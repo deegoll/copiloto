@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conheça o Copiloto</title>
+<style>
+  :root { --tinta:#0F172A; --suave:#475569; --linha:#E2E8F0; --fundo:#F8FAFC; --verde:#047857; --ambar:#B45309; --verm:#B91C1C; --azul:#0369A1; --ml:#FFF3B0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--tinta); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  .topo { background: var(--tinta); color: #fff; }
+  .topo .in { max-width: 980px; margin: 0 auto; padding: 26px 20px; display: flex; align-items: center; gap: 16px; }
+  .topo img { width: 48px; height: 48px; border-radius: 10px; }
+  .topo h1 { margin: 0; font-size: 22px; } .topo p { margin: 4px 0 0; color: #CBD5E1; font-size: 14px; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px; }
+  .card { background: #fff; border: 1px solid var(--linha); border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; }
+  .card h2 { margin: 0 0 6px; font-size: 17px; }
+  .sub { margin: 0 0 12px; color: var(--suave); font-size: 13.5px; }
+  .bt { display: inline-flex; align-items: center; gap: 6px; border: 0; cursor: pointer; padding: 11px 18px; border-radius: 10px; font-weight: 700; font-size: 14px; background: var(--tinta); color: #fff; text-decoration: none; font-family: inherit; }
+  .bt.verde { background: var(--verde); } .bt.sec { background: #fff; color: var(--tinta); border: 1px solid #CBD5E1; }
+  .acoes { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  .mod { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }
+  .mod ul { margin: 6px 0 0; padding-left: 20px; } .mod li { margin: 3px 0; }
+  .mod .onde { color: var(--suave); font-size: 12.5px; margin-top: 8px; }
+  /* Desenhos em HTML/CSS (sem imagens) */
+  .des { border: 1px solid var(--linha); border-radius: 12px; padding: 12px; background: #F8FAFC; font-size: 12px; }
+  .des .tit { font-weight: 700; margin-bottom: 8px; color: var(--suave); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; }
+  .lin { display: grid; grid-template-columns: 1fr auto; gap: 8px; background: #fff; border: 1px solid var(--linha); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
+  .lin b { display: block; font-size: 12.5px; } .lin span { color: var(--suave); font-size: 11px; }
+  .lin .rec { text-align: right; } .lin .rec b { font-size: 13px; }
+  .ml { background: var(--ml); border-radius: 4px; padding: 0 4px; }
+  .et { display: inline-flex; flex-direction: column; align-items: flex-start; margin-top: 4px; padding: 2px 7px 3px; border-radius: 6px; border: 1px solid #A7F3D0; background: #ECFDF5; color: #065F46; font-size: 11px; line-height: 1.3; }
+  .et b { font-size: 12px; white-space: nowrap; } .et i { font-style: normal; font-size: 10.5px; opacity: .9; }
+  .et.ate { border-color: #FDE68A; background: #FFFBEB; color: #92400E; } .et.pre { border-color: #FECACA; background: #FEF2F2; color: #991B1B; }
+  .et.add { border: 1px dashed #94A3B8; background: #F8FAFC; color: #334155; font-weight: 700; }
+  .ideal { display: inline-block; margin-top: 4px; padding: 1px 7px; border-radius: 5px; background: #0F172A; color: #FDE047; font-weight: 700; font-size: 10.5px; }
+  .prog { height: 8px; background: #E2E8F0; border-radius: 99px; overflow: hidden; margin: 4px 0 8px; } .prog i { display: block; height: 100%; border-radius: 99px; }
+  .kp { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .kp div { background: #fff; border: 1px solid var(--linha); border-radius: 8px; padding: 6px 8px; } .kp b { display: block; font-size: 13px; } .kp small { color: var(--suave); }
+  .casc div { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #EEF2F6; } .casc .neg { color: var(--verm); } .casc .tot { font-weight: 800; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-right: 4px; }
+  .pill.p { background: #FEE2E2; color: #991B1B; } .pill.a { background: #FEF3C7; color: #92400E; } .pill.l { background: #D1FAE5; color: #065F46; } .pill.n { background: #F1F5F9; color: #475569; }
+  .sem { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; } .sem div { background: #fff; border: 1px solid var(--linha); border-radius: 6px; padding: 4px; font-size: 10px; min-height: 42px; } .sem b { display: block; color: var(--suave); font-size: 10px; } .sem .on { background: #ECFDF5; border-color: #A7F3D0; }
+  .fontes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .fontes div { border-radius: 12px; padding: 12px 14px; } .fontes .am { background: var(--ml); } .fontes .az { background: #E0F2FE; }
+  .fontes b { display: block; margin-bottom: 4px; } .fontes ul { margin: 0; padding-left: 18px; font-size: 13px; }
+  @media (max-width: 760px) { .mod, .fontes { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="topo"><div class="in">
+  <img src="icons/icon48.png" alt="">
+  <div><h1>Conheça o Copiloto</h1><p>Lucro real de cada anúncio, promoção, frete, Ads e Full no Mercado Livre, com os números do próprio ML. Você só informa o custo.</p></div>
+</div></header>
+
+<main>
+  <section class="card" id="inicio">
+    <h2>O que ele faz por você</h2>
+    <p class="sub">O Copiloto trabalha dentro do seu painel de vendedor, com a conta que você já usa. Ele lê os números que o Mercado Livre mostra e junta com o que só você sabe: o custo do produto e o imposto. Quase tudo é leitura: as exceções estão em Privacidade, no fim desta página.</p>
+    <div class="acoes"><button class="bt verde" id="comecar" type="button">Começar</button><a class="bt sec" id="suporteZap" href="#" target="_blank" rel="noopener">Falar com o suporte (WhatsApp)</a></div>
+  </section>
+
+  <section class="card" id="m-etiquetas"><div class="mod">
+    <div><h2>Etiquetas nos Anúncios</h2>
+      <ul><li>Em cada anúncio da lista, embaixo do “Você recebe”: <b>Lucro</b> ou <b>Prejuízo</b> e a margem.</li><li>Vale também no preço de promoção e de atacado.</li><li>Sem custo? Clique em “Informar custo” e digite ali mesmo.</li></ul>
+      <p class="onde">Onde: Mercado Livre › Anúncios.</p></div>
+    <div class="des"><div class="tit">Na lista de Anúncios</div>
+      <div class="lin"><div><b>Garrafa térmica inox 1 litro</b><span>SKU GARRAFA-1L · Clássico</span></div><div class="rec"><span>Você recebe</span><b class="ml">R$ 69,95</b><span class="et"><b>Lucro R$ 19,75</b><i>margem 22%</i></span></div></div>
+      <div class="lin"><div><b>Caixa de som portátil</b><span>SKU CAIXA-SOM · Premium</span></div><div class="rec"><span>Você recebe</span><b class="ml">R$ 92,41</b><span class="et pre"><b>Prejuízo R$ 5,59</b><i>margem −4%</i></span></div></div>
+      <div class="lin"><div><b>Organizador de gavetas</b><span>SKU ORGANIZ-6</span></div><div class="rec"><span>Você recebe</span><b class="ml">R$ 41,91</b><span class="et add"><b>＋ Informar custo</b></span></div></div>
+    </div>
+  </div></section>
+
+  <section class="card" id="m-central"><div class="mod">
+    <div><h2>Central de promoções</h2>
+      <ul><li>Em cada proposta: <b>Dá para entrar</b>, <b>Abaixo da meta</b> ou <b>Prejuízo</b>.</li><li>★ Melhor opção para a sua meta de margem.</li><li>Um botão mostra só as promoções que dão lucro.</li><li>No painel, o robô de promoções mostra as que mantêm a sua margem mínima. Ele só sugere: quem entra é você.</li></ul>
+      <p class="onde">Onde: Mercado Livre › Central de promoções.</p></div>
+    <div class="des"><div class="tit">Na proposta do ML</div>
+      <div class="lin"><div><b>Oferta do dia · 10%</b><span>Kit panelas 5 peças</span></div><div class="rec"><b class="ml">R$ 259,90</b><span class="et"><b>Dá para entrar</b><i>sobra R$ 41,20 · 16%</i></span><span class="ideal">★ Melhor opção</span></div></div>
+      <div class="lin"><div><b>Liquidação · 24%</b><span>Kit panelas 5 peças</span></div><div class="rec"><b class="ml">R$ 219,90</b><span class="et ate"><b>Abaixo da meta</b><i>sobra R$ 9,80 · 4%</i></span></div></div>
+    </div>
+  </div></section>
+
+  <section class="card" id="m-frete"><div class="mod">
+    <div><h2>Frete</h2>
+      <ul><li>Um selo avisa quando o frete de um anúncio sobe.</li><li>Quanto você pagou a mais, anúncio por anúncio, com as vendas afetadas.</li><li>Texto pronto para pedir a revisão ao Mercado Livre. Quem envia é você.</li></ul>
+      <p class="onde">Onde: painel do Copiloto › aba Frete.</p></div>
+    <div class="des"><div class="tit">Aba Frete</div>
+      <div class="lin"><div><b>Fone Bluetooth sem fio</b><span>frete de R$ 19,95 para <b class="ml">R$ 21,45</b> desde 08/09</span></div><div class="rec"><span class="pill p">subiu R$ 1,50</span></div></div>
+      <div class="kp"><div><small>Pago a mais no mês</small><b>R$ 34,50</b></div><div><small>Vendas afetadas</small><b>23</b></div></div>
+    </div>
+  </div></section>
+
+  <section class="card" id="m-catalogo"><div class="mod">
+    <div><h2>Catálogo e custos</h2>
+      <ul><li>Todos os seus SKUs, com e sem custo. Comece pelos 10 que mais vendem.</li><li>Custos sem digitar: conecte o Tiny ou o Omie, ou importe a planilha do Bling.</li><li>Competição de catálogo: quem está ganhando e o que mudou.</li></ul>
+      <p class="onde">Onde: painel do Copiloto › aba Catálogo e Ajustes › Abrir planilha de custos.</p></div>
+    <div class="des"><div class="tit">Custos preenchidos</div>
+      <b>8 de 11 SKUs com custo</b><div class="prog"><i style="width:73%;background:#047857"></i></div>
+      <div class="lin"><div><b>Suporte de celular</b><span>SKU SUP-CEL · 40 vendas no mês</span></div><div class="rec"><span class="et add"><b>＋ custo</b></span></div></div>
+    </div>
+  </div></section>
+
+  <section class="card" id="m-full"><div class="mod">
+    <div><h2>Full</h2>
+      <ul><li>Remessa que chegou com diferença em destaque, produto por produto, com o botão para reclamar no ML.</li><li>Pontuação do Full num medidor com cores e a saúde do estoque: crítico, atenção, saudável, excedente e parado.</li><li>Quanto enviar de cada produto, o espaço que você tem e o frete para repor o Full no mês.</li></ul>
+      <p class="onde">Onde: painel do Copiloto › aba Full.</p></div>
+    <div class="des"><div class="tit">Saúde do estoque</div>
+      <p style="margin:0 0 8px"><span class="pill p">2 crítico</span><span class="pill a">1 atenção</span><span class="pill l">3 saudável</span><span class="pill n">1 parado</span></p>
+      <div class="lin"><div><b>Fone Bluetooth sem fio</b><span>9 aptas · vende 48 por mês</span></div><div class="rec"><span class="pill p">acaba em 5 dias</span><b>Enviar 39 un.</b></div></div>
+    </div>
+  </div></section>
+
+  <section class="card" id="m-posvenda"><div class="mod">
+    <div><h2>Pós-venda</h2>
+      <ul><li>Reclamações, mediações, mensagens e devoluções em aberto.</li><li>Os motivos das reclamações agrupados, do mais comum ao menos comum.</li><li>Os produtos com mais problema, para você corrigir o anúncio ou a embalagem. Nada do comprador aparece.</li></ul>
+      <p class="onde">Onde: painel do Copiloto › aba Pós-venda.</p></div>
+    <div class="des"><div class="tit">Motivos das reclamações</div>
+      <div class="lin"><div><b>Produto chegou danificado</b><span>3 reclamações · 2 contaram na reputação</span></div><div class="rec"><span class="pill p">mais comum</span></div></div>
+      <div class="lin"><div><b>Garrafa térmica 1 L</b><span>2 reclamações · reforce a embalagem</span></div><div class="rec"><span class="pill a">produto com mais problema</span></div></div>
+    </div>
+  </div></section>
+
+  <section class="card" id="m-ads"><div class="mod">
+    <div><h2>Ads por SKU</h2>
+      <ul><li>ROAS, ACOS, TACOS, cliques, investimento e receita por produto.</li><li>O ponto de equilíbrio de cada produto: onde o Ads gasta mais do que o lucro.</li><li>Sugestão de organização das campanhas. Quem muda a campanha é você, no Mercado Ads.</li></ul>
+      <p class="onde">Onde: painel do Copiloto › aba Ads › Abrir Ads por SKU.</p></div>
+    <div class="des"><div class="tit">Ads por SKU</div>
+      <div class="lin"><div><b>Garrafa térmica inox 1 litro</b><span>ACOS <b class="ml">22%</b> · equilíbrio 18%</span></div><div class="rec"><span class="pill p">acima do equilíbrio</span></div></div>
+      <div class="lin"><div><b>Bicicleta Aro 20</b><span>ACOS <b class="ml">9%</b> · equilíbrio 24%</span></div><div class="rec"><span class="pill l">dá para escalar</span></div></div>
+    </div>
+  </div></section>
+
+  <section class="card" id="m-afiliados"><div class="mod">
+    <div><h2>Gestão de afiliados</h2>
+      <ul><li>Quanto os afiliados vendem: vendas, unidades e os produtos que mais saem por eles.</li><li>Quanto custam: a comissão estimada pelo ML e o retorno de cada real.</li><li>Quais produtos ficaram fora da campanha. Quem coloca ou tira é você, no Mercado Livre.</li></ul>
+      <p class="onde">Onde: painel do Copiloto › aba Afiliados.</p></div>
+    <div class="des"><div class="tit">Afiliados · últimos 30 dias</div>
+      <div class="lin"><div><b>Ventilador de mesa turbo</b><span>2 vendas por afiliados · comissão <b class="ml">4%</b></span></div><div class="rec"><span class="pill l">na campanha</span></div></div>
+      <div class="lin"><div><b>Garrafa térmica inox 1 litro</b><span>anúncio ativo</span></div><div class="rec"><span class="pill p">fora da campanha</span></div></div>
+    </div>
+  </div></section>
+
+  <section class="card" id="m-fechamento"><div class="mod">
+    <div><h2>Fechamento do mês</h2>
+      <ul><li>Da venda ao lucro: vendas brutas, cada tarifa, frete, Ads, estornos, líquido e lucro.</li><li>Mês do calendário ou ciclo da fatura, com o rateio entre os meses.</li><li>Notas fiscais de cada fatura e cobranças para conferir, com o texto do chamado pronto.</li></ul>
+      <p class="onde">Onde: painel do Copiloto › aba Conciliação › Abrir o fechamento completo.</p></div>
+    <div class="des casc"><div class="tit">Da venda ao lucro</div>
+      <div><span>Vendas brutas</span><b class="ml">R$ 38.420,00</b></div><div class="neg"><span>Tarifas de venda</span><span>− R$ 5.610,00</span></div><div class="neg"><span>Frete por sua conta</span><span>− R$ 4.180,00</span></div><div class="neg"><span>Ads</span><span>− R$ 1.400,00</span></div><div class="neg"><span>Custo dos produtos</span><span>− R$ 17.900,00</span></div><div class="tot"><span>Lucro do mês</span><span>R$ 7.024,00</span></div>
+    </div>
+  </div></section>
+
+  <section class="card" id="m-canal"><div class="mod">
+    <div><h2>Agenda do Canal de transmissão</h2>
+      <ul><li>Monta a agenda da semana com os produtos que dão lucro.</li><li>Ao clicar em Programar, o Copiloto pré-preenche o formulário do Mercado Livre.</li><li>Você confere e clica em Criar. Nada sai sem o seu clique.</li></ul>
+      <p class="onde">Onde: Mercado Livre › Canal de transmissão › Agenda do Copiloto.</p></div>
+    <div class="des"><div class="tit">Semana</div>
+      <div class="sem"><div><b>seg</b></div><div class="on"><b>ter</b>Kit panelas</div><div><b>qua</b></div><div class="on"><b>qui</b>Bicicleta</div><div><b>sex</b></div><div class="on"><b>sáb</b>Fone</div><div><b>dom</b></div></div>
+    </div>
+  </div></section>
+
+  <section class="card" id="m-saude"><div class="mod">
+    <div><h2>Saúde dos anúncios: fotos, dados fiscais, medidas, radar de visitas e robô de fotos</h2>
+      <ul><li>Quantas fotos tem cada anúncio e quais estão sem dados fiscais (sem eles o ML não emite a NF-e).</li><li>Avisa quem está perdendo visitas e sugere trocar a ordem das fotos, sem mexer na capa. Depois mostra se ajudou.</li><li>Confere as medidas da embalagem sozinho: avisa SKUs com medidas diferentes entre anúncios e quando o ML muda uma medida, com o texto do chamado pronto.</li></ul>
+      <p class="onde">Onde: painel do Copiloto › aba Saúde e a lista de Anúncios do ML.</p></div>
+    <div class="des"><div class="tit">Aba Saúde</div>
+      <div class="lin"><div><b>Kit panelas 5 peças</b><span>8 de 12 fotos · visitas na semana <b class="ml">320</b> (antes 480)</span></div><div class="rec"><span class="pill p">−33%</span></div></div>
+      <div class="lin"><div><b>Fone Bluetooth sem fio</b><span>NCM e origem não preenchidos</span></div><div class="rec"><span class="pill p">sem dados fiscais</span></div></div>
+    </div>
+  </div></section>
+
+  <section class="card" id="m-alertas"><div class="mod">
+    <div><h2>Alertas</h2>
+      <ul><li>Produto acabando no Full, Ads gastando mais do que o lucro e anúncios sem dados fiscais ou perdendo visitas.</li><li>Avisos da conta: certificado digital vencido ou penalidade no Full.</li><li>Perguntas sem resposta e reputação perto do limite; toda segunda, o resumo da semana fica pronto para você mandar pelo WhatsApp.</li><li>Um número no ícone do Chrome mostra quantos alertas há.</li></ul>
+      <p class="onde">Onde: ícone do Copiloto na barra do Chrome e o topo do painel.</p></div>
+    <div class="des"><div class="tit">Alertas · 3</div>
+      <div class="lin"><div><b>Conta · Certificado Digital venceu</b><span>o Full não recebe seu estoque até você atualizar</span></div></div>
+      <div class="lin"><div><b>Full · Fone Bluetooth</b><span>acaba em 5 dias. Sugestão: enviar 39 un.</span></div></div>
+      <div class="lin"><div><b>Ads · Garrafa térmica</b><span>gastou R$ 160 e a sobra dessas vendas era R$ 120</span></div></div>
+    </div>
+  </div></section>
+
+  <section class="card" id="fontes">
+    <h2>De onde vêm os números</h2>
+    <div class="fontes">
+      <div class="am"><b>Do Mercado Livre (em amarelo nas telas)</b><ul><li>Preço, tarifa, frete e “você recebe” de cada anúncio</li><li>Faturamento: tarifas, frete, Ads e estornos</li><li>Vendas, faturas e notas fiscais</li><li>Estoque Full e remessas</li><li>Mercado Ads: campanhas, cliques e investimento</li><li>Fotos, visitas e dados fiscais de cada anúncio</li><li>Reclamações do pós-venda (sem dado do comprador)</li><li>Pedidos por afiliados (só somas)</li></ul></div>
+      <div class="az"><b>Seus (em azul nas telas)</b><ul><li>Custo de cada SKU (digitado, planilha, Tiny ou Omie)</li><li>Imposto sobre a venda</li><li>Meta de margem</li><li>Estoque mínimo no Full</li></ul></div>
+    </div>
+    <p class="sub" style="margin-top:10px">Lucro, margem e sugestões são estimativas feitas com esses dois lados. O Copiloto nunca inventa um número: o que ainda não foi lido aparece como “—”.</p>
+  </section>
+
+  <section class="card" id="privacidade">
+    <h2>Privacidade, em uma frase</h2>
+    <p class="sub">Não pedimos senha: o Copiloto usa a sessão do Mercado Livre já aberta neste Chrome e só lê. Seus custos e números ficam neste navegador; nada vai para os servidores do SellerHub. As únicas exceções: ele pré-preenche o Canal de transmissão (quem clica em Criar é você), o robô de fotos só sugere (nunca escreve sozinho) o Simulador de custos só calcula e a busca das notas fiscais das suas vendas só consulta, sem enviar nada.</p>
+    <div class="acoes"><button class="bt verde" id="comecar2" type="button">Começar</button><a class="bt sec" id="suporteZap2" href="#" target="_blank" rel="noopener">Falar com o suporte (WhatsApp)</a></div>
+  </section>
+</main>
+
+<script src="calc.js"></script>
+<script src="store.js"></script>
+<script src="apresentacao.js"></script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Copiloto · Ads por SKU</title>
+<style>
+  :root { --tinta:#0F172A; --suave:#475569; --linha:#E2E8F0; --fundo:#F8FAFC; --verde:#047857; --ambar:#B45309; --verm:#B91C1C; --azul:#0369A1; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--tinta); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  .topo { background: var(--tinta); color: #fff; }
+  .topo .in { max-width: 1180px; margin: 0 auto; padding: 18px 20px; display: flex; align-items: center; gap: 14px; }
+  .topo img { width: 36px; height: 36px; border-radius: 8px; }
+  .topo h1 { margin: 0; font-size: 18px; }
+  .topo p { margin: 0; color: #CBD5E1; font-size: 13px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 16px; }
+  .card { background: #fff; border: 1px solid var(--linha); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 4px; font-size: 16px; }
+  .card h2 small, .grp h3 small { color: var(--suave); font-weight: 600; }
+  .grp h3 { margin: 16px 0 2px; font-size: 14.5px; }
+  .sub { margin: 0 0 12px; color: var(--suave); font-size: 13px; }
+  .cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .bt { display: inline-flex; align-items: center; gap: 6px; border: 0; cursor: pointer; padding: 9px 16px; border-radius: 9px; font-weight: 700; font-size: 13.5px; background: var(--tinta); color: #fff; text-decoration: none; font-family: inherit; }
+  .bt.sec { background: #fff; color: var(--tinta); border: 1px solid #CBD5E1; }
+  .bt:disabled { opacity: .6; cursor: default; }
+  .bt:focus-visible, .lnk:focus-visible, .chips button:focus-visible { outline: 2px solid #0EA5E9; outline-offset: 2px; }
+  .lnk { border: 0; background: none; color: var(--azul); cursor: pointer; font: inherit; font-size: 12px; padding: 0; text-decoration: underline; }
+  .acoes { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 6px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .kpi { border: 1px solid var(--linha); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+  .kpi .kn { font-size: 12px; font-weight: 700; color: var(--suave); }
+  .kpi b { font-size: 18px; }
+  .kpi b small { font-size: 11.5px; font-weight: 600; color: var(--suave); }
+  .kpi .ka { font-size: 12px; color: var(--suave); }
+  .kpi .kx { font-size: 11.5px; color: var(--suave); border-top: 1px dashed var(--linha); margin-top: 4px; padding-top: 4px; }
+  .rola { overflow-x: auto; }
+  .tabela { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .tabela th { text-align: left; font-size: 11.5px; color: var(--suave); font-weight: 700; padding: 6px 8px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+  .tabela td { padding: 6px 8px; border-bottom: 1px solid #F1F5F9; vertical-align: top; white-space: nowrap; }
+  .tabela td.tit { white-space: normal; min-width: 220px; max-width: 340px; }
+  .tabela td.mot { white-space: normal; min-width: 260px; }
+  .tabela td.sh { min-width: 200px; }
+  .tabela tr.leit td { white-space: normal; background: #F8FAFC; color: var(--suave); font-size: 12.5px; }
+  .tit b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tit span { display: block; color: var(--suave); font-size: 11.5px; }
+  .selo { display: inline-block; margin: 3px 4px 0 0; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #F1F5F9; color: var(--suave); }
+  .selo.ruim { background: #FEF2F2; color: var(--verm); }
+  .selo.bom { background: #ECFDF5; color: var(--verde); }
+  .barra-sh { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: #E2E8F0; }
+  .barra-sh i { display: block; height: 100%; }
+  .barra-sh .g, .leg-sh .g { background: var(--verde); color: var(--verde); }
+  .barra-sh .o { background: #F59E0B; }
+  .barra-sh .c { background: #94A3B8; }
+  .leg-sh { display: block; font-size: 11px; color: var(--suave); margin-top: 2px; }
+  .leg-sh span { background: none !important; font-weight: 700; }
+  .leg-sh .o { color: var(--ambar); }
+  .leg-sh .c { color: var(--suave); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
+  .chips button { border: 1px solid #CBD5E1; background: #fff; border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--tinta); }
+  .chips button.on { background: var(--tinta); border-color: var(--tinta); color: #fff; }
+  .mod { border: 1px solid var(--linha); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .mod p { margin: 2px 0; font-size: 13px; }
+  .mod small { color: var(--suave); }
+  .aviso { background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+  .msg.erro { color: var(--verm); font-size: 13px; }
+  .vazio { text-align: center; padding: 30px 20px; }
+  .fonte { color: var(--suave); font-size: 12px; text-align: center; }
+  .sync-caixa { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 420px; }
+  .sync-topo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .sync-topo .shs-lin { flex-basis: 100%; }
+  .sync-lido { color: var(--suave); font-size: 11.5px; }
+  .topo .aula { margin-left: auto; background: transparent; color: #fff; border: 1px solid #475569; border-radius: 9px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .topo .aula:focus-visible { outline: 2px solid #0EA5E9; outline-offset: 2px; }
+  @media (max-width: 600px) { .card { padding: 14px; } .kpi b { font-size: 16px; } }
+</style>
+</head>
+<body>
+<header class="topo"><div class="in">
+  <img src="icons/icon48.png" alt="">
+  <div><h1>Ads por SKU</h1><p>Quanto o Mercado Ads custa e devolve em cada produto. O Copiloto só lê e sugere: quem muda é você, no Mercado Ads.</p></div>
+  <button class="aula" id="verAula" type="button">Ver aula guiada</button>
+</div></header>
+<main id="app"><section class="card vazio"><p class="sub">Carregando…</p></section></main>
+<script src="calc.js"></script>
+<script src="store.js"></script>
+<script src="ml-extrator.js"></script>
+<script src="tour.js"></script>
+<script src="ads.js"></script>
+</body>
+</html>

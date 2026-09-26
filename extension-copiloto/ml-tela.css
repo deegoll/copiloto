@@ -1,0 +1,64 @@
+/* SellerHub Copiloto v2.1 — etiquetas dentro do Mercado Livre. Só classes com prefixo shc. */
+.shc-w{display:block;margin:0;padding:0;border:0;background:none;font:12px/1.35 -apple-system,"Segoe UI",Roboto,Arial,sans-serif;letter-spacing:normal;text-transform:none;text-align:left}
+span.shc-w{display:inline}
+.shc-w *{box-sizing:border-box;font-family:inherit;letter-spacing:normal;text-transform:none}
+
+/* Lucro / prejuízo do anúncio, embaixo do "Você recebe" */
+.shc-r{display:inline-flex;flex-direction:column;align-items:flex-start;max-width:100%;margin-top:4px;padding:2px 7px 3px;border-radius:6px;border:1px solid #A7F3D0;background:#ECFDF5;color:#065F46;font-size:11px;line-height:1.3;cursor:help}
+.shc-r b{font-size:12px;font-weight:700;white-space:nowrap}
+.shc-r i{font-style:normal;font-size:10.5px;opacity:.9;white-space:nowrap}
+.shc-r.luc{border-color:#A7F3D0;background:#ECFDF5;color:#065F46}
+.shc-r.ate{border-color:#FDE68A;background:#FFFBEB;color:#92400E}
+.shc-r.pre{border-color:#FECACA;background:#FEF2F2;color:#991B1B}
+.shc-r:focus-visible,.shc-at:focus-visible,.shcp:focus-visible{outline:2px solid #3483FA;outline-offset:1px}
+
+/* Saúde do anúncio: fotos, dados fiscais e visitas (embaixo do lucro) */
+.shc-sd{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.shc-s{display:inline-block;padding:1px 6px;border-radius:5px;border:1px solid #E2E8F0;background:#F8FAFC;color:#475569;font-size:10.5px;font-weight:700;line-height:1.35;white-space:nowrap;cursor:help;text-decoration:none}
+.shc-s b{color:#B91C1C;font-weight:700}
+a.shc-s.fi,.shc-s.cai,.shc-s.md{background:#FEF2F2;border-color:#FECACA;color:#991B1B}
+.shc-s.mm,.shc-s.mdr{background:#FFFBEB;border-color:#FDE68A;color:#92400E}
+a.shc-s.fi{cursor:pointer}a.shc-s.fi:hover{text-decoration:underline}
+.shc-s.sobe{background:#ECFDF5;border-color:#A7F3D0;color:#065F46}
+.shc-s:focus-visible{outline:2px solid #3483FA;outline-offset:1px}
+
+/* "＋ Informar custo" */
+button.shc-add{display:inline-flex;align-items:center;gap:4px;margin:5px 0 0;padding:3px 8px;border-radius:6px;border:1px dashed #94A3B8;background:#F8FAFC;color:#334155;font:700 11.5px/1.3 -apple-system,"Segoe UI",Roboto,Arial,sans-serif;cursor:pointer;box-shadow:none;min-height:0;width:auto;height:auto}
+button.shc-add:hover{border-color:#3483FA;color:#1E40AF;background:#EFF6FF}
+
+/* Atacado: um bloco por degrau, alinhado com a linha "preço de atacado" */
+.shc-at{display:block;width:100%;margin-top:4px;padding:2px 6px 3px;border-radius:6px;border:1px solid #BAE6FD;background:#F0F9FF;color:#075985;font-size:10px;line-height:1.35;white-space:nowrap;cursor:help}
+.shc-at b{display:block;font-size:10.5px;font-weight:700}
+.shc-at b.luc{color:#047857}.shc-at b.ate{color:#B45309}.shc-at b.pre{color:#B91C1C}
+
+/* Selo do frete, ao lado do valor */
+button.shc-fr{display:inline-flex;align-items:center;gap:3px;margin:0 0 0 4px;padding:1px 6px;border-radius:5px;border:1px solid #E2E8F0;background:#F1F5F9;color:#475569;font:700 10.5px/1.35 -apple-system,"Segoe UI",Roboto,Arial,sans-serif;white-space:nowrap;cursor:pointer;vertical-align:baseline;box-shadow:none;min-height:0;width:auto;height:auto}
+button.shc-fr.sobe{background:#FEF2F2;color:#B91C1C;border-color:#FECACA}
+button.shc-fr.desce{background:#ECFDF5;color:#065F46;border-color:#A7F3D0}
+button.shc-fr:hover{filter:brightness(.97);text-decoration:underline}
+
+/* Central de promoções: veredito por proposta */
+.shcp{display:inline-flex;flex-direction:column;align-items:flex-start;gap:1px;margin-top:4px;padding:3px 8px;border-radius:6px;border:1px solid #E2E8F0;background:#F8FAFC;color:#475569;font:11.5px/1.3 -apple-system,"Segoe UI",Roboto,Arial,sans-serif;text-align:left;cursor:help}
+.shcp b{font-size:11.5px;font-weight:700;white-space:nowrap}
+.shcp span{white-space:nowrap}
+.shcp.ok{background:#ECFDF5;border-color:#A7F3D0;color:#065F46}
+.shcp.at{background:#FFFBEB;border-color:#FDE68A;color:#92400E}
+.shcp.pr{background:#FEF2F2;border-color:#FECACA;color:#991B1B}
+.shcp.sc{background:#F8FAFC;border-color:#E2E8F0;color:#475569}
+.shcp.sc span{white-space:normal;max-width:220px}
+button.shcp.sem{border-style:dashed;border-color:#94A3B8;color:#334155;cursor:pointer;box-shadow:none;min-height:0;width:auto;height:auto}
+button.shcp.sem:hover{border-color:#3483FA;background:#EFF6FF}
+.shcp-ideal{display:inline-block;margin-top:4px;padding:1px 7px;border-radius:5px;background:#0F172A;color:#FDE047;font:700 10.5px/1.4 -apple-system,"Segoe UI",Roboto,Arial,sans-serif;white-space:nowrap}
+
+/* Barra de resumo antes da lista */
+.shcp-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px;padding:10px 14px;border:1px solid #E5E7EB;border-radius:8px;background:#F8FAFC;color:#0F172A;font:12px/1.4 -apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.shcp-bar .lg{font-weight:700;margin-right:4px}
+.shcp-bar .cs{display:inline-flex;flex-wrap:wrap;gap:6px}
+.shcp-bar .c{border-radius:999px;padding:2px 9px;font-weight:700}
+.shcp-bar .c.ok{background:#ECFDF5;color:#065F46}.shcp-bar .c.at{background:#FFFBEB;color:#92400E}
+.shcp-bar .c.pr{background:#FEF2F2;color:#991B1B}.shcp-bar .c.sc,.shcp-bar .c.sem{background:#F1F5F9;color:#475569}
+.shcp-bar button.shcp-filtro{margin-left:auto;padding:4px 10px;border:1px solid #0F172A;border-radius:6px;background:#fff;color:#0F172A;font:700 12px/1.4 -apple-system,"Segoe UI",Roboto,Arial,sans-serif;cursor:pointer;box-shadow:none;min-height:0;width:auto;height:auto}
+.shcp-bar button.shcp-filtro.on{background:#0F172A;color:#fff}
+
+/* Filtro: só esconde grupos do ML, não mexe em mais nada */
+.shcp-oculto{display:none !important}

@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Copiloto · Custos e configurações</title>
+<style>
+  :root { --tinta:#0F172A; --suave:#475569; --linha:#E2E8F0; --fundo:#F8FAFC; --verde:#047857; --ambar:#B45309; --verm:#B91C1C; --azul:#0369A1; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--fundo); color: var(--tinta); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  .topo { background: var(--tinta); color: #fff; }
+  .topo .in { max-width: 1040px; margin: 0 auto; padding: 18px 20px; display: flex; align-items: center; gap: 14px; }
+  .topo img { width: 36px; height: 36px; border-radius: 8px; }
+  .topo h1 { margin: 0; font-size: 18px; }
+  .topo p { margin: 0; color: #CBD5E1; font-size: 13px; }
+  main { max-width: 1040px; margin: 0 auto; padding: 20px; }
+  .card { background: #fff; border: 1px solid var(--linha); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 4px; font-size: 16px; }
+  .card > p.sub, .sub { margin: 0 0 14px; color: var(--suave); font-size: 13px; }
+  .grade { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 16px; }
+  .campo label { display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 4px; }
+  .campo small { display: block; color: var(--suave); font-size: 11.5px; margin-top: 3px; }
+  .conta-linha { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 5px; }
+  .conta-linha b { font-size: 13.5px; }
+  .contatag { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 9px; background: #EEF2FF; color: #3730A3; white-space: nowrap; }
+  .contatag.agora { background: #ECFDF5; color: var(--verde); }
+  .inp, select { width: 100%; padding: 8px 10px; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 14px; background: #fff; color: var(--tinta); }
+  .inp:focus, select:focus { outline: 2px solid #0EA5E9; outline-offset: 0; border-color: #0EA5E9; }
+  .bt { display: inline-flex; align-items: center; gap: 6px; border: 0; cursor: pointer; padding: 9px 16px; border-radius: 9px; font-weight: 700; font-size: 13.5px; background: var(--tinta); color: #fff; text-decoration: none; font-family: inherit; }
+  .bt.sec { background: #fff; color: var(--tinta); border: 1px solid #CBD5E1; }
+  .bt.verde { background: var(--verde); }
+  .lnk { border: 0; background: none; color: var(--azul); cursor: pointer; font: inherit; font-size: 13px; padding: 0; text-decoration: underline; }
+  .acoes { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  .ok { color: var(--verde); font-weight: 700; font-size: 13px; }
+  .barra { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .barra .inp { max-width: 300px; }
+  .chk { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--suave); }
+  .tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tabela th { text-align: left; font-size: 11.5px; color: var(--suave); font-weight: 700; padding: 6px 8px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+  .tabela td { padding: 6px 8px; border-bottom: 1px solid #F1F5F9; vertical-align: middle; }
+  .tabela td .inp { padding: 5px 8px; font-size: 13px; max-width: 110px; }
+  .tabela tr.grp td { background: #F8FAFC; font-size: 12px; font-weight: 800; color: var(--suave); padding-top: 12px; }
+  .tit { max-width: 360px; }
+  .tit b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tit span { color: var(--suave); font-size: 11.5px; }
+  .dica { display: block; font-size: 11px; color: var(--suave); margin-top: 2px; }
+  .dica.alerta { color: var(--ambar); font-weight: 600; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; background: #F1F5F9; color: var(--suave); }
+  .tag.sp { background: #FFEDD5; color: #9A3412; }
+  .x { border: 0; background: none; cursor: pointer; color: #94A3B8; font-size: 16px; } .x:hover { color: var(--verm); }
+  .vazio { text-align: center; color: var(--suave); padding: 26px 10px; }
+  .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  textarea { width: 100%; min-height: 90px; font: 12.5px/1.4 ui-monospace, Consolas, monospace; padding: 8px; border: 1px solid #CBD5E1; border-radius: 8px; }
+  .msg { font-size: 13px; margin-top: 8px; }
+  .msg.erro { color: var(--verm); }
+  .leg { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; margin-top: 6px; }
+  .leg i { display: inline-block; padding: 1px 9px; border-radius: 999px; color: #fff; font-style: normal; font-weight: 700; font-size: 12px; margin-right: 4px; }
+  .priv { font-size: 12.5px; color: var(--suave); background: #F1F5F9; border-radius: 10px; padding: 10px 12px; margin-top: 10px; }
+  .mais { font-size: 12.5px; color: var(--suave); margin-top: 8px; }
+  .prog { height: 6px; background: #E2E8F0; border-radius: 99px; overflow: hidden; }
+  .prog i { display: block; height: 100%; background: var(--verde); border-radius: 99px; transition: width .25s; }
+  .contador { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; }
+  .contador .prog { flex: 1; max-width: 420px; }
+
+  /* Boas-vindas guiadas */
+  body.guiando main > section:not(#guia), body.guiando #retoma { display: none; }
+  .guia { max-width: 620px; margin: 10px auto 16px; padding: 22px 24px; border-color: #A7F3D0; box-shadow: 0 8px 30px rgba(15,23,42,.06); }
+  .g-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12.5px; color: var(--suave); font-weight: 700; }
+  .guia .prog { margin-bottom: 18px; }
+  .guia h2 { font-size: 19px; margin-bottom: 6px; }
+  .g-lin { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+  .g-num { max-width: 110px; font-size: 18px; font-weight: 700; }
+  .g-lab { display: block; font-size: 13px; font-weight: 700; margin: 16px 0 6px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 4px; }
+  .chips button { border: 1px solid #CBD5E1; background: #fff; border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--tinta); }
+  .chips button.on { background: var(--verde); border-color: var(--verde); color: #fff; }
+  .aviso { background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E; border-radius: 10px; padding: 8px 12px; font-size: 13px; margin: 10px 0 0; }
+  .estado { border-radius: 10px; padding: 10px 12px; font-size: 14px; font-weight: 600; background: #F1F5F9; margin: 6px 0 10px; }
+  .estado.bom { background: #ECFDF5; color: var(--verde); }
+  .estado.ruim { background: #FEF2F2; color: var(--verm); }
+  .obs { font-size: 12.5px; color: var(--suave); margin: 6px 0; }
+  /* Passo 2: desenho da barra do Chrome em 3 quadros (sem imagens) */
+  .fx { border: 1px solid var(--linha); border-radius: 12px; padding: 12px; margin: 8px 0 12px; background: #F8FAFC; }
+  .fx-q { display: none; }
+  .fx-q.on { display: block; }
+  .fx-t { margin: 0 0 8px; font-size: 13.5px; font-weight: 700; display: flex; gap: 8px; align-items: flex-start; }
+  .fx-t i { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--tinta); color: #fff; font-style: normal; font-size: 12px; }
+  .cb { display: flex; align-items: center; gap: 6px; background: #DEE3EA; border-radius: 10px; padding: 7px 8px; color: #334155; font-size: 14px; }
+  .cb-n { width: 20px; text-align: center; color: #64748B; }
+  .cb-url { flex: 1; min-width: 0; height: 26px; line-height: 26px; background: #fff; border-radius: 99px; color: #475569; font-size: 11.5px; padding: 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cb-ic { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; flex: none; }
+  .cb-ic svg { width: 17px; height: 17px; }
+  .cb-av { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #7C3AED; color: #fff; font-size: 11px; font-weight: 800; flex: none; }
+  .cb-alvo { background: #fff; box-shadow: 0 0 0 3px #2563EB, 0 0 0 7px rgba(37,99,235,.25); }
+  .rs { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: #047857; color: #fff; font-size: 10px; font-weight: 800; flex: none; }
+  .fx-seta { margin: 6px 0 0; text-align: right; font-size: 12px; color: #1D4ED8; font-weight: 700; padding-right: 64px; }
+  .cm { margin: 6px 0 0 auto; width: min(290px, 100%); background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(15,23,42,.18); padding: 8px 0; font-size: 13px; }
+  .cm-top { display: flex; justify-content: space-between; padding: 2px 14px 6px; font-weight: 700; }
+  .cm-sub { padding: 2px 14px; font-size: 11.5px; color: #64748B; }
+  .cm-lin { display: flex; align-items: center; gap: 8px; padding: 6px 14px; }
+  .cm-lin span.nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cm hr { border: 0; border-top: 1px solid var(--linha); margin: 6px 0; }
+  .cm-ger { padding: 4px 14px; color: #334155; }
+  .fx-ok { margin: 8px 0 0; background: #ECFDF5; border: 1px solid #A7F3D0; color: #065F46; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+  .fx-dots { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
+  .fx-dots button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid #CBD5E1; background: #fff; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; color: var(--tinta); }
+  .fx-dots button.on { background: var(--tinta); border-color: var(--tinta); color: #fff; }
+  .fx-dots button:focus-visible { outline: 2px solid #0EA5E9; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .fx-q { display: block; margin-bottom: 14px; } .fx-dots { display: none; } }
+  /* Custos por SKU: ação rápida, arrastar e soltar, barra grossa */
+  .rapido { border: 1px solid #A7F3D0; background: #F0FDF4; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+  .rapido .acoes { margin-top: 0; }
+  .bt.grande { padding: 12px 20px; font-size: 15px; }
+  .passos { margin: 10px 0 0; padding-left: 20px; font-size: 13px; }
+  .passos li { margin-bottom: 4px; }
+  .prog.grossa { height: 10px; }
+  .prog-lin { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; font-weight: 700; }
+  .prog-lin .prog { flex: 1; max-width: 420px; }
+  .soltar { position: relative; border: 2px dashed transparent; border-radius: 12px; }
+  .soltar.arrastando { border-color: var(--verde); background: #F0FDF4; }
+  .soltar .solte { display: none; position: absolute; inset: 0; z-index: 2; place-items: center; font-size: 16px; font-weight: 800; color: var(--verde); background: rgba(240,253,244,.92); border-radius: 10px; }
+  .soltar.arrastando .solte { display: grid; }
+  .duv { margin-top: 16px; font-size: 13px; color: var(--suave); }
+  .duv summary { cursor: pointer; color: var(--azul); }
+  .duv p { margin: 8px 0 0; }
+  .duv b { color: var(--tinta); }
+  .retoma { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; font-size: 13.5px; }
+
+  /* Prévia da planilha */
+  .previa { border: 1px solid #BAE6FD; background: #F0F9FF; border-radius: 12px; padding: 14px 16px; margin-top: 14px; }
+  .previa h3 { margin: 0 0 6px; font-size: 15px; }
+  .previa .tabela { background: #fff; margin: 8px 0; }
+  .previa p { margin: 4px 0; font-size: 13px; }
+  .tres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .forma { border: 1px solid var(--linha); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .forma p { margin: 0; font-size: 12.5px; color: var(--suave); flex: 1; }
+  .cinza { color: #94A3B8; font-size: 12.5px; }
+  @media (max-width: 820px) { .grade { grid-template-columns: 1fr 1fr; } .dupla, .tres { grid-template-columns: 1fr; } }
+
+  /* Barra fixa do guia (aberta pelo painel lateral: #guia-custos) */
+  .gbar { position: sticky; top: 0; z-index: 5; background: #ECFDF5; border-bottom: 1px solid #A7F3D0; }
+  .gbar .in { max-width: 1040px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+  .gbar .in > b { margin-right: auto; }
+  .gbar .bt { padding: 7px 12px; font-size: 13px; }
+  /* Como ler a etiqueta: pedaço da linha do ML desenhado + a etiqueta real (mesmas cores de ml-tela.css) */
+  .ml-lin { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start; border: 1px solid var(--linha); border-radius: 12px; padding: 12px 14px; background: #fff; max-width: 560px; }
+  .ml-lin .prod b { display: block; font-size: 13.5px; } .ml-lin .prod span { color: var(--suave); font-size: 12px; }
+  .ml-lin .recebe { text-align: right; font-size: 12px; color: var(--suave); } .ml-lin .recebe b { display: block; color: var(--tinta); font-size: 14px; }
+  .et { display: inline-flex; flex-direction: column; align-items: flex-start; margin-top: 4px; padding: 2px 7px 3px; border-radius: 6px; border: 1px solid #A7F3D0; background: #ECFDF5; color: #065F46; font-size: 11px; line-height: 1.3; }
+  .et b { font-size: 12px; white-space: nowrap; } .et i { font-style: normal; font-size: 10.5px; opacity: .9; white-space: nowrap; }
+  .et.luc { border-color: #A7F3D0; background: #ECFDF5; color: #065F46; } .et.ate { border-color: #FDE68A; background: #FFFBEB; color: #92400E; } .et.pre { border-color: #FECACA; background: #FEF2F2; color: #991B1B; }
+  .et.add { border: 1px dashed #94A3B8; background: #F8FAFC; color: #334155; font-weight: 700; font-size: 11.5px; }
+  .seta { font-size: 12px; color: #1D4ED8; font-weight: 700; margin: 4px 0 0; }
+  .leg4 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px; margin-top: 12px; font-size: 13px; }
+  .leg4 > div { display: flex; gap: 10px; align-items: center; } .leg4 .et { margin: 0; flex: none; }
+  .priv-det { margin-top: 10px; font-size: 12.5px; color: var(--suave); } .priv-det summary { cursor: pointer; color: var(--azul); }
+  /* Custos do ERP: 3 cartões no mesmo padrão (conexão que importa sozinha) + importação visual */
+  .erp-c { border: 1px solid var(--linha); border-radius: 12px; padding: 12px 14px; }
+  .erp-c h3 { margin: 0 0 4px; font-size: 14.5px; } .erp-c p { margin: 4px 0; font-size: 12.5px; color: var(--suave); }
+  .erp-c .inp { margin-top: 6px; } .erp-c .bt { margin-top: 8px; } .bt:disabled { opacity: .55; cursor: default; }
+  .cartoes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+  .cartoes div { border: 1px solid var(--linha); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; color: var(--suave); }
+  .cartoes b { display: block; font-size: 16px; color: var(--tinta); } .cartoes .falta b { color: var(--ambar); }
+  @media (max-width: 820px) { .leg4, .cartoes { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="topo"><div class="in">
+  <img src="icons/icon48.png" alt="">
+  <div><h1>Copiloto</h1><p>Veja quanto sobra de cada anúncio, com os números do próprio Mercado Livre</p></div>
+</div></div>
+<div class="gbar" id="gBar" hidden><div class="in">
+  <b id="gBarTxt">Guia · Passo 4 de 9: Custo dos produtos que mais vendem</b>
+  <span class="ok" id="gBarOk"></span>
+  <button class="bt sec" id="gBarPular" type="button">Continuar sem custos por agora</button>
+  <button class="bt verde" id="gBarJa" type="button">Já informei os principais</button>
+  <button class="bt sec" id="gBarFechar" type="button" hidden>Fechar esta página</button>
+</div></div>
+
+<main>
+  <!-- Boas-vindas em 5 passos (abre na instalação: painel.html#bem-vindo) -->
+  <section class="card guia" id="guia" hidden>
+    <div class="g-top"><span id="gPasso">Passo 1 de 5</span><button class="lnk" id="gFechar">Fechar e continuar depois</button></div>
+    <div class="prog"><i id="gProg" style="width:20%"></i></div>
+
+    <div class="g-p" data-p="1">
+      <h2>Quanto de imposto você paga sobre a venda?</h2>
+      <p class="sub">Vale para todos os produtos. Dá para mudar depois.</p>
+      <div class="g-lin"><input class="inp g-num" id="gImposto" inputmode="decimal" aria-label="Imposto sobre a venda em %"><span>%</span></div>
+      <div class="chips" id="gChips">
+        <button type="button" data-v="4">Simples 4%</button><button type="button" data-v="6">6%</button><button type="button" data-v="8">8%</button><button type="button" data-v="naosei">Não sei</button>
+      </div>
+      <p class="aviso" id="gNaoSei" hidden>Tudo bem. Por enquanto usamos 0%. Ajuste depois em “Seus números”: sem o imposto, o lucro aparece maior do que é.</p>
+      <label class="g-lab" for="gMargem">Sua meta de margem</label>
+      <div class="g-lin"><input class="inp g-num" id="gMargem" inputmode="decimal"><span>%</span></div>
+      <p class="obs">Abaixo dela, a etiqueta de lucro fica amarela.</p>
+      <p class="msg erro" id="gErro1"></p>
+      <div class="acoes"><button class="bt verde" id="g1">Continuar</button></div>
+      <details class="duv"><summary>Tenho uma dúvida</summary>
+        <p><b>Qual imposto eu coloco?</b> O percentual que você paga sobre o valor da venda. No Simples Nacional, ele está na guia do DAS ou com o seu contador. Na dúvida, escolha “Não sei” e ajuste depois.</p>
+        <p><b>Coloco o frete no custo?</b> Não. O frete vem do Mercado Livre e já é descontado antes do “você recebe”. No custo vai só o que você paga no produto.</p>
+      </details>
+    </div>
+
+    <div class="g-p" data-p="2" hidden>
+      <h2>Fixe o Copiloto na barra (opcional)</h2>
+      <p class="sub">Assim ele fica sempre a um clique. Não é obrigatório: pode continuar agora e fixar depois.</p>
+      <div class="fx" id="gFix" aria-label="Como fixar o ícone em 3 passos">
+        <div class="fx-q on" data-q="1"><p class="fx-t"><i>1</i>No alto do Chrome, clique na peça de quebra-cabeça</p><div class="cb"><span class="cb-n">←</span><span class="cb-n">→</span><span class="cb-n">↻</span><span class="cb-url">vendedores.mercadolivre.com.br/anuncios</span><span class="cb-n">☆</span><span class="cb-ic cb-alvo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a2 2 0 0 1 4 0v1h4a1 1 0 0 1 1 1v4h-1a2 2 0 0 0 0 4h1v4a1 1 0 0 1-1 1h-4v-1a2 2 0 0 0-4 0v1H6a1 1 0 0 1-1-1v-4h1a2 2 0 0 0 0-4H5V6a1 1 0 0 1 1-1h4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="cb-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 5v14" stroke="currentColor" stroke-width="1.8"/></svg></span><span class="cb-av">D</span><span class="cb-n">⋮</span></div><p class="fx-seta">↑ fica à direita da barra de endereço</p></div>
+        <div class="fx-q" data-q="2"><p class="fx-t"><i>2</i>Na lista que abre, clique no alfinete ao lado de Copiloto</p><div class="cb"><span class="cb-n">←</span><span class="cb-n">→</span><span class="cb-n">↻</span><span class="cb-url">vendedores.mercadolivre.com.br/anuncios</span><span class="cb-n">☆</span><span class="cb-ic cb-alvo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a2 2 0 0 1 4 0v1h4a1 1 0 0 1 1 1v4h-1a2 2 0 0 0 0 4h1v4a1 1 0 0 1-1 1h-4v-1a2 2 0 0 0-4 0v1H6a1 1 0 0 1-1-1v-4h1a2 2 0 0 0 0-4H5V6a1 1 0 0 1 1-1h4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="cb-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 5v14" stroke="currentColor" stroke-width="1.8"/></svg></span><span class="cb-av">D</span><span class="cb-n">⋮</span></div><div class="cm"><div class="cm-top"><span>Extensões</span><span aria-hidden="true">×</span></div><div class="cm-sub">Acesso total</div><div class="cm-lin"><span class="rs">R$</span><span class="nm">Copiloto: lucro no Mercado Livre</span><span class="cb-ic cb-alvo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3 3v2h-4v6l-1 1-1-1v-6H7v-2l3-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="cb-n">⋮</span></div><hr><div class="cm-ger">⚙ Gerenciar extensões</div></div></div>
+        <div class="fx-q" data-q="3"><p class="fx-t"><i>3</i>Pronto: o ícone R$ do Copiloto fica fixo na barra. Um clique abre o painel</p><div class="cb"><span class="cb-n">←</span><span class="cb-n">→</span><span class="cb-n">↻</span><span class="cb-url">vendedores.mercadolivre.com.br/anuncios</span><span class="cb-n">☆</span><span class="rs cb-alvo">R$</span><span class="cb-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a2 2 0 0 1 4 0v1h4a1 1 0 0 1 1 1v4h-1a2 2 0 0 0 0 4h1v4a1 1 0 0 1-1 1h-4v-1a2 2 0 0 0-4 0v1H6a1 1 0 0 1-1-1v-4h1a2 2 0 0 0 0-4H5V6a1 1 0 0 1 1-1h4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="cb-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 5v14" stroke="currentColor" stroke-width="1.8"/></svg></span><span class="cb-av">D</span><span class="cb-n">⋮</span></div><p class="fx-ok">O Copiloto detecta sozinho quando o ícone está fixado. Não quer fixar agora? Clique em Continuar.</p></div>
+        <div class="fx-dots"><button type="button" data-q="1" class="on" aria-label="Quadro 1">1</button><button type="button" data-q="2" aria-label="Quadro 2">2</button><button type="button" data-q="3" aria-label="Quadro 3">3</button></div>
+      </div>
+      <p class="estado" id="gIcone">Ainda não fixou? Tudo bem: clique em Continuar.</p>
+      <div class="acoes"><button class="bt verde" id="g2">Continuar</button></div>
+      <details class="duv"><summary>Tenho uma dúvida</summary>
+        <p><b>Não acho a peça de quebra-cabeça.</b> Ela fica à direita da barra de endereço, no alto da janela do Chrome. Se o ícone do Copiloto já aparece ali, está tudo certo: é só continuar.</p>
+      </details>
+    </div>
+
+    <div class="g-p" data-p="3" hidden>
+      <h2>Ler a sua conta</h2>
+      <p class="estado" id="gConta">Conferindo sua conta…</p>
+      <div id="gSync" aria-live="polite"></div>
+      <p class="obs" id="gContaObs" hidden>Em contas grandes a leitura leva alguns minutos. Pode continuar enquanto isso.</p>
+      <p class="obs">Usamos a sessão que já está aberta. Não pedimos senha e quase tudo é só leitura (as exceções estão na dúvida abaixo).</p>
+      <div class="acoes">
+        <button class="bt" id="gAbrirML" hidden>Abrir o Mercado Livre</button>
+        <button class="bt sec" id="gVerificar" hidden>Tentar de novo</button>
+        <button class="bt verde" id="g3">Continuar</button>
+      </div>
+      <details class="duv"><summary>Tenho uma dúvida</summary>
+        <p><b>Vocês veem a minha senha?</b> Não. O Copiloto usa as páginas do painel de vendedor que já abrem neste Chrome e não pede senha.</p>
+        <p><b>O Copiloto mexe na minha conta?</b> Quase tudo é só leitura. As exceções: a Agenda do Canal pré-preenche o formulário do ML quando você clica em Programar (quem clica em Criar é você), o robô de fotos só sugere (quem troca é você) e o Simulador de custos só calcula, sem mudar nada.</p>
+      </details>
+    </div>
+
+    <div class="g-p" data-p="4" hidden>
+      <h2>Guarde uma cópia dos seus custos</h2>
+      <p class="sub">Seus custos ficam só neste Chrome. Baixe uma cópia de vez em quando.</p>
+      <div class="acoes"><button class="bt" id="gBackup">⬇ Baixar cópia (planilha)</button><span class="ok" id="gBackupOk"></span></div>
+      <div class="acoes"><button class="bt verde" id="g4">Continuar</button></div>
+      <details class="duv"><summary>Tenho uma dúvida</summary>
+        <p><b>Para que serve a cópia?</b> Se você trocar de computador ou desinstalar a extensão, é com essa planilha que os custos voltam: é só importar em “Planilha”, nesta página.</p>
+      </details>
+    </div>
+
+    <div class="g-p" data-p="5" hidden>
+      <h2>Abrir meus anúncios</h2>
+      <p class="sub">Na lista de Anúncios do Mercado Livre, o Copiloto mostra quanto sobra de cada anúncio. Um tour rápido mostra onde digitar o custo de cada produto.</p>
+      <p class="estado bom">Depois daqui, o guia continua sozinho: no painel lateral do Copiloto (“Próximo passo”) e na própria tela do Mercado Livre, até concluir todas as etapas.</p>
+      <div class="acoes"><button class="bt verde" id="gAnuncios">Abrir meus anúncios</button><button class="lnk" id="g5">Agora não</button></div>
+      <details class="duv"><summary>Tenho uma dúvida</summary>
+        <p><b>Por onde começo os custos?</b> Pelos produtos que mais vendem. O custo é por SKU: digite uma vez e ele vale para todos os anúncios desse SKU.</p>
+        <p><b>Onde vejo o próximo passo?</b> Clique no ícone do Copiloto na barra do Chrome: o painel lateral abre com o “Próximo passo” no topo.</p>
+      </details>
+    </div>
+  </section>
+
+  <div class="retoma" id="retoma" hidden><span id="retomaTxt">Faltam alguns passos das boas-vindas.</span><button class="bt sec" id="retomaBt">Continuar</button></div>
+
+  <section class="card" id="legenda">
+    <h2>Como ler a etiqueta</h2>
+    <p class="sub">Na lista de Anúncios do Mercado Livre, embaixo do “Você recebe”, o Copiloto mostra quanto sobra de verdade.</p>
+    <div class="ml-lin" aria-label="Exemplo de uma linha de anúncio no Mercado Livre">
+      <div class="prod"><b>Bicicleta Aro 20 infantil com rodinhas</b><span>MLB4000000101 · SKU BIKE-ARO20 · Premium</span></div>
+      <div class="recebe">Você recebe<b>R$ 438,96</b><span class="et luc"><b>Lucro R$ 152,97</b><i>margem 25,5%</i></span></div>
+    </div>
+    <p class="seta">↑ “Você recebe” é do Mercado Livre. A etiqueta é do Copiloto: você recebe − seu custo − seu imposto = lucro. Margem = lucro ÷ preço.</p>
+    <div class="leg4">
+      <div><span class="et luc"><b>Lucro R$ 12,30</b><i>margem 15%</i></span><span>Verde: lucro acima da sua meta de margem de <b class="metaTxt">10</b>%.</span></div>
+      <div><span class="et ate"><b>Lucro R$ 3,10</b><i>margem 4%</i></span><span>Amarelo: dá lucro, mas abaixo da meta de <b class="metaTxt">10</b>%.</span></div>
+      <div><span class="et pre"><b>Prejuízo R$ 5,00</b><i>margem −6%</i></span><span>Vermelho: você perde dinheiro a cada venda.</span></div>
+      <div><span class="et add"><b>＋ Informar custo</b></span><span>Pontilhado: falta o custo do produto. Clique e digite ali mesmo.</span></div>
+    </div>
+    <details class="priv-det"><summary>Onde ficam os meus dados?</summary>
+      <p class="priv">🔒 Seus custos ficam guardados só neste navegador, neste computador. O Copiloto só se comunica com o Mercado Livre e, se você conectar, com o Mercado Pago e o seu ERP (Tiny ou Omie). Do Mercado Livre e do Mercado Pago ele usa a sessão já aberta neste Chrome; do ERP ele só lê os custos. Seus custos não vão para nenhum servidor. Para usar em outro computador, baixe a planilha aqui e importe lá.</p>
+    </details>
+  </section>
+
+  <section class="card" id="cfg">
+    <h2>Seus números</h2>
+    <p class="sub">Tarifa, comissão e frete vêm do próprio Mercado Livre. Aqui ficam só os números que são seus.</p>
+    <form id="fcfg" class="grade" autocomplete="off">
+      <div class="campo"><label for="imposto_pct">Imposto sobre a venda (%)</label><input class="inp" id="imposto_pct" inputmode="decimal"><small>Ex.: Simples Nacional, 4% a 10%</small></div>
+      <div class="campo"><label for="margem_alvo_pct">Sua meta de margem (%)</label><input class="inp" id="margem_alvo_pct" inputmode="decimal"><small>Abaixo dela a etiqueta de lucro fica amarela</small></div>
+    </form>
+    <div class="acoes"><button class="bt" id="salvarCfg">Salvar meus números</button><span class="ok" id="okCfg"></span><button class="lnk" id="rever">Rever boas-vindas</button></div>
+  </section>
+
+  <section class="card" id="custos">
+    <h2>Custo dos produtos que mais vendem</h2>
+    <p class="sub">Sem o custo, o Copiloto não sabe se o produto dá lucro. Comece pelos 10 que mais vendem. Escolha um jeito:</p>
+    <div class="contador"><b id="cPrinc">—</b><div class="prog"><i id="cProg" style="width:0"></i></div><span class="cinza" id="cTodos"></span></div>
+    <div class="tres">
+      <div class="forma"><b>1. Planilha do Tiny ou Bling</b><p>Exporte os produtos do seu sistema e importe o arquivo como veio (.xls ou .csv).</p><label class="bt verde" for="arquivo" style="cursor:pointer">⬆ Importar planilha</label></div>
+      <div class="forma"><b>2. Conectar o seu ERP</b><p>Tiny ou Omie: uma chave da sua conta e os custos entram sozinhos, e se atualizam a cada sincronização. O Copiloto só lê.</p><button class="bt" id="cTiny">Conectar Tiny ou Omie</button></div>
+      <div class="forma"><b>3. Digitar nos anúncios</b><p>Na lista de Anúncios do Mercado Livre, clique em “Informar custo” na etiqueta de cada produto.</p><button class="bt sec" id="cAnuncios">Abrir meus anúncios</button></div>
+    </div>
+    <div id="cFaltam" hidden><p class="sub">Faltam estes (do que mais vende para o que menos vende):</p><ol id="cFaltamLista"></ol>
+      <button class="bt" id="cDigitar">Digitar o custo desses aqui</button></div>
+    <div class="acoes"><button class="bt sec" id="cJa">Já informei os principais</button><span class="ok" id="cOk"></span></div>
+  </section>
+
+  <section class="card" id="lista">
+    <h2>Custos por SKU</h2>
+    <p class="sub">Um custo por SKU vale para todos os anúncios desse SKU. Edite direto na tabela: salva sozinho.</p>
+    <div class="contador"><b id="contador">—</b><div class="prog grossa"><i id="contProg" style="width:0"></i></div><b id="contPct"></b></div>
+    <div class="rapido" id="rapido">
+      <div class="acoes">
+        <button class="bt grande verde" id="rTiny" type="button">Puxar custos do Tiny</button>
+        <label class="bt grande sec" for="arquivo" style="cursor:pointer">Importar planilha do Tiny ou Bling</label>
+      </div>
+      <p class="mais">Ou arraste a planilha (.xls ou .csv) para cima da tabela.</p>
+      <div id="rPassos" hidden>
+        <ol class="passos">
+          <li>No Tiny: Início › Extensões › Token API › Instalar.</li>
+          <li>Depois: Configurações › E-commerce › Token API › Copiar.</li>
+          <li>Cole aqui e clique em Conectar. O Copiloto só lê o custo; não muda nada no Tiny.</li>
+        </ol>
+        <div class="barra"><input class="inp" id="rToken" type="password" autocomplete="off" spellcheck="false" placeholder="Cole aqui o token do Tiny" aria-label="Token da API do Tiny"><button class="bt verde" id="rConectar" type="button">Conectar e puxar</button></div>
+      </div>
+      <div class="prog-lin" id="rProgLin" hidden><div class="prog grossa"><i id="rProg" style="width:0"></i></div><span id="rProgTxt"></span></div>
+      <p class="msg" id="rMsg" role="status" aria-live="polite"></p>
+      <p class="mais">Omie: veja “Custos do ERP”, logo abaixo da tabela. Bling: importe a planilha.</p>
+    </div>
+    <p class="msg erro" id="msgTab"></p>
+    <div class="barra">
+      <input class="inp" id="busca" placeholder="Buscar por nome, SKU ou MLB">
+      <label class="chk"><input type="checkbox" id="soSem"> Só os sem custo</label>
+      <label class="chk"><input type="checkbox" id="soPrinc"> Só os que mais vendem e estão sem custo</label>
+    </div>
+    <div class="soltar" id="soltar">
+      <div class="solte" aria-hidden="true">Solte a planilha aqui</div>
+      <div style="overflow-x:auto">
+        <table class="tabela">
+          <thead><tr><th>Produto</th><th>Custo (R$)</th><th>Embalagem/outros</th><th>Origem</th><th></th></tr></thead>
+          <tbody id="corpo"></tbody>
+        </table>
+      </div>
+    </div>
+    <p class="mais" id="rodape"></p>
+  </section>
+
+  <section class="card" id="erp">
+    <h2>Custos do ERP</h2>
+    <p class="sub">Conecte o seu sistema uma vez: o Copiloto importa o preço de custo de cada SKU sozinho e repete a cada sincronização. Só lê; não muda nada no seu ERP e não troca o custo que você digitou aqui.</p>
+    <div class="tres">
+      <div class="erp-c" id="tiny">
+        <h3>Tiny</h3>
+        <div id="tinySem">
+          <p>No Tiny: Início › Extensões › Token API › Instalar; depois Configurações › E-commerce › Token API › Copiar.</p>
+          <input class="inp" id="tinyToken" type="password" autocomplete="off" spellcheck="false" placeholder="Cole aqui o token do Tiny" aria-label="Token da API do Tiny">
+          <button class="bt verde" id="tinyConectar">Conectar</button>
+          <p>O Chrome vai pedir permissão para o Copiloto falar com api.tiny.com.br.</p>
+        </div>
+        <div id="tinyCom" hidden>
+          <p>✓ Conectado com o token <b id="tinyMasc"></b>. Os custos se atualizam a cada sincronização.</p>
+          <div class="acoes" style="margin-top:6px"><button class="bt" id="tinyAtualizar">Atualizar agora</button><button class="lnk" id="tinyEsquecer">Esquecer token</button></div>
+        </div>
+      </div>
+      <div class="erp-c" id="omie">
+        <h3>Omie</h3>
+        <div id="omieSem">
+          <p>No Omie: Configurações › Aplicativos › Chaves de acesso. Copie a App Key e a App Secret da sua conta.</p>
+          <input class="inp" id="omieKey" autocomplete="off" spellcheck="false" placeholder="App Key" aria-label="App Key do Omie">
+          <input class="inp" id="omieSecret" type="password" autocomplete="off" spellcheck="false" placeholder="App Secret" aria-label="App Secret do Omie">
+          <button class="bt verde" id="omieConectar">Conectar</button>
+          <p>O Chrome vai pedir permissão para o Copiloto falar com app.omie.com.br. As chaves ficam só neste Chrome.</p>
+        </div>
+        <div id="omieCom" hidden>
+          <p>✓ Conectado com a App Key <b id="omieMasc"></b>. Os custos se atualizam a cada sincronização.</p>
+          <div class="acoes" style="margin-top:6px"><button class="bt" id="omieAtualizar">Atualizar agora</button><button class="lnk" id="omieEsquecer">Esquecer chaves</button></div>
+        </div>
+      </div>
+      <div class="erp-c" id="bling">
+        <h3>Bling</h3>
+        <p>Exporte a planilha de produtos do Bling (.xls ou .csv) e importe aqui: o Copiloto lê o código e o preço de custo.</p>
+        <label class="bt sec" for="arquivo" style="cursor:pointer">⬆ Importar planilha do Bling</label>
+      </div>
+    </div>
+    <div class="prog-lin" id="impProgLin" hidden><div class="prog grossa"><i id="impProg" style="width:0"></i></div><span id="impProgTxt"></span></div>
+    <p class="msg" id="tinyMsg" role="status" aria-live="polite"></p>
+    <div id="impResumo" hidden>
+      <div class="cartoes">
+        <div><b id="impCom">0</b>com custo agora</div>
+        <div><b id="impSem">0</b><span id="impSemTxt">o ERP não tem custo</span></div>
+        <div><b id="impMant">0</b>mantidos porque você digitou</div>
+        <div class="falta"><b id="impFalta">0</b>falta</div>
+      </div>
+      <div class="acoes"><button class="bt sec" id="impVerFaltam" type="button">Ver os que faltam</button></div>
+    </div>
+  </section>
+
+  <section class="card" id="planilha">
+    <h2>Planilha</h2>
+    <p class="sub">Tem muitos produtos? Traga os custos do seu ERP ou preencha no Excel e importe aqui.</p>
+    <div class="dupla">
+      <div>
+        <button class="bt verde" id="baixar">⬇ Baixar planilha de custos</button>
+        <p class="mais">Serve de cópia (backup) e de modelo: um SKU por linha, com separador “;” e vírgula nos centavos, do jeito que o Excel brasileiro abre.</p>
+        <p class="mais" id="ultimaCopia"></p>
+      </div>
+      <div>
+        <label class="bt sec" for="arquivo" style="cursor:pointer">⬆ Importar planilha (.xls ou .csv)</label>
+        <input type="file" id="arquivo" accept=".xls,.csv,.txt,text/csv,application/vnd.ms-excel" hidden>
+        <p class="mais">Exporte os produtos do Tiny ou do Bling e importe o arquivo como veio (.xls ou .csv). O Copiloto procura a coluna do código (“Código” ou “SKU”) e a do custo (“Preço de custo” ou “Custo”) e mostra o que entendeu antes de gravar.</p>
+        <details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px;color:var(--azul)">ou colar as linhas aqui</summary>
+          <textarea id="colar" placeholder="Código;Preço de custo&#10;F1-20-LILAS-RODA;250,00&#10;GT-1L-INOX;58,00"></textarea>
+          <button class="bt sec" id="importarColado" style="margin-top:6px">Ler texto colado</button>
+        </details>
+      </div>
+    </div>
+    <div class="msg" id="msgImp"></div>
+    <div class="previa" id="previa" hidden>
+      <h3 id="pvTitulo"></h3>
+      <p id="pvColunas"></p>
+      <div style="overflow-x:auto"><table class="tabela"><thead><tr><th>SKU ou anúncio</th><th>Produto</th><th>Custo</th></tr></thead><tbody id="pvCorpo"></tbody></table></div>
+      <p id="pvIgnorados"></p>
+      <p id="pvAtualiza"></p>
+      <p class="aviso" id="pvSuspeito" hidden></p>
+      <div class="acoes"><button class="bt verde" id="pvImportar">Importar</button><button class="bt sec" id="pvCancelar">Cancelar</button></div>
+    </div>
+  </section>
+
+  <section class="card" id="contas">
+    <h2>Suas contas</h2>
+    <p class="sub">O Copiloto já mostra o nome de cada conta do Mercado Livre que você usa neste Chrome, junto com o ID. Se preferir, dê um apelido só seu (ex.: Loja 1) no lugar do nome do ML.</p>
+    <div id="listaContas"></div>
+    <div class="acoes"><button class="bt" id="salvarApelidos">Salvar apelidos</button><span class="ok" id="okApelidos"></span></div>
+  </section>
+
+  <section class="card" id="ajuda">
+    <h2>Ajuda</h2>
+    <p class="sub">Dúvida ou algo que não funcionou? Fale com a gente.</p>
+    <div class="acoes" style="margin-top:0"><a class="bt verde" id="suporteZap" href="#" target="_blank" rel="noopener">Falar com o suporte (WhatsApp)</a><a class="bt sec" href="apresentacao.html">Conheça o Copiloto</a></div>
+  </section>
+</main>
+
+<script src="calc.js"></script>
+<script src="store.js"></script>
+<script src="ml-extrator.js"></script>
+<script src="xls.js"></script>
+<script src="tiny.js"></script>
+<script src="omie.js"></script>
+<script src="painel.js"></script>
+</body>
+</html>

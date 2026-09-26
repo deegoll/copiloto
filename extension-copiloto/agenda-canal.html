@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agenda do Canal</title>
+<style>
+  :root { --tinta:#0F172A; --suave:#475569; --linha:#E2E8F0; --fundo:#F8FAFC; --card:#fff; --verde:#047857; --ambar:#B45309; --verm:#B91C1C; --azul:#0369A1; --tag:#F1F5F9; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --tinta:#E2E8F0; --suave:#94A3B8; --linha:#334155; --fundo:#0B1220; --card:#111827; --verde:#34D399; --ambar:#FBBF24; --verm:#F87171; --azul:#38BDF8; --tag:#1E293B; } }
+  :root[data-theme="dark"] { --tinta:#E2E8F0; --suave:#94A3B8; --linha:#334155; --fundo:#0B1220; --card:#111827; --verde:#34D399; --ambar:#FBBF24; --verm:#F87171; --azul:#38BDF8; --tag:#1E293B; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--fundo); color: var(--tinta); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  .topo { background: #0F172A; color: #fff; }
+  .topo .in { max-width: 1200px; margin: 0 auto; padding: 16px; display: flex; align-items: center; gap: 12px; }
+  .topo img { width: 32px; height: 32px; border-radius: 8px; }
+  .topo h1 { margin: 0; font-size: 18px; }
+  .topo p { margin: 0; color: #CBD5E1; font-size: 13px; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  .card { background: var(--card); border: 1px solid var(--linha); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  .card h2 { margin: 0 0 4px; font-size: 16px; }
+  .sub { margin: 0 0 12px; color: var(--suave); font-size: 13px; }
+  .aviso { background: var(--tag); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; font-weight: 600; }
+  .grade-f { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 16px; }
+  .campo label, .campo > span { display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 4px; }
+  .campo small { display: block; color: var(--suave); font-size: 11.5px; margin-top: 3px; }
+  .inp, select { width: 100%; padding: 8px 10px; border: 1px solid var(--linha); border-radius: 8px; font-size: 14px; background: var(--card); color: var(--tinta); }
+  .chk { display: inline-flex; gap: 5px; align-items: flex-start; font-size: 13px; margin: 0 12px 6px 0; max-width: 100%; }   /* texto longo quebra linha em tela estreita */
+  .chk input { flex: none; margin-top: 3px; }
+  .bt { display: inline-flex; align-items: center; gap: 6px; border: 0; cursor: pointer; padding: 9px 16px; border-radius: 9px; font-weight: 700; font-size: 13.5px; background: #0F172A; color: #fff; text-decoration: none; font-family: inherit; }
+  .bt.sec { background: var(--card); color: var(--tinta); border: 1px solid var(--linha); }
+  .bt.verde { background: #047857; }
+  .bt:disabled { opacity: .5; cursor: default; }
+  .lnk { border: 0; background: none; color: var(--azul); cursor: pointer; font: inherit; font-size: 12px; padding: 0; text-decoration: underline; text-align: left; }
+  .acoes { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .msg { font-size: 13px; color: var(--suave); min-height: 18px; }
+  .msg.erro { color: var(--verm); font-weight: 600; }
+  .resumo { font-size: 16px; font-weight: 800; }
+  #grade { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+  .dia h3 { margin: 0 0 8px; font-size: 13.5px; }
+  .cartao { background: var(--card); border: 1px solid var(--linha); border-radius: 10px; padding: 10px; margin-bottom: 8px; font-size: 12.5px; }
+  .cartao.vazio { border-style: dashed; }
+  .cartao.feito { opacity: .6; }
+  .cartao .cab { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .cartao .feito { color: var(--verde); font-weight: 700; margin-left: auto; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--tag); color: var(--suave); }
+  .tag.t-channel { background: #DBEAFE; color: #1E40AF; } .tag.t-story { background: #FCE7F3; color: #9D174D; } .tag.t-ambos { background: #EDE9FE; color: #5B21B6; }
+  .prod { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+  .prod img { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; flex: none; }
+  .prod span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .luc { color: var(--verde); font-weight: 700; margin-top: 6px; }
+  .luc small { color: var(--suave); font-weight: 400; }
+  .mot { color: var(--suave); font-size: 11.5px; margin: 4px 0 6px; }
+  .cartao .ac { display: flex; flex-direction: column; gap: 3px; }
+  .vazio { color: var(--suave); }
+  details summary { cursor: pointer; font-weight: 700; }
+  #fora { font-size: 12.5px; color: var(--suave); max-height: 320px; overflow: auto; }
+</style>
+</head>
+<body>
+<div id="shc-agenda">
+  <div class="topo"><div class="in">
+    <img src="icons/icon48.png" alt="">
+    <div><h1>Agenda do Canal de transmissão</h1><p>Todos os tipos, a semana inteira, só com produtos que dão lucro na promoção.</p></div>
+  </div></div>
+  <main>
+    <div class="card">
+      <p class="aviso">O Copiloto monta a agenda e preenche o formulário do Mercado Livre. Você confere e clica em Criar em cada uma — nada é enviado sem o seu clique.</p>
+      <div class="grade-f" style="margin-top:14px">
+        <div class="campo" id="canal-campo" hidden><label for="canal">Canal</label><select id="canal"></select></div>
+        <!-- Confirmado ao vivo em 24/09/2026: o ML aceitava até 8 dias à frente (só dias úteis). -->
+        <div class="campo"><label for="ultimo">Último dia que o ML aceita</label><input class="inp" type="date" id="ultimo"><small>O ML costuma aceitar até 8 dias à frente, só em dias úteis. Ajuste se o formulário do ML mostrar outro limite.</small></div>
+        <div class="campo"><label for="meta">Lucro mínimo na promoção (%)</label><input class="inp" type="number" id="meta" min="0" max="90" step="0.5"><small>Produto com prejuízo nunca entra.</small></div>
+        <div class="campo"><label for="repetir">Não repetir o mesmo produto antes de</label><select id="repetir"><option value="1">1 dia</option><option value="2">2 dias</option><option value="3" selected>3 dias</option><option value="5">5 dias</option><option value="7">7 dias</option></select></div>
+      </div>
+      <div class="campo" style="margin-top:12px"><span>Tipos</span>
+        <div id="tipos">
+          <label class="chk"><input type="checkbox" value="channel" checked> Mensagem (canal)</label>
+          <label class="chk"><input type="checkbox" value="story" checked> Story</label>
+          <label class="chk"><input type="checkbox" value="ambos"> Story e Canal (um formulário cria os dois; vai no lugar de Mensagem e Story)</label>
+        </div>
+      </div>
+      <div class="campo" style="margin-top:6px"><span>Horários (os mesmos em todos os dias)</span>
+        <p class="sub" id="melhores" style="margin:0 0 6px"></p>
+        <div id="horas"></div>
+      </div>
+      <div class="acoes">
+        <button class="bt" id="montar" type="button">Montar agenda</button>
+        <button class="bt sec" id="atualizar" type="button">Ler de novo do ML</button>
+        <span class="msg" id="status" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="acoes" style="margin:0 0 12px">
+        <span class="resumo" id="resumo"></span>
+        <button class="bt verde" id="programar" type="button" disabled>Programar no ML</button>
+        <span class="msg" id="progresso"></span>
+      </div>
+      <p class="sub"><span id="cand-n">0</span> produtos podem entrar. Lucro é estimativa do Copiloto com o preço da promoção e os números do ML; custo e imposto são seus.</p>
+      <div id="grade"></div>
+    </div>
+
+    <div class="card">
+      <h2>Cupom de desconto</h2>
+      <p class="sub">O Copiloto não cria cupom. Se quiser mandar um cupom para os seguidores, crie no Mercado Livre em "Cupom de desconto".</p>
+      <a class="bt sec" id="cupom" target="_blank" rel="noopener" href="https://vendedores.mercadolivre.com.br/marketing/canal-de-transmissao/lista">Abrir o canal no Mercado Livre</a>
+    </div>
+
+    <div class="card">
+      <details id="fora-box"><summary>Fora da agenda (<span id="fora-n">0</span>) e por quê</summary><ul id="fora"></ul></details>
+    </div>
+  </main>
+</div>
+<script src="calc.js"></script>
+<script src="store.js"></script>
+<script src="ml-extrator.js"></script>
+<script src="agenda-canal.js"></script>
+</body>
+</html>

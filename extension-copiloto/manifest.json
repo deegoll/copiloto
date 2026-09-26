@@ -1,0 +1,88 @@
+{
+  "manifest_version": 3,
+  "name": "Copiloto: lucro no Mercado Livre",
+  "short_name": "Copiloto",
+  "version": "3.0.0",
+  "description": "Lucro real de cada anúncio, promoção, frete, Ads e Full no Mercado Livre, com os números do próprio ML. Você só informa o custo.",
+  "homepage_url": "https://especialistaemmarketplace.com.br/sellerhub/",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "alarms",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://vendedores.mercadolivre.com.br/*",
+    "https://pa.mercadolivre.com.br/*"
+  ],
+  "optional_permissions": [
+    "background"
+  ],
+  "optional_host_permissions": [
+    "https://api.tiny.com.br/*",
+    "https://www.mercadopago.com.br/*",
+    "https://www.mercadolivre.com.br/*",
+    "https://produto.mercadolivre.com.br/*",
+    "https://app.omie.com.br/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Abrir o Copiloto",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "painel-lateral.html"
+  },
+  "options_page": "painel.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://vendedores.mercadolivre.com.br/*"
+      ],
+      "js": [
+        "calc.js",
+        "store.js",
+        "ml-extrator.js",
+        "copiloto-ml.js",
+        "ml-tela.js"
+      ],
+      "css": [
+        "ml-tela.css"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://vendedores.mercadolivre.com.br/marketing/canal-de-transmissao/*",
+        "https://vendedores.mercadolivre.com.br/marketing/canal-de-transmissao?*"
+      ],
+      "js": [
+        "agenda-canal.js",
+        "ml-canal.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "agenda-canal.html"
+      ],
+      "matches": [
+        "https://vendedores.mercadolivre.com.br/*"
+      ]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
