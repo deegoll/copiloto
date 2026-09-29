@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Copiloto: lucro no Mercado Livre",
   "short_name": "Copiloto",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Lucro real de cada anúncio, promoção, frete, Ads e Full no Mercado Livre, com os números do próprio ML. Você só informa o custo.",
   "homepage_url": "https://especialistaemmarketplace.com.br/sellerhub/",
   "minimum_chrome_version": "116",
@@ -17,14 +17,17 @@
     "https://pa.mercadolivre.com.br/*"
   ],
   "optional_permissions": [
-    "background"
+    "background",
+    "identity"
   ],
   "optional_host_permissions": [
     "https://api.tiny.com.br/*",
     "https://www.mercadopago.com.br/*",
     "https://www.mercadolivre.com.br/*",
     "https://produto.mercadolivre.com.br/*",
-    "https://app.omie.com.br/*"
+    "https://app.omie.com.br/*",
+    "https://www.bling.com.br/*",
+    "https://api.bling.com.br/*"
   ],
   "background": {
     "service_worker": "background.js"

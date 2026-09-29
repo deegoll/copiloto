@@ -59,7 +59,27 @@
   .ok-lido { color: var(--verde); font-weight: 700; font-size: 13px; margin: 4px 0 8px; }
   .topo .aula { margin-left: auto; background: transparent; color: #fff; border: 1px solid #475569; border-radius: 9px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
   .topo .aula:focus-visible { outline: 2px solid #0EA5E9; outline-offset: 2px; }
-  @media (max-width: 600px) { .card { padding: 14px; } .cascata td.bar, .cascata th.bar { display: none; } }
+  /* v3.1: custos × mês anterior e "quanto dá para recuperar" (cores do ESPEC: vermelho sobe, verde cai, âmbar = ação) */
+  .manchete { margin: 4px 0 10px; font-size: 14px; color: var(--suave); }
+  .manchete b { color: var(--tinta); }
+  .pt { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #94A3B8; margin-right: 7px; vertical-align: 1px; }
+  .pt.pr { background: var(--verm); } .pt.at { background: #F59E0B; } .pt.ok { background: var(--verde); }
+  .seta { display: inline-block; font-weight: 800; font-size: 12px; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+  .seta.sobe { background: #FEF2F2; color: var(--verm); } .seta.desce { background: #ECFDF5; color: var(--verde); } .seta.igual { background: #F1F5F9; color: var(--suave); }
+  .custos td.rot b { display: block; font-weight: 650; } .custos td.rot span { display: block; color: var(--suave); font-size: 11px; white-space: normal; }
+  .nl { color: #94A3B8; font-size: 12px; font-style: italic; }
+  #f-recuperar { border-color: #FDE68A; }
+  #f-recuperar h2 small { color: #92400E; }
+  .rec-tot { margin: 2px 0 10px; font-size: 13px; color: var(--suave); } .rec-tot b { font-size: 22px; color: #92400E; margin-right: 6px; }
+  .parc { border: 1px solid var(--linha); border-left: 4px solid #F59E0B; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; }
+  .parc.full, .parc.novo { border-left-color: var(--verm); }
+  .pc-cab { display: flex; justify-content: space-between; gap: 10px; }
+  .rec-it { list-style: none; margin: 6px 0 0; padding: 0; }
+  .rec-it li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-top: 1px solid #F1F5F9; font-size: 12.5px; }
+  .rec-it li > span:first-child { flex: 1; min-width: 200px; } .rec-it small { display: block; color: var(--suave); }
+  .rec-it .acoes { gap: 8px; align-items: center; }
+  .tabela th.num { text-align: right; }
+  @media (max-width: 600px) { .card { padding: 14px; } .cascata td.bar, .cascata th.bar { display: none; } .custos th:nth-child(3), .custos td:nth-child(3) { display: none; } .custos td.rot, .custos th { white-space: normal; } .custos td, .custos th { padding: 6px 4px; } }
 </style>
 </head>
 <body>

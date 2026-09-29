@@ -294,6 +294,104 @@
             diasPerdendo: /^(perdendo|restrito)$/.test(u.e) ? dias : 0, mudancas: h.map(x => Object.assign({}, x)) };
     };
 
+    // ── v3.1: competição no catálogo pela tela "Alterar anúncio" (a MESMA leitura de fotos/medidas; mapeado ao vivo em 26/09/2026):
+    // brick 'competition_task' > 'buybox_competition_user_product'. Só LEITURA: as ações do brick (competition-push-price = ESCRITA,
+    // "Reportar") nunca são chamadas nem guardadas; do botão "Baixar para R$ X" fica só o número (o preço para ganhar).
+    const txtDe = v => String((v && (typeof v === 'string' ? v : v.label || v.text)) || '').replace(/\s+/g, ' ').trim();
+    const ofertaComp = row => {
+        if (!row || typeof row !== 'object') return null;
+        const pr = row.price || {}, pub = row.publication || {};
+        const preco = SHC.num(pr.amount) !== null ? SHC.num(pr.amount) : SHC.valorRS(txtDe(pr));
+        return { itemId: /^MLB\d+$/.test(String(row.itemId || '')) ? String(row.itemId) : '', loja: txtDe(pub.title).slice(0, 60), unidades: txtDe(pub.secondaryLabel).slice(0, 30),
+            preco: preco > 0 ? preco : null, parcelamento: txtDe(row.installments).slice(0, 60), frete: txtDe(row.shipping).slice(0, 60),
+            logistica: txtDe(row.logistics).replace(/^Envios? no Mercado Livre:\s*/i, '').slice(0, 60), melhor: /melhor oferta/i.test(txtDe(row.tagStatus)) };
+    };
+    /**
+     * Tela "Alterar anúncio" → { itemId, catalogo, estado ('perdendo'|'ganhando'|…), tipo, winRate (% | null), precoGanhar | null, voce, vencedor | null,
+     * souVencedor, concorrentes (qtd na tabela), visitas {voce, concorrentes, total, delta, tendencia, dias:[{dia, voce, conc}]} | null, mensagem } | null (sem o brick).
+     * voce/vencedor = { itemId, loja, unidades, preco, parcelamento, frete, logistica } (loja = nome público da loja no ML; nada de comprador).
+     */
+    SHC.mlCompeticaoDoEstado = function (r) {
+        if (!r || typeof r !== 'object') return null;
+        const t = primeiroEmLargura(r, o => (o.id === 'competition_task' && o.data ? o : undefined), 40);
+        if (!t) return null;
+        const b = primeiroEmLargura(t, o => (o.id === 'buybox_competition_user_product' && o.data ? o.data : undefined), 8) || {};
+        const grupos = ((b.competitionTable || {}).groups || []).filter(g => g && Array.isArray(g.rows));
+        const rows = [].concat(...grupos.map(g => g.rows)).filter(x => x && typeof x === 'object');
+        const eu = rows.find(x => x.role === 'requester'), vr = rows.find(x => /melhor oferta/i.test(txtDe(x.tagStatus)));
+        const voce = ofertaComp(eu), acao = eu && ((eu.price || {}).actions || []).find(a => a && (a.id === 'LOWER_PRICE' || /baixar para/i.test(txtDe(a))));
+        const pg = acao ? (SHC.num(acao.priceValue) !== null ? SHC.num(acao.priceValue) : SHC.valorRS(txtDe(acao))) : null;
+        const pill = txtDe(((t.data || {}).header || {}).pill).toLowerCase(), show = ((t.data || {}).metrics || {}).show || {};
+        const ui = String(b.uiState || show.competitionType || '');
+        const estado = pill ? pill.normalize('NFD').replace(/[̀-ͯ]/g, '') : /^losing/.test(ui) ? 'perdendo' : /^winning/.test(ui) ? 'ganhando' : '';
+        const vp = b.visitPerformance || {}, pa = vp.participation || {};
+        const visitas = Array.isArray(vp.dailyData) || pa.total !== undefined ? {
+            voce: SHC.num(pa.myVisits), concorrentes: SHC.num(pa.competitors), total: SHC.num(pa.total), delta: txtDe(pa.deltaLabel).slice(0, 30), tendencia: String(pa.trend || ''),
+            dias: (vp.dailyData || []).slice(0, 14).map(d => ({ dia: String((d && d.date) || '').slice(0, 12), voce: SHC.num(d && d.myVisits) || 0, conc: SHC.num(d && d.competitorsVisits) || 0 })),
+        } : null;
+        const wr = SHC.num(show.winRate) !== null ? SHC.num(show.winRate) : numPct(pa.winRate);   // numPct (mais abaixo): "15%" → 15
+        return { itemId: voce ? voce.itemId : '', catalogo: /^MLB\d+$/.test(String(b.productId || '')) ? String(b.productId) : '', estado, tipo: ui.slice(0, 40),
+            winRate: wr, precoGanhar: pg > 0 ? pg : null, voce, vencedor: vr && vr !== eu ? ofertaComp(vr) : null, souVencedor: !!(vr && vr === eu),
+            concorrentes: rows.filter(x => x.role === 'competitor').length, visitas, mensagem: txtDe(grupos[0] && grupos[0].message).slice(0, 160) };
+    };
+    const CATCOMP_HIST_MAX = 120;
+    /** catcomp:<conta>.porItem[MLB] + leitura nova → entrada { ...leitura, ts, hist:[{d, e, w (winRate), g (preço p/ ganhar), vp (preço do vencedor)}] } (1 por dia; a do dia é trocada). */
+    SHC.compCatRegistra = function (ant, leitura, hoje, agora) {
+        const h = ((ant && ant.hist) || []).filter(x => x && x.d && x.d !== hoje);
+        const v = leitura.vencedor;
+        h.push({ d: hoje, e: leitura.estado, w: leitura.winRate, g: leitura.precoGanhar, vp: v ? v.preco : null });
+        return Object.assign({}, leitura, { ts: agora || Date.now(), hist: h.sort((a, b) => (a.d < b.d ? -1 : 1)).slice(-CATCOMP_HIST_MAX) });
+    };
+    /**
+     * "O que fazer para ganhar", em ordem → [{ tipo: 'preco'|'logistica'|'parcelamento'|'frete'|'info', cor: 'l'|'a'|'p'|'n', txt }].
+     * sg = sobra no preço para ganhar (SHC.sobraAtacado no preço de ganhar: mesma tarifa % e mesmo frete) | null (sem custo).
+     * Baixar o preço vem 1º só se ainda sobra lucro; senão, 1º as alavancas que o vencedor tem e você não (colunas da tabela do ML).
+     */
+    SHC.compCatAcoes = function (c, sg) {
+        if (!c || c.souVencedor || c.estado === 'ganhando') return [];
+        const out = [], v = c.vencedor, eu = c.voce || {}, pg = c.precoGanhar;
+        let preco = null;
+        if (pg) {
+            if (!sg || sg.sobra === null || sg.sobra === undefined) preco = { tipo: 'preco', cor: 'n', txt: 'Baixar para ' + SHC.moeda(pg) + ': informe o custo para saber se ainda dá lucro.' };
+            else if (sg.sobra >= 0) preco = { tipo: 'preco', cor: 'l', txt: 'Baixar para ' + SHC.moeda(pg) + ': ainda sobra ' + SHC.moeda(sg.sobra) + ' (' + SHC.pctTxt(sg.pct) + ') por venda.' };
+            else preco = { tipo: 'preco', cor: 'p', txt: 'Baixar para ' + SHC.moeda(pg) + ' dá prejuízo de ' + SHC.moeda(-sg.sobra) + ' por venda: não compensa.' };
+        }
+        if (preco && preco.cor !== 'p') out.push(preco);
+        if (v) {
+            const vl = v.logistica.toLowerCase(), el = String(eu.logistica || '').toLowerCase();
+            if (/full/.test(vl) && !/full/.test(el)) out.push({ tipo: 'logistica', cor: 'a', txt: 'O vencedor envia pelo Full e você não: mandar ao Full ajuda a ganhar.' });
+            else if (/flex/.test(vl) && !/flex/.test(el)) out.push({ tipo: 'logistica', cor: 'a', txt: 'O vencedor tem Flex e você não: habilitar o Flex ajuda a ganhar.' });
+            else if (/coleta/.test(vl) && /ag[êe]ncia/.test(el)) out.push({ tipo: 'logistica', cor: 'a', txt: 'O vencedor tem coleta e você agência: Full, Flex ou coleta ajudam a ganhar.' });
+            else if (vl && el && vl !== el) out.push({ tipo: 'logistica', cor: 'a', txt: 'Entrega: o vencedor tem “' + v.logistica + '” e você “' + eu.logistica + '”.' });
+            if (/premium|sem juros/i.test(v.parcelamento) && !/premium|sem juros/i.test(eu.parcelamento || ''))
+                out.push({ tipo: 'parcelamento', cor: 'a', txt: 'O vencedor parcela sem juros e você não: mudar para Premium (a tarifa do Premium é maior).' });
+            if (/gr[áa]tis/i.test(v.frete) && !/gr[áa]tis/i.test(eu.frete || '')) out.push({ tipo: 'frete', cor: 'a', txt: 'O vencedor tem frete grátis e você não: oferecer frete grátis.' });
+            if (out.every(x => x.tipo === 'preco') && v.preco && eu.preco && v.preco > eu.preco + 0.004)
+                out.push({ tipo: 'info', cor: 'n', txt: 'O vencedor cobra mais caro (' + SHC.moeda(v.preco) + '): o ML pesa entrega, parcelamento e reputação, não só o preço.' });
+        }
+        if (preco && preco.cor === 'p') out.push(preco);
+        if (!out.length) out.push({ tipo: 'info', cor: 'n', txt: 'O ML não mostrou o que falta. Confira em “Alterar anúncio”, seção Concorrência.' });
+        return out;
+    };
+    /**
+     * Sazonalidade da competição: histórico comp:<conta>[MLB] ([{d, e}], 1 registro por mudança) → [{ mes 'AAAA-MM', ganhando, perdendo, dividindo }]
+     * (dias em cada estado, os meses mais novos por último, no máx. `meses`). Antes do 1º registro não se sabe: não conta.
+     */
+    SHC.compPorMes = function (hist, hoje, meses) {
+        const h = (Array.isArray(hist) ? hist : []).filter(x => x && /^\d{4}-\d{2}-\d{2}$/.test(x.d)).sort((a, b) => (a.d < b.d ? -1 : 1));
+        const fim = diaUTC(hoje || SHC.hoje()), out = {};
+        h.forEach((x, i) => {
+            const k = /^(perdendo|restrito)$/.test(x.e) ? 'perdendo' : x.e === 'ganhando' ? 'ganhando' : x.e === 'dividindo' ? 'dividindo' : '';
+            const ate = i + 1 < h.length ? diaUTC(h[i + 1].d) : fim;   // hoje não conta: bate com o "há N dias" de compResumo (hoje − desde)
+            if (!k) return;
+            for (let t = diaUTC(x.d); t < ate && t < fim; t += 864e5) {
+                const m = new Date(t).toISOString().slice(0, 7), o = out[m] || (out[m] = { mes: m, ganhando: 0, perdendo: 0, dividindo: 0 });
+                o[k]++;
+            }
+        });
+        return Object.keys(out).sort().slice(-(meses || 12)).map(m => out[m]);
+    };
+
     SHC.mlAnunciosDoEstado = function (r) {
         const vd = r && r.appProps && r.appProps.pageProps && r.appProps.pageProps.viewData;
         const out = [];
@@ -600,7 +698,11 @@
             const texto = String(c.detail_1 || '').replace(/\s+/g, ' ').trim().slice(0, 140);
             const envio = /tarifa (de|por) envio|mercado envios/i.test(texto), mt = c.modalTrigger || {};   // "Tarifa do Mercado Envios" (AMB MOVE, 24/09) também é frete
             const estorno = mt.type === 'BXDE' || mt.detailType === 'BONUS' || /^cancelamento/i.test(texto), vende = /custo por vender/i.test(texto);   // v2.3: 1 por venda (sazonalidade)
-            const tipo = estorno ? (envio ? 'frete_estorno' : vende ? 'venda_cancelada' : 'outro')
+            // v3.1: "Tarifa de devolução por envio externo ou intermunicipal" (visto na fatura real) é o frete de VOLTA de uma devolução,
+            // cobrado no mesmo pedido: não é o frete da venda. Antes caía em 'frete' e inflava o "cobrado a mais" (ex.: 20,75 + 46,49 = 67,24).
+            const devolucao = /devolu[çc][ãa]o/i.test(texto);
+            const tipo = devolucao ? (estorno ? 'devolucao_estorno' : 'devolucao')
+                : estorno ? (envio ? 'frete_estorno' : vende ? 'venda_cancelada' : 'outro')
                 : envio ? (/conta do comprador/i.test(texto) ? 'frete_parcial' : 'frete')
                 : vende ? 'venda' : /product ads/i.test(texto) ? 'ads' : 'outro';
             const mlb = /MLB-?(\d{6,14})/i.exec(String(c.permalink || ''));
@@ -623,6 +725,9 @@
         out.brutas = lista.length;
         return out;
     };
+    // v3.1: cobrança gravada antes da separação da devolução (cob:<conta>:<mês> da versão anterior) → o tipo que mlCobrancasDaResposta dá hoje.
+    SHC.tipoDevolucao = c => (c && /devolu[çc][ãa]o/i.test(String(c.texto || '')) && !/^devolucao/.test(String(c.tipo || '')))
+        ? Object.assign({}, c, { tipo: c.estorno ? 'devolucao_estorno' : 'devolucao' }) : c;
 
     /**
      * Janelas para ler o Faturamento, UMA POR MÊS de calendário (o mês atual vai até hoje), do mês ATUAL para trás
@@ -732,7 +837,7 @@
         const indice = indiceTitulos(itens), cache = {}, pendentes = [];
         let resolvidas = 0;
         const out = (cobs || []).map(c => {
-            if (!c || c.itemId || !c.titulo || !/^(frete|venda)/.test(c.tipo)) return c;
+            if (!c || c.itemId || !c.titulo || !/^(frete|venda|devolucao)/.test(c.tipo)) return c;   // v3.1: devolução também (frete de devoluções por anúncio)
             const n = SHC.normalizaTitulo(c.titulo);
             const id = n in cache ? cache[n] : (cache[n] = casaTitulo(n, indice));
             if (id) { resolvidas++; return Object.assign({}, c, { itemId: id, porTitulo: true }); }
@@ -789,13 +894,17 @@
      *   [{ pedido, itemId, data (1ª cobrança), cobrado (cobranças − estornos), cheio (antes do desconto do ML; ≥ cobrado), temExtra,
      *      formato: 'gratis' | 'compartilhado' | 'extra' (só envio extra, sem a tarifa principal) | 'cancelado', cancelado }]
      * Pedido só com estorno (a cobrança caiu fora do período lido) fica de fora.
+     * v3.1: linhas = [{t: texto do ML, v: valor, d: dia, e: 1 se estorno}] (a conta linha a linha, igual ao detalhe da venda no ML).
+     * A tarifa de devolução (frete de VOLTA) nunca entra aqui: é SHC.devolucoesDasCobrancas.
      */
+    const linhaCob = c => (/estorno$/.test(c.tipo) ? { t: c.texto, v: c.valor, d: c.data, e: 1 } : { t: c.texto, v: c.valor, d: c.data });
     SHC.freteDasCobrancas = function (cobs) {
         const g = {};
         (cobs || []).forEach(c => {
             if (!c || !/^frete/.test(c.tipo) || !c.orderId || !(c.valor >= 0)) return;
-            const p = g[c.orderId] || (g[c.orderId] = { pedido: c.orderId, itemId: '', data: '', cob: 0, est: 0, cheio: 0, gratis: false, compart: false, extra: false });
+            const p = g[c.orderId] || (g[c.orderId] = { pedido: c.orderId, itemId: '', data: '', cob: 0, est: 0, cheio: 0, gratis: false, compart: false, extra: false, linhas: [] });
             if (!p.itemId && c.itemId) p.itemId = c.itemId;
+            if (p.linhas.length < 12) p.linhas.push(linhaCob(c));
             if (c.tipo === 'frete_estorno') { p.est = SHC.r2(p.est + c.valor); return; }
             p.cob = SHC.r2(p.cob + c.valor);
             p.cheio = SHC.r2(p.cheio + (c.cheio > c.valor ? c.cheio : c.valor));
@@ -805,8 +914,42 @@
         return Object.keys(g).map(k => g[k]).filter(p => p.data && p.cob > 0).map(p => {
             const cancelado = p.est >= p.cob - 0.004, cobrado = cancelado ? 0 : SHC.r2(p.cob - p.est);
             return { pedido: p.pedido, itemId: p.itemId, data: p.data, cobrado, cheio: cancelado ? 0 : Math.max(cobrado, SHC.r2(p.cheio - p.est)), temExtra: p.extra,
-                formato: cancelado ? 'cancelado' : p.compart ? 'compartilhado' : p.gratis ? 'gratis' : 'extra', cancelado };
+                formato: cancelado ? 'cancelado' : p.compart ? 'compartilhado' : p.gratis ? 'gratis' : 'extra', cancelado, linhas: p.linhas };
         });
+    };
+    /**
+     * v3.1: tarifa de devolução ("Tarifa de devolução por envio externo ou intermunicipal" = frete de VOLTA do produto devolvido) por pedido:
+     * [{ pedido, itemId, data (1ª cobrança), valor (cobranças − estornos, ≥ 0), linhas }]. É custo do Fechamento ("Frete de devoluções"),
+     * nunca "frete cobrado a mais": não se pede revisão dela.
+     */
+    SHC.devolucoesDasCobrancas = function (cobs) {
+        const g = {};
+        (cobs || []).forEach(c => {
+            if (!c || !/^devolucao/.test(c.tipo) || !c.orderId || !(c.valor >= 0)) return;
+            const p = g[c.orderId] || (g[c.orderId] = { pedido: c.orderId, itemId: '', data: '', valor: 0, linhas: [] });
+            if (!p.itemId && c.itemId) p.itemId = c.itemId;
+            if (p.linhas.length < 12) p.linhas.push(linhaCob(c));
+            p.valor = SHC.r2(p.valor + (c.tipo === 'devolucao_estorno' ? -c.valor : c.valor));
+            if (c.tipo === 'devolucao' && c.data && (!p.data || c.data < p.data)) p.data = c.data;
+        });
+        return Object.keys(g).map(k => g[k]).filter(p => p.data).map(p => Object.assign(p, { valor: Math.max(0, p.valor) }));
+    };
+    /**
+     * Frete de devoluções dos últimos 30 dias (hoje incluso) e dos 30 anteriores. devs = SHC.devolucoesDasCobrancas (ou o guardado).
+     * → { ult30: {pedidos, total}, ant30: {pedidos, total}, lista: [os 30 maiores dos últimos 30 dias] }
+     */
+    SHC.devolucoesResumo = function (devs, hoje) {
+        const h = hoje || SHC.hoje(), ini30 = diaMenosX(h, 29), ini60 = diaMenosX(h, 59), r2 = SHC.r2;
+        const out = { ult30: { pedidos: 0, total: 0 }, ant30: { pedidos: 0, total: 0 }, lista: [] };
+        (devs || []).forEach(p => {
+            if (!p || !p.data || p.data > h || !(p.valor > 0)) return;
+            const b = p.data >= ini30 ? out.ult30 : p.data >= ini60 ? out.ant30 : null;
+            if (!b) return;
+            b.pedidos++; b.total = r2(b.total + p.valor);
+            if (b === out.ult30) out.lista.push({ pedido: p.pedido, itemId: p.itemId || '', data: p.data, valor: p.valor, linhas: p.linhas || null });
+        });
+        out.lista = out.lista.sort((a, b) => b.valor - a.valor).slice(0, 30);
+        return out;
     };
     /** Cobranças "Custo por vender" → pedidos vendidos [{ pedido, itemId, data, cancelada }] (cancelada = "Cancelamento do custo por vender" ≥ vendas). */
     SHC.vendasDasCobrancas = function (cobs) {
@@ -901,8 +1044,8 @@
      * de frete lida: o ML lança depois), semFreteNoAnuncio (anúncio fora do retrato ou sem frete). compradorPaga = anúncio com envio
      * por conta do comprador e sem cobrança (nada a conciliar). Cancelado não conta como venda.
      * porPedido = SHC.freteDasCobrancas; retratoPorItem = {MLB: item}; vendas30 = SHC.vendasDasCobrancas; hoje (opcional) = recorta 30 dias.
-     * → { vendas, conciliados, pagoAMais:[{pedido, itemId, data, cobrado, esperado, diferenca, formato, talvezUnidades}], totalAMais,
-     *     semCobrancaAinda, pedidosSemCobranca:[pedido] (até 100), semFreteNoAnuncio, compradorPaga, cancelados, freteSemVenda, faltam }
+     * → { vendas, conciliados, pagoAMais:[{pedido, itemId, data, cobrado, esperado, diferenca, formato, talvezUnidades, linhas?, dev?}],
+     *     totalAMais (sem os talvezUnidades), talvez:{pedidos, total} (os com *), semCobrancaAinda, pedidosSemCobranca:[pedido] (até 100), semFreteNoAnuncio, compradorPaga, cancelados, freteSemVenda, faltam }
      */
     // O frete costuma vir com OUTRO número ("Venda #20000147…" no frete × "Pedido #2000018…" no Custo por vender, retrato real de
     // 25/09/2026): sem o mesmo número, o frete casa com a venda do MESMO anúncio, sem par, feita até FRETE_PAR_DIAS antes (a mais próxima).
@@ -943,10 +1086,15 @@
             const esperado = a.freteComprador ? 0 : a.frete;
             if (!(esperado > 0) || p.formato === 'compartilhado' || p.aprox) return;   // aprox: sem o formato (versão anterior), não aponta
             const dif = r2(p.cobrado - esperado), razao = p.cobrado / esperado;
-            if (dif > Math.max(1, esperado * 0.05) && !variasUn(razao)) out.pagoAMais.push({ pedido: k, itemId: id, data: p.data, cobrado: p.cobrado, esperado, diferenca: dif, formato: p.formato, talvezUnidades: razao >= 1.6 });
+            // v3.1: linhas = a conta do frete linha a linha (conferir com o ML); dev = tarifa de devolução do pedido, que fica FORA desta conta.
+            if (dif > Math.max(1, esperado * 0.05) && !variasUn(razao)) out.pagoAMais.push(Object.assign({ pedido: k, itemId: id, data: p.data, cobrado: p.cobrado, esperado, diferenca: dif, formato: p.formato, talvezUnidades: razao >= 1.6 },
+                p.linhas ? { linhas: p.linhas } : {}, p.dev > 0 ? { dev: p.dev } : {}, k !== p.pedido ? { pedidoFrete: p.pedido } : {}));
         });
         out.pagoAMais.sort((a, b) => b.diferenca - a.diferenca);
-        out.totalAMais = r2(out.pagoAMais.reduce((s, x) => s + x.diferenca, 0));
+        // v3.1: o total "a mais" é só o que dá para pedir revisão; o pedido com * (frete ≥ 1,6× o do anúncio: pode ter 2+ unidades) fica à parte.
+        const talvez = out.pagoAMais.filter(x => x.talvezUnidades);
+        out.totalAMais = r2(out.pagoAMais.filter(x => !x.talvezUnidades).reduce((s, x) => s + x.diferenca, 0));
+        out.talvez = { pedidos: talvez.length, total: r2(talvez.reduce((s, x) => s + x.diferenca, 0)) };
         out.pagoAMais = out.pagoAMais.slice(0, 200);
         out.freteSemVenda = soltos.filter(p => !p.cancelado).length;   // venda fora do período lido (ou sem o anúncio): não é venda nova
         out.faltam = out.semCobrancaAinda + out.semFreteNoAnuncio;
@@ -1188,6 +1336,13 @@
         const s = String(t || '').replace(/^\s*cancelamento\s+(d[oa]s?|de)\s+/i, '');
         if (/seguidores/i.test(s)) return 'ads_seguidores';
         if (/product ads|publicidad/i.test(s)) return 'ads';
+        // v3.1 (pedido da dona 26/09: "tudo que é pertinente a custo"): nomes vistos ao vivo no resumo da fatura por categoria
+        // ("Tarifa pelo serviço de armazenamento Full", "Tarifa por estoque antigo no Full", "Tarifa de manutenção da Minha página",
+        // "Cobrança do diferencial de alíquota interestadual (ICMS-DIFAL)", "Tarifa de devolução…"). Antes caíam em 'outro' (ou em frete).
+        if (/\bfull\b/i.test(s)) return 'full';
+        if (/minha p[áa]gina/i.test(s)) return 'minha_pagina';
+        if (/difal|al[íi]quota|\bimpostos?\b/i.test(s)) return 'impostos_ml';
+        if (/devolu[çc][ãa]o/i.test(s)) return 'devolucao';
         if (/tarifa (de|por) envio|envios?\b/i.test(s)) return 'frete';
         if (/custo por vender/i.test(s)) return 'tarifa_venda';
         if (/custo por cobrar/i.test(s)) return 'cobranca_mp';
@@ -1195,7 +1350,9 @@
         if (/taxa de recebimento/i.test(s)) return 'recebimento';
         return 'outro';
     };
-    SHC.TIPOS_FECHAMENTO = ['tarifa_venda', 'cobranca_mp', 'parcelamento', 'recebimento', 'frete', 'ads', 'ads_seguidores', 'outro'];
+    SHC.TIPOS_FECHAMENTO = ['tarifa_venda', 'cobranca_mp', 'parcelamento', 'recebimento', 'frete', 'devolucao', 'full', 'ads', 'ads_seguidores', 'minha_pagina', 'impostos_ml', 'outro'];
+    // fech.tipos = 2: gravado já com Full, Minha página, impostos e devolução separados de 'outro'/frete (mês lido antes fica sem a marca).
+    SHC.FECH_TIPOS_VERSAO = 2;
     /**
      * Cobranças de SHC.mlCobrancasDaResposta (TODAS, sem filtro) → { 'AAAA-MM': {mes, porTipo, estornos, total, qtdVendas, pedidos} }.
      * porTipo = cobrado − estornado de cada tipo; estornos ≤ 0; total = soma de porTipo. Ads no mês do dia das visitas (dataRef).
@@ -1211,13 +1368,18 @@
             const mes = d.slice(0, 7), tipo = SHC.tipoCustoFechamento(c.texto);
             const est = c.estorno !== undefined ? !!c.estorno : /^cancelamento/i.test(c.texto || '');
             const v = est ? -c.valor : c.valor;
-            const f = out[mes] || (out[mes] = { mes, porTipo: {}, porOrigem: {}, porDia: {}, estornos: 0, total: 0, qtdVendas: 0, pedidos: {} });
+            const f = out[mes] || (out[mes] = { mes, porTipo: {}, porOrigem: {}, porDia: {}, estornos: 0, total: 0, qtdVendas: 0, pedidos: {}, tipos: SHC.FECH_TIPOS_VERSAO });
             f.porTipo[tipo] = (f.porTipo[tipo] || 0) + v;
             const o = f.porOrigem[tipo] || (f.porOrigem[tipo] = { venda: 0, fatura: 0 });
             o[c.origemPagamento === 'venda' ? 'venda' : 'fatura'] += v;
-            if (/^\d{4}-\d{2}-\d{2}$/.test(c.data || '')) f.porDia[c.data] = (f.porDia[c.data] || 0) + v;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(c.data || '')) {
+                f.porDia[c.data] = (f.porDia[c.data] || 0) + v;
+                // v3.1 (29/09): cobrado (sem estorno) por dia DA COBRANÇA e tipo: a conferência soma o ciclo exato da fatura (F.somaCiclo).
+                if (!est) { const pd = f.porDiaTipo || (f.porDiaTipo = {}), x = pd[c.data] || (pd[c.data] = {}); x[tipo] = SHC.r2((x[tipo] || 0) + v); }
+            }
             f.total += v;
-            if (est) f.estornos += v;
+            // v3.1 (29/09): estorno por tipo (≤ 0), como a fatura do ML (tipo ANTES dos cancelamentos + "Cancelamentos de tarifas" à parte).
+            if (est) { f.estornos += v; const e = f.estornosPorTipo || (f.estornosPorTipo = {}); e[tipo] = (e[tipo] || 0) + v; }
             if (tipo === 'tarifa_venda') f.qtdVendas += est ? -1 : 1;
             if (c.orderId && desdePedidos && mes >= desdePedidos) { const p = f.pedidos[c.orderId] || (f.pedidos[c.orderId] = {}); p[tipo] = SHC.r2((p[tipo] || 0) + v); }
         });
@@ -1226,6 +1388,7 @@
             Object.keys(f.porTipo).forEach(t => { f.porTipo[t] = SHC.r2(f.porTipo[t]); });
             Object.keys(f.porOrigem).forEach(t => { const o = f.porOrigem[t]; o.venda = SHC.r2(o.venda); o.fatura = SHC.r2(o.fatura); o.total = f.porTipo[t]; });
             Object.keys(f.porDia).forEach(d => { f.porDia[d] = SHC.r2(f.porDia[d]); });
+            Object.keys(f.estornosPorTipo || {}).forEach(t => { f.estornosPorTipo[t] = SHC.r2(f.estornosPorTipo[t]); });
             f.total = SHC.r2(f.total); f.estornos = SHC.r2(f.estornos); f.qtdVendas = Math.max(0, f.qtdVendas);
         });
         return out;
@@ -1342,6 +1505,95 @@
         });
     };
 
+    // ── v3.1: CUSTO NOVO NA FATURA. Resumo da fatura por categoria e por tipo de tarifa, mapeado ao vivo em 26/09/2026:
+    // GET /billing/detail/api/billing-info/<AAAAMMDD>/bricks?… (1 pedido por fatura) → account_detail_card.data:
+    // pieChartSection.dataset[] {label, value, charges[] {label, value}} (categoria e tipos) e chargeSection {total, sectionIterator[]}.
+    SHC.faturaCategoriasUrl = data => 'https://vendedores.mercadolivre.com.br/billing/detail/api/billing-info/' + data
+        + '/bricks?site_id=MLB&fromReports=false&fromCxOne=false&society=ml&isMobile=false&fromLegalDocuments=false&fromChargesPaymentInfo=true&selectedCurrency=BRL';
+    /** → { total, categorias:[{nome, valor, tipos:[{nome, valor}]}] } | null (formato desconhecido: não grava). Valor = o que a lista da fatura mostra
+     *  (antes dos "Cancelamentos de tarifas", que vêm à parte e ficam fora: não são custo). Categoria sem tipos (sem o gráfico) = ela mesma é o tipo. */
+    SHC.mlFaturaCategorias = function (j) {
+        const d = (j && j.account_detail_card && j.account_detail_card.data) || primeiroEmLargura(j, o => (o.chargeSection && o.chargeSection.sectionIterator ? o : undefined), 6);
+        if (!d || typeof d !== 'object') return null;
+        const n = v => { const x = typeof v === 'number' ? v : valorCobranca(v); return x === null || !isFinite(x) ? null : SHC.r2(x); };
+        const ds = d.pieChartSection && Array.isArray(d.pieChartSection.dataset) ? d.pieChartSection.dataset : null;
+        const si = d.chargeSection && Array.isArray(d.chargeSection.sectionIterator) ? d.chargeSection.sectionIterator : null;
+        let categorias;
+        // v3.1 (29/09): cancelado = "Cancelamentos" da categoria (bonus do gráfico; ao vivo 26/09 a soma bate com "Cancelamentos de tarifas").
+        if (ds) categorias = ds.filter(c => c && c.label && n(c.value) !== null).map(c => Object.assign({ nome: String(c.label), valor: n(c.value),
+            tipos: (Array.isArray(c.charges) ? c.charges : []).filter(t => t && t.label && n(t.value) !== null).map(t => ({ nome: String(t.label), valor: n(t.value) })) },
+            typeof c.bonus === 'number' && isFinite(c.bonus) ? { cancelado: SHC.r2(Math.abs(c.bonus)) } : {}));
+        else if (si) categorias = si.filter(s => s && s.link_description && s.link_description.text && !(s.amount && s.amount.negative)).map(s => ({ nome: String(s.link_description.text), valor: n(s.amount), tipos: [] })).filter(c => c.valor !== null);
+        else return null;
+        // Linhas negativas: "Cancelamentos de tarifas" (na lista de tarifas) e "Cancelamentos de tarifas em estornos" (nos pagamentos: tarifa de
+        // fatura ANTERIOR cancelada depois do fim do mês de faturamento). null = a fatura não mandou a linha (não é zero).
+        const neg = (lista, re) => { const xs = (lista || []).filter(s => s && s.amount && s.amount.negative && re.test(String((s.link_description && (s.link_description.link + ' ' + s.link_description.text)) || '')));
+            return xs.length ? SHC.r2(xs.reduce((a, s) => a + Math.abs(n(s.amount) || 0), 0)) : null; };
+        const ps = d.paymentSection && Array.isArray(d.paymentSection.sectionIterator) ? d.paymentSection.sectionIterator : null;
+        return { total: d.chargeSection ? n(d.chargeSection.total) : null, categorias, cancelamentos: neg(si, /cancelamento/i), estornosAnteriores: neg(ps, /credit-applied-notes|cancelamentos de tarifas em estornos/i) };
+    };
+    // Por que o custo costuma aparecer e como evitar (só o que o nome da tarifa diz; sem entrada = "sem explicação conhecida"). A ordem importa:
+    // "Tarifa de devolução por envio…" é devolução antes de ser envio.
+    SHC.CUSTO_EXPLICA = [
+        [/devolu/i, 'Aparece quando uma venda volta: o ML cobra o envio da devolução.', 'Veja as reclamações e devoluções na aba Pós-venda: descrição, fotos e medidas certas evitam devolução.', 'posvenda'],
+        [/multa|penalidade|inconformidade/i, 'Multa por problema numa remessa do Full ou num anúncio.', 'Veja as remessas com problema na aba Full; se não concorda, reclame no ML.', 'full'],
+        [/estoque antigo|armazenamento|armazenagem|\bfull\b|coleta|remessa/i, 'Custo do Full: armazenagem, estoque parado há muito tempo ou coleta.', 'Veja na aba Full os produtos parados e envie menos unidades dos que vendem pouco.', 'full'],
+        [/envio|frete/i, 'Frete dos envios pelo Mercado Livre: muda com o peso, as medidas do pacote e o destino.', 'Confira as medidas e o peso dos anúncios na aba Saúde e o frete por anúncio na aba Frete.', 'saude'],
+        [/assinatura|conte[úu]do digital/i, 'Assinatura de um serviço ou conteúdo no Mercado Livre.', 'Se você não usa, cancele a assinatura no Mercado Livre.', null],
+        [/minha p[áa]gina/i, 'Mensalidade da Minha página (a sua loja dentro do ML).', 'Se você não usa a Minha página, cancele no Mercado Livre.', null],
+        [/publicidade|product ads|\bads\b/i, 'Custo das campanhas do Mercado Ads.', 'Veja na aba Ads os anúncios acima do equilíbrio e ajuste o orçamento ou o ROAS objetivo.', 'ads'],
+        [/parcelamento|parcela/i, 'Taxa das vendas parceladas sem juros para o comprador (anúncio Premium).', 'Confira se a margem aguenta as parcelas sem juros; se não, mude o anúncio para Clássico.', null],
+        [/imposto|icms|difal|tribut/i, 'Imposto que o ML recolhe nas suas vendas (veja o nome da tarifa).', 'Confira o seu regime fiscal com o contador e os dados fiscais dos anúncios na aba Saúde.', 'saude'],
+        [/recebimento|mercado pago|por cobrar/i, 'Custo do Mercado Pago para receber o dinheiro das vendas.', 'Faz parte de cada venda: confira se o preço cobre essa taxa.', null],
+        [/venda|vender/i, 'Tarifa de venda do Mercado Livre (comissão da categoria).', 'Confira se o preço cobre a comissão na aba Catálogo.', 'catalogo'],
+    ];
+    SHC.custoExplica = nome => { const x = SHC.CUSTO_EXPLICA.find(([re]) => re.test(String(nome || ''))); return x ? { porque: x[1], evitar: x[2], aba: x[3] } : null; };
+    SHC.CUSTO_SUBIU_PCT = 50;   // subiu "muito" = mais de 50% E mais de R$ 50 contra a fatura anterior
+    SHC.CUSTO_SUBIU_RS = 50;
+    SHC.CUSTO_NOVO_MIN = 3;   // faturas lidas seguidas (a atual + 2 anteriores) para dizer "novo: não aparecia antes"
+    /**
+     * fat = fat:<conta> com categorias {'AAAA-MM' (mês da fatura): {nome, fechamento, aberta, link, total, categorias}}.
+     * Olha as 2 faturas mais recentes lidas (a em andamento conta): tipo de tarifa que não aparecia em NENHUMA fatura anterior lida = novo;
+     * tipo que estava na fatura anterior e subiu > 50% e > R$ 50 = subiu. Sem fatura anterior lida não compara (nunca "tudo é novo").
+     * → { itens:[{chave, tipo, categoria, valor, antes, novo, pct, fatura, nomeFatura, aberta, desde (nome da fatura em que apareceu), link,
+     *             porque, evitar, aba}] (os novos primeiro, depois o maior valor), lidas (faturas com categorias), base (tem com o que comparar) }
+     */
+    SHC.custosNovos = function (fat) {
+        const cat = (fat && fat.categorias) || {}, ms = Object.keys(cat).filter(m => /^\d{4}-\d{2}$/.test(m) && cat[m] && Array.isArray(cat[m].categorias)).sort();
+        const tiposDe = m => { const o = {}; cat[m].categorias.forEach(c => (c.tipos && c.tipos.length ? c.tipos : [c]).forEach(t => { if (t.valor > 0) o[t.nome] = { valor: SHC.r2((o[t.nome] ? o[t.nome].valor : 0) + t.valor), categoria: c.nome }; })); return o; };
+        const out = {}, vistos = new Set(), faltaLer = [];
+        // Só compara com o ciclo IMEDIATAMENTE anterior (fatura que não foi lida no meio não pode virar "subiu" contra 2 ciclos atrás) e só
+        // diz "novo" com SHC.CUSTO_NOVO_MIN faturas lidas seguidas (com 2 lidas, qualquer tarifa esporádica viraria "não aparecia antes").
+        const mAnt = m => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 2, 1)).toISOString().slice(0, 7);
+        const seguidas = i => { let n = 1; while (i - n >= 0 && ms[i - n] === mAnt(ms[i - n + 1])) n++; return n; };   // lidas seguidas até ms[i]
+        if (ms.length) Object.keys(tiposDe(ms[0])).forEach(t => vistos.add(t));
+        for (let i = 1; i < ms.length; i++) {
+            const m = ms[i], ag = tiposDe(m), ant = tiposDe(ms[i - 1]), f = cat[m], recente = i >= ms.length - 2;
+            const seguido = ms[i - 1] === mAnt(m), podeNovo = seguido && seguidas(i) >= SHC.CUSTO_NOVO_MIN;
+            if (recente && !seguido) faltaLer.push(mAnt(m));
+            if (recente) Object.keys(ag).forEach(t => {
+                const v = ag[t].valor, a = ant[t] ? ant[t].valor : null, novo = !vistos.has(t) && podeNovo;
+                const subiu = seguido && !novo && a > 0 && v - a > SHC.CUSTO_SUBIU_RS && (v - a) / a * 100 > SHC.CUSTO_SUBIU_PCT;
+                if (v < 1 || (!novo && !subiu)) {
+                    if (out[t] && out[t].novo) Object.assign(out[t], { valor: v, fatura: m, nomeFatura: f.nome || m, aberta: !!f.aberta, link: f.link || out[t].link });
+                    else if (out[t] && !f.aberta) delete out[t];   // voltou ao normal na fatura fechada (a em andamento ainda está pela metade)
+                    return;
+                }
+                const x = SHC.custoExplica(t) || {};
+                out[t] = Object.assign({ chave: 'custo|' + t, tipo: t, categoria: ag[t].categoria, valor: v, antes: novo ? null : a, novo, pct: novo ? null : Math.round((v - a) / a * 100),
+                    fatura: m, nomeFatura: f.nome || m, aberta: !!f.aberta, desde: novo ? (f.nome || m) : null, link: f.link || '', porque: x.porque || null, evitar: x.evitar || null, aba: x.aba || null },
+                    out[t] && out[t].novo ? { novo: true, antes: null, pct: null, desde: out[t].desde } : {});
+            });
+            Object.keys(ag).forEach(t => vistos.add(t));
+        }
+        const itens = Object.keys(out).map(k => out[k]).sort((a, b) => (b.novo - a.novo) || (b.valor - a.valor));
+        return { itens, lidas: ms.length, base: itens.length > 0 || (ms.length > 0 && seguidas(ms.length - 1) >= SHC.CUSTO_NOVO_MIN), faltaLer };
+    };
+    /** Texto curto de um item de SHC.custosNovos: "Tarifa X: R$ 84,00 na fatura de agosto, não aparecia antes." */
+    SHC.custoNovoTxt = x => x.tipo + ': ' + SHC.moeda(x.valor) + ' na fatura ' + (x.aberta ? 'em andamento' : 'de ' + x.nomeFatura)
+        + (x.novo ? (x.desde && x.desde !== x.nomeFatura ? ', novo desde a fatura de ' + x.desde : ', não aparecia nas faturas anteriores')
+            : ', era ' + SHC.moeda(x.antes) + ' na anterior (+' + x.pct + '%)') + '.';
+
     // ── v2.8: NF-e das SUAS VENDAS (emitidas pelo Faturador ou pelo Full), capturado ao vivo em 25/09/2026 na página
     // /documents/overview/reports?start_date=AAAA-MM-DD&end_date=AAAA-MM-DD&page=N. A lista vem de um POST de CONSULTA (só busca: não cria
     // nem muda nada, como a calculadora do Simulador): SHC.NFE_URL com {startDate, endDate, typeOfReceipt:['NFE'], offset, limit}.
@@ -1349,10 +1601,11 @@
     // "Baixar relatório" (Excel) e "Baixar documentos" (PDF/XML) são botões da página do ML: o Copiloto só abre a página no mês certo.
     SHC.NFE_URL = 'https://vendedores.mercadolivre.com.br/documents/overview/api/invoice/search?boUserId=&boSiteId=';
     SHC.NFE_LIMITE = 10;          // o que a própria página do ML pede
-    SHC.NFE_MAX_NOTAS = 2000;     // por mês; acima disso só os totais
+    SHC.NFE_MAX_NOTAS = 5000;     // por mês (= NFE_PAGINAS_MAX × 10); acima disso só os totais. v2.11: 5.000 para a leitura incremental valer em conta grande (~1,5 MB guardados)
     const fimMesNfe = m => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 0)).toISOString().slice(0, 10);
     SHC.nfeLink = m => 'https://vendedores.mercadolivre.com.br/documents/overview/reports?start_date=' + m + '-01&end_date=' + fimMesNfe(m) + '&page=1';
-    SHC.nfePedido = (m, offset) => ({ startDate: m + '-01', endDate: fimMesNfe(m), typeOfReceipt: ['NFE'], offset: offset || 0, limit: SHC.NFE_LIMITE });
+    // v2.11: desde ('AAAA-MM-DD' dentro do mês) = só as notas a partir desse dia (leitura incremental do mês já lido).
+    SHC.nfePedido = (m, offset, desde) => ({ startDate: desde || m + '-01', endDate: fimMesNfe(m), typeOfReceipt: ['NFE'], offset: offset || 0, limit: SHC.NFE_LIMITE });
     // O ML manda o status em espanhol ("Aprobada"). Status que não reconhecemos fica com o texto do ML.
     const NFE_STATUS = [[/aprob|autoriz/i, 'Autorizada'], [/cancel|anulad/i, 'Cancelada'], [/rechaz|rejeit|deneg/i, 'Rejeitada'], [/error|erro|falh/i, 'Com erro'], [/pend|proces/i, 'Pendente']];
     SHC.nfeStatusTxt = s => { const t = String(s || '').trim(), x = NFE_STATUS.find(([re]) => re.test(t)); return x ? x[1] : (t || 'Sem status'); };
@@ -1452,19 +1705,21 @@
         const ld = r && r.appProps && r.appProps.pageProps && r.appProps.pageProps.listData;
         if (!ld || !Array.isArray(ld.groups)) return null;
         const out = [], sinais = [];
-        let blocos = 0;
+        let blocos = 0, outros = 0;
         ld.groups.forEach(g => ((g && Array.isArray(g.items)) ? g.items : []).forEach(i => {
             if (!i || typeof i !== 'object') return;
             blocos++;
-            const valor = valorMP(i.amount), code = i.status && i.status.code, data = DIA_BRT(i.creationDate);
+            // v3.1 (29/09): tipo desconhecido (crédito, cashback, ajuste… ainda sem retrato real) nunca quebra a leitura: fica fora e só é contado.
+            const valor = valorMP(i.amount && typeof i.amount === 'object' ? i.amount : null), code = i.status && typeof i.status === 'object' ? i.status.code : undefined, data = DIA_BRT(i.creationDate);
             const tr = /(\d{4,24})/.exec(String((i.paymentMethod && i.paymentMethod.text) || '')), transacao = tr ? tr[1] : String(i.link || i.id || '');
             sinais.push([data, i.type, valor, transacao].join('/'));
-            if (!/^(sale|pack)$/.test(i.type) || !/^venda no mercado livre$/i.test(String(i.title || '').trim())) return;
+            if (!/^(sale|pack)$/.test(String(i.type || '')) || !/^venda no mercado livre$/i.test(String(i.title || '').trim())) { if (!/^purchase$/.test(String(i.type || ''))) outros++; return; }
             if ((code !== 'approved' && code !== 'refunded') || valor === null || !data) return;
             if (code === 'refunded' && valor > 0) return;   // igual ao plano B: reembolso só ≤ 0 (o positivo fica fora)
             out.push({ data, tipo: code === 'refunded' ? 'reembolso' : 'venda', valor, transacao, titulo: String(i.description || '').slice(0, 200), status: code });
         }));
         out.blocos = blocos;
+        out.outros = outros;   // atividades que não são venda nem compra (ex.: créditos, ajustes): não entram no repasse
         out.assinatura = sinais.slice(0, 5).join('|');
         out.paginas = +ld.pages || 0;
         return out;
@@ -1556,14 +1811,17 @@
     };
 
     // ── Andamento da sincronização (shc:status.etapas / .progresso): ordem fixa, o painel desenha por aqui ──
+    // v2.11: ordem por PRIORIDADE — o que as telas usam primeiro (vendas, Fechamento, Full, Ads, pós-venda, famílias), depois as etapas
+    // leves (promoções, afiliados, saúde) e por último as pesadas (faturas + NF-e, Mercado Pago). Os meses antigos ficam para o histórico.
     SHC.SYNC_ETAPAS = [
-        { id: 'anuncios', rotulo: 'Seus anúncios' }, { id: 'promos', rotulo: 'Central de promoções' },
-        { id: 'afiliados', rotulo: 'Afiliados' },   // v2.9: logo depois das promoções (leve); no fim ela não rodava quando o Faturamento demorava
-        { id: 'vendasBrutas', rotulo: 'Vendas brutas' },
-        { id: 'faturamento', rotulo: 'Faturamento (tarifas, frete e Ads)' }, { id: 'faturas', rotulo: 'Faturas do ML' }, { id: 'full', rotulo: 'Estoque Full' },
-        { id: 'ads', rotulo: 'Mercado Ads' }, { id: 'repasse', rotulo: 'Mercado Pago' },
-        { id: 'saude', rotulo: 'Saúde dos anúncios' }, { id: 'posvenda', rotulo: 'Pós-venda' },
-        { id: 'vendasAnuncio', rotulo: 'Vendas por anúncio' },   // v2.6: 13 meses por anúncio (faturamento por família); no fim, não atrasa as outras
+        { id: 'anuncios', rotulo: 'Seus anúncios' },
+        { id: 'vendasBrutas', rotulo: 'Vendas brutas' },   // antes do Faturamento: o Fechamento soma os dias
+        { id: 'faturamento', rotulo: 'Faturamento (tarifas, frete e Ads)' },   // só o mês atual (a partir dos dias novos) e o anterior
+        { id: 'full', rotulo: 'Estoque Full' }, { id: 'ads', rotulo: 'Mercado Ads' }, { id: 'posvenda', rotulo: 'Pós-venda' },
+        { id: 'vendasAnuncio', rotulo: 'Vendas por anúncio' },   // v2.6: faturamento por família (mês atual e anterior; o resto no histórico)
+        { id: 'promos', rotulo: 'Central de promoções' }, { id: 'afiliados', rotulo: 'Afiliados' }, { id: 'saude', rotulo: 'Saúde dos anúncios' },
+        { id: 'faturas', rotulo: 'Faturas do ML' },   // + NF-e das vendas (a mais pesada)
+        { id: 'repasse', rotulo: 'Mercado Pago' },
         { id: 'alertas', rotulo: 'Alertas' },
     ];
     /** "1.051 anúncios" / "1 anúncio" (milhar com ponto, plural certo). */
@@ -1738,6 +1996,7 @@
         })(r, 0);
         return achou;
     };
+    SHC.achaBrickStack = achaBrickStack;   // v3.1: a lista de Vendas (ml-tela.js) usa o mesmo estado Flox
     const PROIBIDO_PV = /^(block-buyer|item-options-menu|item-note)/;
     /**
      * Estado da página do pós-venda (ou {brickStack}) → { casos:[{claimId, pedido, titulo, valor, unidades, motivo, afetouReputacao (true|false|null), situacao}],
@@ -1831,12 +2090,12 @@
 
     // ── v2.5.3: TODAS as anomalias da conta (número do ícone e "N coisas pedem sua atenção" do painel) ──
     // v2.7: + 'perguntas' (perguntas:<conta>) e 'reputacao' (reputacao:<conta>); remessas do Full com inconformidade/multa entram em 'full'.
-    const ANOM_TIPOS = ['full', 'estoque', 'frete', 'pagamento', 'posvenda', 'ads', 'fiscal', 'visitas', 'medidas', 'perguntas', 'reputacao'];
-    const ANOM_ABA = { full: 'full', estoque: 'full', frete: 'frete', pagamento: 'conciliacao', posvenda: 'posvenda',   // v2.9: aba Pós-venda
-        ads: 'ads', fiscal: 'saude', visitas: 'saude', medidas: 'saude', perguntas: 'saude', reputacao: 'saude' };   // v2.9: perguntas e reputação na aba Saúde
+    const ANOM_TIPOS = ['full', 'estoque', 'frete', 'pagamento', 'custo', 'posvenda', 'ads', 'fiscal', 'visitas', 'medidas', 'perguntas', 'reputacao', 'familia'];
+    const ANOM_ABA = { full: 'full', estoque: 'full', frete: 'frete', pagamento: 'conciliacao', custo: 'conciliacao', posvenda: 'posvenda',   // v2.9: aba Pós-venda; v3.1: custo novo na fatura
+        ads: 'ads', fiscal: 'saude', visitas: 'saude', medidas: 'saude', perguntas: 'saude', reputacao: 'saude', familia: 'geral' };   // v2.9: perguntas e reputação na aba Saúde; v3.1: família na Geral
     /**
      * conta = sellerId; dados = { alertas (SHC.alertasDe), posvenda (posvenda:<conta>), frete (frete:<conta>:hist), conferir (conferir:<conta>),
-     *   rateio (fech:<conta>:rateio), cert (cert:<conta>), medidas (medidas:<conta>), nfe? ([nfe:<conta>:<mês>…], v2.8), titulos? ({MLB: título}, para o texto), agora? (ms) }.
+     *   rateio (fech:<conta>:rateio), cert (cert:<conta>), medidas (medidas:<conta>), nfe? ([nfe:<conta>:<mês>…], v2.8), fatura? (fat:<conta>, custo novo, v3.1), titulos? ({MLB: título}, para o texto), agora? (ms) }.
      *   Tudo opcional: o que não foi lido não conta.
      * → { conta, total, porTipo:{full, estoque, frete, pagamento, posvenda, ads, fiscal, visitas, medidas}, vermelho, itens:[{tipo, aba, texto, chave, link?, itemId?, qtd?}] }
      * Sem contar a mesma coisa 2×: Full = 1 por anúncio (sem estoque vale mais que "acabando" → tipo 'estoque'); frete = 1 por anúncio (pago a mais
@@ -1876,6 +2135,7 @@
         const fr = d.frete || {}, conc = fr.conciliacao || {}, porItem = {}, pedidosFrete = new Set();
         (conc.pagoAMais || []).forEach(p => {
             pedidosFrete.add(String(p.pedido));
+            if (p.talvezUnidades) return;   // v3.1: pode ter 2+ unidades → o aviso não pede revisão dele (a aba Frete mostra com *)
             const k = p.itemId || 'pedido ' + p.pedido, x = porItem[k] || (porItem[k] = { n: 0, dif: 0 });
             x.n++; x.dif = SHC.r2(x.dif + p.diferenca);
         });
@@ -1928,6 +2188,10 @@
         const nNfe = nfeRuim.reduce((s, x) => s + x.n, 0);
         if (nNfe) add('fiscal', SHC.qtd(nNfe, 'nota fiscal de venda rejeitada ou com erro', 'notas fiscais de venda rejeitadas ou com erro') + '. Confira no Mercado Livre e emita de novo pelo Faturador.',
             { chave: 'anom|nfe', aba: 'conciliacao', link: /^\d{4}-\d{2}$/.test(String(nfeRuim[0].mes)) ? SHC.nfeLink(nfeRuim[0].mes) : SHC.FATURADOR_URL, qtd: nNfe });
+        // v3.1: custo novo (ou que subiu muito) na fatura (fat:<conta>.categorias): 1 por tipo de tarifa, com o link da fatura.
+        if (d.fatura) SHC.custosNovos(d.fatura).itens.forEach(x => add('custo', (x.novo ? 'Custo novo na fatura: ' : 'Custo que subiu na fatura: ') + SHC.custoNovoTxt(x), { chave: 'anom|' + x.chave, link: x.link }));
+        // v3.1: faturamento por família — SKUs para repor, enviar ao Full, baixar preço ou parados (SHC.familiasAcoes): 1 item só, com o resumo.
+        if (d.familias && d.familias.total > 0) add('familia', 'Faturamento por família: ' + d.familias.texto + '.', { chave: 'anom|familia', qtd: d.familias.total });
         // v2.8: módulo desligado pelo seller (Ajustes) → a anomalia dele não conta nem aparece ("N coisas pedem sua atenção" e o ícone).
         const itensVis = itens.filter(i => SHC.moduloLigado(cfg, i.aba));
         const porTipo = {};
@@ -1937,8 +2201,9 @@
         return { conta: conta || '', total, porTipo, vermelho: porTipo.pagamento > 0 || itensVis.some(i => (i.tipo === 'posvenda' || i.tipo === 'perguntas' || i.tipo === 'reputacao') && i.vermelho), itens: itensVis };
     };
     const ANOM_NOMES = { full: ['no Full', 'no Full'], estoque: ['sem estoque no Full', 'sem estoque no Full'], frete: ['de frete', 'de frete'],
-        pagamento: ['cobrança a conferir', 'cobranças a conferir'], posvenda: ['no pós-venda', 'no pós-venda'], ads: ['de Ads', 'de Ads'],
-        fiscal: ['fiscal', 'fiscais'], visitas: ['de visitas', 'de visitas'], medidas: ['de medidas', 'de medidas'], perguntas: ['de perguntas', 'de perguntas'], reputacao: ['de reputação', 'de reputação'] };
+        pagamento: ['cobrança a conferir', 'cobranças a conferir'], custo: ['custo novo na fatura', 'custos novos na fatura'], posvenda: ['no pós-venda', 'no pós-venda'], ads: ['de Ads', 'de Ads'],
+        fiscal: ['fiscal', 'fiscais'], visitas: ['de visitas', 'de visitas'], medidas: ['de medidas', 'de medidas'], perguntas: ['de perguntas', 'de perguntas'], reputacao: ['de reputação', 'de reputação'],
+        familia: ['de estoque × venda', 'de estoque × venda'] };
     /** Título do ícone: "Copiloto: 5 pontos de atenção — 2 no Full, 1 de frete, 2 no pós-venda" (sem nada: "Abrir o Copiloto"). */
     SHC.anomaliasTitulo = function (a) {
         if (!a || !(a.total > 0)) return 'Abrir o Copiloto';
@@ -2127,6 +2392,48 @@
         const c = a.campanha || {}, m = a.metricas || {}, n = c.totalProdutos !== null && c.totalProdutos !== undefined ? c.totalProdutos : (c.produtos || []).length;
         return [SHC.qtd(n, 'produto na campanha', 'produtos na campanha'), c.comissaoGeral !== null && c.comissaoGeral !== undefined ? SHC.pctTxt(c.comissaoGeral) : '',
             m.vendas !== null && m.vendas !== undefined ? SHC.moeda(m.vendas) + ' em vendas (30 dias)' : ''].filter(Boolean).join(' · ');
+    };
+    // ── v3.1: Campanhas exclusivas (menu Venda com afiliados › Campanhas exclusivas), mapeado ao vivo em 29/09/2026. GET da página
+    // /seller-affiliates/target-campaign; os dados vêm no estado (appProps.pageProps.targetCampaigns.data), sem XHR. Só leitura. ──
+    // Só FINISHED foi visto ao vivo; os outros nomes são A CONFIRMAR. Desconhecido → 'outro' (a tela mostra o texto cru, nunca some).
+    SHC.afilExclusivaEstado = s => (/^(active|activated|in_progress|running|started|ongoing)$/i.test(s) ? 'ativa'
+        : /^(scheduled|programmed|pending|not_started|upcoming)$/i.test(s) ? 'programada'
+        : /^(finished|ended|expired|closed|completed)$/i.test(s) ? 'finalizada' : /^paused$/i.test(s) ? 'pausada' : 'outro');
+    const diaIso = d => (/^\d{4}-\d{2}-\d{2}/.test(String(d || '')) ? String(d).slice(0, 10) : null);
+    /**
+     * Estado da página de campanhas exclusivas → { total, campanhas:[{ id, numero, titulo, status (cru), estado ('ativa'|'programada'|'finalizada'
+     * |'pausada'|'outro'), afiliados, produtos, comissaoMin, comissaoMax (% extra), de, ate ('AAAA-MM-DD') }] } | null (sem o caminho).
+     */
+    SHC.afilExclusivasDoEstado = function (r) {
+        const tc = achaChave(r, 'targetCampaigns', 6), d = tc && typeof tc === 'object' ? (tc.data || tc) : null;
+        if (!d || !Array.isArray(d.elements)) return null;
+        const campanhas = d.elements.filter(e => e && typeof e === 'object').map(e => ({ id: String(e.id || ''), numero: String(e.secondaryId || ''), titulo: String(e.title || ''),
+            status: String(e.status || ''), estado: SHC.afilExclusivaEstado(String(e.status || '')), afiliados: SHC.num(e.affiliates), produtos: SHC.num(e.itemsCount),
+            comissaoMin: SHC.num(e.minExtraCommission), comissaoMax: SHC.num(e.maxExtraCommission), de: diaIso(e.validFrom), ate: diaIso(e.validTo) }));
+        const t = SHC.num(d.totalElements);
+        return { total: t !== null && t >= campanhas.length ? t : campanhas.length, campanhas };
+    };
+    /** "2 campanhas exclusivas · nenhuma ativa agora" (· "1 programada") (· "mostrando 20 de 25") | "Nenhuma campanha exclusiva". */
+    SHC.afilExclusivasResumo = function (ex) {
+        const l = (ex && ex.campanhas) || [], n = ex && ex.total ? ex.total : l.length, conta = e => l.filter(c => c.estado === e).length;
+        if (!n) return 'Nenhuma campanha exclusiva';
+        const at = conta('ativa'), pr = conta('programada'), parte = l.length < n;
+        return [SHC.qtd(n, 'campanha exclusiva', 'campanhas exclusivas'),
+            // lista em parte ou status desconhecido ('outro', pode ser uma ativa com outro nome): não afirma "nenhuma"
+            at ? SHC.qtd(at, 'ativa agora', 'ativas agora') : parte || conta('outro') ? '' : 'nenhuma ativa agora',
+            pr ? SHC.qtd(pr, 'programada', 'programadas') : '', parte ? 'mostrando ' + l.length + ' de ' + n : ''].filter(Boolean).join(' · ');
+    };
+    /** Comissão extra: "5%" | "4%–6%" | "" (sem dado). */
+    SHC.afilExclusivaComissao = function (c) {
+        const a = c.comissaoMin, b = c.comissaoMax;
+        if (a === null && b === null) return '';
+        return a === null || b === null || a === b ? SHC.pctTxt(a === null ? b : a) : SHC.pctTxt(a) + '–' + SHC.pctTxt(b);
+    };
+    /** Período: "27/07 a 31/07/2026" (mesmo ano) | "20/12/2025 a 05/01/2026" | "até 31/07/2026" | "". */
+    SHC.afilExclusivaPeriodo = function (c) {
+        const br = (d, ano) => d.slice(8, 10) + '/' + d.slice(5, 7) + (ano ? '/' + d.slice(0, 4) : '');
+        if (c.de && c.ate) return br(c.de, c.de.slice(0, 4) !== c.ate.slice(0, 4)) + ' a ' + br(c.ate, true);
+        return c.ate ? 'até ' + br(c.ate, true) : c.de ? 'desde ' + br(c.de, true) : '';
     };
 
     // ── Simulador de custos do ML (/simulador-de-custos?itemId=<MLB>), mapeado ao vivo em 25/09/2026. Estado embutido
@@ -2651,7 +2958,8 @@
     // vbAnuncio:<conta> = { ts, meses:{'AAAA-MM': {porAnuncio:{MLB:{bruto, unidades, vendas, visitas, sku}}, paginas, linhas, completo, lidoEm, lidoTs (hora da leitura)}},
     //                      itens:{MLB:{sku, titulo}} }   (fundo: etapa 'vendasAnuncio')
     // cat:<conta> = { ts, porItem:{MLB:{familia, sub, categoriaId, ts}} }   (fundo: a MESMA leitura da tela "Alterar anúncio" das fotos/medidas)
-    SHC.FAMILIA_PALETA = ['#4E79A7', '#F28E2B', '#59A14F', '#E15759', '#76B7B2', '#EDC948', '#B07AA1', '#FF9DA7'];
+    // Cores de CATEGORIA, sem vermelho nem verde: essas duas querem dizer ▼ caiu / ▲ subiu no mesmo cartão (ESPEC: cor de situação é a mesma em todo lugar).
+    SHC.FAMILIA_PALETA = ['#4E79A7', '#F28E2B', '#3E6E7A', '#9C755F', '#76B7B2', '#EDC948', '#B07AA1', '#6B6ECF'];
     SHC.FAMILIA_OUTRAS = 'Outras';
     SHC.FAMILIA_SEM = 'Sem categoria ainda';
     SHC.FAMILIA_COR_OUTRAS = '#9AA0A6';
@@ -2688,6 +2996,7 @@
      *   variacaoPct (vs mês anterior), variacaoAnoPct (vs o mesmo mês do ano anterior, se lido), lucro | null, lucroParcial, lucroCobertoPct,
      *   serie12:[13 × {mes, bruto | null, parcial?, ate?}] (do mais velho ao `mes`; mês não lido = null, sem ponto; lido pela metade = parcial + ate),
      *   picoMes | null (único e 10% acima da média; nunca em "Outras"/"Sem categoria ainda"), picoMotivo (o porquê de não ter), subs:[{sub, bruto}], skus:[…] }]
+     * fator3 (no array) = o ritmo do mês contra a média dos 3 meses antes (0 = menos de 1 dia lido).
      * No próprio array: mes, lido, motivo ('' ou o porquê de não ter dado), total, totalAnt, comparacao ('mes' | 'ritmo'), dias, diasAnt, fator,
      *   mesesLidos, semCategoria (anúncios com venda no mês ainda sem categoria lida), mesParcial, antParcial, mesAtual, motivoComp ('' ou por que não há setas),
      *   cores (mapa família → cor, com as novas), coresMudou (a tela grava cores:<conta>).
@@ -2721,6 +3030,7 @@
         const cobM = m => coberturaMes(M[m], m), cm = cobM(mes), ca = cobM(ant);
         const fator = lido(ant) ? fatorRitmo(cm, ca) : 1, fatorAno = lido(ano) ? fatorRitmo(cm, cobM(ano)) : 1;
         const compara = lido(ant) && fator > 0;
+        out.diasCobertos = Math.round(cm.ms / 864e5 * 10) / 10;   // v3.1: dias do mês que a leitura cobre (venda por dia = unidades ÷ isto)
         if (cm.parcial || (lido(ant) && ca.parcial)) {
             Object.assign(out, { comparacao: 'ritmo', dias: cm.ate, diasAnt: ca.parcial ? ca.ate : diasNoMesFam(ant), fator: Math.round(fator * 1000) / 1000,
                 antParcial: lido(ant) && ca.parcial, mesParcial: cm.parcial, mesAtual: mes === hoje.slice(0, 7) });
@@ -2776,6 +3086,7 @@
             return b - b * tarifaPct - u * (frete + taxaOp) - u * (custo + outros) - b * imp;
         };
         const antLido = compara;
+        out.fator3 = cm.ms < 864e5 ? 0 : cm.ms / cm.dur;   // ritmo do mês contra a média dos 3 meses antes (o "Por que caiu?" usa na família e na conta)
         grupos.forEach(g => {
             const mb = new Set(g.membros), ids = new Set(), porSku = {}, subs = {};
             [mes, ant].forEach(m => { if (lido(m)) Object.keys(M[m].porAnuncio).forEach(id => { if (mb.has(famDe(id))) ids.add(id); }); });
@@ -2794,10 +3105,14 @@
             });
             const skus = Object.keys(porSku).map(k => {
                 const s = porSku[k], bruto = SHC.r2(s.bruto), brutoAnt = s.brutoAnt === null ? null : SHC.r2(s.brutoAnt);
+                // v3.1 (pedido da dona 27/09): a série do SKU (13 meses; null = mês não lido) para comparar com MAIS de um período.
+                const serie = meses.map(m => (lido(m) ? SHC.r2(s.itemIds.reduce((t, id) => t + n0((linha(m, id) || {}).bruto), 0)) : null));
+                const tres = serie.slice(9, 12), media3 = tres.every(v => v !== null) && meses.slice(9, 12).every(m => !cobM(m).parcial) ? SHC.r2((tres[0] + tres[1] + tres[2]) / 3) : null;
                 return { sku: s.sku, titulo: s.titulo, itemIds: s.itemIds, bruto, brutoAnt, variacaoPct: varFam(bruto, brutoAnt, fator),
                     'variacaoR$': brutoAnt === null ? null : SHC.r2(bruto - brutoAnt * fator), unidades: s.unidades, unidadesAnt: s.unidadesAnt,
                     precoMedio: s.unidades > 0 ? SHC.r2(bruto / s.unidades) : null, precoMedioAnt: s.unidadesAnt > 0 ? SHC.r2(brutoAnt / s.unidadesAnt) : null,
-                    visitas: s.visitas, visitasAnt: s.visitasAnt, lucro: s.semCusto ? null : SHC.r2(s.lucro), semCusto: s.semCusto, fator };
+                    visitas: s.visitas, visitasAnt: s.visitasAnt, lucro: s.semCusto ? null : SHC.r2(s.lucro), semCusto: s.semCusto, fator,
+                    serie, media3, variacao3Pct: cm.ms < 864e5 ? null : varFam(bruto, media3, out.fator3), brutoAno: serie[0], variacaoAnoPct: varFam(bruto, serie[0], fatorAno) };
             }).filter(s => s.bruto > 0 || s.brutoAnt > 0).sort((a, b) => {
                 const va = a['variacaoR$'], vb = b['variacaoR$'];
                 if (va === null || vb === null) return (va === null) - (vb === null) || b.bruto - a.bruto;
@@ -2822,6 +3137,12 @@
                 lucroParcial: cob.length < comValor.length, lucroCobertoPct: bruto > 0 ? r1f(cob.reduce((s, x) => s + x.bruto, 0) / bruto * 100) : null,
                 serie12, picoMes: pico ? pico.mes : null, picoMotivo,
                 subs: Object.keys(subs).map(sb => ({ sub: sb, bruto: SHC.r2(subs[sb]) })).sort((a, b) => b.bruto - a.bruto), skus };
+            // v3.1: anúncios da família com estoque e SEM venda nos 3 últimos meses (os 3 lidos): candidatos a liquidar/descartar.
+            const tres = [mes, ant, mesMenos(mes, 2)];
+            // ponytail: só anúncios ATIVOS (o pausado de propósito não vira alerta); anúncio criado há menos de 3 meses também entra (o retrato não tem a data de criação).
+            item.parados = !tres.every(lido) ? null : Object.keys(ret).filter(id => mb.has(famDe(id)) && !ids.has(id) && SHC.anuncioAtivo(ret[id]) && tres.every(m => !(n0((linha(m, id) || {}).bruto) > 0)))
+                .map(id => ({ itemId: id, sku: SHC.normalizaSku(ret[id].sku || ''), titulo: String(ret[id].titulo || '').slice(0, 120), estoque: inteiro(ret[id].estoque) }))
+                .filter(p => p.estoque > 0).sort((a, b) => b.estoque - a.estoque);
             if (g.familia === SHC.FAMILIA_OUTRAS) item.membros = g.membros.slice();
             out.push(item);
         });
@@ -2962,6 +3283,253 @@
         const texto = 'Em ' + nomeMesFam(alvo) + ' a família costuma subir ' + pctTxt(subidaPct) + ' (ano passado). '
             + (envios.length ? 'Envie ' + lista + ' para o Full ' + quando + '.' : 'O estoque no Full já cobre essa subida.');
         return { aplica: true, mes: alvo, subidaPct, texto, envios, ate };
+    };
+
+    // ══ v3.1 (pedidos da dona 26 e 27/09/2026): faturamento por família VISUAL e INTELIGENTE — estoque × venda de cada SKU, o gargalo da
+    // queda comparando com MAIS de um período, e a época forte de compra. Só com o que o Copiloto já lê (vbAnuncio, retrato de anúncios,
+    // Full, radar de visitas, competição, frete). Sem dado → diz o que falta; nenhum número inventado. ══
+    const capIni = t => (t ? t.charAt(0).toLowerCase() + t.slice(1) : t);
+    const decTxt = v => String(Math.round(v * 10) / 10).replace('.', ',');
+    /**
+     * Estoque publicado de UM SKU ({sku, itemIds}) → { lido, full (aptas no Full) | null, proprio (anúncios fora do Full) | null, total | null, aCaminho }.
+     * Anúncios do mesmo SKU (itemIds ou o mesmo SKU no retrato) que dividem o produto (familia/MLBU) contam 1 vez. lido false = nem o retrato
+     * nem o Full têm este SKU (nunca 0 inventado).
+     */
+    SHC.estoqueSku = function (s, itens, full) {
+        const ids = (s && s.itemIds) || [], sku = (s && s.sku) || '', lista = Array.isArray(itens) ? itens : ((itens && itens.itens) || []);
+        const dele = (p, x) => (sku && SHC.normalizaSku(p.sku || '') === sku) || x.some(i => ids.indexOf(i) >= 0);
+        const prods = ((full && full.produtos) || []).filter(p => p && dele(p, p.itemIds && p.itemIds.length ? p.itemIds : [p.itemId]));
+        const noFull = new Set();
+        prods.forEach(p => (p.itemIds && p.itemIds.length ? p.itemIds : [p.itemId]).forEach(x => noFull.add(x)));
+        const porProduto = {};
+        lista.filter(i => i && i.itemId && !noFull.has(i.itemId) && dele(i, [i.itemId])).forEach(i => {
+            const e = /sem estoque/i.test(String(i.estoque || '')) ? 0 : inteiro(i.estoque), k = i.familia || i.itemId;
+            if (e !== null) porProduto[k] = Math.max(porProduto[k] || 0, e);
+        });
+        const ks = Object.keys(porProduto), proprio = ks.length ? ks.reduce((t, k) => t + porProduto[k], 0) : null;
+        let fullUn = null, aCaminho = 0;
+        prods.forEach(p => { const a = unDe(p.aptas); if (a !== null) fullUn = (fullUn || 0) + Math.max(0, a); aCaminho += Math.max(0, unDe(p.aCaminho) || 0); });
+        const lido = proprio !== null || fullUn !== null;
+        return { lido, full: fullUn, proprio, total: lido ? (proprio || 0) + (fullUn || 0) : null, aCaminho };
+    };
+    // Limites das recomendações por SKU (regra da dona): tendência de ±10% contra o mês anterior; estoque "baixo" < 15 dias, "alto" > 60 dias.
+    SHC.REC_SKU = { subindo: 10, caindo: -10, coberturaBaixa: 15, coberturaAlta: 60 };
+    /**
+     * Recomendação de UM SKU (de SHC.familias) com o estoque dele (SHC.estoqueSku) → { acao: 'repor'|'full'|'baixar'|'manter'|'sem_dado',
+     *   cor: 'vermelho'|'azul'|'amarelo'|'verde'|'cinza', rotulo, motivo (1 linha), vendaDia | null, cobertura (dias) | null }.
+     * dias = dias do mês que a leitura cobre (SHC.familias(...).diasCobertos). Tendência = variacaoPct (contra o mês anterior, pelo ritmo).
+     * Vendendo + estoque para menos de 15 dias (ou zerado) → repor; subindo + estoque só com você → enviar ao Full; caindo + estoque para mais de 60 dias
+     * (ou sem venda com estoque) → baixar preço/promoção; o resto → manter.
+     */
+    SHC.recomendaSku = function (s, est, dias) {
+        const L = SHC.REC_SKU, un = numF(s && s.unidades), v = numF(s && s.variacaoPct), d = numF(dias) >= 1 ? dias : null;
+        const vendaDia = un !== null && d ? un / d : null, out = { vendaDia: vendaDia === null ? null : Math.round(vendaDia * 10) / 10, cobertura: null };
+        if (!est || !est.lido) return Object.assign(out, { acao: 'sem_dado', cor: 'cinza', rotulo: 'Sem estoque lido', motivo: 'O estoque deste SKU ainda não foi lido (lista de Anúncios ou Full).' });
+        const cob = vendaDia > 0 ? Math.floor(est.total / vendaDia) : null;
+        out.cobertura = cob;
+        const ritmo = vendaDia > 0 ? 'vende ' + decTxt(vendaDia) + ' por dia' : 'sem venda neste mês', tend = v === null ? '' : 'vendas ' + (v >= 0 ? '▲ ' : '▼ ') + pctTxt(v) + ', ';
+        const dura = cob === null ? '' : ' dá para ' + SHC.qtd(cob, 'dia', 'dias');
+        // Vendendo e o estoque acaba em menos de 15 dias (ou já acabou) → repor, com vendas subindo ou caindo (sem estoque, a venda cai de qualquer jeito).
+        if (vendaDia > 0 && cob < L.coberturaBaixa)
+            return Object.assign(out, { acao: 'repor', cor: 'vermelho', rotulo: 'Repor', motivo: (est.total > 0 ? 'Estoque de ' + unTxt(est.total) + dura : 'Sem estoque') + ' e ' + ritmo + '.' });
+        if (v !== null && v >= L.subindo && est.proprio > 0 && !(est.full > 0))
+            return Object.assign(out, { acao: 'full', cor: 'azul', rotulo: 'Enviar ao Full', motivo: capF(tend) + unTxt(est.proprio) + ' no seu estoque, fora do Full.' });
+        if ((v !== null && v <= L.caindo && (cob === null || cob > L.coberturaAlta) && est.total > 0) || (!(vendaDia > 0) && est.total > 0 && un !== null))
+            return Object.assign(out, { acao: 'baixar', cor: 'amarelo', rotulo: 'Baixar preço ou promoção', motivo: capF(tend) + 'estoque de ' + unTxt(est.total) + (cob === null ? ' parado' : dura) + '.' });
+        return Object.assign(out, { acao: 'manter', cor: 'verde', rotulo: 'Manter', motivo: capF(tend) + (est.total > 0 ? 'estoque de ' + unTxt(est.total) + dura : 'sem estoque e sem venda') + '.' });
+    };
+    /** Anúncio parado (SHC.familias(...)[i].parados: estoque e nenhuma venda nos 3 últimos meses) → a mesma forma de SHC.recomendaSku. */
+    SHC.recomendaParado = p => ({ acao: 'liquidar', cor: 'vermelho', rotulo: 'Liquidar ou descartar', vendaDia: 0, cobertura: null,
+        motivo: 'Nenhuma venda nos últimos 3 meses e ' + unTxt((p && p.estoque) || 0) + ' paradas.' });
+
+    const ORDEM_GARGALO = ['estoque', 'anuncio', 'buybox', 'preco', 'visitas', 'sazonal', 'frete', 'ads'];
+    /**
+     * "Por que caiu?" com indicador de gargalo (pedido da dona 27/09: "compara com outros meses… se é estoque, variação de preço, sazonalidade,
+     * buy box… algo visual onde está o gargalo"). sku = item de SHC.familias(...)[i].skus; dados = os de SHC.porQueCaiu + { mes, dias, familia,
+     * conta (o array de SHC.familias: variacaoPct/variacao3Pct da conta inteira) }. Sem o mesmo mês do ano passado, a sazonalidade compara com a família e a conta.
+     * → { comparacoes: [{ id: 'ant'|'media3'|'ano', rotulo, pct | null, motivo? }],
+     *     causas: [{ id: estoque|anuncio|buybox|preco|visitas|sazonal|frete|ads, nome, nivel: 'e'|'contribui'|'nao'|'semdado', texto, curto (poucas palavras + o número) }],
+     *     principal (id | null), manchete, resumo ('Gargalo: …' | 'Pode ser: …' | 'Sem causa clara nos dados'), lista (SHC.porQueCaiu) }
+     * nivel: 'e' = é essa (vermelho), 'contribui' (amarelo), 'nao' = não é (verde), 'semdado' (cinza). Visitas que caíram JUNTO com estoque, anúncio
+     * pausado ou catálogo perdido são consequência ('contribui'). anuncio e ads só aparecem quando há o que dizer. Nunca inventa causa.
+     */
+    SHC.gargaloQueda = function (sku, dados) {
+        const d = dados || {}, s = sku || {}, hoje = d.hoje || SHC.hoje(), mes = /^\d{4}-\d{2}$/.test(String(d.mes || '')) ? d.mes : hoje.slice(0, 7), ant = mesMenos(mes, 1), R = SHC.moeda;
+        const lista = SHC.porQueCaiu(s, d), tem = t => (lista.find(c => c.tipo === t) || {}).texto || '';
+        const comparacoes = [
+            { id: 'ant', rotulo: (s.fator > 0 && s.fator < 0.999 ? 'mesmo período de ' : '') + nomeMesFam(ant), pct: numF(s.variacaoPct) },
+            { id: 'media3', rotulo: 'média dos 3 meses antes', pct: numF(s.variacao3Pct) },
+            { id: 'ano', rotulo: nomeMesFam(mes) + ' do ano passado', pct: numF(s.variacaoAnoPct) },
+        ];
+        comparacoes.forEach(c => { if (c.pct === null) c.motivo = c.id === 'ant' ? 'sem ' + nomeMesFam(ant) + ' lido' : c.id === 'media3' ? 'precisa dos 3 meses antes lidos' : (numF(s.brutoAno) === 0 ? 'não vendia no ano passado' : 'sem o ano passado lido'); });
+        const causas = [], C = (id, nome, nivel, texto, curto) => causas.push(Object.assign({ id, nome, nivel, texto }, curto ? { curto } : {}));
+        const n0f = v => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'), rs0 = v => 'R$ ' + n0f(v);
+        const ids = (s.itemIds || []).filter(Boolean), itens = Array.isArray(d.itens) ? d.itens : ((d.itens && d.itens.itens) || []), ret = itens.filter(i => i && ids.indexOf(i.itemId) >= 0);
+        // Estoque (hoje: o Copiloto não guarda o estoque dia a dia — só o de agora)
+        const est = SHC.estoqueSku(s, itens, d.full), rec = SHC.recomendaSku(s, est, d.dias);
+        if (tem('estoque')) C('estoque', 'Estoque', 'e', tem('estoque'));
+        else if (est.lido && rec.cobertura !== null && rec.cobertura < 7) C('estoque', 'Estoque', 'contribui', 'Estoque baixo: ' + unTxt(est.total) + ', dá para ' + SHC.qtd(rec.cobertura, 'dia', 'dias') + '.');
+        else if (est.lido) C('estoque', 'Estoque', 'nao', 'Tem ' + unTxt(est.total) + ' em estoque agora.');
+        else C('estoque', 'Estoque', 'semdado', 'O estoque deste SKU ainda não foi lido.');
+        if (tem('pausado')) C('anuncio', 'Anúncio', 'e', tem('pausado'));
+        // Buy Box (catálogo)
+        const comp = d.comp || {}, noCat = ret.some(r => r.catalogoML || r.competicao) || ids.some(id => comp[id]);
+        if (tem('catalogo')) C('buybox', 'Buy Box', 'e', tem('catalogo'));
+        else if (noCat) C('buybox', 'Buy Box', 'nao', 'Não está perdendo o catálogo.');
+        else if (ret.length) C('buybox', 'Buy Box', 'nao', 'Não é anúncio de catálogo.');
+        else C('buybox', 'Buy Box', 'semdado', 'O anúncio não está na lista lida.');
+        // Preço
+        if (tem('preco_subiu')) C('preco', 'Preço', tem('vendeu_menos') ? 'e' : 'contribui', tem('preco_subiu'));
+        else if (tem('mais_barato')) C('preco', 'Preço', 'contribui', tem('mais_barato'));
+        else if (numF(s.precoMedio) > 0 && numF(s.precoMedioAnt) > 0) C('preco', 'Preço', 'nao', 'Preço médio parecido: ' + R(s.precoMedio) + ' contra ' + R(s.precoMedioAnt) + '.');
+        else {
+            // v3.1 (pedido da dona 29/09: "sempre compare com o que já tem"): falta o médio de um dos meses → o preço de HOJE contra o médio que existe.
+            const pHoje = Math.max(0, ...ret.map(r => numF(r.preco) || 0)), temM = numF(s.precoMedio) > 0, pBase = temM ? s.precoMedio : numF(s.precoMedioAnt);
+            const mB = nomeMesFam(temM ? mes : ant), mF = nomeMesFam(temM ? ant : mes);
+            if (pHoje > 0 && pBase > 0) C('preco', 'Preço', pHoje > pBase * 1.03 ? 'contribui' : 'nao', 'O preço de hoje (' + R(pHoje) + ') está ' + (pHoje > pBase * 1.03 ? 'acima do' : pHoje < pBase * 0.97 ? 'abaixo do' : 'parecido com o')
+                + ' preço médio de ' + mB + ' (' + R(pBase) + '). Não tenho o preço médio de ' + mF + (temM ? '' : ' (sem venda)') + '.', pHoje > pBase * 1.03 ? 'preço ' + rs0(pBase) + ' → ' + rs0(pHoje) + ' hoje' : 'preço de hoje ' + rs0(pHoje));
+            else C('preco', 'Preço', 'semdado', 'Sem o preço médio dos dois meses nem o preço de hoje para comparar.');
+        }
+        // Visitas (consequência quando junto com estoque, anúncio pausado ou catálogo perdido)
+        const outraE = causas.some(c => c.nivel === 'e'), cfgG = Object.assign({}, SHC.PADRAO, d.cfg || {});
+        const rvOk = ids.map(id => (d.visitas && d.visitas[id] && d.visitas[id].dias ? SHC.radarVisitas(d.visitas[id].dias, hoje, cfgG.radar_queda_pct) : null)).find(r => r && r.ult7 !== null && r.classe !== 'caindo');
+        if (tem('visitas')) C('visitas', 'Visitas', outraE ? 'contribui' : 'e', tem('visitas'));
+        else if (numF(s.visitasAnt) > 0 && numF(s.visitas) !== null) C('visitas', 'Visitas', 'nao', 'Visitas no ritmo do mês anterior.');
+        else if (rvOk) C('visitas', 'Visitas', 'nao', 'Visitas da última semana: ' + rvOk.ult7 + ' contra ' + rvOk.ant7 + ' na semana antes (não caíram).', 'visitas ok na semana (' + rvOk.ult7 + ')');
+        else C('visitas', 'Visitas', 'semdado', 'Sem as visitas dos dois meses para comparar.');
+        // Sazonalidade: o mesmo mês no ano passado contra a média daquele ano (a série do SKU; se ele não vendia, a da família)
+        const serieSku = Array.isArray(s.serie) ? s.serie : [], fs = ((d.familia && d.familia.serie12) || []).map(p => (p && !p.parcial ? p.bruto : null));
+        const usa = serieSku.length === 13 && serieSku[0] > 0 ? { v: serieSku, de: 'este SKU' } : fs.length === 13 && fs[0] > 0 ? { v: fs, de: 'a família' } : null;
+        const outros = usa ? usa.v.slice(1, 12).filter(x => x !== null) : [];
+        if (usa && outros.length >= 6) {
+            const media = outros.reduce((t, x) => t + x, 0) / outros.length, dif = media > 0 ? r1f((usa.v[0] - media) / media * 100) : null;
+            if (dif === null) C('sazonal', 'Sazonalidade', 'semdado', 'Sem vendas no ano passado para comparar.');
+            else C('sazonal', 'Sazonalidade', dif <= -15 ? 'e' : dif < -5 ? 'contribui' : 'nao', 'No ano passado, ' + nomeMesFam(mes) + ' vendeu ' + pctTxt(dif) + (dif < 0 ? ' abaixo' : ' acima') + ' da média do ano para ' + usa.de
+                + (dif <= -15 ? ': é um mês fraco.' : dif < -5 ? ': um pouco mais fraco.' : ': não é um mês fraco.'));
+        } else {
+            // v3.1 (pedido da dona 29/09: "se não tiver dos 12 meses… sempre é bom mostrar e comparar com o que você já tem"): diz o mês que falta
+            // e compara a queda deste SKU com a do RESTO da família e do resto da conta no mesmo período (sem o próprio SKU: senão a queda dele puxa
+            // a família para baixo e parece época). Caíram juntos → sinal de época; só o SKU caiu → não é época.
+            const mAno = mesMenos(mes, 12), anoTxt = nomeMesFam(mAno) + ' de ' + mAno.slice(0, 4);
+            const falta = usa ? 'Tenho ' + anoTxt + ', mas poucos meses lidos depois dele para saber se é mês fraco.'
+                : serieSku[0] === 0 ? 'Este SKU não vendia em ' + anoTxt + '.' : 'Não tenho ' + anoTxt + ' deste SKU.';
+            const f = d.familia, famOk = f && f.familia !== SHC.FAMILIA_SEM && f.familia !== SHC.FAMILIA_OUTRAS && (f.skus || []).length > 1;
+            const mv = p => (p > 0 ? 'subiu ' + pctTxt(p) : p < 0 ? 'caiu ' + pctTxt(p) : 'ficou igual'), seta = p => (p > 0 ? '▲ ' : p < 0 ? '▼ ' : '= ') + pctTxt(p);
+            const pts = x => (x && Array.isArray(x.serie12) && x.serie12.length === 13 ? x.serie12 : null), tira = serieSku.length === 13, f3 = numF(d.conta && d.conta.fator3);
+            const cps = d.conta && d.conta.length > 1 ? d.conta.map(pts) : [];
+            const contaPts = cps.length && cps.every(Boolean) ? cps[0].map((_, i) => (cps.some(p => p[i].bruto === null) ? { bruto: null } : { bruto: cps.reduce((t, p) => t + p[i].bruto, 0), parcial: cps.some(p => p[i].parcial) })) : null;
+            // pontos (13) → { variacao3Pct, variacaoPct } do resto (os pontos − este SKU), pelo mesmo ritmo do SKU
+            const resto = P => {
+                if (!P) return {};
+                const v = P.map((p, i) => (p.bruto === null || (tira && serieSku[i] === null) ? null : SHC.r2(p.bruto - (tira ? serieSku[i] : 0)))), t = v.slice(9, 12);
+                const m3 = t.every(x => x !== null) && P.slice(9, 12).every(p => !p.parcial) ? (t[0] + t[1] + t[2]) / 3 : null;
+                return { variacao3Pct: f3 > 0 ? varFam(v[12], m3, f3) : null, variacaoPct: s.fator > 0 ? varFam(v[12], v[11], s.fator) : null };
+            };
+            const rF = famOk ? resto(pts(f)) : {}, rC = resto(contaPts), de = tira ? 'o resto da ' : 'a ';
+            const bases = [{ k: 'variacao3Pct', txt: 'contra a média dos 3 meses antes' }, { k: 'variacaoPct', txt: 'contra ' + (s.fator > 0 && s.fator < 0.999 ? 'o mesmo período de ' : '') + nomeMesFam(ant) }]
+                .map(b => Object.assign(b, { sku: numF(s[b.k]), refs: [{ nome: de + 'família ' + (f && f.familia), curto: 'família', pct: numF(rF[b.k]) }, { nome: de + 'conta', curto: 'conta', pct: numF(rC[b.k]) }]
+                    .filter(r => r.pct !== null) }));
+            // a base em que o SKU caiu vem primeiro (senão a época vira "o gargalo" de um SKU que subiu na comparação mostrada)
+            const b = bases.find(x => x.refs.length && x.sku !== null && x.sku < 0) || bases.find(x => x.refs.length && x.sku !== null) || bases.find(x => x.refs.length);
+            if (!b) {
+                const bs = bases.find(x => x.sku !== null);
+                C('sazonal', 'Sazonalidade', 'semdado', falta + (bs ? ' Este SKU ' + mv(bs.sku) + ' ' + bs.txt + ', mas' : ' E') + ' não tenho a família nem a conta no mesmo período para saber se é época.', 'sem base para comparar');
+            } else {
+                const r = b.refs[0], pS = b.sku, quem = (tira ? 'o resto da ' : 'a ') + r.curto + (tira ? '' : ' toda');
+                const c = b.refs.find(x => x !== r); // a conta, quando r é a família
+                const nivel = pS !== null && pS >= 0 ? 'nao' : r.pct <= -15 && (pS === null || r.pct <= pS / 2) ? 'e' : r.pct < -5 ? 'contribui' : 'nao';
+                const fecho = nivel === 'e' ? 'Parece época: ' + quem + ' caiu junto.' : nivel === 'contribui' ? (r.pct <= -15 ? 'A época explica só parte: este SKU caiu bem mais.' : 'A época pesa um pouco.')
+                    : pS !== null && pS >= 0 ? 'Não parece época: este SKU não caiu.'
+                    : c && c.pct <= -15 ? 'Não parece época da família: a conta caiu, a família não.'
+                    : c && c.pct < -5 ? 'Não parece época: ' + quem + ' não caiu junto.'
+                    : 'Não parece época' + (pS !== null ? ': só este SKU caiu.' : '.');
+                C('sazonal', 'Sazonalidade', nivel, falta + ' Comparei ' + nomeMesFam(mes) + ' ' + b.txt + ': ' + b.refs.map(x => x.nome + ' ' + mv(x.pct)).join(', ') + (pS !== null ? ' e este SKU ' + mv(pS) : '') + '. ' + fecho,
+                    (nivel === 'e' ? 'parece época' : nivel === 'contribui' ? 'época pesa um pouco' : 'não é época') + ' (' + r.curto + ' ' + seta(r.pct) + ')');
+            }
+        }
+        // Frete (custo seu: pesa na margem e na competitividade, não derruba sozinho a venda)
+        const fr = d.fretes || {}, fr1 = ids.map(id => fr[id] || {}).map(h => Object.keys(h).filter(k => k <= hoje && numF(h[k]) !== null).sort().map(k => h[k])).find(v => v.length === 1);
+        if (tem('frete')) C('frete', 'Frete', 'contribui', tem('frete'));
+        else if (ids.some(id => Object.keys(fr[id] || {}).length >= 2)) C('frete', 'Frete', 'nao', 'O frete que você paga não subiu.');
+        else C('frete', 'Frete', 'semdado', fr1 ? 'Só tenho o frete de hoje (' + R(fr1[0]) + '): falta um de antes para comparar.' : 'Sem o histórico do frete deste anúncio.');
+        if (tem('ads')) C('ads', 'Mercado Ads', 'contribui', tem('ads'));
+        // v3.1 (print da dona 29/09: "muito texto e pouco visual"): cada causa também em poucas palavras COM o número que a prova (etiqueta e manchete da tela).
+        const fr0 = s.fator > 0 ? s.fator : 1;
+        const CURTO = {
+            estoque: c => (c.nivel === 'e' ? (/Full/.test(c.texto) ? 'sem estoque no Full' : 'anúncio sem estoque')
+                : c.nivel === 'contribui' ? 'estoque baixo — ' + n0f(est.total) + ' un. (' + SHC.qtd(rec.cobertura, 'dia', 'dias') + ')' : c.nivel === 'nao' ? n0f(est.total) + ' un. em estoque' : 'estoque não lido'),
+            anuncio: c => 'anúncio ' + ((/\(([^)]+)\)\.$/.exec(c.texto) || [])[1] || 'inativo'),
+            buybox: c => (c.nivel === 'e' ? (/fora da disputa/i.test(c.texto) ? 'fora da disputa do catálogo' : 'perdendo o catálogo') + (/ por preço/.test(c.texto) ? ' (preço)' : / pela forma de entrega/.test(c.texto) ? ' (entrega)' : '')
+                : c.nivel === 'nao' ? (noCat ? 'não perde o catálogo' : 'não é catálogo') : 'anúncio não lido'),
+            preco: c => (tem('preco_subiu') ? 'preço subiu ' + rs0(s.precoMedioAnt) + ' → ' + rs0(s.precoMedio > s.precoMedioAnt * 1.03 ? s.precoMedio : Math.max(0, ...ret.map(r => numF(r.preco) || 0)))
+                : tem('mais_barato') ? 'preço caiu ' + rs0(s.precoMedioAnt) + ' → ' + rs0(s.precoMedio) : c.nivel === 'nao' ? 'preço igual (' + rs0(s.precoMedio) + ')' : 'sem preço dos 2 meses'),
+            visitas: c => (c.nivel === 'e' || c.nivel === 'contribui' ? 'visitas ▼ ' + ((/caíram ([\d,]+%)/.exec(c.texto) || [])[1] ? /caíram ([\d,]+%)/.exec(c.texto)[1] + ' na semana' : pctTxt((1 - s.visitas / (s.visitasAnt * fr0)) * 100))
+                : c.nivel === 'nao' ? 'visitas no ritmo' : 'visitas não lidas'),
+            sazonal: c => { const m = /vendeu ([\d,]+%) abaixo/.exec(c.texto);
+                return c.nivel === 'e' ? 'mês fraco (−' + m[1] + ' no ano passado)' : c.nivel === 'contribui' ? 'mês um pouco fraco (−' + m[1] + ')' : c.nivel === 'nao' ? 'não é mês fraco'
+                    : 'sem base para comparar'; },
+            frete: c => { const m = /de (R\$ [\d.,]+) para (R\$ [\d.,]+)/.exec(c.texto); return m ? 'frete ' + m[1] + ' → ' + m[2] : c.nivel === 'nao' ? 'frete igual' : 'sem histórico do frete'; },
+            ads: c => (/verba/.test(c.texto) ? 'Ads sem verba' : 'Ads pausado'),
+        };
+        causas.forEach(c => { c.curto = c.curto || CURTO[c.id](c); });
+        causas.sort((a, b) => ORDEM_GARGALO.indexOf(a.id) - ORDEM_GARGALO.indexOf(b.id));
+        const e = causas.find(c => c.nivel === 'e'), ct = causas.find(c => c.nivel === 'contribui');
+        const nm = c => (c.id === 'buybox' || c.id === 'ads' ? c.nome : c.nome.toLowerCase());   // nome próprio (Buy Box, Mercado Ads) fica como é
+        const manchete = e ? 'O gargalo é ' + nm(e) + ': ' + capIni(e.texto) : ct ? 'Pode ser ' + nm(ct) + ': ' + capIni(ct.texto)
+            : 'Os dados que o Copiloto tem não mostram um gargalo claro.';
+        // resumo = a manchete em 1 linha curta (sempre visível no cartão do SKU, sem clicar)
+        const resumo = e ? 'Gargalo: ' + e.curto : ct ? 'Pode ser: ' + ct.curto : 'Sem causa clara nos dados';
+        return { comparacoes, causas, principal: e ? e.id : ct ? ct.id : null, manchete, resumo, lista };
+    };
+
+    /**
+     * Época forte de compra de UMA família (item de SHC.familias): um dos 2 próximos meses, no ano passado, vendeu 20% ou mais acima da média
+     * dos meses inteiros lidos → { aplica: true, mes, acimaPct, ate ('AAAA-MM-DD' | null = o quanto antes), texto } | { aplica: false, motivo }.
+     * ate = dia 1º do mês forte − 21 dias (2 semanas para comprar + 1 para a remessa chegar ao Full). Precisa de 10 meses inteiros lidos.
+     */
+    SHC.sazonalCompra = function (familia, opc) {
+        const o = opc || {}, hoje = o.hoje || SHC.hoje(), nome = (familia && familia.familia) || 'a família';
+        if (!familia || familia.familia === SHC.FAMILIA_OUTRAS || familia.familia === SHC.FAMILIA_SEM) return { aplica: false, motivo: 'Grupo misto: não mostra sazonalidade.' };
+        const s = (familia.serie12 || []).filter(p => p && /^\d{4}-\d{2}$/.test(p.mes)), ult = s[s.length - 1], inteiros = s.filter(p => p.bruto !== null && !p.parcial);
+        if (!ult || inteiros.length < 10) return { aplica: false, motivo: 'Para avisar a época forte de compra preciso de pelo menos 10 meses inteiros de histórico (tenho ' + SHC.qtd(inteiros.length, 'mês', 'meses') + ').' };
+        const media = inteiros.reduce((t, p) => t + p.bruto, 0) / inteiros.length;
+        if (!(media > 0)) return { aplica: false, motivo: 'Sem vendas no último ano.' };
+        // Família que parou de vender (os 2 últimos meses lidos zerados) não ganha aviso de compra.
+        if (s.slice(-2).every(p => p.bruto !== null && !(p.bruto > 0))) return { aplica: false, motivo: nome + ' não vende nos 2 últimos meses.' };
+        for (let k = 1; k <= 2; k++) {
+            const alvo = mesMenos(ult.mes, -k), p = s.find(x => x.mes === mesMenos(alvo, 12));
+            if (alvo <= hoje.slice(0, 7) || !p || p.bruto === null || p.parcial) continue;   // só meses que ainda vão chegar
+            const acimaPct = r1f((p.bruto - media) / media * 100);
+            if (acimaPct < 20) continue;
+            const lim = diaMenosISO(alvo + '-01', 21), ate = lim >= hoje ? lim : null;
+            return { aplica: true, mes: alvo, acimaPct, ate, texto: capF(nomeMesFam(alvo)) + ' costuma ser forte para ' + nome + ': no ano passado vendeu ' + pctTxt(acimaPct) + ' acima da média. '
+                + 'Compre e envie ao Full ' + (ate ? 'até ' + ate.slice(8, 10) + '/' + ate.slice(5, 7) : 'o quanto antes') + ' (2 semanas para comprar + 1 para chegar ao Full).' };
+        }
+        return { aplica: false, motivo: 'Os próximos 2 meses não costumam ser mais fortes para ' + nome + '.' };
+    };
+
+    /**
+     * O que pede ação no faturamento por família (a linha "Precisa de você" da Geral e o ícone) → { repor, full, baixar, liquidar: [{familia, sku, titulo, itemId, motivo}],
+     *   sazonal: [{familia, texto, ate}], total (SKUs), texto ('' sem nada) }. fams = SHC.familias; itens = retrato; full = ml:full:<conta>.
+     */
+    SHC.familiasAcoes = function (fams, itens, full, opc) {
+        const o = opc || {}, out = { repor: [], full: [], baixar: [], liquidar: [], sazonal: [], total: 0, texto: '' };
+        if (!fams || !fams.lido) return out;
+        (fams || []).forEach(f => {
+            (f.skus || []).filter(s => s.bruto > 0).forEach(s => {
+                const r = SHC.recomendaSku(s, SHC.estoqueSku(s, itens, full), fams.diasCobertos);
+                if (out[r.acao]) out[r.acao].push({ familia: f.familia, sku: s.sku, titulo: s.titulo, itemId: (s.itemIds || [])[0] || '', motivo: r.motivo });
+            });
+            (f.parados || []).forEach(p => out.liquidar.push({ familia: f.familia, sku: p.sku, titulo: p.titulo, itemId: p.itemId, motivo: SHC.recomendaParado(p).motivo }));
+            const sz = SHC.sazonalCompra(f, { hoje: o.hoje });
+            if (sz.aplica) out.sazonal.push({ familia: f.familia, texto: sz.texto, ate: sz.ate, mes: sz.mes });
+        });
+        out.total = out.repor.length + out.full.length + out.baixar.length + out.liquidar.length;
+        const partes = [out.repor.length ? SHC.qtd(out.repor.length, 'SKU para repor', 'SKUs para repor') : '', out.full.length ? out.full.length + ' para enviar ao Full' : '',
+            out.baixar.length ? out.baixar.length + ' para baixar preço' : '', out.liquidar.length ? SHC.qtd(out.liquidar.length, 'anúncio parado (3 meses sem venda)', 'anúncios parados (3 meses sem venda)') : '',
+            out.sazonal.length ? capF(nomeMesFam(out.sazonal[0].mes)) + ' forte para ' + out.sazonal[0].familia + (out.sazonal[0].ate ? ' (compre até ' + out.sazonal[0].ate.slice(8, 10) + '/' + out.sazonal[0].ate.slice(5, 7) + ')' : '') : ''].filter(Boolean);
+        out.texto = partes.join(' · ');
+        return out;
     };
 
     /**

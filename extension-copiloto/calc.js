@@ -65,16 +65,46 @@
     // Faixa aceita no que o seller digita (Ajustes do painel lateral, "Seus números" e guia do painel.html): uma só para as duas telas.
     SHC.FAIXAS = { imposto_pct: [0, 60], margem_alvo_pct: [0, 90] };
 
-    // Sessão caída: o ML manda (302) para o login em www.mercadolivre.com.br, que não tem CORS nem permissão → o fetch quebra com
-    // TypeError antes de ver r.url. Refaz o MESMO GET sem seguir o redirecionamento: 'opaqueredirect' = mandou para o login.
-    // Devolve a resposta normal, ou uma falsa com url de login (os chamadores já tratam com ehLogin(r.url)). Só GET; POST não é repetido.
+    // Sessão caída: o ML manda (302) para o login em www.mercadolivre.com.br, que não tem CORS nem permissão → seguir o desvio quebra o
+    // fetch (TypeError) e, fora de uma página do ML, o Chrome registra "blocked by CORS policy" em chrome://extensions › Erros.
+    // Fora de uma página https (service worker e páginas da extensão): o 1º GET já vai com redirect:'manual'. Desviou → confere a sessão
+    // num endereço que só desvia sem login (PROVA_SESSAO, também com 'manual'): sem sessão → resposta falsa com url de login (os chamadores
+    // tratam com ehLogin(r.url)); com sessão, o desvio era do próprio endereço → refaz seguindo. Na página do ML (script de conteúdo):
+    // segue o desvio e, no TypeError, refaz o MESMO GET com 'manual' ('opaqueredirect' = login). Só GET; POST não é repetido.
+    // v3.1 (visto ao vivo em 29/09/2026): /anuncios/lista passou a desviar (302) para /anuncios COM a sessão aberta, e aí toda leitura
+    // parecia "sem sessão". A prova agora é: QUALQUER um destes responde sem desvio (com sessão dão 200; sem sessão desviam para o login).
+    // Prova boa vale 60 s: uma leitura de várias páginas que desviam não prova a cada página.
+    // Sessão caiu dentro desses 60 s: o desvio seguido vai ao login (TypeError/CORS ou página de login) → esquece a prova e confere de novo.
+    const PROVAS_SESSAO = ['https://vendedores.mercadolivre.com.br/anuncios', 'https://vendedores.mercadolivre.com.br/metricas'];
+    let sessaoVistaAte = 0;
+    // Só 'opaqueredirect' é desvio: um 302 SEM Location chega como resposta comum e é do chamador (ex.: lista do Canal "Tivemos um problema").
+    const desviou = r => !!r && r.type === 'opaqueredirect';
+    const urlLogin = u => /login|registration|\/lgz\//i.test(u || '');
+    const loginFalso = () => ({ ok: false, status: 302, url: 'https://www.mercadolivre.com.br/login?redirecionado', redirecionadoLogin: true });
     SHC.buscarVendo = async function (url, init, ir) {
         const f = ir || root.fetch;
+        const soGet = !(init && init.method && String(init.method).toUpperCase() !== 'GET');
+        const naPagina = !!(root.location && /^https?:$/.test(root.location.protocol));
+        if (soGet && !naPagina) {
+            const r = await f(url, Object.assign({}, init, { redirect: 'manual' }));
+            if (!desviou(r)) return r;
+            if (Date.now() < sessaoVistaAte) {
+                try { const s = await f(url, init); if (!(s && urlLogin(s.url))) return s; } catch (e) { if (!e || e.name !== 'TypeError') throw e; }
+                sessaoVistaAte = 0;   // caiu no login: a prova de antes não vale mais
+            }
+            for (const prova of PROVAS_SESSAO) {
+                if (prova === url) continue;   // o próprio endereço já desviou
+                const p = await f(prova, { credentials: 'include', cache: 'no-store', redirect: 'manual', signal: init && init.signal });
+                try { if (p && p.body && p.body.cancel) p.body.cancel().catch(() => {}); } catch (e) { /* corpo da prova não interessa */ }
+                if (!desviou(p)) { sessaoVistaAte = Date.now() + 60e3; return f(url, init); }
+            }
+            return loginFalso();
+        }
         try { return await f(url, init); } catch (e) {
             if (!e || e.name !== 'TypeError' || (init && init.method && String(init.method).toUpperCase() !== 'GET')) throw e;
             let r = null;
             try { r = await f(url, Object.assign({}, init, { redirect: 'manual' })); } catch (e2) { throw e; }
-            if (r && (r.type === 'opaqueredirect' || (r.status >= 300 && r.status < 400))) return { ok: false, status: 302, url: 'https://www.mercadolivre.com.br/login?redirecionado', redirecionadoLogin: true };
+            if (desviou(r) || (r && r.status >= 300 && r.status < 400)) return loginFalso();
             throw e;
         }
     };

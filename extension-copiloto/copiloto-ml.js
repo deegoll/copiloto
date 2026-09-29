@@ -1,6 +1,6 @@
 // SellerHub Copiloto v2 — roda no painel do vendedor do Mercado Livre (vendedores.mercadolivre.com.br).
 // 1) Na Central de promoções, manda para a extensão os números que o ML já calculou para cada proposta.
-// 2) Serve de "plano B" da sincronização: busca páginas do painel (promoções e lista de Anúncios) com a sessão desta aba.
+// 2) Serve de "plano B" da sincronização: busca páginas do painel (promoções e lista de Anúncios) e o JSON do Mercado Ads com a sessão desta aba.
 // Só lê. Não clica, não preenche, não envia nada para fora do navegador.
 (function () {
     'use strict';
@@ -29,6 +29,21 @@
         const leitor = msg && LEITORES[msg.acao];
         let u = null;
         try { u = new URL(String(msg && msg.url)); } catch (e) { /* url inválida */ }
+        // v3.1: Mercado Ads (pa.mercadolivre.com.br) só responde a quem vem de uma página do ML → o fundo pede o JSON por aqui.
+        // Só GET, só a API de leitura do Ads; sem seguir desvio (redirect:'manual': nada de erro de CORS no console da página).
+        if (msg && msg.acao === 'ler_json_pa') {
+            if (!u || u.origin !== 'https://pa.mercadolivre.com.br' || u.pathname.indexOf('/pa/api/admin-pads/ajax/') !== 0) return false;
+            fetch(u.href, Object.assign({ method: 'GET', credentials: 'include', cache: 'no-store', redirect: 'manual', headers: { accept: 'application/json' } }, typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(25000) } : {}))
+                .then(async r => {
+                    // Desvio daqui (29/09/2026, ao vivo): para ads.mercadolivre.com.br/accounts = conta de anúncios ainda não aberta neste
+                    // Chrome (a sessão está ok: o Ads só roda depois da lista de Anúncios lida). O fundo decide o que fazer.
+                    if (r.type === 'opaqueredirect' || (r.status >= 300 && r.status < 400)) return { ok: false, desvio: true };
+                    if (!r.ok) return { ok: false, status: r.status };
+                    try { return { ok: true, dados: await r.json() }; } catch (e) { return { ok: false, formato: true }; }   // HTML no lugar de JSON
+                })
+                .then(responder, err => responder({ ok: false, erro: String(err && err.name || err) }));
+            return true;
+        }
         if (!leitor || !u || u.origin !== 'https://vendedores.mercadolivre.com.br' || !leitor.rota.test(u.pathname)) return false;
         SHC.buscarVendo(u.href, Object.assign({ credentials: 'include', cache: 'no-store' }, typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(25000) } : {}))
             .then(r => /login|registration|\/lgz\//i.test(r.url) ? { login: true } : { html: r.ok ? r.text() : '' })

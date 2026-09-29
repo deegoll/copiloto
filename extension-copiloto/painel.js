@@ -79,7 +79,7 @@
     // Barra "Importando do Tiny: 120 de 253 SKUs" (shc:status.custosProgresso = {erp, feito, de, unidade?}); '' sem contagem.
     P.textoImportando = function (p) {
         if (!p || !p.erp) return '';
-        const nome = p.erp === 'omie' ? 'Omie' : (p.erp === 'tiny' ? 'Tiny' : String(p.erp));
+        const nome = { omie: 'Omie', tiny: 'Tiny', bling: 'Bling' }[p.erp] || String(p.erp);
         return 'Importando do ' + nome + (p.de > 0 ? ': ' + (p.feito || 0) + ' de ' + p.de + ' ' + (p.unidade || 'SKUs') : '…');
     };
     // Custo acima do maior preço de venda: provável zero a mais ou coluna errada.
@@ -114,8 +114,8 @@
     const nfr = v => (v === null || v === undefined || v === '' || !isFinite(v)) ? '' : Number(v).toFixed(2).replace('.', ',');   // reais: sempre com centavos
     const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const dataBR = ts => ts ? new Date(ts).toLocaleDateString('pt-BR') : '';
-    // Origem do custo: 'erp' diz qual (c.erp = 'tiny' | 'omie'); custo do ERP gravado sem dizer qual -> "ERP".
-    const ORIGEM = c => c.origem === 'erp' ? ({ tiny: 'Tiny', omie: 'Omie' }[c.erp] || 'ERP') : { manual: 'digitado', planilha: 'planilha' }[c.origem];
+    // Origem do custo: 'erp' diz qual (c.erp = 'tiny' | 'omie' | 'bling'); custo do ERP gravado sem dizer qual -> "ERP".
+    const ORIGEM = c => c.origem === 'erp' ? ({ tiny: 'Tiny', omie: 'Omie', bling: 'Bling' }[c.erp] || 'ERP') : { manual: 'digitado', planilha: 'planilha' }[c.origem];
     const URL_ANUNCIOS = 'https://vendedores.mercadolivre.com.br/anuncios/lista';
     const URL_ML = 'https://vendedores.mercadolivre.com.br/';
     const FALHA = P.FALHA;
@@ -816,6 +816,92 @@
         desenhaOmie();
     });
     desenhaOmie();
+    // ── Bling (v3.1, bling.js): OAuth 2.0 com o aplicativo do PRÓPRIO seller (o Copiloto não tem servidor nem segredo embutido).
+    // Client ID/Secret e tokens só em erp:bling, neste Chrome. Conectar: pede identity + bling.com.br (opcionais) no clique →
+    // launchWebAuthFlow com state aleatório conferido aqui → o fundo troca o code ({acao:'bling_conectar'}) e já importa os custos.
+    const BLING = { permissions: ['identity'], origins: SHC.BLING_ORIGENS };
+    let blingRodando = false, blingSalvo = null;   // blingSalvo: o guardado (o clique decide sem esperar o armazenamento)
+    const blingBotoes = off => ['#blingConectar', '#blingAtualizar', '#blingEsquecer'].forEach(s => { $(s).disabled = off; });
+    async function desenhaBling() {
+        const b = (await SHC.lerChave(SHC.BLING_CHAVE)) || {}, com = !!(b.clientId && b.refresh);
+        blingSalvo = b.clientId && b.clientSecret ? b : null;
+        $('#blingSem').hidden = com;
+        $('#blingCom').hidden = !com;
+        $('#blingMasc').textContent = com ? SHC.tinyMascara(b.clientId) : '';
+        $('#blingRetorno').textContent = SHC.blingRetorno(chrome.runtime.id, chrome.identity);
+        if (!com && b.clientId && !$('#blingId').value) $('#blingId').value = b.clientId;
+        if (b.reconectar && !blingRodando && !$('#tinyMsg').textContent) tinyMsg('Conecte o Bling de novo: a entrada venceu (30 dias sem uso). Clique em Conectar no cartão do Bling.', true);
+    }
+    // cred = {clientId, clientSecret} → entra no Bling e importa; null → só importa de novo (já conectado).
+    async function puxarBling(pedido, cred) {
+        let deu = false;
+        try { deu = await pedido; } catch (e) { deu = false; }
+        if (!deu) return tinyMsg('Sem a permissão do Chrome o Copiloto não consegue entrar no Bling. Clique de novo e escolha “Permitir”.', true);
+        if (blingRodando) return;
+        blingRodando = true;
+        blingBotoes(true);
+        let antes = null;
+        try {
+            let r;
+            if (cred) {
+                antes = (await SHC.lerChave(SHC.BLING_CHAVE)) || {};
+                await SHC.gravarChave(SHC.BLING_CHAVE, antes.clientId === cred.clientId && antes.clientSecret === cred.clientSecret ? Object.assign({}, antes, cred) : cred);
+                tinyMsg('Entre no Bling na janela que abriu e clique em “Autorizar”…');
+                const state = SHC.blingEstado();
+                let volta = '';
+                try { volta = await chrome.identity.launchWebAuthFlow({ url: SHC.blingUrlAutorizar(cred.clientId, state), interactive: true }); }
+                catch (e) { throw { msg: 'A entrada no Bling fechou sem autorizar. Confira o Client ID e a URL de redirecionamento do aplicativo (passo 3) e tente de novo.' }; }
+                const v = SHC.blingLerVolta(volta, state);
+                if (!v.ok) throw { msg: v.msg };
+                tinyMsg('Lendo os produtos do Bling…');
+                impBarra({ erp: 'bling' });
+                r = await chrome.runtime.sendMessage({ acao: 'bling_conectar', code: v.code });
+            } else {
+                tinyMsg('Lendo os produtos do Bling…');
+                impBarra({ erp: 'bling' });
+                r = await chrome.runtime.sendMessage({ acao: 'sincronizar_custos', erp: 'bling' });
+            }
+            if (!r || !r.ok) throw { msg: (r && r.msg) || 'Não consegui ler o Bling agora. Tente de novo em alguns minutos.' };
+            $('#blingId').value = ''; $('#blingSecret').value = '';
+            await lerDados();
+            desenhaTabela();
+            tinyMsg('✓ ' + (r.resumo || 'Custos do Bling importados') + '.' + (txtPrincipais() ? ' Agora: ' + txtPrincipais() + '.' : ''));
+            impResumo(r, 'Bling');
+        } catch (e) {
+            // Entrada que não deu certo (e não chegou a conectar): volta o que estava guardado antes (Client ID/Secret e tokens);
+            // só apaga quando não havia nada antes.
+            if (cred && antes) {
+                const b = await SHC.lerChave(SHC.BLING_CHAVE).catch(() => null);
+                if (b && !b.refresh) await (antes.clientId ? SHC.gravarChave(SHC.BLING_CHAVE, antes) : chrome.storage.local.remove(SHC.BLING_CHAVE)).catch(() => {});
+            }
+            tinyMsg((e && e.msg) || FALHA, true);
+        } finally {
+            blingRodando = false;
+            blingBotoes(false);
+            $('#impProgLin').hidden = true;
+            await desenhaBling();
+        }
+    }
+    $('#blingConectar').addEventListener('click', () => {
+        let clientId = $('#blingId').value.trim(), clientSecret = $('#blingSecret').value.trim();
+        // Reconectar (a entrada venceu): Client ID igual ao guardado e Secret em branco → usa o guardado.
+        if (!clientSecret && blingSalvo && clientId === blingSalvo.clientId) clientSecret = blingSalvo.clientSecret;
+        if (clientId.length < 8 || clientSecret.length < 8 || /\s/.test(clientId + clientSecret)) return tinyMsg('Cole o Client ID e o Client Secret inteiros do seu aplicativo do Bling (passo 4).', true);
+        puxarBling(chrome.permissions.request(BLING), { clientId, clientSecret });
+    });
+    $('#blingSecret').addEventListener('keydown', e => { if (e.key === 'Enter') $('#blingConectar').click(); });
+    $('#blingAtualizar').addEventListener('click', () => puxarBling(chrome.permissions.request(BLING), null));
+    $('#blingCopiar').addEventListener('click', () => {
+        const t = $('#blingRetorno').textContent;
+        Promise.resolve(navigator.clipboard && navigator.clipboard.writeText(t)).then(() => tinyMsg('Endereço copiado. Cole em “URL de redirecionamento” no aplicativo do Bling.'), () => tinyMsg('Selecione o endereço e copie com Ctrl+C.'));
+    });
+    $('#blingEsquecer').addEventListener('click', async () => {
+        await chrome.storage.local.remove(SHC.BLING_CHAVE);
+        try { await chrome.permissions.remove(BLING); } catch (e) { /* ok */ }
+        tinyMsg('Bling desconectado. Os custos que já vieram do Bling continuam na tabela.');
+        desenhaBling();
+    });
+    desenhaBling();
     $('#tinyConectar').addEventListener('click', () => {
         const token = $('#tinyToken').value.trim();
         if (token.length < 10 || /\s/.test(token)) return tinyMsg('Cole o token inteiro do Tiny (Configurações › E-commerce › Token API).', true);

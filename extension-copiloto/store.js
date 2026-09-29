@@ -253,6 +253,8 @@
     // secao:'envio'|'entrega', de, ts, envio, fabrica, entrega, quem?}, historico:[{ordenadas, pesoKg, de, ate, vistoAte, fonte, quem?}] (máx. 20), alterar?:[ts], falhaTs?, falhas?}},
     // (quem 'seller' = o seller disse "Fui eu"; alterar = cliques em "Alterar no ML") mudancas:[{itemId, sku, antes, depois, em, vistoAte, fonte}] (máx. 100, a mais nova 1º), lidos, de, semPermissao}. null = ainda não lido.
     SHC.lerMedidas = async conta => SHC.lerChave('medidas:' + (conta || await SHC.contaAtual()));
+    // v3.1 (background.js): catcomp:<conta> = {ts, porItem:{MLB: SHC.compCatRegistra(...) = SHC.mlCompeticaoDoEstado + {ts, hist:[{d, e, w, g, vp}]} (ou só falhaTs/falhas)}}.
+    SHC.lerCatComp = async conta => SHC.lerChave('catcomp:' + (conta || await SHC.contaAtual()));
     // v2.5.3 (background.js): posvenda:<conta> = {ts, reclamacoes, mensagens, devolucoes} (null = aba não achada; só totais, nada do comprador)
     // + v2.9 casos:[{titulo, valor, unidades, motivo, afetouReputacao, situacao}] da 1ª página da lista, paginas, casosTs (sem pedido, id da reclamação nem comprador);
     // frete:<conta>:hist = {ts, hoje, desde, fonte, lidoAte, porAnuncio, conta, conciliacao} (SHC.freteHistorico + SHC.conciliaFrete; os pedidos
@@ -466,9 +468,12 @@
     // Diagnóstico por mês (shc:status.etapas[id].meses = {'AAAA-MM': 'ok'|'sem resposta'|'login'|'formato mudou'|'vazio'|'cortado'}) → frases.
     const DIAG_MES = { 'sem resposta': 'o ML não respondeu — tento de novo na próxima', login: 'o Mercado Livre pediu para entrar de novo — entre no ML neste Chrome e sincronize',
         'formato mudou': 'o ML mandou os dados de um jeito que o Copiloto não reconheceu — tento de novo na próxima', vazio: 'o ML devolveu a lista vazia — tento de novo na próxima',
-        cortado: 'lido só em parte: o mês tem movimento demais para ler inteiro', incompleto: 'uma das páginas não veio inteira — tento de novo na próxima' };
+        cortado: 'lido só em parte: o mês tem movimento demais para ler inteiro', incompleto: 'uma das páginas não veio inteira — tento de novo na próxima',
+        // v3.1: o motivo exato das vendas por anúncio (buscarJsonMotivo), depois de 4 tentativas com espera crescente
+        tempo: 'o ML demorou demais para responder — tento de novo em alguns minutos', ocupado: 'o ML pediu uma pausa (muitos pedidos) — tento de novo em alguns minutos' };
+    const diagMes = d => DIAG_MES[d] || (/^erro \d{3}$/.test(d) ? 'o ML recusou o pedido (' + d + ') — tento de novo na próxima' : DIAG_MES['sem resposta']);
     SHC.textosMeses = meses => Object.keys(meses || {}).filter(m => meses[m] && meses[m] !== 'ok').sort().reverse()
-        .map(m => MESES_CURTO[+m.slice(5, 7) - 1] + '/' + m.slice(2, 4) + ': ' + (DIAG_MES[meses[m]] || DIAG_MES['sem resposta']));
+        .map(m => MESES_CURTO[+m.slice(5, 7) - 1] + '/' + m.slice(2, 4) + ': ' + diagMes(meses[m]));
     const rodando = (st, agora) => !!st && (st.estado === 'sincronizando' || st.sincronizando === true) && agora - (st.batimento || st.inicio || 0) <= 5 * 60e3;
     const VELHO_MS = 6 * 3600e3;
 
@@ -549,7 +554,8 @@
         + '.shs-lista li:first-child{border-top:0}.shs-ic{font-weight:800;text-align:center}.shs-ok .shs-ic{color:#047857}.shs-lendo .shs-ic{color:#0284C7}.shs-fila .shs-ic,.shs-pulado .shs-ic{color:#94A3B8}'
         + '.shs-erro .shs-ic{color:#B45309}.shs-lista li small{grid-column:2;color:#475569;font-size:12px}.shs-lista li .shs-barra{grid-column:2;height:6px;margin:3px 0 0;max-width:260px}'
         + '.shs-lista li button{grid-column:2;justify-self:start;margin-top:3px;border:1px solid #CBD5E1;background:#fff;border-radius:8px;padding:3px 10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}'
-        + '.shs-etapa{background:#F0F9FF;border:1px solid #BAE6FD;border-radius:10px;padding:8px 12px;margin:6px 0;color:#0C4A6E}.shs-etapa .shs-barra{margin:6px 0 0}';
+        + '.shs-etapa{background:#F0F9FF;border:1px solid #BAE6FD;border-radius:10px;padding:8px 12px;margin:6px 0;color:#0C4A6E}.shs-etapa .shs-barra{margin:6px 0 0}'
+        + '.shs-aviso{background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:8px 12px;margin:6px 0;color:#92400E}.shs-aviso a{color:#92400E;font-weight:700}';
     SHC.cssSync = function () {
         if (typeof document === 'undefined' || typeof document.getElementById !== 'function' || !document.head || document.getElementById('shs-css')) return;
         const s = document.createElement('style');
@@ -567,12 +573,42 @@
         return e ? '<div class="shs shs-etapa" role="status" aria-live="polite"><b>' + escH(e.texto) + '</b>' + barra(e.pct) + '</div>' : '';
     };
 
+    // Ads pulado porque não havia aba do painel do vendedor aberta (o fundo grava este resumo na etapa 'ads'; a conta migrada para
+    // ads.mercadolivre.com.br só responde a pedido feito de uma página do ML).
+    SHC.ADS_SEM_ABA = 'Abra o painel do vendedor do Mercado Livre numa aba para ler o Mercado Ads';
+    SHC.adsSemAba = function (st) {
+        const e = ((st || {}).etapas || {}).ads;
+        return !!e && e.estado === 'pulado' && e.resumo === SHC.ADS_SEM_ABA;
+    };
+    // v3.1 (29/09/2026, print da dona): por que o Ads não foi lido, cada causa com a sua frase (nunca "confira se está logado" com o
+    // login ok). status.erroAds (background.js): sem_sessao | ads_sem_conta (o ML pede abrir o Mercado Ads uma vez) | ads_escolher_conta
+    // (abriu sozinho e continuou pedindo: o ML quer que a pessoa escolha a conta de anúncios) | outro = o Mercado Ads não respondeu.
+    const ADS_CONTAS = 'https://ads.mercadolivre.com.br/accounts';
+    SHC.adsAviso = function (st) {
+        const cod = SHC.adsSemAba(st) ? 'sem_aba' : (st || {}).erroAds || '';
+        const txt = {
+            sem_aba: ['Falta abrir o painel do vendedor', 'Abra o painel do vendedor do Mercado Livre numa aba e clique em Sincronizar agora.', 'O Mercado Ads desta conta só é lido com essa aba aberta.', 'https://vendedores.mercadolivre.com.br', 'Abrir o painel do vendedor'],
+            sem_sessao: ['Entre no Mercado Livre', 'Entre no Mercado Livre neste Chrome e clique em Sincronizar agora.', 'O Copiloto lê o Mercado Ads com a sua sessão.', 'https://vendedores.mercadolivre.com.br', 'Abrir o Mercado Livre'],
+            ads_sem_conta: ['Abra o Mercado Ads uma vez', 'Abra o Mercado Ads uma vez e clique em Sincronizar agora.', 'O Mercado Livre só libera os números do Ads depois que a conta de anúncios é aberta neste Chrome.', ADS_CONTAS, 'Abrir o Mercado Ads'],
+            ads_escolher_conta: ['Escolha a conta de anúncios', 'Abra o Mercado Ads e escolha a conta de anúncios.', 'Depois clique em Sincronizar agora. O Copiloto não escolhe por você.', ADS_CONTAS, 'Abrir o Mercado Ads'],
+        }[cod] || (cod ? ['O Mercado Ads não respondeu', 'O Mercado Ads não respondeu agora.', 'Tente de novo em alguns minutos.', '', ''] : null);
+        return txt && { cod, titulo: txt[0], frase: txt[1], det: txt[2], link: txt[3], linkTxt: txt[4] };
+    };
+    /** Aviso âmbar do Ads não lido (SHC.adsAviso), com o link do que abrir; '' quando o Ads foi lido. */
+    SHC.htmlAdsSemAba = function (st) {
+        const a = SHC.adsAviso(st);
+        if (!a) return '';
+        SHC.cssSync();
+        return '<div class="shs shs-aviso" role="status"><b>' + escH(a.frase) + '</b> ' + escH(a.det)
+            + (a.link ? ' <a href="' + escH(a.link) + '" target="_blank" rel="noopener">' + escH(a.linkTxt) + '</a>' : '') + '</div>';
+    };
+
     /**
      * Só o andamento mudou: troca apenas o selo (.sync-caixa) e as etapas (.shs-etapa) de el, sem refazer a página
      * (não engole clique nem apaga o que a pessoa faz). Se os blocos mudaram de número, refaz tudo. → true se trocou só os blocos.
      */
     SHC.trocarSoSync = function (el, html) {
-        const t = document.createElement('template'), sel = '.sync-caixa,.shs-etapa';
+        const t = document.createElement('template'), sel = '.sync-caixa,.shs-etapa,.shs-aviso';
         t.innerHTML = html;
         const velhos = el.querySelectorAll(sel), novos = t.content.querySelectorAll(sel);
         if (!velhos.length || velhos.length !== novos.length) { el.innerHTML = html; return false; }

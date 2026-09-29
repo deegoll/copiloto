@@ -263,12 +263,69 @@
         return 'ok';
     };
 
+    /**
+     * Montante em R$ do SKU no período: sobra antes do Ads = margem (%) × receita pelo Ads; lucro depois do Ads = sobra − investimento.
+     * Sem custo → null (não inventa). lucroRs < 0 ⇔ ACOS acima do equilíbrio (ou gasto sem venda).
+     */
+    A.montante = function (g) {
+        const ads = SHC.r2(g.m.investimento || 0);
+        if (g.margem === null) return { adsRs: ads, sobraRs: null, lucroRs: null };
+        const sobra = SHC.r2((g.m.receita || 0) * g.margem / 100);
+        return { adsRs: ads, sobraRs: sobra, lucroRs: SHC.r2(sobra - ads) };
+    };
+
+    /** O que fazer com o SKU (só sugestão; o botão abre o Mercado Ads): tirar | ajustar | escalar | custo, ou null. */
+    A.ORDEM_ACAO = { tirar: 0, ajustar: 1, custo: 2, escalar: 3 };
+    A.acao = function (g) {
+        const m = g.m, tem = s => g.selos.indexOf(s) >= 0;
+        if (!(m.investimento > 0) || tem('semAnuncio')) return null;
+        if (tem('semCusto')) return { tipo: 'custo', cls: 'at', bt: 'Informar custo', tx: `Ads ${rs(m.investimento)} · sem o custo não dá para saber se dá lucro` };
+        if (g.margem <= 0) return { tipo: 'tirar', cls: 'pr', bt: 'Tirar', tx: `ACOS ${pct(m.acos)} · sem espaço para Ads (prejuízo antes do Ads)` };
+        if (tem('semVenda')) return { tipo: 'tirar', cls: 'pr', bt: 'Tirar', tx: `gastou ${rs(m.investimento)} sem nenhuma venda` };
+        if (tem('acima')) return { tipo: 'ajustar', cls: 'at', bt: 'Ajustar', tx: `ACOS ${pct(m.acos)} · equilíbrio ${pct(g.margem)} · suba o ROAS objetivo para mais de ${A.xTxt(100 / g.margem)}` };
+        if (tem('escalar')) return { tipo: 'escalar', cls: 'ok', bt: 'Escalar', tx: `ACOS ${pct(m.acos)} · equilíbrio ${pct(g.margem)} · perde aparições por orçamento` };
+        return null;
+    };
+    // Ordem "o que mais pede ação": tirar → ajustar → custo → escalar → resto; dentro, o maior prejuízo primeiro.
+    const ordemAcao = (a, b) => ((a.acao ? A.ORDEM_ACAO[a.acao.tipo] : 9) - (b.acao ? A.ORDEM_ACAO[b.acao.tipo] : 9))
+        || ((a.lucroRs === null ? Infinity : a.lucroRs) - (b.lucroRs === null ? Infinity : b.lucroRs))
+        || ((b.m.investimento || 0) - (a.m.investimento || 0));
+
+    /** Resultado do Ads nos SKUs com custo: sobra, Ads, lucro, equilíbrio médio e quantos passam do equilíbrio. */
+    A.resultado = function (grupos) {
+        const comGasto = grupos.filter(g => g.m.investimento > 0);
+        const comCusto = comGasto.filter(g => g.lucroRs !== null);
+        const soma = k => SHC.r2(comCusto.reduce((s, g) => s + (k === 'receita' ? g.m.receita || 0 : g[k]), 0));
+        const sobra = soma('sobraRs'), ads = soma('adsRs'), receita = soma('receita');
+        return { comCusto: comCusto.length, semCusto: comGasto.filter(g => g.selos.indexOf('semCusto') >= 0).length,
+            sobra, ads, lucro: comCusto.length ? SHC.r2(sobra - ads) : null, equilibrio: receita > 0 ? sobra / receita * 100 : null,
+            acima: comCusto.filter(g => g.lucroRs < 0).length };
+    };
+
+    /** Manchete (1 frase): {cls: pr|at|ok, fato, acao}. */
+    A.manchete = function (an) {
+        const r = an.res, camps = an.camps;
+        // Só fala de orçamento quando a própria leitura da campanha sugere testar mais orçamento (senão contradiz "Não aumente o orçamento").
+        const perdeOrc = camps.filter(c => c.ativa && c.share && c.share.orcamento >= A.PERDE_MIN && c.leitura && c.leitura.linhas.some(t => /testar orçamento/.test(t)))
+            .sort((a, b) => b.share.orcamento - a.share.orcamento)[0];
+        const orc = perdeOrc ? `A ${perdeOrc.nome} perde ${SHC.pctTxt(perdeOrc.share.orcamento)} das aparições por falta de orçamento.` : '';
+        const pp = SHC.qtd(r.acima, 'produto passa', 'produtos passam');
+        if (!r.comCusto) return { cls: r.semCusto ? 'at' : 'ok', fato: r.semCusto ? 'Falta o custo dos produtos com Ads.' : 'Nenhum produto gastou com Ads no período.', acao: r.semCusto ? 'Informe o custo para ver se o Ads dá lucro.' : '' };
+        if (r.lucro < 0) return { cls: 'pr', fato: `O Ads dá prejuízo de ${rs0(-r.lucro)} no período.`, acao: r.acima ? `${pp} do equilíbrio: tire ou ajuste em "Precisa de você".` : '' };
+        if (r.acima) return { cls: 'at', fato: `O Ads dá lucro, mas ${pp} do equilíbrio.`, acao: 'Veja o que fazer em "Precisa de você".' };
+        return { cls: 'ok', fato: `O Ads dá lucro de ${rs0(r.lucro)} nos produtos com custo.`, acao: orc || 'Nenhum produto passa do equilíbrio.' };
+    };
+
     /** Tudo o que a tela mostra, a partir dos dados guardados. */
     A.analisa = function (snap, itens, custoDe, cfg, fechs) {
         const camps = A.campanhas(snap), ads = A.anuncios(snap);
         const grupos = A.porSku(ads, itens, custoDe, cfg, camps);
+        grupos.forEach(g => { Object.assign(g, A.montante(g)); g.acao = A.acao(g); });
         camps.forEach(c => { c.leitura = A.leituraCampanha(c, grupos, cfg); });
-        return { camps, ads, grupos, kpis: A.kpis(snap, camps), proposta: A.proposta(grupos, cfg), modelos: A.modelos(camps, fechs) };
+        const an = { camps, ads, grupos, kpis: A.kpis(snap, camps), proposta: A.proposta(grupos, cfg), modelos: A.modelos(camps, fechs), res: A.resultado(grupos),
+            meta: SHC.num((cfg || {}).margem_alvo_pct) || 0 };
+        an.manchete = A.manchete(an);
+        return an;
     };
 
     // ── Texto e HTML (strings; todo texto externo passa por esc) ──
@@ -278,6 +335,8 @@
     const int = v => v === null || v === undefined ? '—' : Math.round(v).toLocaleString('pt-BR');
     const pct = v => v === null || v === undefined || !isFinite(v) ? '—' : SHC.pctTxt(v);
     const rs = v => v === null || v === undefined ? '—' : SHC.moeda(v);
+    const rs0 = v => v === null || v === undefined || !isFinite(v) ? '—' : (Math.round(v) < 0 ? '−' : '') + 'R$ ' + Math.abs(Math.round(v)).toLocaleString('pt-BR');   // KPI: "R$ 1.433"
+    A.rs0 = rs0;
     const dataBR = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')); return m ? m[3] + '/' + m[2] : ''; };
 
     A.SIGLAS = {
@@ -313,16 +372,55 @@
         const a = k.atual, b = k.anterior;
         if (!a) return '<p class="sub">Sem totais do período.</p>';
         const cel = (id, nome, valor, antes) => `<div class="kpi"><span class="kn">${esc(nome)}</span><b>${valor}</b>${antes !== null ? `<span class="ka">30 dias antes: ${antes}</span>` : ''}<span class="kx">${esc(A.SIGLAS[id])}</span></div>`;
-        return '<div class="kpis">' + KPI.map(([id, nome, f]) => cel(id, nome, f(a), b ? f(b) : null)).join('')
+        return '<div class="kpis todos">' + KPI.map(([id, nome, f]) => cel(id, nome, f(a), b ? f(b) : null)).join('')
             + cel('orcamento', 'Orçamento diário total', rs(k.orcamentoDia) + (k.campanhasAtivas ? ` <small>(${SHC.qtd(k.campanhasAtivas, 'ativa', 'ativas')})</small>` : ''), null) + '</div>';
     };
 
+    /** Variação contra os 30 dias antes: "▲ 18% vs 30 dias antes" (sem base → ''). */
+    A.variacao = (a, b) => a === null || a === undefined || !(b > 0) ? '' : (a >= b ? '▲ ' : '▼ ') + SHC.pctTxt(Math.abs(a - b) / b * 100) + ' vs 30 dias antes';
+    /** Cor do ACOS da conta: ok até (equilíbrio − meta), at até o equilíbrio, pr acima. */
+    A.corAcos = (acos, eq, meta) => acos === null || acos === undefined || eq === null || eq === undefined ? '' : (acos <= eq - meta ? 'ok' : (acos <= eq ? 'at' : 'pr'));
+
+    /** Os 4 números do período, com cor: Investimento, Receita pelo Ads, ROAS · ACOS e Lucro depois do Ads. */
+    A.htmlKpis4 = function (an) {
+        const a = an.kpis.atual, b = an.kpis.anterior || {}, r = an.res;
+        if (!a) return '<p class="sub">Sem totais do período.</p>';
+        const cel = (cls, rot, tit, valor, sub) => `<div class="kpi ${cls}" title="${esc(tit)}"><div class="l">${esc(rot)}</div><div class="v">${valor}</div><div class="s">${esc(sub)}</div></div>`;
+        const corLucro = r.lucro === null ? '' : (r.lucro < 0 ? 'pr' : 'ok');
+        const subLucro = r.lucro === null ? 'informe o custo dos produtos'
+            : `sobra ${rs0(r.sobra)} − Ads ${rs0(r.ads)}` + (r.semCusto ? ` · ${SHC.qtd(r.semCusto, 'sem custo fica', 'sem custo ficam')} fora` : '');
+        return '<div class="kpis k4">'
+            + cel('', 'Investimento', A.SIGLAS.investimento, rs0(a.investimento), A.variacao(a.investimento, b.investimento))
+            + cel('', 'Receita pelo Ads', A.SIGLAS.receita, rs0(a.receita), A.variacao(a.receita, b.receita))
+            + cel(A.corAcos(a.acos, r.equilibrio, an.meta), 'ROAS · ACOS ⓘ', A.SIGLAS.roas + ' ' + A.SIGLAS.acos, `${A.xTxt(a.roas)} <small>· ${pct(a.acos)}</small>`,
+                r.equilibrio !== null ? 'equilíbrio ' + pct(r.equilibrio) + (b.acos != null ? ' · antes ' + pct(b.acos) : '') : (b.acos != null ? 'antes ' + pct(b.acos) : ''))
+            + cel(corLucro, 'Lucro depois do Ads ⓘ', 'Sobra das vendas pelo Ads (preço de hoje, tarifa, frete, seu custo e imposto) menos o que o Ads custou. Só produtos com custo.', rs0(r.lucro), subLucro)
+            + '</div>';
+    };
+
+    /** Barra "aparece / perde por orçamento / perde no leilão" de uma campanha (verde / âmbar / vermelho). */
     A.htmlBarra = function (sh) {
-        if (!sh) return '<small class="sub">Sem dado de impressões perdidas.</small>';
+        if (!sh) return '<div class="comp vazia barra-sh"></div><div class="mini">sem dado de aparições perdidas</div>';
         const w = v => Math.max(0, Math.min(100, v || 0));
-        return `<div class="barra-sh" role="img" aria-label="Ganhas ${pct(sh.ganhas)}, perdidas por orçamento ${pct(sh.orcamento)}, perdidas por classificação ${pct(sh.classificacao)}">`
-            + `<i class="g" style="width:${w(sh.ganhas)}%"></i><i class="o" style="width:${w(sh.orcamento)}%"></i><i class="c" style="width:${w(sh.classificacao)}%"></i></div>`
-            + `<small class="leg-sh"><span class="g">ganhas ${pct(sh.ganhas)}</span> · <span class="o">orçamento ${pct(sh.orcamento)}</span> · <span class="c">classificação ${pct(sh.classificacao)}</span></small>`;
+        return `<div class="comp barra-sh" role="img" aria-label="Aparece ${pct(sh.ganhas)}, perde ${pct(sh.orcamento)} por orçamento, ${pct(sh.classificacao)} no leilão">`
+            + `<i class="ok" style="width:${w(sh.ganhas)}%"></i><i class="at" style="width:${w(sh.orcamento)}%"></i><i class="pr" style="width:${w(sh.classificacao)}%"></i></div>`
+            + `<div class="mini">aparece ${pct(sh.ganhas)} · perde ${pct(sh.orcamento)} por orçamento · ${pct(sh.classificacao)} no leilão</div>`;
+    };
+
+    /** A frase do que fazer na campanha (1 só): a do ACOS × equilíbrio; senão a de aparições perdidas. */
+    A.fraseCampanha = c => { const l = (c.leitura && c.leitura.linhas) || []; return l.find(t => /^(ACOS|Gastou)/.test(t)) || l.find(t => /^Perde/.test(t)) || ''; };
+
+    A.htmlCampBarras = function (camps, k) {
+        if (!camps.length) return '<p class="sub">Nenhuma campanha no período.</p>';
+        const ord = camps.slice().sort((a, b) => (b.ativa - a.ativa) || (((b.m || {}).investimento || 0) - ((a.m || {}).investimento || 0)));
+        return `<div class="ch"><h2>Campanhas</h2><span class="d">${k.orcamentoDia ? rs0(k.orcamentoDia) + '/dia · ' : ''}${SHC.qtd(k.campanhasAtivas, 'ativa', 'ativas')}</span></div>`
+            + ord.map(c => {
+                const m = c.m || {}, fr = A.fraseCampanha(c);
+                return `<div class="hb"><div class="l"><b>${esc(c.nome)}</b><span class="selo ${c.ativa ? 'ok' : ''}">${esc(c.statusTxt)}</span>`
+                    + `<span class="v">${c.orcamentoDia ? rs0(c.orcamentoDia) + '/dia · ' : ''}${rs0(m.investimento)} · ACOS ${pct(m.acos)}</span></div>`
+                    + A.htmlBarra(c.share) + (fr ? `<p class="faz">${esc(fr)}</p>` : '') + '</div>';
+            }).join('')
+            + '<div class="faixas"><span><i class="ok"></i>aparece</span><span><i class="at"></i>perde por orçamento</span><span><i class="pr"></i>perde no leilão</span></div>';
     };
 
     A.htmlCampanhas = function (camps) {
@@ -343,24 +441,61 @@
     };
     A.FILTROS = [['todos', 'Todos'], ['acima', 'Acima do equilíbrio'], ['escalar', 'Dá para escalar'], ['semVenda', 'Sem venda com gasto'], ['semCusto', 'Sem custo']];
 
+    const idSku = g => g.sku || (g.itens[0] ? g.itens[0].itemId + ' (sem SKU)' : g.ads[0].id);
+    const selosHtml = g => g.selos.map(s => `<span class="selo ${A.SELO[s][0]}">${esc(A.SELO[s][1])}</span>`).join('');
+
+    /** Tamanho da barra do SKU em R$: Ads + |lucro ou prejuízo| (sem custo: só o Ads). Mesma escala para todos. */
+    A.tamanhoBarra = g => (g.adsRs || 0) + Math.abs(g.lucroRs || 0);
+    /** Texto do montante: "Ads R$ 12,30 · Lucro R$ 48,90" | "Ads R$ 5,46 · Prejuízo R$ 5,46" | "Ads R$ 9,00 · sem custo". */
+    A.textoMontante = g => 'Ads ' + rs(g.adsRs) + ' · ' + (g.lucroRs === null || g.lucroRs === undefined ? 'sem custo' : (g.lucroRs < 0 ? 'Prejuízo ' + rs(-g.lucroRs) : 'Lucro ' + rs(g.lucroRs)));
+
+    /** Uma linha de SKU: título + montante escrito + barra (Ads âmbar, lucro verde, prejuízo vermelho) na escala max (R$). */
+    A.htmlSkuBarra = function (g, max) {
+        const m = g.m, l = g.lucroRs, w = v => (max > 0 ? Math.max(0, Math.min(100, v / max * 100)) : 0).toFixed(1);
+        const cor = l === null || l === undefined ? '' : (l < 0 ? 'pr' : 'ok');
+        const res = cor ? `<i class="${cor}" style="width:${w(Math.abs(l))}%"></i>` : '';
+        const custo = g.selos.indexOf('semCusto') >= 0 ? ' <button class="lnk" data-custos>informar custo</button>' : '';
+        return `<li class="sk"><div class="l"><b title="${esc(g.titulo)}">${esc(g.titulo)}</b><span class="v ${cor}">${esc(A.textoMontante(g))}</span></div>`
+            + `<div class="comp" role="img" aria-label="${esc(A.textoMontante(g))}"><i class="ads" style="width:${w(g.adsRs || 0)}%"></i>${res}</div>`
+            + `<div class="mini">${esc(idSku(g))}${g.campanhas.length ? ' · ' + esc(g.campanhas.join(', ')) : ''} · ACOS ${pct(m.acos)} · equilíbrio ${g.margem === null ? '—' : (g.margem <= 0 ? 'sem espaço' : pct(g.margem))}${g.porTitulo ? ' · ligado pelo título' : ''}</div>`
+            + (g.selos.length || custo ? `<div class="selos">${selosHtml(g)}${custo}</div>` : '') + '</li>';
+    };
+
+    A.htmlSkusTabela = vis => '<div class="rola"><table class="tabela"><thead><tr><th>Produto</th><th>Impressões</th><th>Cliques</th><th>CTR</th><th>CPC</th><th>Investimento</th><th>Receita</th><th>Vendas</th><th>ROAS</th><th>ACOS</th><th>Sobra antes do Ads</th><th>ACOS de equilíbrio</th></tr></thead><tbody>'
+        + vis.map(g => {
+            const m = g.m;
+            return `<tr><td class="tit"><b title="${esc(g.titulo)}">${esc(g.titulo)}</b><span>${esc(idSku(g))}${g.campanhas.length ? ' · ' + esc(g.campanhas.join(', ')) : ''}${g.porTitulo ? ' · ligado pelo título' : ''}</span>${selosHtml(g)}</td>`
+                + `<td>${int(m.impressoes)}</td><td>${int(m.cliques)}</td><td>${pct(m.ctr)}</td><td>${rs(m.cpc === null ? null : SHC.r2(m.cpc))}</td><td>${rs(m.investimento)}</td><td>${rs(m.receita)}</td>`
+                + `<td>${int(m.vendas)}</td><td>${A.xTxt(m.roas)}</td><td>${pct(m.acos)}</td><td>${pct(g.margem)}</td><td>${g.margem === null ? '—' : (g.margem <= 0 ? 'sem espaço' : pct(g.equilibrio))}</td></tr>`;
+        }).join('') + '</tbody></table></div>';
+
+    A.MAX_BARRAS = 25;
+    /** Por produto: filtros + uma barra de R$ por SKU (ordem: o que mais pede ação) + legenda + tabela completa recolhida. */
     A.htmlSkus = function (grupos, filtro) {
-        const ativos = grupos.filter(g => g.m.impressoes > 0 || g.m.investimento > 0);
+        const ativos = grupos.filter(g => g.m.impressoes > 0 || g.m.investimento > 0).sort(ordemAcao);
         const conta = id => ativos.filter(g => g.selos.indexOf(id) >= 0).length;
         const vis = !filtro || filtro === 'todos' ? ativos : ativos.filter(g => g.selos.indexOf(filtro) >= 0);
         let html = '<div class="chips">' + A.FILTROS.map(([id, nome]) => `<button data-filtro="${id}" class="${(filtro || 'todos') === id ? 'on' : ''}">${esc(nome)}${id === 'todos' ? '' : ' (' + conta(id) + ')'}</button>`).join('') + '</div>';
         if (!vis.length) return html + `<p class="sub">${ativos.length ? 'Nenhum produto neste filtro.' : 'Nenhum anúncio com impressões no período.'}</p>`;
-        html += '<div class="rola"><table class="tabela"><thead><tr><th>Produto</th><th>Impressões</th><th>Cliques</th><th>CTR</th><th>CPC</th><th>Investimento</th><th>Receita</th><th>Vendas</th><th>ROAS</th><th>ACOS</th><th>Sobra antes do Ads</th><th>ACOS de equilíbrio</th></tr></thead><tbody>'
-            + vis.map(g => {
-                const m = g.m;
-                const id = g.sku || (g.itens[0] ? g.itens[0].itemId + ' (sem SKU)' : g.ads[0].id);
-                const selos = g.selos.map(s => `<span class="selo ${A.SELO[s][0]}">${esc(A.SELO[s][1])}</span>`).join('');
-                const acao = g.selos.indexOf('semCusto') >= 0 ? ' <button class="lnk" data-custos>informar custo</button>' : '';
-                return `<tr><td class="tit"><b title="${esc(g.titulo)}">${esc(g.titulo)}</b><span>${esc(id)}${g.campanhas.length ? ' · ' + esc(g.campanhas.join(', ')) : ''}${g.porTitulo ? ' · ligado pelo título' : ''}</span>${selos}${acao}</td>`
-                    + `<td>${int(m.impressoes)}</td><td>${int(m.cliques)}</td><td>${pct(m.ctr)}</td><td>${rs(m.cpc === null ? null : SHC.r2(m.cpc))}</td><td>${rs(m.investimento)}</td><td>${rs(m.receita)}</td>`
-                    + `<td>${int(m.vendas)}</td><td>${A.xTxt(m.roas)}</td><td>${pct(m.acos)}</td><td>${pct(g.margem)}</td><td>${g.margem === null ? '—' : (g.margem <= 0 ? 'sem espaço' : pct(g.equilibrio))}</td></tr>`;
-            }).join('') + '</tbody></table></div>';
+        const max = Math.max(0, ...ativos.map(A.tamanhoBarra));   // escala de todos os produtos (o filtro não muda o tamanho)
+        html += '<ul class="skus">' + vis.slice(0, A.MAX_BARRAS).map(g => A.htmlSkuBarra(g, max)).join('') + '</ul>'
+            + (vis.length > A.MAX_BARRAS ? `<p class="sub">e mais ${vis.length - A.MAX_BARRAS} na tabela completa.</p>` : '')
+            + '<div class="faixas"><span><i class="ads"></i>custo do Ads</span><span><i class="ok"></i>lucro depois do Ads</span><span><i class="pr"></i>prejuízo</span></div>'
+            + `<details class="vm dentro-card"><summary><span class="t"><b>Ver a tabela completa</b><span>impressões · cliques · CTR · CPC · vendas · ROAS · sobra</span></span></summary><div class="in">${A.htmlSkusTabela(vis)}</div></details>`;
         const parados = grupos.length - ativos.length;
-        return html + (parados ? `<p class="sub">${SHC.qtd(parados, 'produto sem impressões no período fica', 'produtos sem impressões no período ficam')} fora desta tabela (aparecem na proposta abaixo).</p>` : '');
+        return html + (parados ? `<p class="sub">${SHC.qtd(parados, 'produto sem impressões no período fica', 'produtos sem impressões no período ficam')} fora desta lista (aparecem na proposta).</p>` : '');
+    };
+
+    /** "Precisa de você": tirar / ajustar / escalar / informar custo. O botão só ABRE o Mercado Ads (ou os custos). */
+    A.MAX_ACOES = 8;
+    A.htmlAcoes = function (grupos) {
+        const l = grupos.filter(g => g.acao).sort(ordemAcao);
+        if (!l.length) return '<p class="est vazio">✓ Nenhum produto pede ação agora.</p>';
+        return '<ul class="acoes">' + l.slice(0, A.MAX_ACOES).map(g => {
+            const bt = g.acao.tipo === 'custo' ? `<button class="bt pq sec" data-custos>${esc(g.acao.bt)}</button>`
+                : `<a class="bt pq sec" href="${A.URL.campanhas}" target="_blank" rel="noopener" title="Abre o Mercado Ads. Quem muda é você, lá.">${esc(g.acao.bt)}</a>`;
+            return `<li class="acao ${g.acao.cls}"><div class="tx"><b title="${esc(g.titulo)}">${esc(g.titulo)}${g.campanhas.length ? ' · ' + esc(g.campanhas.join(', ')) : ''}</b><span>${esc(g.acao.tx)}</span></div>${bt}</li>`;
+        }).join('') + '</ul>' + (l.length > A.MAX_ACOES ? `<p class="sub">e mais ${l.length - A.MAX_ACOES} em "Por produto".</p>` : '');
     };
 
     A.htmlProposta = function (prop) {
@@ -398,31 +533,41 @@
         const est = A.estado(d.snap, d.st, d.agora), rodando = est === 'sincronizando' || SHC.statusSync(d.st, d.agora).estado === 'sincronizando';
         const etapa = SHC.htmlEtapa(d.st, ['ads'], d.agora);
         const caixa = lidos => A.htmlSyncCaixa(d.st, d.agora, rodando, lidos);
+        // v3.1: Ads não lido (sem aba, sem sessão, conta de anúncios não liberada, ML fora) → a frase da causa (SHC.adsAviso), nunca uma genérica.
+        const semAba = etapa ? '' : SHC.htmlAdsSemAba(d.st), aviso = semAba ? SHC.adsAviso(d.st) : null;
         if (est === 'vazio' || est === 'sincronizando')
-            return `<section class="card vazio" id="a-periodo"><h2>${etapa ? 'Lendo as suas campanhas' : 'Sincronize para ver'}</h2><p class="sub">O Copiloto lê as suas campanhas no Mercado Ads com a sessão do Mercado Livre aberta neste Chrome. Leva alguns minutos.</p>${etapa}${caixa('')}${d.st && d.st.erroAds && !etapa ? '<p class="msg erro">A última leitura do Mercado Ads falhou. Abra o Mercado Livre, confira se está logado e tente de novo.</p>' : ''}</section>`;
+            return `<section class="card vazio" id="a-periodo"><h2>${etapa ? 'Lendo as suas campanhas' : aviso ? esc(aviso.titulo) : 'Sincronize para ver'}</h2>${semAba || '<p class="sub">O Copiloto lê as suas campanhas no Mercado Ads com a sessão do Mercado Livre aberta neste Chrome. Leva alguns minutos.</p>'}${etapa}${caixa('')}</section>`;
         if (est === 'semAds')
             return `<section class="card vazio" id="a-periodo"><h2>Sua conta não tem campanhas no Mercado Ads</h2><p class="sub">Quando você criar uma, o Copiloto mostra aqui o resultado por SKU.</p><a class="bt sec" href="${A.URL.criar}" target="_blank" rel="noopener">Abrir no Mercado Ads</a> ${caixa('')}</section>`;
-        const an = d.an, p = d.snap.periodo || {};
+        const an = d.an, p = d.snap.periodo || {}, mc = an.manchete;
         const de = dataBR(p.de || p.dateFrom || p.inicio), ate = dataBR(p.ate || p.dateTo || p.fim);
         const quando = d.snap.ts ? new Date(d.snap.ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-        return `<section class="card" id="a-periodo"><div class="cab"><div><h2>Últimos 30 dias${de && ate ? ` <small>(${de} a ${ate})</small>` : ''}</h2><p class="sub">Números do Mercado Ads. A comparação é com os 30 dias anteriores.</p></div>${caixa(quando ? 'Mercado Ads lido em ' + quando : '')}</div>`
-            + (etapa || (d.st && d.st.erroAds ? '<p class="aviso">A última leitura do Mercado Ads falhou: os números abaixo são da leitura anterior.</p>' : ''))
-            + A.htmlKpis(an.kpis) + '</section>'
-            + `<section class="card" id="a-campanhas"><h2>Campanhas</h2><p class="sub">"Competindo por impressões": das vezes em que o anúncio poderia aparecer, quantas ele ganhou e por que perdeu as outras.</p>${A.htmlCampanhas(an.camps)}</section>`
-            + `<section class="card" id="a-sku"><h2>Por produto (SKU)</h2><p class="sub">${esc(A.SIGLAS.equilibrio)} Sobra no preço de hoje, com a tarifa e o frete do ML, o seu custo e o seu imposto.</p>${A.htmlSkus(an.grupos, d.filtro)}</section>`
-            + `<section class="card" id="a-proposta"><h2>Proposta de organização por SKU</h2><p class="sub"><b>O Copiloto não muda nada nas suas campanhas.</b> Você faz a mudança no Mercado Ads.</p>`
-            + `<div class="acoes"><a class="bt" href="${A.URL.campanhas}" target="_blank" rel="noopener">Abrir no Mercado Ads</a><a class="bt sec" href="${A.URL.criar}" target="_blank" rel="noopener">Criar campanha no Mercado Ads</a></div>${A.htmlProposta(an.proposta)}</section>`
-            + `<section class="card" id="a-modelos"><h2>Modelos de Ads da conta</h2>${A.htmlModelos(an.modelos)}</section>`
-            + '<p class="fonte">Fonte: Mercado Ads e lista de Anúncios do Mercado Livre (lidas neste Chrome) · custo e imposto = seus. Sobra e equilíbrio são estimativas no preço de hoje.</p>';
+        const vm = (tit, resumo, corpo) => `<details class="vm dentro-card"><summary><span class="t"><b>${esc(tit)}</b><span>${esc(resumo)}</span></span></summary><div class="in">${corpo}</div></details>`;
+        return `<section class="card" id="a-periodo"><div class="cab"><div class="cab-tx"><p class="per">Últimos 30 dias${de && ate ? ` (${de} a ${ate})` : ''} · comparado aos 30 dias anteriores</p>`
+            + `<p class="manchete"><span class="pt ${mc.cls}"></span><b>${esc(mc.fato)}</b>${mc.acao ? ' ' + esc(mc.acao) : ''}</p></div>${caixa(quando ? 'Mercado Ads lido em ' + quando : '')}</div>`
+            + (etapa || (semAba ? semAba.replace('</b>', '</b> Os números abaixo são da leitura anterior.') : ''))
+            + A.htmlKpis4(an) + vm('Todos os números', 'TACOS · impressões · cliques · CTR · CPC · orgânicas · orçamento', A.htmlKpis(an.kpis)) + '</section>'
+            + '<div class="colunas"><div class="col">'
+            + `<section class="card" id="a-acoes"><div class="ch"><h2>Precisa de você</h2><span class="d">o botão abre o Mercado Ads</span></div>${A.htmlAcoes(an.grupos)}</section>`
+            + `<section class="card" id="a-sku"><div class="ch"><h2>Por produto (SKU)</h2><button class="ajuda" type="button" title="${esc(A.SIGLAS.equilibrio + ' Sobra no preço de hoje, com a tarifa e o frete do ML, o seu custo e o seu imposto. A barra usa a mesma escala para todos os produtos.')}" aria-label="Como ler">?</button></div>`
+            + `<p class="sub">Quanto o Ads custou e quanto sobrou de lucro (ou virou prejuízo) em cada produto, em R$.</p>${A.htmlSkus(an.grupos, d.filtro)}</section>`
+            + '</div><div class="col">'
+            + `<section class="card" id="a-campanhas">${A.htmlCampBarras(an.camps, an.kpis)}${vm('Ver todas as métricas', 'estratégia · ROAS objetivo · TACOS · CTR · cliques · impressões · receita', A.htmlCampanhas(an.camps))}</section>`
+            + `<section class="card" id="a-proposta"><h2>Mudar no Mercado Ads</h2><p class="sub"><b>O Copiloto não muda nada nas suas campanhas.</b> Você faz a mudança no Mercado Ads.</p>`
+            + `<div class="botoes"><a class="bt" href="${A.URL.campanhas}" target="_blank" rel="noopener">Abrir no Mercado Ads</a><a class="bt sec" href="${A.URL.criar}" target="_blank" rel="noopener">Criar campanha no Mercado Ads</a></div>`
+            + vm('Proposta de organização por SKU', 'em que campanha cada produto fica melhor e com qual ROAS objetivo', A.htmlProposta(an.proposta)) + '</section>'
+            + `<section class="card" id="a-modelos">${vm('Modelos de Ads da conta', an.modelos.map(x => x.nome.replace(/ \(.*/, '')).join(' · ') || 'nenhum com gasto lido', A.htmlModelos(an.modelos))}</section>`
+            + '</div></div>'
+            + '<p class="fonte">Fonte: Mercado Ads e lista de Anúncios do Mercado Livre (lidas neste Chrome) · custo e imposto = seus. Sobra, lucro e equilíbrio são estimativas no preço de hoje.</p>';
     };
 
     // Aula guiada (tour.js): um balão por parte da tela. Alvo que não está na tela é pulado.
     A.AULA = [
-        { sel: '#a-periodo', titulo: 'Números do período', texto: 'Quanto você gastou em Ads nos últimos 30 dias e quanto vendeu com eles. Embaixo de cada número: o mesmo número 30 dias antes.' },
-        { sel: '#a-campanhas', titulo: 'Suas campanhas', texto: 'Cada campanha com orçamento, ROAS e ACOS. Embaixo, o que o Copiloto viu nela.' },
-        { sel: '.barra-sh', titulo: 'Impressões perdidas', texto: 'Verde: vezes em que o anúncio apareceu. Amarelo: perdeu porque o orçamento acabou. Cinza: perdeu o leilão.' },
-        { sel: '#a-sku', titulo: 'Por produto e equilíbrio', texto: 'O resultado de cada SKU. "ACOS de equilíbrio" é o máximo que o Ads pode levar da venda sem dar prejuízo.' },
-        { sel: '#a-proposta', titulo: 'Proposta de organização', texto: 'Em que campanha cada produto ficaria melhor e com qual ROAS objetivo. Quem muda é você, no Mercado Ads.' },
+        { sel: '#a-periodo', titulo: 'Números do período', texto: 'A frase de cima diz se o Ads dá lucro. Embaixo: quanto você gastou, quanto vendeu pelo Ads, o ROAS e o lucro depois do Ads, com a comparação dos 30 dias antes.' },
+        { sel: '#a-acoes', titulo: 'Precisa de você', texto: 'Os produtos que pedem ação: tirar, ajustar ou escalar. O botão só abre o Mercado Ads: quem muda é você.' },
+        { sel: '#a-sku', titulo: 'Por produto', texto: 'Cada barra mostra em R$ quanto o Ads custou (âmbar) e quanto sobrou de lucro (verde) ou virou prejuízo (vermelho). Todas na mesma escala.' },
+        { sel: '#a-campanhas', titulo: 'Suas campanhas', texto: 'Verde: vezes em que o anúncio apareceu. Âmbar: perdeu porque o orçamento acabou. Vermelho: perdeu o leilão. Embaixo, o que fazer.' },
+        { sel: '#a-proposta', titulo: 'Mudar no Mercado Ads', texto: 'Em que campanha cada produto ficaria melhor e com qual ROAS objetivo. Quem muda é você, no Mercado Ads.' },
         { sel: '#a-modelos', titulo: 'Modelos de Ads', texto: 'Os tipos de Ads que a sua conta usa e o que o Copiloto acompanha em cada um.' },
     ];
 
@@ -437,15 +582,25 @@
         if (querAula) history.replaceState(null, '', location.pathname);
         // Redesenha com o que já foi lido e calculado (clique no filtro, gravação só do status): não relê nem recalcula.
         const pinta = soSync => { const h = A.htmlPagina(Object.assign({}, ultimo, { agora: Date.now(), filtro, conta })); if (soSync) SHC.trocarSoSync(app, h); else app.innerHTML = h; };
+        // Pílula da conta no topo: nome + ID completo (só textContent).
+        const pintaConta = (nome, id) => {
+            const el = document.getElementById('conta');
+            if (!el || !/^\d{6,15}$/.test(String(id))) return;
+            document.getElementById('contaAv').textContent = String(nome).split(/\s+/).filter(w => /^[0-9A-Za-zÀ-ú]/.test(w)).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'ML';
+            document.getElementById('contaNome').textContent = nome;
+            document.getElementById('contaId').textContent = 'ID ' + id;
+            el.hidden = false;
+        };
         const mesAnt = (mes, k) => { const d = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1 - k, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
         async function desenha() {
             try {
                 conta = await SHC.contaAtual();
                 const hoje = SHC.hoje().slice(0, 7), meses = [mesAnt(hoje, 1), hoje];
-                const r = await chrome.storage.local.get(['ads:' + conta, 'shc:status'].concat(meses.map(m => 'fech:' + conta + ':' + m)));
+                const r = await chrome.storage.local.get(['ads:' + conta, 'shc:status', 'ml:contas'].concat(meses.map(m => 'fech:' + conta + ':' + m)));
                 const snap = r['ads:' + conta] || null, st = r['shc:status'] || {};
                 const itens = ((await SHC.lerAnuncios(conta)) || {}).itens || [];
                 const cfg = await SHC.lerCfg();
+                pintaConta(SHC.nomeConta(conta, cfg, r['ml:contas']), conta);
                 const custos = await SHC.custosDe(itens);
                 const custoDe = it => { const c = custos.get(it); return c ? c.dados : null; };
                 const fechs = meses.map(m => Object.assign({ mes: m.slice(5) + '/' + m.slice(0, 4) }, r['fech:' + conta + ':' + m] || {}));

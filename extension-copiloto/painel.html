@@ -158,6 +158,8 @@
   /* Custos do ERP: 3 cartões no mesmo padrão (conexão que importa sozinha) + importação visual */
   .erp-c { border: 1px solid var(--linha); border-radius: 12px; padding: 12px 14px; }
   .erp-c h3 { margin: 0 0 4px; font-size: 14.5px; } .erp-c p { margin: 4px 0; font-size: 12.5px; color: var(--suave); }
+  .erp-c ol.erp-passos { margin: 4px 0; padding-left: 18px; font-size: 12.5px; color: var(--suave); } .erp-c ol.erp-passos li { margin: 2px 0; }
+  .erp-c code { font-size: 11.5px; background: var(--fundo2, rgba(127,127,127,.12)); padding: 1px 4px; border-radius: 4px; word-break: break-all; }
   .erp-c .inp { margin-top: 6px; } .erp-c .bt { margin-top: 8px; } .bt:disabled { opacity: .55; cursor: default; }
   .cartoes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
   .cartoes div { border: 1px solid var(--linha); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; color: var(--suave); }
@@ -275,7 +277,7 @@
       <div><span class="et add"><b>＋ Informar custo</b></span><span>Pontilhado: falta o custo do produto. Clique e digite ali mesmo.</span></div>
     </div>
     <details class="priv-det"><summary>Onde ficam os meus dados?</summary>
-      <p class="priv">🔒 Seus custos ficam guardados só neste navegador, neste computador. O Copiloto só se comunica com o Mercado Livre e, se você conectar, com o Mercado Pago e o seu ERP (Tiny ou Omie). Do Mercado Livre e do Mercado Pago ele usa a sessão já aberta neste Chrome; do ERP ele só lê os custos. Seus custos não vão para nenhum servidor. Para usar em outro computador, baixe a planilha aqui e importe lá.</p>
+      <p class="priv">🔒 Seus custos ficam guardados só neste navegador, neste computador. O Copiloto só se comunica com o Mercado Livre e, se você conectar, com o Mercado Pago e o seu ERP (Tiny, Omie ou Bling). Do Mercado Livre e do Mercado Pago ele usa a sessão já aberta neste Chrome; do ERP ele só lê os custos. Seus custos não vão para nenhum servidor. Para usar em outro computador, baixe a planilha aqui e importe lá.</p>
     </details>
   </section>
 
@@ -295,7 +297,7 @@
     <div class="contador"><b id="cPrinc">—</b><div class="prog"><i id="cProg" style="width:0"></i></div><span class="cinza" id="cTodos"></span></div>
     <div class="tres">
       <div class="forma"><b>1. Planilha do Tiny ou Bling</b><p>Exporte os produtos do seu sistema e importe o arquivo como veio (.xls ou .csv).</p><label class="bt verde" for="arquivo" style="cursor:pointer">⬆ Importar planilha</label></div>
-      <div class="forma"><b>2. Conectar o seu ERP</b><p>Tiny ou Omie: uma chave da sua conta e os custos entram sozinhos, e se atualizam a cada sincronização. O Copiloto só lê.</p><button class="bt" id="cTiny">Conectar Tiny ou Omie</button></div>
+      <div class="forma"><b>2. Conectar o seu ERP</b><p>Tiny, Omie ou Bling: conecte uma vez e os custos entram sozinhos, e se atualizam a cada sincronização. O Copiloto só lê.</p><button class="bt" id="cTiny">Conectar Tiny, Omie ou Bling</button></div>
       <div class="forma"><b>3. Digitar nos anúncios</b><p>Na lista de Anúncios do Mercado Livre, clique em “Informar custo” na etiqueta de cada produto.</p><button class="bt sec" id="cAnuncios">Abrir meus anúncios</button></div>
     </div>
     <div id="cFaltam" hidden><p class="sub">Faltam estes (do que mais vende para o que menos vende):</p><ol id="cFaltamLista"></ol>
@@ -323,7 +325,7 @@
       </div>
       <div class="prog-lin" id="rProgLin" hidden><div class="prog grossa"><i id="rProg" style="width:0"></i></div><span id="rProgTxt"></span></div>
       <p class="msg" id="rMsg" role="status" aria-live="polite"></p>
-      <p class="mais">Omie: veja “Custos do ERP”, logo abaixo da tabela. Bling: importe a planilha.</p>
+      <p class="mais">Omie e Bling: veja “Custos do ERP”, logo abaixo da tabela.</p>
     </div>
     <p class="msg erro" id="msgTab"></p>
     <div class="barra">
@@ -376,8 +378,23 @@
       </div>
       <div class="erp-c" id="bling">
         <h3>Bling</h3>
-        <p>Exporte a planilha de produtos do Bling (.xls ou .csv) e importe aqui: o Copiloto lê o código e o preço de custo.</p>
-        <label class="bt sec" for="arquivo" style="cursor:pointer">⬆ Importar planilha do Bling</label>
+        <div id="blingSem">
+          <ol class="erp-passos">
+            <li>No Bling: Central de extensões › Área do integrador › Criar aplicativo.</li>
+            <li>Marque só <b>Produtos</b>, com leitura.</li>
+            <li>Em “URL de redirecionamento”, cole: <code id="blingRetorno"></code> <button class="lnk" id="blingCopiar" type="button">Copiar</button></li>
+            <li>Salve e cole aqui o Client ID e o Client Secret.</li>
+          </ol>
+          <input class="inp" id="blingId" autocomplete="off" spellcheck="false" placeholder="Client ID" aria-label="Client ID do aplicativo do Bling">
+          <input class="inp" id="blingSecret" type="password" autocomplete="off" spellcheck="false" placeholder="Client Secret" aria-label="Client Secret do aplicativo do Bling">
+          <button class="bt verde" id="blingConectar">Conectar</button>
+          <p>O Chrome vai pedir permissão para abrir a entrada do Bling e falar com bling.com.br. Tudo fica só neste Chrome.</p>
+        </div>
+        <div id="blingCom" hidden>
+          <p>✓ Conectado com o aplicativo <b id="blingMasc"></b>. Os custos se atualizam a cada sincronização.</p>
+          <div class="acoes" style="margin-top:6px"><button class="bt" id="blingAtualizar">Atualizar agora</button><button class="lnk" id="blingEsquecer">Desconectar</button></div>
+        </div>
+        <p>Prefere planilha? <label class="lnk" for="arquivo" style="cursor:pointer">Importar planilha do Bling</label></p>
       </div>
     </div>
     <div class="prog-lin" id="impProgLin" hidden><div class="prog grossa"><i id="impProg" style="width:0"></i></div><span id="impProgTxt"></span></div>
@@ -444,6 +461,7 @@
 <script src="xls.js"></script>
 <script src="tiny.js"></script>
 <script src="omie.js"></script>
+<script src="bling.js"></script>
 <script src="painel.js"></script>
 </body>
 </html>

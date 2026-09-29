@@ -8,21 +8,43 @@
   :root{--bg:#F6F7FB;--card:#fff;--tinta:#0B1220;--suave:#5B6474;--linha:#E7EAF0;--verde:#047857;--verde-bg:#ECFDF5;--ambar:#B45309;--ambar-bg:#FFFBEB;--verm:#B91C1C;--verm-bg:#FEF2F2;--azul:#2563EB}
   *{box-sizing:border-box} html,body{margin:0;height:100%} [hidden]{display:none!important}
   body{font:13px/1.45 "Segoe UI",Inter,Arial,sans-serif;color:var(--tinta);background:var(--bg);display:flex;flex-direction:column;min-width:300px}
-  .topo{background:linear-gradient(135deg,#0B1220,#16213A);color:#fff;padding:12px 14px 10px;position:sticky;top:0;z-index:2}
-  .l1{display:flex;align-items:center;gap:8px}.l1 img{width:24px;height:24px}.l1 b{font-size:14.5px}
-  .conta{margin-left:auto;display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:4px 10px 4px 6px;font-size:11.5px;white-space:nowrap;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 1px 3px rgba(0,0,0,.18)}
-  .conta i{width:8px;height:8px;border-radius:50%;background:#22C55E;display:inline-block;box-shadow:0 0 0 3px rgba(34,197,94,.22)}
-  .conta.sem i{background:#94A3B8;box-shadow:0 0 0 3px rgba(148,163,184,.22)}
-  .conta select{background:transparent;border:0;color:#fff;font:inherit;font-weight:600;max-width:160px;cursor:pointer;padding:0}.conta select option{color:var(--tinta)}
-  .conta b{font-weight:650;letter-spacing:.1px}
-  .conta-id{opacity:.9;font-weight:600;font-size:10.5px;letter-spacing:.2px;background:rgba(147,197,253,.16);color:#BFDBFE;border-radius:999px;padding:2px 7px}
+  /* v3.1 topo (ESPEC §3 + imagem tela-catalogo): selo R$ + Copiloto, pílula da conta (apelido + ID inteiro), sino, tela cheia e minimizar;
+     linha 2 = sincronização (em 900 px ou mais fica na linha 1); faixa #abas rolável com ícone, rótulo e contador; "Todas" abre a grade 3×4 */
+  :root{--c-topo:#0F172A;--c-topo-2:#1E293B;--c-topo-txt:#CBD5E1;--mono:ui-monospace,Consolas,"Cascadia Mono",monospace}
+  .topo{--kn:var(--c-topo);background:var(--c-topo);color:#fff;padding:8px 12px 0;position:sticky;top:0;z-index:4}
+  .topo .menu-abas{--kn:#fff}
+  .topo svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .l1{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-height:40px}
+  .cp-marca{display:flex;align-items:center;gap:6px;font-weight:700;font-size:15px;flex:none;order:0}
+  .cp-logo{width:24px;height:24px;border-radius:7px;background:#10B981;display:grid;place-items:center;color:#0F172A;font-size:10.5px;font-weight:800;letter-spacing:-.3px;flex:none}
+  .conta{position:relative;order:1;flex:1 1 0;display:flex;align-items:center;border-radius:10px;background:var(--c-topo-2);box-shadow:inset 0 0 0 1px #334155;color:#fff}
+  .conta:hover{box-shadow:inset 0 0 0 1px #475569}.conta:focus-within{outline:2px solid #93C5FD;outline-offset:1px}
+  .conta .conta-in{all:unset;cursor:pointer;flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:4px 8px 4px 4px;box-sizing:border-box}
+  .conta .av{position:relative;width:30px;height:30px;border-radius:8px;background:#334155;display:grid;place-items:center;font-size:11px;font-weight:700;line-height:1;color:#E2E8F0;flex:none}
+  .conta .av::after{content:"";position:absolute;right:-2px;bottom:-2px;width:9px;height:9px;border-radius:50%;background:#22C55E;box-shadow:0 0 0 2px var(--c-topo-2)}
+  .conta.sem .av::after{background:#94A3B8}
+  .conta .ct{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+  .conta .ct b{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;contain:inline-size}
+  .conta .ct b.pede{color:#FCD34D;font-weight:650;font-size:12.5px}
+  .conta .ct small{font:500 11px/1.3 var(--mono);color:var(--c-topo-txt);letter-spacing:.02em;white-space:nowrap}
+  .conta .chev{margin-left:auto;color:#94A3B8;width:14px;height:14px}
+  .conta select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;margin:0;font-size:13px}.conta select option{color:#0F172A}
+  .topo .ic{all:unset;cursor:pointer;position:relative;order:3;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--c-topo-txt);flex:none;box-sizing:border-box}
+  .topo .ic:hover,.topo .ic:focus-visible{background:var(--c-topo-2);color:#fff}.topo .ic:focus-visible{outline:2px solid #93C5FD}
+  .topo .ic .n{position:absolute;top:1px;right:-2px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#D97706;color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 0 0 2px var(--c-topo);box-sizing:border-box}
+  .topo .ic .n.pr{background:#EF4444}
+  .topo .volta{all:unset;cursor:pointer;order:3;color:#93C5FD;font-weight:600;font-size:12px;white-space:nowrap;padding:6px 4px}
+  @media (max-width:359px){.cp-marca>span:last-child{display:none}.l1{gap:4px}.topo .ic{width:28px}
+    /* 320 px: "✓ Atualizado às · próxima às" numa linha só; o botão vira ↻ (o texto continua para o leitor de tela) */
+    .topo .sync button{font-size:0;width:28px;height:22px;text-align:center;border-radius:7px;flex:none}.topo .sync button::before{content:"↻";font-size:17px;line-height:22px}.topo .sync button:hover{background:var(--c-topo-2)}}
   #txtSemanal{min-height:150px;margin-top:6px}.gb-c .prog{margin:4px 0 0}
-  .sync{margin-top:8px;display:flex;align-items:center;gap:6px;font-size:11.5px;color:#C7D2E3}
-  #st{flex:1;min-width:0}.topo .shs-lin{color:#C7D2E3;font-size:11px}
+  .sync{order:5;flex:1 0 100%;display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--c-topo-txt);padding:0 0 6px;min-width:0}
+  #st{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:0 4px}.topo .shs-lin{color:#C7D2E3;font-size:11px}
+  .topo #st .shs .shs-selo{background:none;padding:0;border-radius:0;font-weight:600;color:#CBD5E1}.topo #st .shs-verde .shs-selo{color:#6EE7B7}.topo #st .shs-azul .shs-selo{color:#7DD3FC}
+  .topo #st .shs-amarelo .shs-selo{color:#FCD34D}.topo #st .shs-vermelho .shs-selo{color:#FCA5A5}.topo #st .st-px{color:var(--c-topo-txt);white-space:nowrap}
   #st .shs{display:flex;flex-wrap:wrap;align-items:center;gap:0 6px;min-width:0}#st .shs-selo{padding:1px 8px;font-size:11.5px;white-space:normal;min-width:0;max-width:100%;overflow-wrap:anywhere}
   #st .shs-barra{order:3;flex-basis:100%;height:3px;margin:4px 0 0}#st .shs-lin{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .sync button{all:unset;cursor:pointer;color:#93C5FD;font-weight:600;white-space:nowrap}
-  .sync .ic{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;color:#C7D2E3;flex:none}.sync .ic:hover{background:rgba(255,255,255,.12)}.sync .ic svg{width:15px;height:15px}
+  .sync button{all:unset;cursor:pointer;color:#93C5FD;font-weight:600;white-space:nowrap;margin-left:auto}
   #syncLista .shs>.shs-selo,#syncLista .shs>.shs-barra,#syncLista .shs>.shs-lin{display:none}#syncLista .shs-lista{margin:0}
   .dot.lendo{background:#0284C7}#syncLista .sync-prog{height:6px;margin:6px 0 2px}#syncLista .sync-prog i{background:#0284C7}#syncLista .sync-fila{margin:2px 0 0}#syncLista .gb-l .lnk{margin-left:auto}#syncLista .shs-lista{margin-top:8px}
   #st.so-selo .shs-barra,#st.so-selo .shs-lin{display:none}
@@ -36,10 +58,23 @@
   .passos{margin:8px 0;padding-left:20px;font-size:12px;line-height:1.5}.passos li{margin:2px 0}
   .vant{margin:8px 0;padding-left:18px;font-size:12px;line-height:1.5}
   .col{display:flex;flex-direction:column;gap:6px;margin-top:8px}.col .bt{box-sizing:border-box;width:100%}
-  .abas{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px;margin-top:10px;background:rgba(255,255,255,.07);border-radius:10px;padding:3px}
-  .abas button{all:unset;cursor:pointer;text-align:center;padding:5px 2px;border-radius:8px;font-size:11px;font-weight:600;color:#C7D2E3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  @media (max-width:479px){.abas{grid-template-columns:repeat(4,minmax(0,1fr))}}
-  .abas button.on{background:#fff;color:var(--tinta)}
+  .abas-w{display:flex;align-items:stretch;margin:0 -12px;border-top:1px solid #1E293B;position:relative}
+  .abas{flex:1;min-width:0;display:flex;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;padding:0 20px 0 12px;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}
+  .abas::-webkit-scrollbar{display:none}
+  .abas button{all:unset;cursor:pointer;position:relative;flex:none;min-width:52px;padding:8px 6px 7px;display:flex;flex-direction:column;align-items:center;gap:3px;color:#94A3B8;font-size:11px;font-weight:600;line-height:1.1;white-space:nowrap;border-bottom:2px solid transparent;box-sizing:border-box}
+  .abas button:hover{color:#fff}.abas button.on{color:#fff;border-bottom-color:#34D399}.abas button:focus-visible{outline:2px solid #93C5FD;outline-offset:-2px}
+  .topo .b{position:absolute;top:3px;left:calc(50% + 4px);min-width:15px;height:15px;padding:0 3px;border-radius:8px;font-size:9.5px;font-weight:700;line-height:15px;text-align:center;color:#fff;box-sizing:border-box}
+  .topo .b.pr{background:#EF4444}.topo .b.at{background:#D97706}
+  .todas{all:unset;cursor:pointer;position:relative;flex:none;width:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#CBD5E1;font-size:11px;font-weight:600;line-height:1.1;border-left:1px solid #1E293B;background:var(--c-topo);box-sizing:border-box}
+  .todas:hover,.todas[aria-expanded="true"]{color:#fff;background:var(--c-topo-2)}.todas:focus-visible{outline:2px solid #93C5FD;outline-offset:-2px}
+  .todas .b{left:auto;right:6px}
+  .menu-abas{position:absolute;right:8px;top:calc(100% + 4px);width:min(340px,calc(100vw - 16px));background:#fff;color:#0F172A;border-radius:14px;box-shadow:0 12px 32px rgba(15,23,42,.22);padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;z-index:9;box-sizing:border-box}
+  .menu-abas button{all:unset;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:10px;font-size:12px;font-weight:600;line-height:1.1;color:#475569;text-align:center}
+  .menu-abas button:hover{background:#F1F5F9}.menu-abas button.on{background:#EFF6FF;color:#1D4ED8}.menu-abas button:focus-visible{outline:2px solid #1D4ED8;outline-offset:-2px}
+  .menu-abas .b{top:4px;left:auto;right:10px}
+  .menu-abas .rod{grid-column:1/-1;font-size:11px;color:#64748B;text-align:center;padding-top:6px;border-top:1px solid #F1F5F9}
+  .menu-abas .rod .lnk{font-size:11px}
   .corpo{flex:1;overflow:auto;padding:12px}
   .aba{display:none}.aba.on{display:block}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
@@ -66,7 +101,7 @@
   .custo-ok button{all:unset;cursor:pointer;color:var(--azul);font-weight:600;font-size:12px}
   .prop{border-top:1px dashed var(--linha);margin-top:8px;padding-top:8px}
   .prop .l1p{display:flex;gap:6px;align-items:baseline}
-  .prop .nome{font-weight:650;font-size:12px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .prop .nome{font-weight:650;font-size:12px;flex:1;min-width:0;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .prop .datas{color:#667085;font-size:11px;white-space:nowrap}
   .prop .l2p{display:flex;align-items:center;gap:8px;margin-top:4px}
   .preco{font-size:14px;font-weight:700}.recebe{font-size:11.5px;color:var(--suave)}
@@ -139,9 +174,11 @@
   .canais button.on{box-shadow:inset 0 0 0 1.5px currentColor}
   .alerta{grid-column:1 / -1;font-size:11px;color:#92400E;background:var(--ambar-bg);border-radius:7px;padding:4px 7px}
   .linha-comp{border-top:1px dashed var(--linha);margin-top:7px;padding-top:6px}.linha-comp b{display:block;font-size:12px;line-height:1.3}.linha-comp small{display:block;color:var(--suave);font-size:10.5px}
+  /* Aba Canal: tipo da transmissão com as cores das etiquetas da Agenda */
+  .tipo-canal{display:inline-block;padding:0 7px;border-radius:999px;font-size:10.5px;font-weight:700;background:#F1F5F9;color:#475569}.tipo-canal.t-channel{background:#DBEAFE;color:#1E40AF}.tipo-canal.t-story{background:#FCE7F3;color:#9D174D}.tipo-canal.t-ambos{background:#EDE9FE;color:#5B21B6}
   button:focus-visible,.lnk:focus-visible,.kpi:focus-visible,.chip:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
   .sync button:focus-visible,.abas button:focus-visible{outline-color:#93C5FD}
-  .alab{border-color:#FECACA;background:#FFFBFB}
+  .alab:has(.dot.ruim){border-color:#FECACA;background:#FFFBFB}.alab .gb-v{font-weight:600}   /* bloco "Alertas desta aba" (fim da aba): vermelho só com urgente */
   .gb{padding:9px 11px}.gb-l{display:flex;align-items:center;gap:7px}.gb-l b{font-size:12.5px;white-space:nowrap}
   .gb-v{flex:1;min-width:0;font-size:12px;color:#344054}.gb-l .lnk{white-space:nowrap;font-size:11.5px}
   .dot{width:9px;height:9px;border-radius:50%;flex:none;background:#98A2B3}.dot.ok{background:#059669}.dot.atencao{background:#D97706}.dot.ruim{background:#DC2626}
@@ -152,8 +189,13 @@
   .atalho-nf{display:grid;grid-template-columns:1fr;gap:6px;margin-top:6px}.atalho-nf a{display:block;text-decoration:none;color:inherit;border:1px solid var(--linha);border-radius:10px;padding:7px 9px}
   .atalho-nf a b{display:block;font-size:12px;color:var(--azul)}.atalho-nf a small{color:var(--suave);font-size:11px}
   body.larga{font-size:14px}
-  body.larga .topo{padding:14px max(24px,calc((100% - 1400px) / 2))}
-  body.larga .abas{grid-template-columns:repeat(12,minmax(0,1fr))}body.larga .abas button{font-size:12.5px;padding:7px 4px}
+  body.larga .topo{padding:8px max(24px,calc((100% - 1400px) / 2)) 0}
+  body.larga .l1{flex-wrap:nowrap;gap:12px}body.larga .conta{flex:0 1 280px}
+  body.larga .sync{order:2;flex:1 1 auto;padding:0;margin-left:4px}
+  body.larga .abas-w{margin:6px 0 0}body.larga .todas,body.larga .menu-abas{display:none!important}
+  body.larga .abas{padding:0;-webkit-mask-image:none;mask-image:none;justify-content:space-between}
+  body.larga .abas button{flex:1 1 0;min-width:0;padding:8px 2px 7px}
+  @media (min-width:1240px){body.larga .abas button{flex:0 1 auto;flex-direction:row;gap:6px;padding:10px 8px;font-size:12.5px}body.larga .abas .b{position:static;margin-left:2px}}
   body.larga .corpo{padding:16px max(24px,calc((100% - 1400px) / 2))}
   body.larga .gb-grade,body.larga #listaPromo,body.larga #listaFrete,body.larga #listaCat,body.larga #listaFull,body.larga #listaSaude,body.larga #listaConc,body.larga #listaAds{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:10px;align-items:start}
   body.larga .gb-grade>.card,body.larga #listaPromo>.card,body.larga #listaFrete>.card,body.larga #listaCat>*,body.larga #listaFull>.card,body.larga #listaSaude>.card,body.larga #listaConc>.card,body.larga #listaAds>.card{margin:0}
@@ -164,12 +206,48 @@
   .legenda .sit-ruim::before{background:#DC2626}.legenda .sit-atencao::before{background:#D97706}.legenda .sit-ok::before{background:#059669}
   .linha-fr.sit-ruim{border-left:5px solid #DC2626;background:#FFFBFB}.linha-fr.sit-atencao{border-left:5px solid #D97706}.linha-fr.sit-ok{border-left:5px solid #059669}
   .linha-fr .l2p{flex-wrap:wrap}
-  .tabf tr.acima td{background:#FEF2F2}.vm{color:var(--verm)}
+  .tabf tr.acima td{background:#FEF2F2}.vm{color:var(--verm)}.vv{color:var(--verde)}
+  .tabf td .lnk{font:inherit;padding:0}.tabf tr.conta-ped td{background:var(--bg);padding:6px 8px}
+  .conta-ped .cl{display:flex;justify-content:space-between;gap:10px;padding:2px 0;text-align:left}.conta-ped .cl b{white-space:nowrap;font-weight:600}
+  .conta-ped .cl.est b{color:var(--verde)}.conta-ped .cl.tot{border-top:1px solid var(--linha);margin-top:2px;padding-top:4px}.conta-ped .cl.tot b{font-weight:800}
+  .conta-ped .cl.mais b{color:var(--verm);font-weight:800}.conta-ped .cl.fora{color:var(--suave);font-style:italic}
   .medidas{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.medidas div{background:#F8FAFC;border-radius:9px;padding:7px 9px;font-size:12px}.medidas small{display:block;color:var(--suave);font-size:10.5px;font-weight:700;margin-bottom:2px}
   .aviso-custo{margin:8px 0 0;font-size:12px;font-weight:650;color:#92400E;background:var(--ambar-bg);border-radius:8px;padding:6px 9px}
   .linha-sem{display:flex;gap:8px;align-items:center;border-top:1px dashed var(--linha);padding:6px 0}.linha-sem>span:first-child{flex:1;min-width:0}.linha-sem b{display:block;font-size:12px;line-height:1.3}.linha-sem small{color:var(--suave);font-size:10.5px}
   .conc{background:#F8FAFC;border-radius:9px;padding:7px 9px;margin-top:6px;font-size:12px}.conc p{margin:0 0 4px}.conc .alerta{display:block;margin:4px 0}
   .linha-tempo{margin-top:4px;border-left:2px solid #CBD5E1;padding-left:7px}
+  /* v3.1 competição pela tela "Alterar anúncio": KPIs, "O que fazer para ganhar" e a linha do tempo por mês (verde ganhando, cinza dividindo, vermelho perdendo) */
+  .cc .kpis{margin:6px 0 4px}.cc .cc-t{margin:10px 0 4px;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+  .cc .lnk{display:inline-block;margin-top:2px}.cc>small{margin-top:6px}
+  .cc-meses{display:grid;gap:5px;margin:4px 0}
+  .cc-mes{display:grid;grid-template-columns:28px minmax(0,1fr) 76px;align-items:center;gap:6px}.cc-mes .q{text-align:right}
+  .cc-b{display:flex;height:10px;border-radius:5px;overflow:hidden;background:#E2E8F0}.cc-b i{display:block;height:100%}.cc-b .g{background:var(--verde)}.cc-b .d{background:#94A3B8}.cc-b .p{background:var(--verm)}
+  .cc-mes small{display:block;font-size:10.5px;color:var(--suave);white-space:nowrap}.cc-mes .m{font-weight:700;color:var(--tinta);text-transform:capitalize}
+  .cc-leg{display:flex;flex-wrap:wrap;gap:3px 10px;font-size:10.5px;color:var(--suave);margin:2px 0 4px}.cc-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}.cc-leg .g{background:var(--verde)}.cc-leg .d{background:#94A3B8}.cc-leg .p{background:var(--verm)}
+  /* v3.1 (29/09, pedido da dona): "Quem está ganhando" em destaque, ações em cartões (a 1ª em destaque) e os números sem "…" em 320 px */
+  .cc .cc-venc{background:#fff;border:1px solid #FECACA;border-left:4px solid var(--verm);border-radius:10px;padding:8px 10px;margin:2px 0 8px}
+  .cc .cc-rot{display:block;font-size:10.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:#991B1B}
+  .cc .cc-loja{display:block;font-size:18px;line-height:1.2;font-weight:800;margin:2px 0 6px;overflow-wrap:anywhere}
+  .cc .cc-pr{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}.cc .cc-pr span{display:block}.cc .cc-pr i{font-style:normal;color:var(--suave);font-weight:700;padding-bottom:2px}
+  .cc .cc-pr small{display:block;font-size:10.5px;color:var(--suave)}.cc .cc-pr b{display:block;font-size:16px;font-weight:750;font-variant-numeric:tabular-nums}.cc .cc-pr b.pr{color:#991B1B}
+  .cc .cc-dif{display:inline-block;margin:6px 0 0;padding:2px 9px;border-radius:999px;font-weight:700;font-size:12px;background:#F1F5F9;color:var(--suave)}
+  .cc .cc-dif.pr{background:var(--verm-bg);color:#991B1B}.cc .cc-dif.at{background:var(--ambar-bg);color:#92400E}
+  .cc .cc-vant{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px}
+  .cc .cc-vant li{font-size:11px;border-radius:999px;padding:2px 8px;background:#F1F5F9;color:var(--suave);border:1px solid #E2E8F0}.cc .cc-vant li b{display:inline;font-size:11px;color:inherit;font-weight:800}
+  .cc .cc-vant li.ok{background:var(--verde-bg);border-color:#A7F3D0;color:#065F46}.cc .cc-vant li.pr{background:var(--verm-bg);border-color:#FECACA;color:#991B1B}
+  .cc .cc-sua{font-weight:700;color:#065F46}
+  .cc .kpis.cc-k{display:flex;flex-wrap:wrap}.cc .kpis.cc-k>.kpi{flex:1 1 64px}
+  .cc .kpi.kn .l,.cc .kpi.kn .s{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.3}.cc .kpi.kn .v{white-space:normal;line-height:1.25}
+  .cc-acoes{list-style:none;margin:2px 0 0;padding:0;display:grid;gap:6px}
+  .cc-acao{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid var(--linha);border-left:4px solid #CBD5E1;border-radius:10px;padding:7px 9px}
+  .cc-acao.ok{border-left-color:var(--verde)}.cc-acao.at{border-left-color:#F59E0B}.cc-acao.pr{border-left-color:var(--verm)}.cc-acao.n{border-left-color:var(--azul)}
+  .cc-acao.prim{border-width:2px 2px 2px 5px;box-shadow:0 2px 6px rgba(15,23,42,.10)}.cc-acao.prim.ok{background:var(--verde-bg);border-color:#A7F3D0 #A7F3D0 #A7F3D0 var(--verde)}
+  .cc-acao.prim.at{background:var(--ambar-bg);border-color:#FDE68A #FDE68A #FDE68A #F59E0B}.cc-acao.prim.pr{background:var(--verm-bg);border-color:#FECACA #FECACA #FECACA var(--verm)}.cc-acao.prim.n{background:#EFF6FF;border-color:#BFDBFE #BFDBFE #BFDBFE var(--azul)}
+  .cc-acao .cc-n{flex:none;width:20px;height:20px;border-radius:50%;background:#E2E8F0;color:var(--tinta);font-weight:700;font-size:11px;line-height:20px;text-align:center}.cc-acao.prim .cc-n{background:var(--tinta);color:#fff}
+  .cc-acao .tx{flex:1 1 150px;min-width:0}.cc-acao .tx b{display:block;font-size:13px;line-height:1.3}.cc-acao.prim .tx b{font-size:14px}.cc-acao .tx span{display:block;font-size:11.5px;color:var(--suave);line-height:1.35}
+  .cc-acao .bt{margin-left:auto;flex:none}
+  .linha-sku .cc-quem{grid-column:1 / -1;justify-self:start;font-size:11.5px;color:#991B1B;background:var(--verm-bg);border-radius:6px;padding:2px 8px}.linha-sku .cc-quem b{font-weight:800}
+  body.larga .linha-comp .cc{max-width:820px}
   .linha-comp .quando{color:#991B1B;font-weight:650}.erro-conc{color:var(--verm)!important;margin-top:3px}
   button.linha-comp{all:unset;cursor:pointer;display:block;box-sizing:border-box;width:100%;border-top:1px dashed var(--linha);margin-top:7px;padding-top:6px}
   .fam-barra{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#E7EAF0;margin:6px 0}.fam-barra i{display:block;height:100%;min-width:2px}.fam-barra i+i{border-left:1px solid #fff}
@@ -183,6 +261,41 @@
   .fam-svg{width:100%;height:auto;display:block;margin-top:8px}
   .fam-sku{border-top:1px dashed var(--linha);padding:6px 0;font-size:12px}.fam-sku>b{display:block;font-size:12px;line-height:1.3}.fam-sku small{display:block;color:var(--suave);font-size:10.5px}
   .causas{margin:4px 0 0;padding-left:18px;font-size:11.5px;color:#344054}.causas li{margin:2px 0}
+  /* v3.1 família visual: barra por família, ▲▼ mês e ano, mini-histórico, "Precisa de você", recomendação por SKU e gargalo da queda */
+  .fam-v{padding:3px 0 5px;border-bottom:1px solid #F1F5F9}.fam-v[data-fam-abrir]{cursor:pointer;border-radius:6px}.fam-v[data-fam-abrir]:hover,.fam-v[data-fam-abrir]:focus-visible{background:#F8FAFC;outline:2px solid #C7D2FE}.fam-vb{height:6px;border-radius:3px;background:#F1F5F9;margin:2px 0 3px 16px}.fam-vb i{display:block;height:100%;border-radius:3px}
+  .fam-vs{display:flex;align-items:center;gap:8px;margin-left:16px;flex-wrap:wrap}.fam-vs .fseta{margin:0}.fam-spark{display:block;margin-left:auto;flex:none}
+  button.fam-l .fam-spark{margin-left:4px}
+  @media (max-width:360px){button.fam-l .fam-spark,button.fam-l .pc{display:none}}
+  .fam-aviso{margin:6px 0 2px;padding:6px 9px;border-radius:9px;background:var(--ambar-bg);color:#92400E;font-size:12px;line-height:1.4}
+  .rec{display:inline-block;font-size:10.5px;font-weight:750;border-radius:6px;padding:1px 6px;margin-right:4px;white-space:nowrap}
+  .rec.pr{background:var(--verm-bg);color:var(--verm)}.rec.at{background:var(--ambar-bg);color:#92400E}.rec.ok{background:var(--verde-bg);color:var(--verde)}.rec.az{background:#EFF6FF;color:#1D4ED8}.rec.ne{background:#F2F4F7;color:#475467}
+  .gq{margin-top:6px;padding:8px;border-radius:10px;background:#F8FAFC;border:1px solid var(--linha)}
+  /* v3.1 (print da dona 29/09: "muito texto e pouco visual"): SKU em cartão — mini gráfico, variação grande, gargalo em etiquetas coloridas,
+     ação como botão, filtros por causa, barra da família (mês × anterior), barras do "Por que caiu?" e a Curva ABC em barra */
+  .fam-sku.fk-caiu{background:linear-gradient(90deg,#FEF2F2 0,#FEF2F2 3px,transparent 3px);padding-left:9px}
+  .fk-top{display:flex;gap:8px;align-items:flex-start}.fk-t{flex:1;min-width:0}.fk-t>b{display:block;font-size:12.5px;line-height:1.3}.fk-mini{flex:none;display:block;margin-top:1px}
+  .fk-var{margin:3px 0 0;font-size:12.5px;font-weight:650;color:#344054;font-variant-numeric:tabular-nums}.fk-var span,.fk-var b{white-space:nowrap}.fk-var b{font-size:15px;font-weight:800}.fk-var.down b{color:var(--verm)}.fk-var.up b{color:var(--verde)}
+  .fk-g{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+  .gt{font-size:10.5px;font-weight:700;border-radius:6px;padding:2px 7px;white-space:nowrap;cursor:help}.gt.pri{box-shadow:inset 0 0 0 1.5px currentColor}
+  .gt.e{background:#FEE2E2;color:#B91C1C}.gt.contribui{background:#FEF3C7;color:#92400E}.gt.nao{background:#DCFCE7;color:#166534}.gt.semdado{background:#F1F5F9;color:#64748B}
+  .fk-m{margin:4px 0 0;font-size:12px;font-weight:750;line-height:1.35}.fk-m.e{color:var(--verm)}.fk-m.contribui{color:#92400E}.fk-m.sem{color:#475467;font-weight:600}
+  .acoes.fk-ac{justify-content:flex-start;margin-top:6px;gap:10px;flex-wrap:wrap;align-items:center}
+  a.rec.fk-bt{font-size:11.5px;padding:3px 9px;border-radius:8px;margin:0;text-decoration:none;cursor:pointer}a.rec.fk-bt:hover{filter:brightness(.95)}a.rec.fk-bt:focus-visible{outline:2px solid var(--azul)}
+  .fk-fam{display:grid;grid-template-columns:auto minmax(40px,1fr) auto auto;gap:3px 6px;align-items:center;font-size:11.5px;margin:4px 0 6px}
+  .fk-fam b{font-variant-numeric:tabular-nums;white-space:nowrap}.fk-tr{display:block;height:10px;border-radius:5px;background:#F1F5F9}.fk-tr i{display:block;height:100%;border-radius:5px}
+  .fk-fil{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 2px}
+  .fk-fil button{all:unset;cursor:pointer;font-size:11px;font-weight:700;border-radius:99px;padding:2px 9px;background:#F1F5F9;color:#344054}
+  .fk-fil button.e{background:#FEE2E2;color:#B91C1C}.fk-fil button.contribui{background:#FEF3C7;color:#92400E}.fk-fil button.semdado{background:#F1F5F9;color:#475467}
+  .fk-fil button[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--tinta)}.fk-fil button:focus-visible{outline:2px solid var(--azul)}
+  .fk-leg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:10px;color:var(--suave);margin:2px 0 4px}.fk-leg i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:3px}
+  .fk-leg i.e{background:#EF4444}.fk-leg i.contribui{background:#F59E0B}.fk-leg i.nao{background:#22C55E}.fk-leg i.semdado{background:#CBD5E1}
+  .gq-bars{display:grid;grid-template-columns:auto minmax(40px,1fr) auto auto;gap:4px 6px;align-items:center;font-size:11.5px;margin-bottom:6px}
+  .gq-r{color:#344054;white-space:nowrap}.gq-t{display:block;height:12px}.gq-t i{display:block;height:100%;border-radius:4px;background:#CBD5E1}.gq-t i.eu.down{background:#DC2626}.gq-t i.eu.up{background:#059669}
+  .gq-v{font-variant-numeric:tabular-nums;white-space:nowrap}.gq-p{font-size:11px;font-weight:750;white-space:nowrap}.gq-p.down{color:var(--verm)}.gq-p.up{color:var(--verde)}
+  .abc-bar{display:flex;gap:2px;height:20px;margin:6px 0 3px}.abc-bar .abc{display:flex;align-items:center;justify-content:center;min-width:36px;margin:0;border-radius:5px;font-size:11px;font-style:normal}.abc-bar .abc.sem{background:#fff;color:#667085;box-shadow:inset 0 0 0 1px #D0D5DD;min-width:70px;font-weight:650}
+  .gq-l{list-style:none;margin:0;padding:0}.gq-l li{display:grid;grid-template-columns:12px auto 1fr;column-gap:6px;align-items:center;padding:3px 0;border-top:1px solid #EEF2F6;font-size:11.5px}
+  .gq-l li .dot{width:9px;height:9px}.gq-l li b{font-size:11.5px}.gq-l .gq-n{font-size:10.5px;color:var(--suave);justify-self:end}.gq-l li small{grid-column:2/4;color:#344054;font-size:11px;line-height:1.35}
+  .gq-l li.gq-e .gq-n{color:var(--verm);font-weight:700}.gq-l li.gq-contribui .gq-n{color:#92400E;font-weight:700}.gq-l li.gq-nao .gq-n{color:var(--verde)}
   .abc{display:inline-block;font-size:10px;font-weight:800;border-radius:5px;padding:0 5px;margin-right:5px;vertical-align:1px}.abc.A{background:#DCFCE7;color:#166534}.abc.B{background:#FEF3C7;color:#92400E}.abc.C{background:#F1F5F9;color:#475467}
   .fam-abc{margin-top:10px;border-top:1px dashed var(--linha);padding-top:6px}.fam-abc .it{font-size:12px;padding:3px 0;border-bottom:1px solid #F1F5F9}.fam-abc .it small{display:block;color:var(--suave);font-size:10.5px}
   .meta-l{margin-top:8px}.meta-l .prog{margin:5px 0}
@@ -203,20 +316,38 @@
   ul.acoes{display:block;list-style:none;margin:0;padding:0}
   .acao{display:flex;align-items:center;gap:10px;padding:8px 0 8px 10px;border-top:1px solid #F1F5F9;position:relative}.acao:first-child{border-top:0}
   .acao::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:2px;background:#CBD5E1}.acao.pr::before{background:var(--verm)}.acao.at::before{background:#F59E0B}.acao.ok::before{background:var(--verde)}
-  .acao .tx{flex:1;min-width:0}.acao .tx b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.acao .tx>span{display:block;font-size:11.5px;color:var(--suave)}
+  .acao .tx{flex:1;min-width:0}.acao .tx b{font-size:12.5px;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.acao .tx>span{display:block;font-size:11.5px;color:var(--suave)}
   .bt.pq{padding:5px 10px;font-size:11.5px}
   .tb{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
   .tb th{font-size:10.5px;font-weight:700;color:#64748B;text-align:right;padding:0 0 4px 6px;white-space:nowrap}.tb th:first-child{text-align:left;padding-left:0}
   .tb td{padding:6px 0 6px 6px;border-top:1px solid #F1F5F9;text-align:right;white-space:nowrap;vertical-align:top}.tb td:first-child{text-align:left;white-space:normal;padding-left:0}
   .tb tr:first-child td{border-top:0}.tb thead+tbody tr:first-child td{border-top:1px solid var(--linha)}
   .tb .sm{display:block;color:#64748B;font-size:10.5px;font-weight:400}
-  .selo.ok{background:var(--verde-bg);color:#065F46}.selo.at{background:var(--ambar-bg);color:#92400E}.selo.pr{background:var(--verm-bg);color:#991B1B}.tb .sm .selo{margin:2px 0 0}
+  .selo.ok{background:var(--verde-bg);color:#065F46}.selo.at{background:var(--ambar-bg);color:#92400E}.selo.pr{background:var(--verm-bg);color:#991B1B}.selo.az{background:#DBEAFE;color:#1E40AF}.selo.cz{background:#F1F5F9;color:#475569}.tb .sm .selo{margin:2px 0 0}
   .etapa{display:flex;gap:8px;align-items:flex-start;margin:8px 0;font-size:12.5px}.etapa i{width:20px;height:20px;border-radius:50%;background:#E0E7FF;color:#3730A3;font-style:normal;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;flex:none}
   /* v2.9 aba Pós-venda: barras de motivo (largura = casos ÷ maior) e dica por produto */
-  .hb{margin:8px 0 0}.hb .l{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px}.hb .l b{font-weight:650;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hb{margin:8px 0 0}.hb .l{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px}.hb .l b{font-weight:650;min-width:0;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .hb .v{white-space:nowrap;font-variant-numeric:tabular-nums}.hb .v small{color:#64748B}
   .medidor{height:7px;border-radius:99px;background:#EEF2F6;overflow:hidden;margin-top:4px}.medidor i{display:block;height:100%;border-radius:99px;background:#94A3B8}.medidor i.pr{background:#EF4444}.medidor i.at{background:#F59E0B}.medidor i.ok{background:#10B981}
   .tb .dica{display:block;color:#92400E;font-size:10.5px;font-weight:400}.tb .dica::before{content:"Dica: ";font-weight:700}
+  /* v3.1 Afiliados e Ads: barra "entrou × custou" (verde = vendas; por cima, âmbar/vermelho = comissão ou Ads), mesma escala da lista */
+  .rl{display:block;padding:8px 0 7px}.rl+.rl{border-top:1px solid #F1F5F9}.rl .sm{display:block;color:#64748B;font-size:10.5px;line-height:1.35}
+  .rlt{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px}.rlt b{font-weight:650;min-width:0;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .rv{white-space:nowrap;font-weight:750;font-size:12px;font-variant-numeric:tabular-nums;color:#475569}.rv.ok{color:#047857}.rv.at{color:#B45309}.rv.pr{color:#B91C1C}
+  .rb{display:block;position:relative;height:8px;border-radius:99px;background:#EEF2F6;overflow:hidden;margin:5px 0 3px}.rb i{position:absolute;left:0;top:0;bottom:0;border-radius:99px}
+  .rb .e{background:#10B981}.rb .c{background:#F59E0B}.rb .c.pr{background:#EF4444}
+  .rleg{margin:4px 0 2px;font-size:10.5px;color:#64748B}.rleg i{display:inline-block;width:9px;height:9px;border-radius:3px;margin:0 4px 0 0;vertical-align:-1px;background:#10B981}.rleg i.c{margin-left:8px;background:#F59E0B}
+  .tb tr.rbl td{border-top:0;padding-top:0}.tb tr.rbl .rb{margin:0 0 2px}
+  /* v3.1 aba Ads "Por produto": barra Ads (âmbar) + lucro (verde) ou prejuízo (vermelho) depois do Ads, em R$ */
+  #ads .rb.rbl2{height:10px}#ads .rb.rbl2 i{border-radius:0}#ads .rb.rbl2 .l{background:#10B981;border-left:2px solid #fff}#ads .rb.rbl2 .p{background:#EF4444;border-left:2px solid #fff}
+  #ads .rleg i.c{margin-left:0}#ads .rleg i.l{margin-left:8px;background:#10B981}#ads .rleg i.p{margin-left:8px;background:#EF4444}
+  #ads .linha-ads small .rv{display:inline;font-size:11px}#ads .linha-ads small:last-child{font-size:11px;color:#475569}
+  /* v3.1 aba Ads (imagem aprovada): blocos "título + resumo" com "Ver mais" à direita; "Precisa de você" vazio com ✓ (ESPEC §4) */
+  #ads .ad-cab{display:flex;align-items:center;gap:10px}#ads .ad-t{flex:1;min-width:0}#ads .ad-t h3{margin:0;font-size:13.5px;font-weight:700}#ads .ad-t>span{display:block;font-size:12px;color:var(--suave);margin-top:2px}
+  #ads .ad-cab .ver{flex:none;margin:0;white-space:nowrap}#ads .ad-in{margin-top:8px;border-top:1px solid #F1F5F9;padding-top:8px}#ads .ad-in>.rleg:first-child{margin-top:0}
+  #ads .est{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--suave);padding:4px 0;margin:0}#ads .est b{color:var(--tinta)}
+  #ads .est.vazio::before{content:"✓";flex:none;width:18px;height:18px;border-radius:50%;background:#ECFDF5;color:#047857;font-weight:800;font-size:11px;text-align:center;line-height:18px}
+  #ads .acao .tx b,#ads .linha-ads .rlt b{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}#ads .acao .bt{flex:none}   /* nome inteiro: quebra a linha, nunca "…" */
   /* v2.9 aba Full: remessa com diferença, passos da remessa, linha do tempo e medidor da pontuação */
   .card.inc{border-color:#FECACA;box-shadow:inset 3px 0 0 var(--verm)}.card.inc.at{border-color:#FDE68A;box-shadow:inset 3px 0 0 #F59E0B}.card.inc.nd{border-color:var(--linha);box-shadow:inset 3px 0 0 #94A3B8}
   .prazo{display:inline-block;font-size:10px;font-weight:700;line-height:1.6;padding:0 6px;border-radius:999px;text-transform:uppercase;letter-spacing:.03em;background:var(--ambar-bg);color:#92400E;white-space:nowrap}.prazo.pr{background:var(--verm-bg);color:#991B1B}
@@ -250,6 +381,85 @@
   .opc input{margin:2px 0 0;accent-color:var(--tinta)}.opc b{display:block;font-size:12.5px;color:var(--tinta)}.opc.on{box-shadow:inset 0 0 0 2px var(--tinta)}.opc.off{opacity:.6;background:#F1F5F9;cursor:not-allowed}
   .opc .selo{margin:0 0 0 4px;background:#E2E8F0;color:#475569}
   .acao.sug{flex-wrap:wrap}.acao.sug .tx{flex-basis:100%}.acao.sug .bt{margin-left:auto}
+  /* v3.1 perfumaria da aba Promoções (29/09, igual à imagem aprovada): KPIs com cor que filtram, "Precisa de você", etiqueta Dá lucro / Abaixo da meta / Prejuízo, robô em rádio e "Todos os produtos" em cartão */
+  #promo .manchete{font-size:14px}
+  #promo .kpis.k4{gap:8px}#promo .kpi.kn{cursor:pointer;display:block}#promo .kpi.kn>span{display:block}#promo .kpi.kn .v{font-size:20px;line-height:1.25;margin:1px 0}
+  #promo .kpi.kn.on{box-shadow:inset 0 0 0 2px var(--tinta)}#promo .kpi.kn:hover{border-color:#CBD5E1}#promo .kpi.kn.pr:hover{border-color:#FCA5A5}#promo .kpi.kn.at:hover{border-color:#FCD34D}
+  #promo .ch .selo{margin:0 0 0 auto}#promo .ajuda{all:unset;cursor:help;margin-left:auto;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1px #CBD5E1;color:#64748B;font-size:11px;font-weight:700;text-align:center;line-height:20px;flex:none}
+  #promo .acao .tx b{white-space:normal;overflow:hidden;text-overflow:clip;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}#promo .acao .tx>span{margin-top:1px}   /* lista densa: até 2 linhas, o nome inteiro no title */
+  #afiliados .rlt b,#afiliados .acao .tx b{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}   /* nome inteiro: quebra a linha, nunca "…" */
+  #promo .pr-v{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;flex:none}#promo .pr-v b{display:block;font-size:13.5px;color:#B91C1C}#promo .pr-v.at b{color:#92400E}#promo .pr-v small{font-size:10.5px;color:#64748B}
+  #promo .pr-mais{display:flex;align-items:center;gap:8px;border-top:1px solid #F1F5F9;padding:8px 0 0;margin-top:2px;font-size:12px;color:var(--suave)}#promo .pr-mais .lnk{margin-left:auto}
+  #promo .pr-abaixo{margin:4px 0 0}#promo .est{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--suave);padding:4px 0}#promo .est b{color:var(--tinta)}
+  #promo .est.vazio::before{content:"✓";flex:none;width:18px;height:18px;border-radius:50%;background:#ECFDF5;color:#047857;font-weight:800;font-size:11px;text-align:center;line-height:18px}
+  #promo .acao.sug{flex-wrap:nowrap;align-items:center}#promo .acao.sug .tx{flex:1 1 auto;min-width:0}#promo .acao.sug .bt{flex:none}
+  #promo .acao.sug .lin{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:4px}
+  @media (max-width:360px){#promo .acao.sug{flex-wrap:wrap}#promo .acao.sug .tx{flex-basis:100%}#promo .acao.sug .bt{margin-left:auto}}
+  #promo .etq{display:inline-flex;align-items:stretch;max-width:100%;border-radius:7px;overflow:hidden;font-size:12px;line-height:1.2;background:#fff;box-shadow:inset 0 0 0 1px var(--eb,#E2E8F0);white-space:nowrap;vertical-align:middle}
+  #promo .etq .st{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;font-weight:700;background:var(--ebg,#F1F5F9);color:var(--etx,#475569)}#promo .etq .st::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+  #promo .etq .vl{padding:4px 8px;font-weight:700;color:var(--tinta);font-variant-numeric:tabular-nums;border-left:1px solid var(--eb,#E2E8F0)}#promo .etq .vl small{font-weight:500;font-size:10.5px;color:#64748B}
+  #promo .etq.ok{--eb:#A7F3D0;--ebg:#ECFDF5;--etx:#065F46}#promo .etq.at{--eb:#FDE68A;--ebg:#FFFBEB;--etx:#92400E}#promo .etq.pr{--eb:#FECACA;--ebg:#FEF2F2;--etx:#991B1B}#promo .etq.ne .st::before{display:none}
+  #promo .melhor{display:inline-flex;align-items:center;background:#0F172A;color:#FDE047;font-weight:700;font-size:11px;border-radius:6px;padding:3px 8px;white-space:nowrap}#promo .melhor.aprox{background:#FEF3C7;color:#92400E}
+  #promo .robo-chip{display:inline-flex;align-items:center;background:#EFF6FF;color:#1D4ED8;box-shadow:inset 0 0 0 1px #BFDBFE;font-weight:700;font-size:11px;border-radius:6px;padding:3px 8px;white-space:nowrap}
+  #promo .prop .l2p{flex-wrap:wrap;gap:4px 8px}#promo .prop .l3p{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}#promo .prop .preco{font-size:15px;font-weight:600}
+  #promo .prop.destaque{background:#fff;box-shadow:inset 0 0 0 2px #10B981,0 0 0 3px #D1FAE5;border-radius:12px;padding:10px}
+  #promo details.pdet{margin-top:4px}#promo details.pdet summary{cursor:pointer;color:var(--azul);font-size:11.5px;font-weight:600;list-style:none}#promo details.pdet summary::-webkit-details-marker{display:none}#promo details.pdet[open] summary{margin-bottom:2px}
+  #promo .robo-top .ic{width:34px;height:34px;border-radius:10px;background:#ECFDF5;color:#047857;display:flex;align-items:center;justify-content:center;flex:none}#promo .robo-top .ic svg{width:20px;height:20px}#promo .robo-top.off .ic{background:#F1F5F9;color:#64748B}
+  #promo .opc.on{background:#fff}#promo .hist-l{display:flex;align-items:center;gap:8px;border-top:1px solid #F1F5F9;margin-top:4px;padding-top:8px;font-size:12px;color:var(--suave)}#promo .hist-l .lnk{margin-left:auto}
+  #promo .pr-todos{display:flex;align-items:center;gap:10px}#promo .pr-todos .tx{flex:1;min-width:0}#promo .pr-todos .tx b{display:block;font-size:13.5px}#promo .pr-todos .tx span{display:block;font-size:12px;color:var(--suave);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#promo .pr-todos button.mais{margin:0;white-space:nowrap}
+  #promo .pr-col{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-content:start;min-width:0}#promo .pr-col>.card{margin:0;min-width:0}#promo .pr-grade{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-bottom:8px}
+  body.larga #promo .pr-grade{grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);gap:12px;align-items:start}body.larga #promo .kpi.kn .v{font-size:22px}
+  @media (min-width:1100px){body.larga #promo #promoSugere ul.acoes{display:grid;grid-template-columns:1fr 1fr;column-gap:18px}body.larga #promo #promoSugere .acao:nth-child(2){border-top:0}}
+  /* v3.1 perfumaria da aba Frete (29/09, igual à imagem tela-frete aprovada): manchete → KPIs que filtram → "Precisa de você" com Pedir revisão → cobrado a mais em barras → blocos "título + resumo · Ver mais" */
+  #frete .manchete{font-size:14px}
+  #frete .kpis.k3{gap:8px}#frete .kpi.kn{display:block}#frete button.kpi.kn{cursor:pointer}#frete .kpi.kn>span{display:block}#frete .kpi.kn .v{font-size:19px;line-height:1.25;margin:1px 0}#frete .kpi.kn .s{white-space:normal}
+  #frete .kpi.kn.on{box-shadow:inset 0 0 0 2px var(--tinta)}#frete button.kpi.kn:hover{border-color:#CBD5E1}
+  #frete .ajuda{all:unset;cursor:help;margin-left:auto;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1px #CBD5E1;color:#64748B;font-size:11px;font-weight:700;text-align:center;line-height:20px;flex:none}
+  #frete .kpi.kn .l{white-space:normal}#frete .acao .tx b,#frete .fr-hb .l b{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}   /* nome inteiro: quebra a linha, nunca "…" */#frete .acao .tx>span{margin-top:1px}#frete .acao .bt{flex:none}
+  #frete .fr-v{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;flex:none}#frete .fr-v b{display:block;font-size:13.5px;color:#92400E}#frete .fr-v.pr b{color:#B91C1C}#frete .fr-v small{font-size:10.5px;color:#64748B}
+  #frete .linha-bts{margin-top:10px}#frete .est{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--suave);padding:4px 0;margin:0}#frete .est b{color:var(--tinta)}
+  #frete .est.vazio::before{content:"✓";flex:none;width:18px;height:18px;border-radius:50%;background:#ECFDF5;color:#047857;font-weight:800;font-size:11px;text-align:center;line-height:18px}
+  #frete .fr-tot{margin:0 0 4px;font-size:12.5px;color:var(--suave)}#frete .fr-tot b{font-size:14px;font-variant-numeric:tabular-nums}
+  #frete .fr-hb{all:unset;cursor:pointer;display:block;box-sizing:border-box;width:100%;padding:4px 0}#frete .fr-hb .medidor,#frete .fr-hb .medidor i{display:block}#frete .fr-hb:hover b{color:var(--azul)}
+  #frete .fr-cab{display:flex;align-items:center;gap:10px}#frete .fr-t{flex:1;min-width:0}#frete .fr-t h3{margin:0;font-size:13.5px;font-weight:700}
+  #frete .fr-t>span{display:block;font-size:12px;color:var(--suave);margin-top:2px}#frete .fr-cab .ver{flex:none;white-space:nowrap}#frete .fr-ant{color:#64748B}
+  #frete .fr-in{margin-top:8px;border-top:1px solid #F1F5F9;padding-top:8px}#frete .fr-in .busca{margin:0 0 8px}#frete .fr-in .linha-fr{margin:0 0 6px}#frete .fr-in .tb{width:100%}
+  #frete .linha-fr .tit .selo{margin:0 0 0 4px;vertical-align:1px;white-space:nowrap}
+  #frete .fr-rod{margin:2px 2px 4px}#frete .fr-grade{display:grid;grid-template-columns:minmax(0,1fr);gap:0}
+  body.larga #frete .fr-grade{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:12px;align-items:start}body.larga #frete .kpi.kn .v{font-size:22px}
+  /* v3.1 perfumaria da aba Full (29/09, igual à imagem tela-full aprovada): manchete → KPIs → remessa com diferença em destaque → "O que enviar primeiro" → a caminho | pontuação em gauge → saúde do estoque em 6 números (+ parado em barras) → blocos "título + resumo · Ver mais" */
+  #full .manchete{font-size:14px}
+  #full .kpis.k3{gap:8px}#full .kpi.kn .v{font-size:19px;line-height:1.25;margin:1px 0}#full .kpi.kn .s{white-space:normal}body.larga #full .kpi.kn .v{font-size:22px}
+  #full .ajuda{all:unset;cursor:help;margin-left:auto;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1px #CBD5E1;color:#64748B;font-size:11px;font-weight:700;text-align:center;line-height:20px;flex:none}#full .ch .d+.ajuda{margin-left:6px}
+  #full .card.inc:not(.at):not(.nd){border-color:#FCA5A5;box-shadow:inset 3px 0 0 var(--verm),0 0 0 3px #FEF2F2}#full .card.inc .tb td:first-child{overflow-wrap:anywhere}
+  #full .linha-bts .bt{padding:9px 12px;font-size:12.5px}#full .card.inc .linha-bts .bt.leve{flex:0 1 auto;min-width:120px}
+  #full .chips{margin:0 0 4px}#full .chip{background:#fff;color:var(--tinta);box-shadow:inset 0 0 0 1px #D0D5DD}#full .chip:hover{background:#F8FAFC}#full .chip.on{background:var(--tinta);color:#fff;box-shadow:none;cursor:default}
+  #full .acao .tx b{font-size:13px;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}#full .acao .tx>span{margin-top:1px}   /* nome inteiro: quebra a linha, nunca "…" */
+  #full .acao .val{flex:none;font-weight:750;font-size:13.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  #full .est{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--suave);padding:4px 0;margin:0}
+  #full .est.vazio::before{content:"✓";flex:none;width:18px;height:18px;border-radius:50%;background:#ECFDF5;color:#047857;font-weight:800;font-size:11px;text-align:center;line-height:18px}
+  #full ul.estq{list-style:none;margin:4px 0 0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  #full ul.estq button{all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;height:100%;padding:8px 10px;border-radius:10px;background:#F1F5F9;color:#334155;font-size:18px;font-weight:750;line-height:1.2;font-variant-numeric:tabular-nums}
+  #full ul.estq button span{display:block;font-size:11.5px;font-weight:500;margin-top:2px}#full ul.estq button:hover{filter:brightness(.97)}
+  #full ul.estq .pr button{background:var(--verm-bg);color:#991B1B}#full ul.estq .at button{background:var(--ambar-bg);color:#92400E}#full ul.estq .ok button{background:var(--verde-bg);color:#065F46}
+  #full ul.estq button.on{box-shadow:inset 0 0 0 2px var(--tinta)}#full ul.estq button:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+  #full .hb .l b{font-weight:500;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}#full .hb .v{font-weight:700}#full .hb .v.ok{color:#065F46}#full .hb .v.at{color:#B45309}#full .hb .v.pr{color:#B91C1C}#full .hb .v small{font-weight:500}
+  #full .fu-sub{margin-top:12px;font-weight:650;color:var(--tinta)}#full .gauge .fu-mes{font-size:12px;color:var(--suave);margin-top:3px}
+  #full .fu-cab{display:flex;align-items:center;gap:10px}#full .fu-t{flex:1;min-width:0}#full .fu-t h3{margin:0;font-size:13.5px;font-weight:700}#full .fu-t>span{display:block;font-size:12px;color:var(--suave);margin-top:2px}#full .fu-cab .ver{flex:none;margin:0;white-space:nowrap}
+  #full .fu-prox{border-top:1px dashed var(--linha);margin-top:10px;padding-top:8px}#full .fu-prox .fu-t>b{font-size:12.5px;font-weight:700}
+  #full .fu-in{margin-top:8px;border-top:1px solid #F1F5F9;padding-top:8px}
+  #full .fu-grade{display:grid;grid-template-columns:minmax(0,1fr);gap:0}#full .fu-col{min-width:0}
+  body.larga #full .fu-grade{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:12px;align-items:start}body.larga #full .fu-grade.um{grid-template-columns:minmax(0,1fr)}body.larga #full .fu-col>.card{margin:0 0 10px}
+  body.larga #full ul.estq{grid-template-columns:repeat(6,minmax(0,1fr))}body.larga #full .fu-met{display:grid;grid-template-columns:1fr 1fr;column-gap:18px}
+  /* v3.1 perfumaria da aba Pós-venda (29/09, igual à imagem tela-posvenda): motivos em barras grossas com R$ → produtos com barra e cor, % vendas (vermelho > 5%) e dica em azul; em tela larga, os dois lado a lado */
+  #posvenda .manchete{font-size:14px}#posvenda .kpi .l{white-space:normal;overflow:visible}#posPrecisa .prazo{margin-right:6px;vertical-align:1px}#posPrecisa .acao .tx b{font-size:13px;white-space:normal;overflow:visible}#posPrecisa .acao .bt{flex:none}#posMotivos .ch{padding-bottom:8px;border-bottom:1px solid var(--linha)}
+  #posvenda .ajuda{all:unset;cursor:help;margin-left:auto;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1px #CBD5E1;color:#64748B;font-size:11px;font-weight:700;text-align:center;line-height:20px;flex:none}
+  #posvenda .hb{margin:12px 0 0}#posvenda .hb .l{font-size:13px}#posvenda .hb .v{font-weight:700}#posvenda .hb .medidor{height:10px;margin-top:6px}
+  #posProdutos .tb td{padding:9px 0 9px 6px;vertical-align:middle}#posProdutos .tb td:first-child{vertical-align:top;padding-left:0}#posProdutos .tb b{font-size:13px}#posProdutos .tb .sm{font-size:11px}
+  #posProdutos .tb .medidor{display:block;height:5px;margin:5px 0 3px;max-width:240px}
+  #posvenda .tb .dica{color:#1D4ED8;font-size:11px;font-weight:500}#posvenda .tb .dica::before{content:none}
+  #posProdutos .tb td.pc{font-weight:600}#posProdutos .tb td.pc.pr{color:#B91C1C;font-weight:750}
+  body.larga #listaPos{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:12px;align-items:start}body.larga #listaPos>*{grid-column:1/-1}body.larga #listaPos>#posMotivos,body.larga #listaPos>#posProdutos{grid-column:auto}
   /* v2.9 aba Saúde: termômetro do ML (5 faixas) e cada variável da reputação contra o limite */
   .lider{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;line-height:1.6;padding:0 8px;border-radius:999px;background:#FEF9C3;color:#854D0E;box-shadow:inset 0 0 0 1px #FDE68A;white-space:nowrap}
   #rep-saude .ch{flex-wrap:wrap}#rep-saude .ch .selo{margin-bottom:0}
@@ -264,18 +474,160 @@
   .vr .q{display:flex;font-size:11px;color:#64748B;font-variant-numeric:tabular-nums}.vr .q span:last-child{margin-left:auto;font-weight:700}
   .vr .q .ok{color:#065F46}.vr .q .at,.card .rs.at{color:#92400E}.vr .q .pr,.card .rs.pr{color:#991B1B}
   ul.rep-top{list-style:none;margin:2px 0 0;padding:0;font-size:12px}ul.rep-top li{display:flex;gap:8px;padding:3px 0;border-top:1px solid #F1F5F9}ul.rep-top li:first-child{border-top:0}ul.rep-top small{margin-left:auto;color:#64748B;white-space:nowrap}
+  /* v3.1 perfumaria da aba Saúde (29/09, igual às imagens tela-saude, tela-radar e tela-medidas): cada bloco com bolinha de estado, título, resumo embaixo e "Ver mais" à direita;
+     reputação sem texto fixo (vai no "?"); radar em cartões coloridos; faixas de fotos com cor; medida que foge em vermelho; robô com a sugestão em caixa azul e "7 dias antes × depois" em barras */
+  #saude .manchete{font-size:14px}
+  #saude .ajuda{all:unset;cursor:help;margin-left:auto;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1px #CBD5E1;color:#64748B;font-size:11px;font-weight:700;text-align:center;line-height:20px;flex:none}
+  #rep-saude .vrs{margin-top:6px}
+  #listaSaude>.card.sb{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:8px;align-items:center}
+  #listaSaude>.card.sb>*{grid-column:1/-1;min-width:0}
+  #listaSaude>.card.sb>.pt{grid-column:1;grid-row:1;margin:0}
+  #listaSaude>.card.sb>.sb-t{grid-column:2;grid-row:1}#saude .sb-t{font-size:14px;font-weight:700;line-height:1.3}
+  #listaSaude>.card.sb>.sb-h{grid-column:1/3;grid-row:1;display:flex;align-items:center;gap:6px 8px;flex-wrap:wrap}
+  #listaSaude>.card.sb>.ver{grid-column:3;grid-row:1;justify-self:end;margin:0;white-space:nowrap}
+  #listaSaude>.card.sb>.res{grid-column:2/-1;margin-top:1px;font-size:12px;line-height:1.4}
+  #listaSaude>.card.sb>.bt{justify-self:start}
+  #listaSaude>#cardPerm>.ajuda{grid-column:3;grid-row:1}#listaSaude>#cardPerm>.bt{margin-top:8px}
+  body.larga #listaSaude{grid-template-columns:repeat(2,minmax(0,1fr))}body.larga #rep-saude{grid-row:span 7}
+  #saude .sb-h .pt{margin:0}#saude .sb-h .selo{margin:0}#saude .sb-h .bt{margin-left:auto}#listaSaude .linha-comp small b{display:inline}
+  #saude svg.ir{width:18px;height:18px;color:#1D4ED8;flex:none}
+  #cardRadar .kpis.k3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 4px}
+  #cardRadar .kpi.kn{background:#F1F5F9;border-color:#E2E8F0;cursor:default}#cardRadar .kpi.kn .v{font-size:22px;line-height:1.2}#cardRadar .kpi.kn .s{white-space:normal}
+  #cardRadar .kpi.kn.pr{background:var(--verm-bg);border-color:#FECACA}#cardRadar .kpi.kn.ok{background:var(--verde-bg);border-color:#A7F3D0}#cardRadar .kpi.kn.ok .v,#cardRadar .kpi.kn.ok .s{color:#065F46}
+  #cardRadar .linha-comp.rd{border-top:0;margin-top:6px;padding:6px 8px 6px 11px;border-radius:8px;background:#F8FAFC;box-shadow:inset 3px 0 0 #CBD5E1}
+  #cardRadar .linha-comp.rd.caindo{background:var(--verm-bg);box-shadow:inset 3px 0 0 #EF4444}#cardRadar .linha-comp.rd.subindo{background:var(--verde-bg);box-shadow:inset 3px 0 0 #10B981}
+  #cardRadar .linha-comp.rd b{font-size:13px}#cardRadar .linha-comp.rd .vm,#cardRadar .linha-comp.rd .vv{font-weight:750}
+  #cardFotos .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}#cardFotos .kpi small{display:block;font-size:11px}#cardFotos .kpi b{display:block;font-size:20px;font-weight:750;font-variant-numeric:tabular-nums}
+  #cardFotos .kpi.pr{background:var(--verm-bg);border-color:#FECACA;color:#991B1B}#cardFotos .kpi.at{background:var(--ambar-bg);border-color:#FDE68A;color:#92400E}#cardFotos .kpi.ok{background:var(--verde-bg);border-color:#A7F3D0;color:#065F46}
+  #cardFotos .kpi.on{box-shadow:inset 0 0 0 2px var(--tinta)}
+  #cardMedidas .linha-comp>.lnk{font-size:13.5px;color:var(--tinta)}#cardMedidas .linha-comp>small b.vm{font-size:12px}
+  #cardMedidas .tabf tr.acima td{background:var(--verm-bg)}#cardMedidas .tabf tr.acima td:first-child{box-shadow:inset 3px 0 0 #EF4444}#cardMedidas .tabf td:first-child{padding-left:8px}#cardMedidas .tabf td:not(:first-child){white-space:nowrap}
+  #cardMudMed .linha-comp>b{font-size:13.5px}#cardMudMed .linha-comp .vm{font-weight:700}
+  #cardRobo .rb-t{margin:10px 0 2px;font-weight:650;font-size:12.5px}
+  #cardRobo .sug{padding:10px;border-radius:10px;background:#EFF6FF;box-shadow:inset 0 0 0 1px #BFDBFE;margin-top:6px}
+  #cardRobo .sug b{display:block;font-size:13px}#cardRobo .sug p{margin:2px 0 8px;font-size:12px;color:var(--suave)}
+  #cardRobo .sug .linha-bts{display:flex;gap:6px}#cardRobo .sug .linha-bts .bt{flex:1;padding:8px 10px;font-size:12.5px}
+  #cardRobo .ef{display:grid;gap:4px;margin:6px 0 3px;max-width:380px}
+  #cardRobo .ef-l{display:grid;grid-template-columns:82px minmax(0,1fr) 44px;align-items:center;gap:8px;font-size:11px;color:var(--suave)}
+  #cardRobo .ef-l .medidor{height:9px;margin:0}#cardRobo .ef-l b{text-align:right;font-size:12.5px;color:var(--tinta);font-variant-numeric:tabular-nums}
+  #cardRobo .ef-l b.ok{color:#065F46}#cardRobo .ef-l b.pr{color:#991B1B}#cardRobo ul.vant{margin:6px 0}
+  /* v3.1 perfumaria da aba Geral (29/09, igual à imagem tela-geral): manchete → KPIs (meta com barra, lucro e alertas com ▲▼) → "Precisa de você hoje" com etiqueta da aba → "Cada aba em 1 linha" que abre a aba */
+  #geral #cardSync:has(.gb-l .dot.ok):not(:has(.recnota,.shs-lista,.prep)){display:none}
+  #geral .manchete{font-size:14px;margin:2px 0 10px}#geral .manchete .pt{width:9px;height:9px}#geral .manchete .zap{float:right;margin:0 0 2px 10px;font-size:12px;white-space:nowrap}
+  #geral .kpis.gk{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}#geral .kpis.gk>.kpi{display:block;min-width:0;cursor:default;padding:9px 12px}
+  #geral .kpi.meta{grid-column:1/-1}#geral .kpi.meta .lin{display:flex;align-items:baseline;gap:8px}#geral .kpi.meta .l{font-size:11.5px;color:var(--suave)}
+  #geral .kpi.meta .lin .s{margin-left:auto;white-space:nowrap}#geral .kpi.meta .s{font-size:11px;color:#64748B}#geral .kpi.meta .lnk{font-size:11px}
+  #geral .kpi.meta .v{font-size:17px;font-weight:750;margin:2px 0;font-variant-numeric:tabular-nums;white-space:nowrap}#geral .kpi .v small{display:inline;font-size:12px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--suave)}
+  #geral .kpi.meta .medidor{height:8px;margin:6px 0 5px}#geral .medidor i.az{background:#1D4ED8}#geral .kpi .fseta{font-size:11.5px;margin-left:4px}
+  #geral .kpi.kn .v{font-size:17px}#geral .kpi.kn .s{white-space:normal}
+  #geralPrecisa .ch .selo{margin:0 0 0 2px}#geralPrecisa .acao .tx b{font-size:13px;white-space:normal;overflow:hidden;text-overflow:clip;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}#geralPrecisa .acao .tx>span{margin-top:2px}
+  #geral .tag{display:inline-block;font-size:10px;font-weight:750;line-height:1.6;padding:0 6px;margin-right:6px;border-radius:5px;background:#F1F5F9;color:#475569;text-transform:uppercase;letter-spacing:.03em;vertical-align:1px}
+  #geral .acao .prazo{margin-right:6px;vertical-align:1px}#geralPrecisa .rs{margin-top:6px}
+  #geral ul.mods{list-style:none;margin:0;padding:0}
+  #geral li.mod{border-top:1px solid #F1F5F9;cursor:pointer;border-radius:8px}#geral li.mod:first-child{border-top:0}#geral li.mod:hover{background:#F8FAFC}#geral li.mod:focus-visible{outline:2px solid #93C5FD;outline-offset:-2px}
+  #geral li.mod .gb-l{padding:9px 4px;gap:8px}#geral li.mod .dot{order:-2;width:8px;height:8px}#geral li.mod svg.i{order:-1;width:16px;height:16px;flex:none;fill:none;stroke:#64748B;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  #geral li.mod b{font-size:13px;min-width:74px}#geral li.mod .gb-v{color:var(--suave);line-height:1.35}#geral li.mod .seta{color:#94A3B8;font-size:18px;line-height:1;flex:none}
+  body.larga #geral .gb-grade{display:block}
+  @media (max-width:379px){#geral li.mod .gb-l{flex-wrap:wrap;row-gap:1px}#geral li.mod .gb-v{order:1;flex-basis:100%;padding-left:32px}#geral li.mod .seta{margin-left:auto}}
+  @media (min-width:900px){#geral .kpis.gk{grid-template-columns:2fr 1fr 1fr}#geral .kpi.meta{grid-column:auto}body.larga #geral ul.mods{display:grid;grid-template-columns:1fr 1fr;column-gap:24px}body.larga #geral li.mod:nth-child(2){border-top:0}}
+  /* v3.1 Ajustes (imagem tela-ajustes, ESPEC §6): cartões com título e "?", campos em 2 colunas com sufixo, interruptores, blocos recolhidos */
+  #ajustes .ch h3{font-size:13.5px}#ajustes .ch{margin-bottom:8px}
+  #ajustes .ajuda{all:unset;cursor:help;margin-left:auto;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1px #CBD5E1;color:#64748B;font-size:11px;font-weight:700;text-align:center;line-height:20px;flex:none}#ajustes .ajuda:focus-visible{outline:2px solid #93C5FD}
+  #ajustes svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  #ajustes .campo label{color:var(--suave);font-weight:600}
+  #ajustes .aj-campos{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}#ajustes .aj-campos .larga{grid-column:1/-1}
+  #ajustes .aj-suf{position:relative;display:flex;align-items:center}
+  #ajustes .aj-suf .inp{width:100%;box-sizing:border-box;padding:9px 28px 9px 11px;font-size:14px;font-variant-numeric:tabular-nums}
+  #ajustes .aj-suf>span{position:absolute;right:10px;color:#64748B;font-size:12px;pointer-events:none}
+  #ajustes .aj-pre .inp{padding-left:34px;padding-right:72px}#ajustes .aj-pre>i{position:absolute;left:11px;font-style:normal;font-size:14px;pointer-events:none}
+  #ajustes .aj-uma+.aj-uma{border-top:1px solid #F1F5F9;padding-top:10px}
+  #ajustes .aj-conta{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+  #ajustes .aj-conta .av{width:40px;height:40px;border-radius:10px;background:var(--tinta);color:#fff;display:grid;place-items:center;font-weight:750;font-size:14px;flex:none}#ajustes .aj-conta .av.sem{background:#F1F5F9;color:#64748B}
+  #ajustes .aj-conta .ct{flex:1;min-width:0}#ajustes .aj-conta .ct b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#ajustes .aj-conta .ct b.pede{color:var(--suave);font-weight:600}
+  #ajustes .aj-conta .id{display:flex;align-items:center;gap:4px;font:500 12px/1.4 var(--mono);color:var(--suave);white-space:nowrap}
+  #ajustes .aj-copia{all:unset;cursor:pointer;color:var(--azul);width:22px;height:22px;display:grid;place-items:center;border-radius:6px;flex:none}#ajustes .aj-copia:hover{background:#EFF6FF}#ajustes .aj-copia:focus-visible{outline:2px solid #93C5FD}
+  #ajustes .aj-conta .contatag{flex:none}
+  #ajustes .aj-sw{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #F1F5F9;cursor:pointer}#ajustes #listaModulos .aj-sw:first-child,#cardSyncAj .aj-sw{border-top:0;padding-top:2px}
+  #ajustes .aj-sw>svg.i{color:#475569}#ajustes .aj-sw .nm{flex:1;min-width:0}#ajustes .aj-sw .nm b{display:block;font-size:13px;font-weight:650}#ajustes .aj-sw .nm small{display:block;font-size:11.5px;color:#64748B;margin-top:1px}
+  #ajustes .aj-sw input.tg{width:38px;height:22px;border-radius:11px}#ajustes .aj-sw input.tg::after{width:18px;height:18px}#ajustes .aj-sw input.tg:checked{background:var(--verde)}#ajustes .aj-sw input.tg:checked::after{left:18px}
+  #ajustes .aj-sw input.tg:disabled{opacity:.5;cursor:default}#ajustes .aj-sw.trava{cursor:default}
+  #listaModulos .aj-sw:has(input:not(:checked)) .nm,#listaModulos .aj-sw:has(input:not(:checked))>svg.i{opacity:.55}
+  #ajustes #salvarModulos{margin-top:6px}#cardSyncAj #infoSync{margin:4px 0 0}
+  #ajustes details.aj-vm>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px}#ajustes details.aj-vm>summary::-webkit-details-marker{display:none}
+  #ajustes details.aj-vm>summary::after{content:"Ver mais";margin-left:auto;color:var(--azul);font-size:12px;font-weight:650;white-space:nowrap}#ajustes details.aj-vm[open]>summary::after{content:"Ver menos"}
+  #ajustes details.aj-vm>summary:focus-visible{outline:2px solid #93C5FD;outline-offset:2px;border-radius:6px}
+  #ajustes details.aj-vm>summary .t{flex:1;min-width:0}#ajustes details.aj-vm>summary .t b{display:block;font-size:13.5px}#ajustes details.aj-vm>summary .t span{display:block;font-size:12px;color:var(--suave);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #ajustes details.aj-vm[open]>summary{margin-bottom:8px}
+  #ajustes .aj-bl+.aj-bl{border-top:1px solid #F1F5F9;margin-top:10px;padding-top:10px}#ajustes .aj-bl>b{font-size:12.5px}#ajustes .aj-bl>.det{margin:2px 0 6px}
+  #ajustes .campo>.inp{display:block;width:100%;box-sizing:border-box;padding:9px 11px;font-size:14px}
+  /* tela cheia: "Abas que aparecem" à direita; o resto à esquerda (a última linha, 1fr, recebe a sobra de altura) */
+  body.larga #ajustes.on{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(5,auto) 1fr;column-gap:12px;align-items:start}body.larga #cardModulos{grid-column:2;grid-row:1/-1}
 </style>
 </head>
 <body>
+  <!-- v3.1 ícones do topo (sprite SVG, ESPEC §2): <use href="#i-…"> -->
+  <svg class="sprite" width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false">
+    <symbol id="i-geral" viewBox="0 0 16 16"><path d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z"/></symbol>
+    <symbol id="i-full" viewBox="0 0 16 16"><path d="M1.5 6L8 2l6.5 4v8h-13zM5.5 14V9.5h5V14"/></symbol>
+    <symbol id="i-posvenda" viewBox="0 0 16 16"><path d="M2 3h12v8H7l-3 2.5V11H2zM5.5 7h5"/></symbol>
+    <symbol id="i-promo" viewBox="0 0 16 16"><path d="M2 2h6l6 6-6 6-6-6z"/><circle cx="5.2" cy="5.2" r="1"/></symbol>
+    <symbol id="i-ads" viewBox="0 0 16 16"><path d="M2 6.5v3h2.5L11 13V3L4.5 6.5zM13 6a2.5 2.5 0 010 4"/></symbol>
+    <symbol id="i-frete" viewBox="0 0 16 16"><path d="M1 3.5h9v7.5H1zM10 6.5h2.8L15 9v2h-5"/><circle cx="4" cy="12.5" r="1.4"/><circle cx="12" cy="12.5" r="1.4"/></symbol>
+    <symbol id="i-catalogo" viewBox="0 0 16 16"><path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/></symbol>
+    <symbol id="i-afiliados" viewBox="0 0 16 16"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 14c0-2.8 2-4.5 4.5-4.5s4.5 1.7 4.5 4.5M11 2.8a2.3 2.3 0 010 4.4M12.5 9.8c1.3.6 2 2 2 4.2"/></symbol>
+    <symbol id="i-saude" viewBox="0 0 16 16"><path d="M1 8.5h3l2-4.5 3 8 2-3.5h4"/></symbol>
+    <symbol id="i-conciliacao" viewBox="0 0 16 16"><path d="M3 1.5h10v13l-2-1.2-2 1.2-2-1.2-2 1.2-2-1.2zM5.5 5h5M5.5 8h5M5.5 11h3"/></symbol>
+    <symbol id="i-canal" viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.6"/><path d="M5 5a4.2 4.2 0 000 6M11 5a4.2 4.2 0 010 6M2.8 2.8a7.3 7.3 0 000 10.4M13.2 2.8a7.3 7.3 0 010 10.4"/></symbol>
+    <symbol id="i-ajustes" viewBox="0 0 16 16"><path d="M2 4.5h12M2 11.5h12"/><circle cx="5.5" cy="4.5" r="1.8" style="fill:var(--kn,#fff)"/><circle cx="10.5" cy="11.5" r="1.8" style="fill:var(--kn,#fff)"/></symbol>
+    <symbol id="i-sino" viewBox="0 0 16 16"><path d="M4 11V7a4 4 0 018 0v4l1.3 1.5H2.7zM6.5 14a1.6 1.6 0 003 0"/></symbol>
+    <symbol id="i-cheia" viewBox="0 0 16 16"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></symbol>
+    <symbol id="i-min" viewBox="0 0 16 16"><path d="M3 12h10"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 16 16"><path d="M4.5 6.5L8 10l3.5-3.5"/></symbol>
+    <symbol id="i-mais" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r=".9"/><circle cx="8" cy="8" r=".9"/><circle cx="12.5" cy="8" r=".9"/></symbol>
+    <symbol id="i-copiar" viewBox="0 0 16 16"><path d="M5.5 5.5h8v8h-8zM10.5 5.5v-3h-8v8h3"/></symbol>
+  </svg>
   <div class="topo">
-    <div class="l1"><img src="icons/icon48.png" alt=""><b>Copiloto</b><span class="conta"><i></i><span id="nomeConta">Mercado Livre</span></span></div>
-    <div class="sync"><div id="st" role="status" aria-live="polite">Carregando…</div><button id="sincronizar">Sincronizar agora</button>
-      <button class="ic" id="telaCheia" aria-label="Tela cheia" title="Tela cheia"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></button>
-      <button class="ic" id="minimizar" aria-label="Minimizar" title="Minimizar"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 12h10"/></svg></button>
-      <button id="voltarLateral" hidden>Voltar ao painel lateral</button></div>
+    <div class="l1">
+      <span class="cp-marca"><span class="cp-logo" aria-hidden="true">R$</span><span>Copiloto</span></span>
+      <div class="conta sem" id="nomeConta"><span class="conta-in"><span class="av" aria-hidden="true"></span><span class="ct"><b>Conta não lida</b><small>abra o ML</small></span></span></div>
+      <div class="sync"><div id="st" role="status" aria-live="polite">Carregando…</div><button id="sincronizar" title="Sincronizar agora">Sincronizar agora</button></div>
+      <button class="ic" id="sino" aria-label="Alertas" title="Alertas"><svg class="i" aria-hidden="true"><use href="#i-sino"/></svg><span class="n" id="sinoN" hidden></span></button>
+      <button class="ic" id="telaCheia" aria-label="Tela cheia" title="Tela cheia"><svg class="i" aria-hidden="true"><use href="#i-cheia"/></svg></button>
+      <button class="ic" id="minimizar" aria-label="Minimizar" title="Minimizar"><svg class="i" aria-hidden="true"><use href="#i-min"/></svg></button>
+      <button class="volta" id="voltarLateral" hidden>Voltar ao painel lateral</button>
+    </div>
     <div class="guia" id="guia" role="status" aria-live="polite" hidden></div>
-    <div class="abas" id="abas">
-      <button data-a="geral" class="on">Geral</button><button data-a="full">Full</button><button data-a="posvenda">Pós-venda</button><button data-a="promo">Promoções</button><button data-a="ads">Ads</button><button data-a="frete">Frete</button><button data-a="catalogo">Catálogo</button><button data-a="afiliados">Afiliados</button><button data-a="saude">Saúde</button><button data-a="conciliacao">Conciliação</button><button data-a="canal">Canal</button><button data-a="ajustes">Ajustes</button>
+    <div class="abas-w">
+      <div class="abas" id="abas" role="tablist" aria-label="Abas do Copiloto">
+        <button data-a="geral" class="on" role="tab" aria-selected="true" aria-controls="geral"><svg class="i" aria-hidden="true"><use href="#i-geral"/></svg>Geral<span class="b" hidden></span></button>
+        <button data-a="full" role="tab" aria-selected="false" aria-controls="full" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-full"/></svg>Full<span class="b" hidden></span></button>
+        <button data-a="posvenda" role="tab" aria-selected="false" aria-controls="posvenda" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-posvenda"/></svg>Pós-venda<span class="b" hidden></span></button>
+        <button data-a="promo" role="tab" aria-selected="false" aria-controls="promo" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-promo"/></svg>Promoções<span class="b" hidden></span></button>
+        <button data-a="ads" role="tab" aria-selected="false" aria-controls="ads" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-ads"/></svg>Ads<span class="b" hidden></span></button>
+        <button data-a="frete" role="tab" aria-selected="false" aria-controls="frete" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-frete"/></svg>Frete<span class="b" hidden></span></button>
+        <button data-a="catalogo" role="tab" aria-selected="false" aria-controls="catalogo" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-catalogo"/></svg>Catálogo<span class="b" hidden></span></button>
+        <button data-a="afiliados" role="tab" aria-selected="false" aria-controls="afiliados" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-afiliados"/></svg>Afiliados<span class="b" hidden></span></button>
+        <button data-a="saude" role="tab" aria-selected="false" aria-controls="saude" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-saude"/></svg>Saúde<span class="b" hidden></span></button>
+        <button data-a="conciliacao" role="tab" aria-selected="false" aria-controls="conciliacao" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-conciliacao"/></svg>Conciliação<span class="b" hidden></span></button>
+        <button data-a="canal" role="tab" aria-selected="false" aria-controls="canal" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-canal"/></svg>Canal<span class="b" hidden></span></button>
+        <button data-a="ajustes" role="tab" aria-selected="false" aria-controls="ajustes" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-ajustes"/></svg>Ajustes<span class="b" hidden></span></button>
+      </div>
+      <button class="todas" id="todasAbas" aria-expanded="false" aria-controls="menuAbas" aria-haspopup="true" title="Ver todas as abas"><svg class="i" aria-hidden="true"><use href="#i-mais"/></svg>Todas<span class="b" hidden></span></button>
+      <div class="menu-abas" id="menuAbas" role="menu" aria-label="Todas as abas" hidden>
+        <button data-a="geral" role="menuitem" class="on"><svg class="i" aria-hidden="true"><use href="#i-geral"/></svg>Geral<span class="b" hidden></span></button>
+        <button data-a="full" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-full"/></svg>Full<span class="b" hidden></span></button>
+        <button data-a="posvenda" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-posvenda"/></svg>Pós-venda<span class="b" hidden></span></button>
+        <button data-a="promo" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-promo"/></svg>Promoções<span class="b" hidden></span></button>
+        <button data-a="ads" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-ads"/></svg>Ads<span class="b" hidden></span></button>
+        <button data-a="frete" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-frete"/></svg>Frete<span class="b" hidden></span></button>
+        <button data-a="catalogo" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-catalogo"/></svg>Catálogo<span class="b" hidden></span></button>
+        <button data-a="afiliados" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-afiliados"/></svg>Afiliados<span class="b" hidden></span></button>
+        <button data-a="saude" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-saude"/></svg>Saúde<span class="b" hidden></span></button>
+        <button data-a="conciliacao" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-conciliacao"/></svg>Conciliação<span class="b" hidden></span></button>
+        <button data-a="canal" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-canal"/></svg>Canal<span class="b" hidden></span></button>
+        <button data-a="ajustes" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-ajustes"/></svg>Ajustes<span class="b" hidden></span></button>
+        <div class="rod">Esconder o que você não usa: Ajustes › Quais módulos você usa</div>
+      </div>
     </div>
   </div>
 
@@ -287,22 +639,23 @@
       <div id="geralContas"></div>
       <div id="geralTopo"></div>
       <div class="gb-grade" id="listaGeral"></div>
-      <div id="geralFam"></div>
       <div id="geralSemanal"></div>
     </section>
 
     <section class="aba" id="posvenda">
       <div id="ta-posvenda"></div>
       <div id="listaPos"></div>
+      <div id="fa-posvenda"></div>
       <button class="bt leve" data-abrir-posvenda style="display:block;box-sizing:border-box;width:100%;margin-top:4px">Abrir o pós-venda no ML</button>
     </section>
 
     <section class="aba" id="promo">
       <div id="ta-promo"></div>
       <div id="promoTopo"></div>
-      <div class="kpis" id="kpis"></div>
+      <div class="kpis k4" id="kpis"></div>
       <div id="roboPromo"></div>
-      <button class="mais" id="promoVer" data-ver="promo:lista" hidden>Ver mais</button>
+      <div class="card pr-todos" id="promoTodos" hidden><div class="tx"><b>Todos os produtos</b><span id="promoTodosRs"></span></div><button class="mais" id="promoVer" data-ver="promo:lista" hidden>Ver mais</button></div>
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="ip-robo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16.5h5M2 12v3M22 12v3"/></symbol></svg>
       <div id="promoMais">
         <input class="busca" id="busca" placeholder="Buscar produto">
         <p class="nota"><span class="auto"></span><span id="notaPromo">Preço, tarifa, frete e “você recebe” vêm do próprio Mercado Livre. Você só informa o custo.</span></p>
@@ -312,8 +665,9 @@
 
     <section class="aba" id="frete">
       <div id="ta-frete"></div>
-      <div id="freteTopo"><input class="busca" id="buscaFrete" placeholder="Buscar anúncio, MLB ou SKU"></div>
+      <div id="freteTopo"></div>
       <div id="listaFrete"></div>
+      <div id="fa-frete"></div>
     </section>
 
     <section class="aba" id="catalogo">
@@ -329,24 +683,27 @@
     <section class="aba" id="ads">
       <div id="ta-ads"></div>
       <div id="listaAds"></div>
-      <button class="bt leve" data-atalho="ads.html" style="display:block;box-sizing:border-box;width:100%;margin-top:4px">Abrir Ads por SKU (tela completa)</button>
+      <div id="fa-ads"></div>
+      <button class="bt leve" data-atalho="ads.html" style="display:block;box-sizing:border-box;width:100%;margin-top:4px">Ver Ads por SKU</button>
     </section>
 
     <section class="aba" id="full">
       <div id="ta-full"></div>
-      <p class="nota"><span class="auto"></span><span>Espaço, pontuação e estoque vêm do Estoque Full do próprio Mercado Livre. A quantidade para enviar é estimativa do Copiloto.</span></p>
       <div id="listaFull"></div>
+      <div id="fa-full"></div>
     </section>
 
     <section class="aba" id="saude">
       <div id="ta-saude"></div>
-      <p class="nota"><span class="auto"></span><span>Dados fiscais, fotos e visitas vêm do próprio Mercado Livre. O Copiloto só lê: nada muda no anúncio. O robô de fotos só sugere; quem troca é você.</span></p>
       <div id="listaSaude"></div>
+      <div id="fa-saude"></div>
     </section>
 
     <section class="aba" id="conciliacao">
       <div id="ta-conciliacao"></div>
       <div id="listaConc"></div>
+      <div id="geralFam"></div>
+      <div id="fa-conciliacao"></div>
       <button class="bt leve" data-atalho="fechamento.html" style="display:block;box-sizing:border-box;width:100%;margin-top:4px">Abrir o fechamento completo</button>
     </section>
 
@@ -362,24 +719,37 @@
     </section>
 
     <section class="aba" id="ajustes">
+      <!-- v3.1 (imagem tela-ajustes e ESPEC §6 Ajustes): Sua conta → Seus números → Abas que aparecem → Sincronização → [Ver mais] Custos, Aprender, Ajuda -->
+      <div class="card" id="cardContas">
+        <div class="ch"><h3 id="tituloContas">Sua conta</h3><button type="button" class="ajuda" title="O apelido é o nome que aparece no topo do Copiloto. Só você vê. O ID é o número da conta no Mercado Livre.">?</button></div>
+        <div id="listaContasAj"></div>
+        <button class="bt verde" id="salvarApelidos">Salvar apelido</button><span class="ok-msg" id="okApelidos"></span>
+      </div>
       <div class="card" id="cardImposto">
-        <div class="campo"><label for="imposto_pct">Imposto sobre a venda (%)</label><input class="inp" id="imposto_pct" inputmode="decimal" placeholder="Ex.: 6"></div>
-        <div class="campo"><label for="margem_alvo_pct">Sua meta de margem (%)</label><input class="inp" id="margem_alvo_pct" inputmode="decimal" placeholder="Ex.: 10"></div>
-        <div class="campo"><label for="meta_mes">Meta de faturamento do mês (R$, opcional)</label><input class="inp" id="meta_mes" inputmode="decimal" placeholder="Ex.: 50.000"></div>
-        <button class="bt" id="salvarCfg">Salvar</button><span class="ok-msg" id="okCfg"></span><p class="det" id="erroCfg" role="alert" style="color:var(--verm)"></p>
-        <p class="det">O estoque mínimo é definido por produto, em unidades, na aba Full.</p>
+        <div class="ch"><h3>Seus números</h3><button type="button" class="ajuda" title="Entram no lucro de todas as telas. O estoque mínimo é definido por produto, em unidades, na aba Full.">?</button></div>
+        <div class="aj-campos">
+          <div class="campo"><label for="imposto_pct">Imposto</label><div class="aj-suf"><input class="inp" id="imposto_pct" inputmode="decimal" placeholder="Ex.: 6"><span>%</span></div></div>
+          <div class="campo"><label for="margem_alvo_pct">Meta de margem</label><div class="aj-suf"><input class="inp" id="margem_alvo_pct" inputmode="decimal" placeholder="Ex.: 10"><span>%</span></div></div>
+          <div class="campo larga"><label for="meta_mes">Meta de vendas do mês</label><div class="aj-suf aj-pre"><i>R$</i><input class="inp" id="meta_mes" inputmode="decimal" placeholder="Ex.: 50.000"><span>opcional</span></div></div>
+        </div>
+        <button class="bt" id="salvarCfg">Salvar meus números</button><span class="ok-msg" id="okCfg"></span><p class="det" id="erroCfg" role="alert" style="color:var(--verm)"></p>
       </div>
-      <div class="card" id="cardSync">
-        <b style="font-size:12.5px">Sincronização</b>
-        <p style="margin:6px 0 0;color:var(--suave);font-size:12px" id="infoSync">Automática a cada 3 horas, com o Mercado Livre deste Chrome.</p>
-        <label class="conf"><input type="checkbox" id="syncFundo"> <span><b>Continuar sincronizando com o Chrome fechado</b><br><span class="det" id="infoFundo">O Chrome fica trabalhando escondido enquanto o computador estiver ligado.</span></span></label>
+      <div class="card" id="cardModulos">
+        <div class="ch"><h3>Abas que aparecem</h3><button type="button" class="ajuda" title="Desligue o que você não usa: a aba some do topo, da Geral e do sino. Nada do que já foi lido é apagado.">?</button></div>
+        <div id="listaModulos"></div>
+        <button class="bt" id="salvarModulos">Salvar abas</button><span class="ok-msg" id="okModulos"></span>
       </div>
-      <div class="card" id="cardCustos">
-        <b style="font-size:12.5px">Custos</b>
+      <div class="card" id="cardSyncAj">
+        <div class="ch"><h3>Sincronização</h3><button type="button" class="ajuda" title="Ligado e não funcionou? No Chrome: Configurações › Sistema › “Continuar executando apps em segundo plano”.">?</button></div>
+        <label class="aj-sw"><span class="nm"><b>Continuar sincronizando com o Chrome fechado</b><small id="infoFundo">enquanto o computador estiver ligado</small></span><input type="checkbox" class="tg" id="syncFundo"></label>
+        <p class="det" id="infoSync">Automática a cada 3 horas.</p>
+      </div>
+      <details class="card aj-vm" id="cardCustos">
+        <summary><span class="t"><b>Custos dos produtos</b><span id="custosRes">planilha ou ERP</span></span></summary>
         <div class="barra-g" role="progressbar" aria-label="SKUs com custo" aria-valuemin="0" aria-valuemax="100" id="custosBarra"><i id="custosProg" style="width:0"></i></div>
         <p style="margin:0;font-size:12.5px" id="infoCustos">—</p>
         <p style="margin:2px 0 0;color:var(--suave);font-size:12px" id="infoPrincipais"></p>
-        <div class="dois"><button class="bt verde" id="abrirTiny">Tiny · Conectar em 1 minuto</button><button class="bt" id="abrirBling">Omie · Conectar</button></div>
+        <div class="dois"><button class="bt verde" id="abrirTiny">Tiny · Conectar em 1 minuto</button><button class="bt" id="abrirBling">Omie ou Bling · Conectar</button></div>
         <div id="tinyBox" hidden>
           <ol class="passos">
             <li>No Tiny: Início › Extensões › Token API › Instalar.</li>
@@ -392,42 +762,32 @@
         <p class="det" id="tinyMsg" role="status" aria-live="polite"></p>
         <button class="bt leve" id="abrirPainel" style="display:block;box-sizing:border-box;width:100%">Abrir planilha de custos</button>
         <p class="det">Conectado, o ERP importa os custos sozinho a cada sincronização. Omie: na página de custos. Bling: importe a planilha.</p>
-      </div>
-      <div class="card" id="cardModulos">
-        <b style="font-size:12.5px">Quais módulos você usa</b>
-        <p style="margin:6px 0 8px;color:var(--suave);font-size:12px">Desmarque o que você não usa no dia a dia. A aba some do topo, mas nada do que já foi lido é apagado: marque de novo quando quiser.</p>
-        <div id="listaModulos"></div>
-        <button class="bt" id="salvarModulos" style="margin-top:8px">Salvar</button><span class="ok-msg" id="okModulos"></span>
-      </div>
-      <div class="card" id="cardContas">
-        <b style="font-size:12.5px">Suas contas</b>
-        <p style="margin:6px 0 8px;color:var(--suave);font-size:12px">O Copiloto já mostra o nome de cada conta do Mercado Livre que você usa neste Chrome, junto com o ID. Se preferir, dê um apelido só seu (ex.: Loja 1) no lugar do nome do ML.</p>
-        <div id="listaContasAj"></div>
-        <button class="bt" id="salvarApelidos">Salvar apelidos</button><span class="ok-msg" id="okApelidos"></span>
-      </div>
-      <div class="card">
-        <b style="font-size:12.5px">Guia</b>
-        <p style="margin:6px 0 8px;color:var(--suave);font-size:12px">Mostra de novo o “Próximo passo” no topo, desde o começo. Seus custos e ajustes ficam.</p>
-        <button class="bt leve" id="reverGuia">Rever o guia</button><p class="ok-msg" id="okGuia" style="margin:6px 0 0"></p>
-      </div>
-      <div class="card" id="cardTour">
-        <b style="font-size:12.5px">Tour</b>
-        <p style="margin:6px 0 0;color:var(--suave);font-size:12px">Uma aula curta: cada parte da tela, o que é e para que serve.</p>
-        <div class="col"><button class="bt" id="aulaGeral">Aula guiada: conhecer todas as telas</button><button class="bt leve" id="reverTourAjustes">Rever o tour das telas do ML</button></div>
-        <p class="ok-msg" id="okTour" style="margin:6px 0 0"></p>
-        <div class="col" id="aulaMais" hidden>
-          <button class="bt leve" data-aula="ads">Abrir Ads por SKU (aula)</button>
-          <button class="bt leve" data-aula="fechamento">Abrir Fechamento (aula)</button>
-          <button class="bt leve" data-aula="ml">Ver a aula na tela de Anúncios do ML</button>
+      </details>
+      <details class="card aj-vm" id="cardAprender">
+        <summary><span class="t"><b>Aprender a usar</b><span>Guia de próximos passos e aula pelas telas</span></span></summary>
+        <div class="aj-bl">
+          <b>Guia</b><p class="det">Mostra de novo o “Próximo passo”, desde o começo. Seus custos e ajustes ficam.</p>
+          <button class="bt leve" id="reverGuia">Rever o guia</button><p class="ok-msg" id="okGuia" style="margin:6px 0 0"></p>
         </div>
-      </div>
-      <div class="card" id="cardAjuda">
-        <b style="font-size:12.5px">Ajuda</b>
-        <p style="margin:6px 0 0;color:var(--suave);font-size:12px">Dúvida ou algo que não funcionou? Fale com a gente.</p>
-        <div class="col"><button class="bt verde" id="suporteZap">Falar com o suporte (WhatsApp)</button><button class="bt leve" id="conhecerCopiloto">Conheça o Copiloto</button></div>
-      </div>
-      <div class="card" id="cardSellerHub">
-        <b style="font-size:13px">Conheça o SellerHub</b>
+        <div class="aj-bl" id="cardTour">
+          <b>Tour</b><p class="det">Uma aula curta: cada parte da tela e para que serve.</p>
+          <div class="col"><button class="bt" id="aulaGeral">Aula guiada: conhecer todas as telas</button><button class="bt leve" id="reverTourAjustes">Rever o tour das telas do ML</button></div>
+          <p class="ok-msg" id="okTour" style="margin:6px 0 0"></p>
+          <div class="col" id="aulaMais" hidden>
+            <button class="bt leve" data-aula="ads">Abrir Ads por SKU (aula)</button>
+            <button class="bt leve" data-aula="fechamento">Abrir Fechamento (aula)</button>
+            <button class="bt leve" data-aula="ml">Ver a aula na tela de Anúncios do ML</button>
+          </div>
+        </div>
+      </details>
+      <details class="card aj-vm" id="cardAjuda">
+        <summary><span class="t"><b>Ajuda e SellerHub</b><span>Suporte no WhatsApp · levar seus dados</span></span></summary>
+        <div class="aj-bl">
+          <b>Ajuda</b><p class="det">Dúvida ou algo que não funcionou? Fale com a gente.</p>
+          <div class="col"><button class="bt verde" id="suporteZap">Falar com o suporte (WhatsApp)</button><button class="bt leve" id="conhecerCopiloto">Conheça o Copiloto</button></div>
+        </div>
+      <div class="aj-bl" id="cardSellerHub">
+        <b>Conheça o SellerHub</b>
         <ul class="vant">
           <li>Todos os marketplaces e CNPJs num painel só: Mercado Livre, Shopee, Amazon, Magalu e outros.</li>
           <li>Seus custos e números na nuvem, em qualquer computador.</li>
@@ -437,6 +797,7 @@
         <div class="col"><button class="bt" id="conhecerSH">Conhecer o SellerHub</button><button class="bt leve" id="levarDados">Levar meus dados para o SellerHub</button></div>
         <p class="det" id="levarMsg">Baixa um arquivo com os seus custos. Importe este arquivo no SellerHub para não digitar os custos de novo.</p>
       </div>
+      </details>
     </section>
   </div>
 
@@ -449,6 +810,7 @@
   <script src="omie.js"></script>
   <script src="tour.js"></script>
   <script src="fechamento.js"></script>
+  <script src="agenda-canal.js"></script>
   <script src="painel-lateral.js"></script>
 </body>
 </html>

@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agenda do Canal</title>
 <style>
-  :root { --tinta:#0F172A; --suave:#475569; --linha:#E2E8F0; --fundo:#F8FAFC; --card:#fff; --verde:#047857; --ambar:#B45309; --verm:#B91C1C; --azul:#0369A1; --tag:#F1F5F9; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --tinta:#E2E8F0; --suave:#94A3B8; --linha:#334155; --fundo:#0B1220; --card:#111827; --verde:#34D399; --ambar:#FBBF24; --verm:#F87171; --azul:#38BDF8; --tag:#1E293B; } }
-  :root[data-theme="dark"] { --tinta:#E2E8F0; --suave:#94A3B8; --linha:#334155; --fundo:#0B1220; --card:#111827; --verde:#34D399; --ambar:#FBBF24; --verm:#F87171; --azul:#38BDF8; --tag:#1E293B; }
+  :root { --tinta:#0F172A; --suave:#475569; --linha:#E2E8F0; --fundo:#F8FAFC; --card:#fff; --verde:#047857; --ambar:#B45309; --verm:#B91C1C; --azul:#0369A1; --tag:#F1F5F9; --ok-bg:#ECFDF5; --at-bg:#FFFBEB; --pr-bg:#FEF2F2; --az-bg:#EFF6FF; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --tinta:#E2E8F0; --suave:#94A3B8; --linha:#334155; --fundo:#0B1220; --card:#111827; --verde:#34D399; --ambar:#FBBF24; --verm:#F87171; --azul:#38BDF8; --tag:#1E293B; --ok-bg:#064E3B; --at-bg:#451A03; --pr-bg:#450A0A; --az-bg:#0C2A4A; } }
+  :root[data-theme="dark"] { --tinta:#E2E8F0; --suave:#94A3B8; --linha:#334155; --fundo:#0B1220; --card:#111827; --verde:#34D399; --ambar:#FBBF24; --verm:#F87171; --azul:#38BDF8; --tag:#1E293B; --ok-bg:#064E3B; --at-bg:#451A03; --pr-bg:#450A0A; --az-bg:#0C2A4A; }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body { margin: 0; background: var(--fundo); color: var(--tinta); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
@@ -27,6 +27,7 @@
   .inp, select { width: 100%; padding: 8px 10px; border: 1px solid var(--linha); border-radius: 8px; font-size: 14px; background: var(--card); color: var(--tinta); }
   .chk { display: inline-flex; gap: 5px; align-items: flex-start; font-size: 13px; margin: 0 12px 6px 0; max-width: 100%; }   /* texto longo quebra linha em tela estreita */
   .chk input { flex: none; margin-top: 3px; }
+  .campo label.chk { display: inline-flex; font-weight: 400; margin-bottom: 6px; }   /* horários e tipos lado a lado, não 1 por linha */
   .bt { display: inline-flex; align-items: center; gap: 6px; border: 0; cursor: pointer; padding: 9px 16px; border-radius: 9px; font-weight: 700; font-size: 13.5px; background: #0F172A; color: #fff; text-decoration: none; font-family: inherit; }
   .bt.sec { background: var(--card); color: var(--tinta); border: 1px solid var(--linha); }
   .bt.verde { background: #047857; }
@@ -36,10 +37,13 @@
   .msg { font-size: 13px; color: var(--suave); min-height: 18px; }
   .msg.erro { color: var(--verm); font-weight: 600; }
   .resumo { font-size: 16px; font-weight: 800; }
-  #grade { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+  /* Os 7 dias sempre à vista: em tela larga quebram em linhas; em tela estreita, 1 dia embaixo do outro (sem rolagem para o lado). */
+  #grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; align-items: start; }
   .dia h3 { margin: 0 0 8px; font-size: 13.5px; }
   .cartao { background: var(--card); border: 1px solid var(--linha); border-radius: 10px; padding: 10px; margin-bottom: 8px; font-size: 12.5px; }
   .cartao.vazio { border-style: dashed; }
+  .cartao.vazios { border-style: dashed; background: transparent; padding: 6px 9px; color: var(--suave); }
+  .cartao.vazios .mot { margin: 0 0 3px; } .cartao.vazios .mot b { color: var(--suave); }
   .cartao.feito { opacity: .6; }
   .cartao .cab { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
   .cartao .feito { color: var(--verde); font-weight: 700; margin-left: auto; }
@@ -54,7 +58,63 @@
   .cartao .ac { display: flex; flex-direction: column; gap: 3px; }
   .vazio { color: var(--suave); }
   details summary { cursor: pointer; font-weight: 700; }
-  #fora { font-size: 12.5px; color: var(--suave); max-height: 320px; overflow: auto; }
+  /* Situação: ok verde · at âmbar · pr vermelho · az azul (ação sua) · ne cinza (informativo) */
+  .c-ok { --c: var(--verde); --cb: var(--ok-bg); } .c-at { --c: var(--ambar); --cb: var(--at-bg); } .c-pr { --c: var(--verm); --cb: var(--pr-bg); }
+  .c-az { --c: var(--azul); --cb: var(--az-bg); } .c-ne { --c: var(--suave); --cb: var(--tag); }
+  /* vi violeta (anúncio não lido) e ci ciano (aguardando a promoção): cor própria para não emendar com o vizinho na barra */
+  .c-vi { --c: #6D28D9; --cb: #F5F3FF; } .c-ci { --c: #0E7490; --cb: #ECFEFF; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .c-vi { --c: #A78BFA; --cb: #2E1065; } :root:not([data-theme="light"]) .c-ci { --c: #22D3EE; --cb: #083344; } }
+  :root[data-theme="dark"] .c-vi { --c: #A78BFA; --cb: #2E1065; } :root[data-theme="dark"] .c-ci { --c: #22D3EE; --cb: #083344; }
+  .kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .kpi { border: 1px solid var(--linha); border-radius: 12px; padding: 10px 12px; border-top: 4px solid var(--linha); }
+  .kpi.ok { border-top-color: var(--verde); } .kpi.at { border-top-color: var(--ambar); } .kpi.pr { border-top-color: var(--verm); }
+  .kpi .v { display: block; font-size: 26px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .kpi.ok .v { color: var(--verde); } .kpi.at .v { color: var(--ambar); } .kpi.pr .v { color: var(--verm); }
+  .kpi .l { font-size: 12px; color: var(--suave); }
+  .ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .est { display: flex; gap: 10px; align-items: center; background: var(--tag); border-radius: 10px; padding: 14px; color: var(--suave); }
+  .est p { margin: 0; } .est b { color: var(--tinta); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+  .chip { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--tag); color: var(--suave); cursor: default; }
+  .chip.ok { background: var(--ok-bg); color: var(--verde); } .chip.at { background: var(--at-bg); color: var(--ambar); } .chip.az { background: var(--az-bg); color: var(--azul); }
+  details#fora-box > summary { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+  details#fora-box > summary::-webkit-details-marker { display: none; }
+  details#fora-box > summary .ft::before { content: '▸ '; } details#fora-box[open] > summary .ft::before { content: '▾ '; }
+  .fr { font-weight: 400; font-size: 12.5px; color: var(--suave); }
+  .barra { display: flex; height: 16px; border-radius: 999px; overflow: hidden; gap: 2px; margin: 12px 0 8px; background: var(--tag); }
+  .barra i { background: var(--c); min-width: 6px; font-style: normal; font-size: 10.5px; font-weight: 800; line-height: 16px; text-align: center; color: var(--fundo); overflow: hidden; }
+  .legenda { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .lg { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--linha); background: var(--card); color: var(--tinta); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .lg i { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+  .grupo { border: 1px solid var(--linha); border-left: 5px solid var(--c); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; scroll-margin-top: 12px; }
+  .grupo header { display: flex; align-items: center; gap: 8px; color: var(--c); }
+  .grupo header b { color: var(--tinta); font-size: 14px; }
+  .grupo .n { margin-left: auto; background: var(--cb); color: var(--c); font-weight: 800; border-radius: 999px; padding: 0 10px; font-size: 13px; }
+  .grupo .acao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 8px; font-size: 12.5px; color: var(--suave); }
+  .bt.pq { padding: 5px 12px; font-size: 12.5px; }
+  .itens { list-style: none; margin: 0; padding: 0; }
+  .itens li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 6px 0; border-top: 1px dashed var(--linha); font-size: 12.5px; }
+  .itens .t { font-weight: 600; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 180px; }
+  .itens code { font: 11.5px ui-monospace, Consolas, monospace; color: var(--suave); }
+  .itens .etq { background: var(--cb); color: var(--c); font-weight: 700; font-size: 11.5px; border-radius: 999px; padding: 1px 9px; }
+  .itens .custo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-basis: 100%; }
+  .itens .custo label { font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+  .itens .custo .inp { width: 110px; padding: 5px 8px; }
+  .itens .err { color: var(--verm); font-weight: 600; }
+  /* "Ler estes anúncios agora": o retorno fica no grupo (botão girando, frase do resultado, andamento de cada linha) */
+  .bt.lendo:disabled { opacity: .8; }
+  .bt.lendo::before { content: ''; width: 11px; height: 11px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: gira .8s linear infinite; }
+  @keyframes gira { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .bt.lendo::before { animation: none; } }
+  .grupo .res { margin: -2px 0 8px; font-size: 12.5px; font-weight: 700; color: var(--suave); }
+  .grupo .res:empty { display: none; }
+  .grupo .res.ok { color: var(--verde); } .grupo .res.erro { color: var(--verm); }
+  .grupo .res.duas span { display: block; } .grupo .res .r-ok { color: var(--verde); } .grupo .res .r-falta { color: var(--ambar); margin-top: 2px; }
+  .itens .and { font-size: 11.5px; font-weight: 700; color: var(--suave); }
+  .itens .and:empty { display: none; }
+  .itens .and.a-lido { color: var(--verde); } .itens .and.a-nao, .itens .and.a-erro { color: var(--verm); }
+  .robo .tg { font-size: 13.5px; margin: 0; }
+  @media (max-width: 520px) { .kpi .v { font-size: 22px; } .kpi { padding: 8px; } }
 </style>
 </head>
 <body>
@@ -92,13 +152,33 @@
     </div>
 
     <div class="card">
+      <div class="kpis">
+        <div class="kpi ok" id="kpi-agenda"><span class="v" id="k-agenda">0</span><span class="l">na agenda</span></div>
+        <div class="kpi" id="kpi-podem"><span class="v" id="k-podem">0</span><span class="l">produtos podem entrar</span></div>
+        <div class="kpi" id="kpi-fora"><span class="v" id="k-fora">0</span><span class="l">fora da agenda</span></div>
+      </div>
       <div class="acoes" style="margin:0 0 12px">
         <span class="resumo" id="resumo"></span>
         <button class="bt verde" id="programar" type="button" disabled>Programar no ML</button>
         <span class="msg" id="progresso"></span>
       </div>
-      <p class="sub"><span id="cand-n">0</span> produtos podem entrar. Lucro é estimativa do Copiloto com o preço da promoção e os números do ML; custo e imposto são seus.</p>
+      <p class="sub">Cada dia só recebe produto conferido naquele dia (promoção confirmada, lucro na meta, custo, estoque). Lucro é estimativa do Copiloto.</p>
       <div id="grade"></div>
+    </div>
+
+    <div class="card" id="fora-card" hidden>
+      <details id="fora-box">
+        <summary><span class="ft">Fora da agenda (<span id="fora-n">0</span>) e por quê</span><span class="fr" id="fora-resumo"></span></summary>
+        <div class="barra" id="fora-barra" aria-hidden="true"></div>
+        <div class="legenda" id="fora-legenda"></div>
+        <div id="fora-grupos"></div>
+      </details>
+    </div>
+
+    <div class="card robo">
+      <label class="chk tg"><input type="checkbox" id="robo"> <span><b>Robô do Canal</b> — uma vez por dia, monta sozinho a agenda dos próximos dias só com produtos conferidos.</span></label>
+      <p class="sub" style="margin:4px 0 0">Criar no ML continua sendo o seu clique: o robô nunca cria nada.</p>
+      <p class="sub" id="robo-info" style="margin:4px 0 0"></p>
     </div>
 
     <div class="card">
@@ -106,12 +186,23 @@
       <p class="sub">O Copiloto não cria cupom. Se quiser mandar um cupom para os seguidores, crie no Mercado Livre em "Cupom de desconto".</p>
       <a class="bt sec" id="cupom" target="_blank" rel="noopener" href="https://vendedores.mercadolivre.com.br/marketing/canal-de-transmissao/lista">Abrir o canal no Mercado Livre</a>
     </div>
-
-    <div class="card">
-      <details id="fora-box"><summary>Fora da agenda (<span id="fora-n">0</span>) e por quê</summary><ul id="fora"></ul></details>
-    </div>
   </main>
 </div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-custo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M14.8 9.2c-.4-.9-1.5-1.4-2.8-1.4-1.6 0-2.7.8-2.7 1.9 0 2.6 5.6 1.4 5.6 4.3 0 1.1-1.2 1.9-2.9 1.9-1.4 0-2.5-.6-2.9-1.5"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></symbol>
+    <symbol id="i-relogio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-desce" viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 8 8"/><path d="M15 17h6v-6"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
+    <symbol id="i-caixa" viewBox="0 0 24 24"><path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></symbol>
+    <symbol id="i-repete" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5l2 2M20 12a8 8 0 0 1-14 5l-2-2"/><path d="M20 4v5h-5M4 20v-5h5"/></symbol>
+    <symbol id="i-bloq" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M6 6l12 12"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></symbol>
+  </defs>
+</svg>
 <script src="calc.js"></script>
 <script src="store.js"></script>
 <script src="ml-extrator.js"></script>

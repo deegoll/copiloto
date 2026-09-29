@@ -43,7 +43,11 @@
 // página "Notas fiscais" do ML (só lê); nada do comprador é guardado. Nota rejeitada/com erro vira anomalia fiscal.
 // v2.10: retomada de onde parou (shc:ciclo + shc:ret:*): worker que morre no meio continua na hora, sem refazer etapa nem página já lida
 // (ver "RETOMADA DE ONDE PAROU" perto de sincronizar()).
-importScripts('calc.js', 'store.js', 'ml-extrator.js', 'tiny.js', 'omie.js', 'fechamento.js');
+// v2.11: sincronização por prioridade (o que as telas usam primeiro: vendas, Fechamento do mês atual e do anterior, Full, Ads, pós-venda,
+// famílias; as etapas leves antes das pesadas), mês atual lido só a partir dos dias novos (cob:<conta>:<mês>, nfe incremental), mês fechado
+// lido 1 vez e nunca relido inteiro, e os 11 meses antigos (Faturamento, vendas por anúncio, NF-e do mês passado) em SEGUNDO PLANO
+// (lerHistorico + alarme 'shc-historico', shc:status.historico = "7 de 12 meses"), sem travar a sincronização.
+importScripts('calc.js', 'store.js', 'ml-extrator.js', 'tiny.js', 'omie.js', 'bling.js', 'fechamento.js', 'agenda-canal.js');
 
 const BASE = 'https://vendedores.mercadolivre.com.br';
 const PAGINAS_MAX = 40;          // promoções: 25 famílias por página → até 1.000 produtos
@@ -72,6 +76,8 @@ function preparar() {
     chrome.alarms.create('shc-sync', { periodInMinutes: INTERVALO_MIN, delayInMinutes: 1 });
     chrome.alarms.create('shc-saude', { periodInMinutes: SAUDE_ALARME_MIN, delayInMinutes: 10 });
     chrome.alarms.create('shc-robo', { periodInMinutes: ROBO_ALARME_MIN, delayInMinutes: 30 });
+    // v3.1: Robô do Canal (roboCanal): confere a cada 6 h e monta no máximo 1 vez por dia, só se a seller ligou na Agenda.
+    if (chrome.alarms.get) Promise.resolve(chrome.alarms.get('shc-canal')).then(x => { if (!x) chrome.alarms.create('shc-canal', { delayInMinutes: 20, periodInMinutes: 360 }); }, () => {});
     // v2.7: resumo da semana (só marca "novo"). Recriar a cada abertura trocaria o alarme que ficou para trás (Chrome fechado na segunda 8h)
     // pelo da semana seguinte: só cria se ainda não existe; e a semana perdida é gerada agora (semanalAtrasado).
     const criaSemanal = () => chrome.alarms.create('shc-semanal', { when: proximaSegunda8h(Date.now()), periodInMinutes: 7 * 24 * 60 });
@@ -115,16 +121,19 @@ chrome.runtime.onInstalled.addListener(d => {
     // v2.5.3: a 1ª sincronização depois de instalar/atualizar lê os dados fiscais logo no começo (não espera as outras etapas)
     // e o frete dos últimos 60 dias já sai do que estava guardado (vd|ml), antes mesmo de sincronizar.
     if (d.reason === 'install' || d.reason === 'update') SHC.gravarChave('shc:fiscalPrimeiro', true).catch(() => {});
-    if (d.reason === 'update') SHC.contaAtual().then(c => (c !== 'atual' ? gravarFreteHist(c, null, []) : null)).then(() => atualizarAlertas()).catch(() => {});
+    // v3.1: na 1ª vez, a migração do frete de devoluções (refaz o frete por pedido); depois, só o guardado.
+    if (d.reason === 'update') SHC.contaAtual().then(async c => { if (c !== 'atual' && !(await migrarFreteDevolucao(c))) await gravarFreteHist(c, null, []); }).then(() => atualizarAlertas()).catch(() => {});
 });
 chrome.runtime.onStartup.addListener(preparar);
 chrome.alarms.onAlarm.addListener(a => {
     if (a.name === 'shc-sync') sincronizar('automatica');
     else if (a.name === 'shc-retoma') sincronizar('retomada');   // 1 vez, depois de uma leitura interrompida (retomarInterrompida)
     else if (a.name === 'shc-orfa') retomarInterrompida().catch(() => {});
-    else if (a.name === 'shc-saude' && !emAndamento) SHC.contaAtual().then(c => rodadaSaude(c)).catch(() => {});   // não disputa com a sincronização
+    else if (a.name === 'shc-historico') lerHistorico().catch(() => {});   // v2.11: meses antigos em segundo plano (continua de onde parou)
+    else if (a.name === 'shc-saude' && !emAndamento && !historicoEm) SHC.contaAtual().then(c => rodadaSaude(c)).catch(() => {});   // não disputa com a sincronização nem com o histórico
     else if (a.name === 'shc-robo') SHC.contaAtual().then(c => roboPassada(c, false)).catch(() => {});
     else if (a.name === 'shc-semanal') SHC.contaAtual().then(c => gerarResumoSemanal(c, 'alarme')).catch(() => {});   // v2.7: só gera e marca "novo"
+    else if (a.name === 'shc-canal') roboCanal().catch(() => {});   // v3.1: Robô do Canal (só monta a agenda; criar no ML é o clique da seller)
 });
 
 // Página inteira do painel do vendedor, com a sessão do Chrome → { html } | { login: true } (mandou para o login) | null (ML fora/erro).
@@ -147,7 +156,7 @@ async function lerPaginaPorAba(acao, url) {
             // A aba tem 25 s para o fetch dela; 30 s sem resposta = a aba travou: segue para a próxima (a etapa não fica presa sem batida).
             const resp = await Promise.race([chrome.tabs.sendMessage(aba.id, { acao, url }), espera(30000).then(() => undefined)]);
             if (resp && resp.ok) return { dados: resp.dados };
-            if (resp) semDados = { login: !!resp.login || !!(semDados && semDados.login) };
+            if (resp) semDados = { login: !!resp.login || !!(semDados && semDados.login), desvio: !!resp.desvio || !!(semDados && semDados.desvio) };   // desvio: só 'ler_json_pa'
         } catch (e) { /* aba sem o content script (recarregar resolve) */ }
     }
     return semDados;
@@ -235,7 +244,8 @@ async function sincronizarPromos(conta, progresso) {
     let paginas = 0, via = '', vazio = false;
     for (let n = 1; n <= PAGINAS_MAX; n++) {
         const url = BASE + '/anuncios/lista/promos' + (n > 1 ? '?page=' + n : '');
-        const pag = await lerPaginaML(url, 'ler_pagina_promos', SHC.mlPromosDoEstado, n === 1 ? d => !d.familias.length : null);
+        // Página lida neste ciclo fica guardada (naCiclo): a retomada depois de uma queda não pede de novo.
+        const pag = await naCiclo('promos', 'p|' + n, () => lerPaginaML(url, 'ler_pagina_promos', SHC.mlPromosDoEstado, n === 1 ? d => !d.familias.length : null));
         if (pag.falha) { if (n === 1) return { falha: pag.falha }; break; }
         if (n === 1) { via = pag.via; vazio = !!pag.dados.vazio; }
         const novas = pag.dados.familias.filter(f => !familias.some(x => x.chave === f.chave));
@@ -284,8 +294,10 @@ const mesCurto = m => MES_CURTO[+m.slice(5, 7) - 1] + '/' + m.slice(2, 4);   // 
 // v2.5.1: a 1ª página sozinha e depois 3 ao mesmo tempo (SHC.paginasEmParalelo); para na página com menos de 500.
 // Nada entra em "vistos" aqui: só quando o mês inteiro deu certo. aoLer(n) = linhas de cada página (andamento).
 const COB_PARALELO = 3;
-async function lerPeriodoCobrancas(de, ate, vistos, aoLer) {
+// v2.11: parar() → true = o histórico em segundo plano deve dar a vez à sincronização: a página não é pedida ({ falha: 'parado' }).
+async function lerPeriodoCobrancas(de, ate, vistos, aoLer, parar) {
     const r = await SHC.paginasEmParalelo(async p => {
+        if (parar && parar()) return { falha: 'parado' };
         // v2.10: página já lida neste ciclo vem do que ficou guardado (naCiclo): a retomada não pede de novo. A pausa de gentileza
         // é ANTES do pedido: a página lida é guardada assim que chega (nenhuma pausa entre chegar e guardar).
         const x = await naCiclo('faturamento', 'cob|' + de + '|' + ate + '|' + p, async () => {
@@ -313,39 +325,57 @@ async function lerPeriodoCobrancas(de, ate, vistos, aoLer) {
 
 // Período que falhou é lido em 2 metades (~15 dias) e, se ainda falhar, em pedaços de 7 dias. Um pedaço que não respondeu nem
 // assim → { falha } (o mês fica "não lido"; o resto dele nem é lido). peso = fração do mês, para o progresso em meses.
-async function lerDividindo(de, ate, vistos, nivel, peso, andou, aoLer) {
-    const r = await lerPeriodoCobrancas(de, ate, vistos, aoLer);
-    if (!r.falha || r.falha === 'login' || nivel >= 2) { await andou(peso); return r; }
+async function lerDividindo(de, ate, vistos, nivel, peso, andou, aoLer, parar) {
+    const r = await lerPeriodoCobrancas(de, ate, vistos, aoLer, parar);
+    if (!r.falha || r.falha === 'login' || r.falha === 'parado' || nivel >= 2) { await andou(peso); return r; }
     const dias = Math.round((Date.parse(ate + 'T12:00:00Z') - Date.parse(de + 'T12:00:00Z')) / 864e5) + 1, passo = nivel ? 7 : Math.ceil(dias / 2);
     const junto = { linhas: [], ids: new Set(), cortado: false };
     for (let i = 0; i < dias; i += passo) {
         const k = Math.min(passo, dias - i);
-        const x = await lerDividindo(diaMenos(de, -i), diaMenos(de, -(i + k - 1)), vistos, nivel + 1, peso * k / dias, andou, aoLer);
+        const x = await lerDividindo(diaMenos(de, -i), diaMenos(de, -(i + k - 1)), vistos, nivel + 1, peso * k / dias, andou, aoLer, parar);
         if (x.falha) { await andou(peso * (dias - i - k) / dias); return x; }
         junto.linhas.push(...x.linhas); x.ids.forEach(id => junto.ids.add(id)); junto.cortado = junto.cortado || !!x.cortado;
     }
     return junto;
 }
 
-// Um mês por vez, do ATUAL para trás, e grava o avanço a cada mês lido (o service worker pode morrer no meio: a próxima
+/// Um mês por vez, do ATUAL para trás, e grava o avanço a cada mês lido (o service worker pode morrer no meio: a próxima
 // sincronização retoma só o que faltou). Mês que não respondeu nem em pedaços fica "não lido": nada dele é gravado (nunca zero)
 // e é tentado de novo na próxima. Sem plano B pela aba: o fundo já leva a sessão.
-async function sincronizarCobrancas(sellerId, progresso) {
-    const marca = 'ml:cobrancas:' + sellerId, antes = (await SHC.lerChave(marca)) || {}, hoje = SHC.hoje();
+// v2.11: modo 'recentes' (a sincronização): só os meses dos últimos ~40 dias que precisam de leitura — o atual a partir dos dias novos
+// (cob:<conta>:<mês>), o anterior só até ser lido FECHADO_GRACA dias depois de fechar. Modo 'historico' (lerHistorico, em segundo plano):
+// os meses mais antigos que ainda não foram lidos, parando quando a sincronização pede a vez (histParar).
+const FECHADO_GRACA = 3;   // dias depois do fim do mês: cobrança/venda lançada com atraso ainda entra; depois disso o mês fechado não muda
+const COB_INC_DIAS = 2;    // o mês atual é relido a partir de 2 dias antes da última leitura (cobrança lançada com atraso)
+const fechadoDesde = m => diaMenos(fimDoMes(m), -FECHADO_GRACA);   // 1º dia em que uma leitura vale como "mês fechado lido"
+const chaveCob = (conta, m) => 'cob:' + conta + ':' + m;
+async function sincronizarCobrancas(sellerId, progresso, modo) {
+    const hist = modo === 'historico';
+    if (!hist) {   // v3.1: 1 vez por conta, antes de ler a marca (ela ganha os meses a reler)
+        await migrarFreteDevolucao(sellerId).catch(() => {});
+        await migrarPorDiaTipo(sellerId).catch(() => {});
+    }
+    const marca = 'ml:cobrancas:' + sellerId, antes = (await SHC.lerChave(marca)) || {}, hoje = SHC.hoje(), atual = hoje.slice(0, 7), anterior = mesAntes(atual, 1);
     const doze = SHC.janelasCobranca(hoje, true), recentes = new Set(SHC.janelasCobranca(hoje, false).map(j => j.mes));
     // Mês já lido (ou cortado pelo limite de páginas) não é relido, fora os dos últimos ~40 dias.
     // v2.10: na retomada vale a lista de ANTES do ciclo (os meses lidos antes da queda entram de novo, vindos do guardado, sem pedido ao ML):
     // o fechamento, o frete por pedido e o "para conferir" saem iguais aos de uma leitura sem queda.
     const base = ciclo && antes.ciclo && antes.ciclo.id === ciclo.id ? antes.ciclo.feitos : [...(antes.mesesLidos || []), ...(antes.incompletos || [])];
     const feitos = new Set(base), marcaCiclo = ciclo ? { id: ciclo.id, feitos: base } : undefined;
-    const janelas = doze.filter(j => recentes.has(j.mes) || !feitos.has(j.mes));
+    // v2.11: cobranças guardadas do mês atual e do anterior (leitura a partir dos dias novos; o "para conferir" do mês não relido).
+    const lidoEm = Object.assign({}, antes.lidoEm), guard = {};
+    for (const m of [atual, anterior]) { const g = await SHC.lerChave(chaveCob(sellerId, m)); if (g && g.ate && Array.isArray(g.linhas)) guard[m] = g; }
+    const fechadoLido = m => m < atual && feitos.has(m) && (lidoEm[m] || '') >= fechadoDesde(m) && (m !== anterior || !!guard[m]);
+    // v3.1: releer = meses lidos pela versão que somava a tarifa de devolução ao frete (migrarFreteDevolucao): lidos de novo 1 vez.
+    const releer = new Set((antes.releer || []).filter(m => doze.some(j => j.mes === m)));
+    const janelas = doze.filter(j => (hist ? !recentes.has(j.mes) && (!feitos.has(j.mes) || releer.has(j.mes)) : recentes.has(j.mes) && (!fechadoLido(j.mes) || releer.has(j.mes))));
     // mesesLidos (v2.3): meses lidos do dia 1º ao fim (o atual até hoje) → no vm|ml, mês lido sem a chave = 0 vendas.
     const lidos = new Set(antes.mesesLidos || []), cortados = new Set((antes.incompletos || []).filter(m => !janelas.some(j => j.mes === m)));
     const cobs = [], todas = [], vistos = new Set(), naoLidos = [], lidosAgora = [];   // todas: TODOS os tipos, para o fechamento do mês
     // v2.3: frete/venda sem permalink → MLB pelo título no retrato de anúncios; o frete que não casar fica em vd|pend
     // (junto com os pendentes de antes que não foram relidos agora) para a próxima sincronização.
     const antigos = await SHC.lerPendentes(sellerId), itensAn = ((await SHC.lerAnuncios(sellerId)) || {}).itens;
-    let feito = 0, lidasTotal = 0, noMes = 0, seguidas = 0, algum = false, res = null, vm = {}, pedidos = 0;
+    let feito = 0, lidasTotal = 0, noMes = 0, seguidas = 0, algum = hist && antes.ate === hoje, res = null, vm = {}, pedidos = 0, parado = false;   // histórico: o ML respondeu hoje na sincronização
     // Andamento: "Lendo agosto (3 de 13 meses) · 6.722 cobranças · falta cerca de N min" (SHC.etapaDaPagina); o tempo sai do ritmo desta leitura.
     const inicio = Date.now();
     // O mês do andamento sai de `feito` (meses em ordem): mês acabado nunca aparece como "Lendo agosto (3 de 13)".
@@ -359,21 +389,35 @@ async function sincronizarCobrancas(sellerId, progresso) {
     for (let k = 0; k < janelas.length; k++) {
         const j = janelas[k];
         noMes = 0;
+        if (hist && histParar) { parado = true; break; }
         // Só desiste quando nada respondeu: mês atual e anterior sempre lentos (conta grande) não impedem a leitura dos mais antigos.
         if (seguidas >= COB_PARA_APOS && !algum) { naoLidos.push(j.mes); await diag(j.mes, 'sem resposta'); await andou(1); continue; }
         await progresso({}, conta());
-        const r = await lerDividindo(j.de, j.ate, vistos, 0, 1, andou, aoLer);
+        // v2.11: mês com as cobranças guardadas de uma leitura inteira → só a partir dos dias novos (2 dias antes da última leitura).
+        const g = guard[j.mes], de = g && g.ate >= j.de ? [j.de, diaMenos(g.ate, COB_INC_DIAS)].sort()[1] : j.de;
+        const r = await lerDividindo(de, j.ate, vistos, 0, 1, andou, aoLer, hist ? () => histParar : null);
         noMes = 0;
+        if (r.falha === 'parado') { parado = true; break; }   // histórico parou para a sincronização: o mês fica para a próxima vez
         await diag(j.mes, r.falha ? (r.falha === 'indisponivel' ? 'sem resposta' : r.falha) : r.cortado ? 'cortado' : 'ok');
         if (r.falha === 'login') return { falha: 'login' };
         if (r.falha) { naoLidos.push(j.mes); seguidas++; continue; }   // o que já estava guardado desse mês fica
+        if (de > j.de) {   // junta com as guardadas de antes de `de` (a lida agora vale por cima: mesmo id)
+            const velhas = g.linhas.filter(c => String(c.data || '') < de && !(c.id && (r.ids.has(c.id) || vistos.has(c.id))));
+            velhas.forEach(c => { if (c.id) r.ids.add(c.id); });
+            r.linhas = velhas.concat(r.linhas);
+        }
         seguidas = 0; algum = true;
         r.ids.forEach(id => vistos.add(id));
         lidasTotal += r.linhas.length;
         todas.push(...r.linhas);
         cobs.push(...r.linhas.filter(c => /^(frete|ads|venda)/.test(c.tipo)));   // as outras cobranças não são usadas
         // Bateu no máximo de páginas: o mês ficou pela metade → fech e vm dele não são regravados (ficariam menores).
-        if (r.cortado) cortados.add(j.mes); else { cortados.delete(j.mes); lidos.add(j.mes); lidosAgora.push(j.mes); }
+        if (r.cortado) cortados.add(j.mes); else { cortados.delete(j.mes); lidos.add(j.mes); lidosAgora.push(j.mes); lidoEm[j.mes] = hoje; }
+        releer.delete(j.mes);
+        if (!r.cortado && (j.mes === atual || j.mes === anterior)) {
+            guard[j.mes] = { ate: j.ate, linhas: r.linhas };
+            await SHC.gravarChave(chaveCob(sellerId, j.mes), { ts: Date.now(), ate: j.ate, linhas: r.linhas });
+        }
         // Recalcula com TUDO o que foi lido nesta sincronização (cobrança e estorno do mesmo pedido podem cair em meses diferentes).
         // v2.4 (V8): o Ads do Faturamento vem por dia e para a conta toda (sem anúncio) → vai só para o fechamento do mês (porTipo.ads).
         res = SHC.resolveCobrancasPorTitulo(cobs.concat(antigos.filter(c => !c.id || !vistos.has(c.id))), itensAn);
@@ -392,24 +436,38 @@ async function sincronizarCobrancas(sellerId, progresso) {
         // B5: o Ads do último dia do mês é cobrado no dia 1º do seguinte. Mês fechado lido sem o seguinte nesta sincronização
         // (retentativa de um mês antigo) → lê só o dia 1º do seguinte e fica com o Ads cujas visitas são deste mês.
         // ponytail: se esse dia não responder, o mês fica sem o Ads do último dia (como antes); 1 pedido a mais por mês relido sozinho.
+        // v2.11: o dia 1º que já está nas cobranças guardadas do mês seguinte não é pedido de novo.
         const prox = mesAntes(j.mes, -1);
-        if (!r.cortado && j.mes < hoje.slice(0, 7) && lidosAgora.indexOf(prox) < 0) {
-            const x = await lerPeriodoCobrancas(prox + '-01', prox + '-01', vistos);
-            if (!x.falha) todas.push(...x.linhas.filter(c => c.tipo === 'ads' && String(c.dataRef || '').slice(0, 7) === j.mes));
+        if (!r.cortado && j.mes < atual && lidosAgora.indexOf(prox) < 0) {
+            const px = guard[prox] ? { linhas: guard[prox].linhas.filter(c => String(c.data || '') === prox + '-01') }
+                : await lerPeriodoCobrancas(prox + '-01', prox + '-01', vistos, null, null);   // sem `parar`: 1 GET pequeno; parar aqui gravava o mês sem o Ads do último dia
+            if (!px.falha) todas.push(...px.linhas.filter(c => c.tipo === 'ads' && String(c.dataRef || '').slice(0, 7) === j.mes));
         }
         if (!r.cortado) await gravarFechamento(sellerId, todas, [j.mes]);
         await SHC.salvarPendentes(sellerId, res.pendentes);
+        Object.keys(lidoEm).forEach(m => { if (!doze.some(x => x.mes === m)) delete lidoEm[m]; });
         await SHC.gravarChave(marca, { completo12: doze.every(x => lidos.has(x.mes) || cortados.has(x.mes)), ate: hoje, ts: Date.now(),
-            incompletos: [...cortados].sort(), mesesLidos: [...lidos].sort().slice(-13), ciclo: marcaCiclo });
-        pedidos = Object.keys(vendas).reduce((n, id) => n + Object.keys(vendas[id]).filter(o => vendas[id][o]).length, 0);
+            incompletos: [...cortados].sort(), mesesLidos: [...lidos].sort().slice(-13), lidoEm, ciclo: marcaCiclo, releer: [...releer].sort() });
+        pedidos =Object.keys(vendas).reduce((n, id) => n + Object.keys(vendas[id]).filter(o => vendas[id][o]).length, 0);
     }
     // v2.5.3: frete por pedido (30 × 30 dias, formatos, conciliação) e pagamento excedente, com o lido agora + o que já estava guardado.
-    // Derivados: se falharem, a etapa continua valendo.
-    try { await gravarFreteHist(sellerId, SHC.resolveCobrancasPorTitulo(todas, itensAn).cobs, lidosAgora); } catch (e) { /* o painel mostra o motivo pela falta de frete:<conta>:hist */ }
-    try { await gravarConferir(sellerId, todas, lidosAgora, itensAn); } catch (e) { /* idem conferir:<conta> */ }
-    if (naoLidos.length === janelas.length) return { falha: 'indisponivel' };   // nenhum mês respondeu: nada foi gravado
+    // Derivados: se falharem, a etapa continua valendo. v2.11: o "para conferir" do mês que não foi relido sai das cobranças guardadas dele;
+    // no histórico, só o frete (e só se leu mês dos últimos 62 dias).
+    if (!hist || lidosAgora.some(m => m >= diaMenos(hoje, FRETE_DIAS).slice(0, 7))) {
+        try { await gravarFreteHist(sellerId, SHC.resolveCobrancasPorTitulo(todas, itensAn).cobs, lidosAgora); } catch (e) { /* o painel mostra o motivo pela falta de frete:<conta>:hist */ }
+    }
+    if (!hist) {
+        const mesesConf = [atual, anterior].filter(m => lidosAgora.indexOf(m) >= 0 || guard[m]);
+        const conf = todas.concat(...[atual, anterior].filter(m => lidosAgora.indexOf(m) < 0 && guard[m]).map(m => guard[m].linhas));
+        try { await gravarConferir(sellerId, conf, mesesConf, itensAn); } catch (e) { /* idem conferir:<conta> */ }
+        // Cobranças guardadas só do mês atual e do anterior.
+        try { await chrome.storage.local.remove([chaveCob(sellerId, mesAntes(atual, 2)), chaveCob(sellerId, mesAntes(atual, 3))]); } catch (e) { /* só espaço */ }
+    }
+    if (janelas.length && naoLidos.length === janelas.length) return { falha: 'indisponivel' };   // nenhum mês respondeu: nada foi gravado
+    const semLer = hist ? 0 : doze.filter(j => !recentes.has(j.mes) && !lidos.has(j.mes) && !cortados.has(j.mes)).length;   // ficam para o histórico
     return { meses: janelas.length - naoLidos.length, de: janelas.length, naoLidos, lidas: lidasTotal, pedidos, fechamentoMeses: lidosAgora.slice().sort(),
-        incompletos: [...cortados].sort(), anunciosVendas: Object.keys(vm).length, porTitulo: res ? res.resolvidas : 0, pendentes: res ? res.pendentes.length : 0 };
+        incompletos: [...cortados].sort(), anunciosVendas: Object.keys(vm).length, porTitulo: res ? res.resolvidas : 0, pendentes: res ? res.pendentes.length : 0,
+        historicoFalta: semLer, parado };
 }
 // ── v2.5.3: frete por pedido → frete:<conta>:pedidos (62 dias de frete, 31 de vendas) e frete:<conta>:hist (SHC.freteHistorico + SHC.conciliaFrete).
 // cobs = cobranças lidas agora (TODOS os tipos) e mesesLidos = meses lidos inteiros agora: eles substituem o que havia desses meses; o resto
@@ -422,12 +480,15 @@ async function gravarFreteHist(conta, cobs, mesesLidos) {
     const antes = (await SHC.lerChave(kP)) || {}, lidos = new Set(mesesLidos || []);
     const itens = ((await SHC.lerAnuncios(conta)) || {}).itens || [], porItem = {};
     itens.forEach(i => { if (i && i.itemId && !porItem[i.itemId]) porItem[i.itemId] = i; });
-    const pedidos = {}, vendas = {}, relido = d => lidos.has(String(d || '').slice(0, 7));
+    const pedidos = {}, vendas = {}, devs = {}, relido = d => lidos.has(String(d || '').slice(0, 7));
     Object.keys(antes.pedidos || {}).forEach(k => { const p = antes.pedidos[k]; if (p && p.data >= limF && !relido(p.data)) pedidos[k] = p; });
     Object.keys(antes.vendas || {}).forEach(k => { const v = antes.vendas[k]; if (v && v.data >= limV && !relido(v.data)) vendas[k] = v; });
+    // v3.1: frete de devoluções por pedido (tarifa de devolução = frete de VOLTA; fora do frete da venda e do "cobrado a mais").
+    Object.keys(antes.devolucoes || {}).forEach(k => { const p = antes.devolucoes[k]; if (p && p.data >= limF && !relido(p.data)) devs[k] = p; });
     if (cobs && cobs.length) {
-        SHC.freteDasCobrancas(cobs).forEach(p => { if (p.data >= limF) pedidos[p.pedido] = { itemId: p.itemId, data: p.data, cobrado: p.cobrado, bruto: p.cobrado, cheio: p.cheio, formato: p.formato, cancelado: p.cancelado, temExtra: p.temExtra }; });
+        SHC.freteDasCobrancas(cobs).forEach(p => { if (p.data >= limF) pedidos[p.pedido] = { itemId: p.itemId, data: p.data, cobrado: p.cobrado, bruto: p.cobrado, cheio: p.cheio, formato: p.formato, cancelado: p.cancelado, temExtra: p.temExtra, linhas: p.linhas }; });
         SHC.vendasDasCobrancas(cobs).forEach(v => { if (v.data >= limV) vendas[v.pedido] = { itemId: v.itemId, data: v.data, cancelada: v.cancelada }; });
+        SHC.devolucoesDasCobrancas(cobs).forEach(p => { if (p.data >= limF) devs[p.pedido] = { itemId: p.itemId, data: p.data, valor: p.valor, linhas: p.linhas }; });
         // Estorno lido agora de um pedido cobrado num mês que não foi relido: desconta do valor BRUTO guardado, uma vez por estorno
         // (est = {id do estorno: valor}; o mesmo estorno relido a cada 3 h não desconta de novo).
         const comCobranca = new Set(cobs.filter(c => c && /^frete/.test(c.tipo) && c.tipo !== 'frete_estorno').map(c => c.orderId));
@@ -435,9 +496,10 @@ async function gravarFreteHist(conta, cobs, mesesLidos) {
             const p = c && c.tipo === 'frete_estorno' && c.orderId && !comCobranca.has(c.orderId) ? pedidos[c.orderId] : null;
             if (!p || (p.cancelado && !p.est)) return;
             const est = Object.assign({}, p.est), bruto = typeof p.bruto === 'number' ? p.bruto : p.cobrado;
-            est[c.id || (c.data + '|' + c.valor)] = c.valor;
+            const kEst = c.id || (c.data + '|' + c.valor), linhas = p.linhas && !(kEst in est) ? p.linhas.concat({ t: c.texto, v: c.valor, d: c.data, e: 1 }) : p.linhas;
+            est[kEst] = c.valor;
             const resto = SHC.r2(bruto - Object.keys(est).reduce((t, k) => t + est[k], 0));
-            pedidos[c.orderId] = Object.assign({}, p, { bruto, est }, resto > 0.004 ? { cobrado: resto, cancelado: false } : { cobrado: 0, cheio: 0, formato: 'cancelado', cancelado: true });
+            pedidos[c.orderId] = Object.assign({}, p, { bruto, est }, linhas ? { linhas } : {}, resto > 0.004 ? { cobrado: resto, cancelado: false } : { cobrado: 0, cheio: 0, formato: 'cancelado', cancelado: true });
         });
     }
     // Versão anterior: frete por pedido só em vd|ml|<MLB> ({d, f, pc}). Entra o que não está em lugar nenhum (nunca por cima do que foi lido).
@@ -448,8 +510,9 @@ async function gravarFreteHist(conta, cobs, mesesLidos) {
         if (!v || !v.d || v.d < limF || pedidos[o] || relido(v.d) || !(v.f >= 0)) return;
         pedidos[o] = { itemId: id, data: v.d, cobrado: v.f, cheio: null, formato: v.pc ? 'compartilhado' : null, cancelado: false, aprox: true };
     }));
-    const arr = Object.keys(pedidos).map(k => Object.assign({ pedido: k }, pedidos[k])), varr = Object.keys(vendas).map(k => Object.assign({ pedido: k }, vendas[k]));
-    await SHC.gravarChave(kP, { ts: Date.now(), pedidos, vendas });
+    // dev = tarifa de devolução do mesmo pedido: só para mostrar ao lado (nunca soma no frete).
+    const arr = Object.keys(pedidos).map(k => Object.assign({ pedido: k }, pedidos[k], devs[k] && devs[k].valor > 0 ? { dev: devs[k].valor } : {})), varr = Object.keys(vendas).map(k => Object.assign({ pedido: k }, vendas[k]));
+    await SHC.gravarChave(kP, { ts: Date.now(), pedidos, vendas, devolucoes: devs });
     // Meses dos 60 dias que nunca foram lidos inteiros (não responderam/cortados): sem eles a comparação 30 × 30 não vale (nunca "0 pedidos").
     const marca = (await SHC.lerChave('ml:cobrancas:' + conta)) || {}, jaLidos = new Set(marca.mesesLidos || []), semLeitura = [];
     for (let m = diaMenos(hoje, 59).slice(0, 7); m <= hoje.slice(0, 7); m = mesAntes(m, -1)) if (!jaLidos.has(m)) semLeitura.push(m);
@@ -461,7 +524,8 @@ async function gravarFreteHist(conta, cobs, mesesLidos) {
         Object.keys(hist.porAnuncio).forEach(id => Object.assign(hist.porAnuncio[id], { variacaoPct: null, subiu: false, semLeitura: true }));
     }
     const snap = Object.assign({ ts: Date.now(), fonte: arr.some(p => !p.aprox) ? 'faturamento' : (arr.length ? 'guardado' : 'nada'), aprox: arr.filter(p => p.aprox).length,
-        vendasLidas, semLeitura }, hist, { conciliacao: vendasLidas ? SHC.conciliaFrete(arr, porItem, varr, hoje) : null });
+        vendasLidas, semLeitura }, hist, { conciliacao: vendasLidas ? SHC.conciliaFrete(arr, porItem, varr, hoje) : null,
+        devolucoes: SHC.devolucoesResumo(Object.keys(devs).map(k => Object.assign({ pedido: k }, devs[k])), hoje) });
     await SHC.gravarChave('frete:' + conta + ':hist', snap);
     return snap;
 }
@@ -475,6 +539,57 @@ async function gravarConferir(conta, cobs, lidosAgora, itens) {
     const snap = { ts: Date.now(), meses, qtd: lista.length, valor: SHC.r2(lista.reduce((s, x) => s + (x.diferenca || 0), 0)), itens: lista.slice(0, 100) };
     await SHC.gravarChave('conferir:' + conta, snap);
     return snap;
+}
+
+// ── v3.1: migração ÚNICA por conta (marca em shc:migra:freteDev = {conta: ts}). A versão anterior somava a "Tarifa de devolução por envio…"
+// (frete de VOLTA da devolução) ao frete da venda (print da dona: 20,75 + 46,49 = "cobrado 67,24"). O mês atual e o anterior são refeitos
+// AGORA a partir das cobranças guardadas (cob:<conta>:<mês>, sem pedido ao ML); os meses mais antigos já lidos vão para `releer` e são lidos
+// de novo 1 vez (o histórico em segundo plano; os dos últimos 40 dias, a sincronização). Nada é apagado antes de ter o novo: o frete por
+// pedido desses meses só é trocado pelo recalculado, e o vd|ml de um pedido só sai quando nele só havia a tarifa de devolução.
+async function migrarFreteDevolucao(conta) {
+    const kM = 'shc:migra:freteDev', feitas = (await SHC.lerChave(kM)) || {};
+    if (!conta || conta === 'atual' || feitas[conta]) return false;
+    const hoje = SHC.hoje(), atual = hoje.slice(0, 7), anterior = mesAntes(atual, 1), linhas = [], meses = [];
+    for (const m of [atual, anterior]) {
+        const g = await SHC.lerChave(chaveCob(conta, m));
+        if (!g || !g.ate || !Array.isArray(g.linhas)) continue;
+        const novas = g.linhas.map(SHC.tipoDevolucao);
+        if (novas.some((c, i) => c !== g.linhas[i])) await SHC.gravarChave(chaveCob(conta, m), Object.assign({}, g, { linhas: novas }));
+        linhas.push(...novas); meses.push(m);
+    }
+    const itens = ((await SHC.lerAnuncios(conta)) || {}).itens, k = 'ml:cobrancas:' + conta, marca = await SHC.lerChave(k);
+    if (meses.length) {
+        const cobs = SHC.resolveCobrancasPorTitulo(linhas, itens).cobs, { vendas } = SHC.vendasEAdsDasCobrancas(cobs);
+        const comFrete = new Set(cobs.filter(c => /^frete/.test(c.tipo) && c.orderId).map(c => c.orderId));
+        cobs.forEach(c => { if (/^devolucao/.test(c.tipo) && c.orderId && /^MLB\d{6,14}$/.test(c.itemId) && !comFrete.has(c.orderId)) (vendas[c.itemId] || (vendas[c.itemId] = {}))[c.orderId] = null; });
+        await SHC.registraVendas(vendas);
+        await gravarFreteHist(conta, cobs, meses);
+        await gravarConferir(conta, cobs, meses, itens).catch(() => {});
+    } else if (marca) await gravarFreteHist(conta, null, []);   // conta nova (nada lido ainda): não há o que refazer
+    // O mês passado também: está "fechado e lido", ninguém o relê → o fech dele ficaria no formato antigo (sem tipos 2). Relido 1 vez a
+    // partir dos dias novos (cob guardado já migrado acima), o fech é regravado com a devolução separada.
+    const velhos = ((marca && marca.mesesLidos) || []).filter(m => m < atual);
+    if (velhos.length) await SHC.gravarChave(k, Object.assign({}, marca, { releer: [...new Set([...(marca.releer || []), ...velhos])].sort() }));
+    feitas[conta] = 1;   // versão da migração (sem hora: a retomada grava exatamente o mesmo que uma leitura sem queda)
+    await SHC.gravarChave(kM, feitas);
+    return true;
+}
+// ── v3.1: migração ÚNICA por conta (marca em shc:migra:porDiaTipo = {conta: 1}). O fech de mês fechado lido antes desta versão não tem
+// porDiaTipo (cobrança por dia E tipo) → o cartão "Confere com a fatura do ML" (F.somaCiclo) fica no modo 'misto'. Esses meses vão para
+// `releer` (mesmo caminho da migrarFreteDevolucao: o mês passado pela sincronização, os mais antigos pelo histórico); o fech antigo só é
+// trocado quando o mês é relido inteiro. O mês atual já é regravado inteiro a cada sincronização.
+async function migrarPorDiaTipo(conta) {
+    const kM = 'shc:migra:porDiaTipo', feitas = (await SHC.lerChave(kM)) || {};
+    if (!conta || conta === 'atual' || feitas[conta]) return false;
+    const k = 'ml:cobrancas:' + conta, marca = await SHC.lerChave(k), atual = SHC.hoje().slice(0, 7), velhos = [];
+    for (const m of ((marca && marca.mesesLidos) || []).filter(m => m < atual)) {
+        const f = await SHC.lerChave(SHC.chaveFech(conta, m));   // mesma regra da F.somaCiclo (mês sem cobrança nenhuma não precisa)
+        if (f && !f.porDiaTipo && (!f.porDia || Object.keys(f.porDia).length)) velhos.push(m);
+    }
+    if (velhos.length) await SHC.gravarChave(k, Object.assign({}, marca, { releer: [...new Set([...(marca.releer || []), ...velhos])].sort() }));
+    feitas[conta] = 1;
+    await SHC.gravarChave(kM, feitas);
+    return true;
 }
 
 // Resumo da etapa: "11 de 12 meses lidos · dez/25 não respondeu (tento de novo na próxima)".
@@ -493,9 +608,10 @@ const fimDoMes = m => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 0)).toIS
 async function gravarFechamento(sellerId, todas, meses) {
     const hoje = SHC.hoje(), atual = hoje.slice(0, 7), desdePedidos = mesAntes(atual, 2);   // pedidos: só os últimos 3 meses
     const fech = SHC.fechamentoDasCobrancas(todas, desdePedidos), vb = await SHC.lerVendasBrutas(sellerId), gravar = {};
-    // Mês lido inteiro (ou o atual até hoje) sem cobrança nenhuma = 0 de verdade: grava zerado.
+    // Mês lido inteiro (ou o atual até hoje) sem cobrança nenhuma = 0 de verdade: grava zerado (porDia vazio = lido; sem ele o rateio e o
+    // "Confere com a fatura" achavam que o mês não foi lido).
     for (const m of meses) {
-        const f = fech[m] || { mes: m, porTipo: {}, estornos: 0, total: 0, qtdVendas: 0, pedidos: {} };
+        const f = fech[m] || { mes: m, porTipo: {}, porDia: {}, estornos: 0, total: 0, qtdVendas: 0, pedidos: {}, tipos: SHC.FECH_TIPOS_VERSAO };
         const b = vb && SHC.vendasBrutasDoMes(vb.dias, m);
         if (b) f.vendasBrutas = b;   // soma dos dias lidos ({valor, dias, …}): a página marca "parcial (N de M dias)" se faltar dia
         gravar[m] = Object.assign(f, { parcial: m === atual, ate: m === atual ? hoje : fimDoMes(m), ts: Date.now() });
@@ -538,10 +654,11 @@ async function sincronizarFaturas(sellerId, progresso) {
         return !x.faturas.length && !x.atual ? { falha: (g1 && g1.login) || (g2 && g2.login) ? 'login' : 'indisponivel' } : x;
     });
     if (r.falha) return r;
-    const antes = (await SHC.lerFaturas(sellerId)) || {}, desde = mesAntes(SHC.hoje().slice(0, 7), 12), notas = {}, linkNotas = {};
+    const antes = (await SHC.lerFaturas(sellerId)) || {}, desde = mesAntes(SHC.hoje().slice(0, 7), 12), notas = {}, linkNotas = {}, categorias = {};
     Object.keys(antes.notas || {}).forEach(m => { if (m >= desde) notas[m] = antes.notas[m]; });
+    Object.keys(antes.categorias || {}).forEach(m => { if (m >= desde) categorias[m] = antes.categorias[m]; });
     r.faturas.forEach(f => { if (f.mes >= desde && f.notas && f.notas.url) linkNotas[f.mes] = f.notas.url; });
-    const salvar = () => SHC.salvarFaturas(sellerId, Object.assign({ ts: Date.now() }, r, { notas, linkNotas }));
+    const salvar = () => SHC.salvarFaturas(sellerId, Object.assign({ ts: Date.now() }, r, { notas, linkNotas, categorias }));
     await salvar();   // as faturas primeiro; as notas vêm depois, uma fatura por vez
     const faltam = r.faturas.filter(f => f.mes >= desde && f.notas && !f.notas.pendente && /^\d{8}$/.test(dataDaFatura(f))
         && !((notas[f.mes] || []).length && notas[f.mes].every(n => n.status === 'DONE')));
@@ -554,7 +671,25 @@ async function sincronizarFaturas(sellerId, progresso) {
         if (lidas) notas[faltam[k].mes] = lidas;
         await progresso({}, { feito: k + 1, de: faltam.length, unidade: 'faturas' });
     }
-    if (faltam.length) await salvar();
+    // v3.1: resumo por categoria/tipo de tarifa de cada fatura (custo novo: SHC.custosNovos). 1 GET por fatura, uma por vez com pausa:
+    // a fechada é lida 1 vez (não muda mais; a lida enquanto estava em andamento é relida 1 vez depois de fechar); a em andamento, a cada
+    // sincronização. A mais recente primeiro. Falha numa fatura não apaga o que havia; formato desconhecido não grava.
+    // A fechada lida antes da linha 'cancelamentos' (a leitura nova sempre grava a chave, mesmo null) é relida 1 vez.
+    const at = r.atual && /^\d{4}-\d{2}/.test(String(r.atual.fechamento || '')) && /^\d{8}$/.test(dataDaFatura({ linkDetalhe: r.atual.linkDetalhe })) ? r.atual : null;
+    const cats = (at ? [{ mes: at.fechamento.slice(0, 7), nome: at.nome, fechamento: at.fechamento, linkDetalhe: at.linkDetalhe, aberta: true }] : [])
+        .concat(r.faturas.filter(f => f.mes >= desde && /^\d{8}$/.test(dataDaFatura({ linkDetalhe: f.linkDetalhe })) && (!categorias[f.mes] || categorias[f.mes].aberta || categorias[f.mes].cancelamentos === undefined))
+            .sort((a, b) => (a.mes < b.mes ? 1 : -1)).map(f => ({ mes: f.mes, nome: f.nome, fechamento: f.fechamento, linkDetalhe: f.linkDetalhe, aberta: false })));
+    for (const f of cats) {
+        const data = dataDaFatura({ linkDetalhe: f.linkDetalhe });
+        const c = await naCiclo('faturas', 'cat|' + data, async () => {
+            await espera(PAUSA_MS);
+            const b = await buscarJson(SHC.faturaCategoriasUrl(data));
+            return b && b.json ? SHC.mlFaturaCategorias(b.json) : null;
+        });
+        if (c && Array.isArray(c.categorias)) categorias[f.mes] = Object.assign({ nome: f.nome || '', fechamento: f.fechamento || '', aberta: f.aberta, link: f.linkDetalhe || '', lidoEm: Date.now() }, c);
+        await bateVivo(progresso);
+    }
+    if (faltam.length || cats.length) await salvar();
     return Object.assign({}, r, { notasFiscais: Object.keys(notas).reduce((n, m) => n + notas[m].length, 0) });
 }
 
@@ -573,41 +708,73 @@ async function buscarNfe(corpo) {
 // progresso (o da sincronização): a cada página grava a batida e "N de M notas" (sem isso a tela acha que parou depois de 5 min).
 // igual(total da 1ª página) → true: o mês guardado continua valendo e as outras páginas não são lidas (mês anterior sem mudança).
 // v2.10: cada página lida no ciclo fica guardada (naCiclo, já reduzida por SHC.nfeVendasDaResposta): a retomada não pede de novo.
-const nfePagina = (mes, off) => naCiclo('faturas', 'nfe|' + mes + '|' + off, async () => {
+const nfePagina = (mes, off, desde) => naCiclo('faturas', 'nfe|' + mes + '|' + (desde ? desde + '|' : '') + off, async () => {
     if (off) await espera(PAUSA_MS);
-    const b = await buscarNfe(SHC.nfePedido(mes, off)), r = b && b.json ? SHC.nfeVendasDaResposta(b.json) : null;
+    const b = await buscarNfe(SHC.nfePedido(mes, off, desde)), r = b && b.json ? SHC.nfeVendasDaResposta(b.json) : null;
     return r && (off || r.total !== null) ? r : { falha: b && b.login ? 'login' : 'indisponivel' };   // a 1ª página precisa do total
 });
-async function lerNfeMes(mes, progresso, igual) {
-    const r1 = await nfePagina(mes, 0);
-    if (r1.falha) return r1;
-    if (igual && igual(r1.total)) return { igual: true };
+// Páginas 2..N de uma consulta (r1 = a 1ª, com o total), 3 ao mesmo tempo → { notas, paginas } | { falha }.
+async function nfeResto(mes, desde, r1, progresso, parar) {
     const paginas = Math.min(Math.ceil(r1.total / SHC.NFE_LIMITE), NFE_PAGINAS_MAX), lidas = [r1.notas];
     let prox = 1, erro = null, feitas = 1;
     const anda = () => bateVivo(progresso && (x => progresso(x, { feito: Math.min(feitas * SHC.NFE_LIMITE, r1.total), de: r1.total, unidade: 'notas' })));
     await anda();   // a 1ª página (até 25 s) e o 1º lote de 3 (até 25 s) não podem somar 30 s sem chamada à extensão
     const vai = async () => {
         while (!erro && prox < paginas) {
+            if (parar && parar()) { erro = { falha: 'parado' }; return; }
             const k = prox++;
-            const r = await nfePagina(mes, k * SHC.NFE_LIMITE);
+            const r = await nfePagina(mes, k * SHC.NFE_LIMITE, desde);
             if (r.falha) { erro = r; return; }
             lidas[k] = r.notas; feitas++;
             await anda();
         }
     };
     await Promise.all([vai(), vai(), vai()]);
-    if (erro) return erro;
-    return SHC.nfeMes(mes, r1.total, [].concat(...lidas), paginas * SHC.NFE_LIMITE >= r1.total);
+    return erro || { notas: [].concat(...lidas), paginas };
+}
+// v2.11: mês com a lista de notas guardada de uma leitura inteira → só as notas a partir de 2 dias antes da última leitura. Só vale se
+// as notas de antes desse dia já estavam resolvidas (autorizada/cancelada: não mudam mais) e se a conta bate com o ML: total do mês =
+// notas guardadas de antes + total dos dias novos. Não bateu → lê o mês inteiro, como antes.
+const NFE_INC_DIAS = 2;
+function nfeDesde(antes, mes) {
+    if (!antes || !antes.ts || !antes.completo || antes.erro || antes.soTotais || !Array.isArray(antes.notas) || antes.notas.length !== antes.lidas) return null;
+    const desde = diaMenos(new Date(antes.ts - 3 * 3600e3).toISOString().slice(0, 10), NFE_INC_DIAS);   // dia (hora de Brasília) da última leitura
+    if (desde.slice(0, 7) !== mes || desde <= mes + '-01') return null;
+    return antes.notas.every(n => String(n.emitidaEm || '').slice(0, 10) >= desde || NFE_RESOLVIDA[n.status]) ? desde : null;
+}
+async function lerNfeMes(mes, progresso, igual, antes, parar) {
+    const r1 = await nfePagina(mes, 0);
+    if (r1.falha) return r1;
+    if (igual && igual(r1.total)) return { igual: true };
+    const desde = nfeDesde(antes, mes);
+    if (desde) {
+        const w1 = await nfePagina(mes, 0, desde);
+        const w = w1.falha ? w1 : await nfeResto(mes, desde, w1, progresso, parar);
+        if (w.falha === 'parado') return w;
+        if (!w.falha) {
+            const velhas = antes.notas.filter(n => String(n.emitidaEm || '').slice(0, 10) < desde);
+            if (velhas.length + w1.total === r1.total) return SHC.nfeMes(mes, r1.total, velhas.concat(w.notas), w.paginas * SHC.NFE_LIMITE >= w1.total);
+        }
+    }
+    if (parar && parar()) return { falha: 'parado' };
+    const t = await nfeResto(mes, null, r1, progresso, parar);
+    if (t.falha) return t;
+    return SHC.nfeMes(mes, r1.total, t.notas, t.paginas * SHC.NFE_LIMITE >= r1.total);
 }
 // Mês anterior (já fechado) só é relido inteiro se o total mudou, se a leitura guardada ficou incompleta/com erro ou se tem nota ainda
 // não resolvida (pendente, rejeitada, com erro, sem status). Senão 1 página basta para conferir.
+// v2.11: modo 'historico' = só o mês anterior ainda nunca lido (a 1ª leitura dele sai da sincronização e vai para o segundo plano);
+// a sincronização lê o atual e, se já existe leitura guardada, confere o anterior.
 const NFE_RESOLVIDA = { Autorizada: 1, Cancelada: 1 };
 const nfeFechado = g => !!g && g.ts && g.completo && !g.erro && typeof g.total === 'number' && Object.keys(g.porStatus || {}).every(k => NFE_RESOLVIDA[k]);
-async function sincronizarNfe(sellerId, progresso) {
-    const atual = SHC.hoje().slice(0, 7), out = { notas: 0, erros: 0 };
+async function sincronizarNfe(sellerId, progresso, modo) {
+    const atual = SHC.hoje().slice(0, 7), out = { notas: 0, erros: 0, historico: 0 }, hist = modo === 'historico';
     for (const mes of [atual, mesAntes(atual, 1)]) {
-        const k = 'nfe:' + sellerId + ':' + mes, antes = mes === atual ? null : await SHC.lerChave(k);
-        const r = await lerNfeMes(mes, progresso, nfeFechado(antes) ? t => t === antes.total : null);
+        const k = 'nfe:' + sellerId + ':' + mes, antes = await SHC.lerChave(k), nunca = !antes;   // nunca tentado (nem com erro): fica para o histórico
+        if (hist ? mes === atual || !nunca : mes !== atual && nunca && modo === 'recentes') { if (!hist) out.historico++; continue; }
+        if (hist && histParar) break;
+        const r = await lerNfeMes(mes, progresso, mes !== atual && nfeFechado(antes) ? t => t === antes.total : null, antes, hist ? () => histParar : null);
+        if (r.falha === 'parado') break;   // a sincronização pediu a vez: nada gravado (nem erro), o mês fica para a próxima
         if (r.igual) { await SHC.gravarChave(k, Object.assign({}, antes, { ts: Date.now() })); out.notas += antes.total; continue; }
         if (r.falha) { await SHC.gravarChave(k, Object.assign({ mes }, await SHC.lerChave(k), { erro: r.falha, erroEm: Date.now() })); out.erros++; continue; }
         await SHC.gravarChave(k, Object.assign({ ts: Date.now() }, r));
@@ -732,19 +899,45 @@ function resumoVendasBrutas(r) {
 //   itens:{MLB:{sku, titulo}}, mesesLidos:[…], naoLidos:[…] }
 const VA_PAGINAS_MAX = 80, VA_LINHAS = 30, VA_PARALELO = 3;   // até 2.400 anúncios com venda no mês (o mesmo teto da lista de Anúncios)
 const urlVendasAnuncio = (m, p) => BASE + '/api/sc-business-metrics/gross-sales-data' + vbPeriodo(m) + '&page_number=' + p;
-// Um mês → { porAnuncio, itens, paginas, linhas, cortado } | { falha: 'login'|'sem resposta'|'formato mudou'|'vazio'|'incompleto' }.
+// v3.1 (a dona viu "set/26: o ML não respondeu" com o ML respondendo em 0,5 s): o buscarJson junta toda falha em null e a página tinha
+// só 1 nova tentativa 1,2 s depois — um "calma" do ML (429/503) ou um engasgo de 2 pedidos seguidos derrubava o mês inteiro.
+// Aqui o motivo exato de cada falha → { json } | { login: true } | { falha: 'ocupado' (429/503), espera (ms do Retry-After, até 60 s) } |
+//   { falha: 'tempo' (passou do limite) | 'erro NNN' (outro status) | 'sem resposta' (rede) | 'formato mudou' (200 que não é JSON) }.
+async function buscarJsonMotivo(url, tempoMs) {
+    const vivo = tempoMs > TEMPO_MS && typeof setInterval === 'function'
+        ? setInterval(() => { if (chrome.runtime.getPlatformInfo) chrome.runtime.getPlatformInfo().catch(() => {}); }, 20000) : null;
+    const tempo = e => !!e && (e.name === 'TimeoutError' || e.name === 'AbortError');
+    try {
+        const r = await SHC.buscarVendo(url, comTempo({ credentials: 'include', cache: 'no-store', headers: { accept: 'application/json' } }, tempoMs));
+        if (ehLogin(r.url)) return { login: true };
+        if (r.ok) { try { return { json: await r.json() }; } catch (e) { return { falha: tempo(e) ? 'tempo' : 'formato mudou' }; } }
+        if (r.status === 429 || r.status === 503) { const s = +((r.headers && r.headers.get && r.headers.get('retry-after')) || 0); return { falha: 'ocupado', espera: s > 0 ? Math.min(60, s) * 1000 : 0 }; }
+        return { falha: r.status ? 'erro ' + r.status : 'sem resposta' };
+    } catch (e) { return { falha: tempo(e) ? 'tempo' : 'sem resposta' }; } finally { if (vivo) clearInterval(vivo); }
+}
+// Esperas antes de cada nova tentativa de uma página (espera crescente; "ocupado" usa o Retry-After do ML se for maior). Limite por pedido: 45 s.
+const VA_ESPERAS_MS = [2000, 6000, 15000], VA_TEMPO_MS = 45000;
+// Um mês → { porAnuncio, itens, paginas, linhas, cortado } | { falha: 'login'|'sem resposta'|'tempo'|'ocupado'|'erro NNN'|'formato mudou'|'vazio'|'incompleto' }.
 // vbMes = SHC.vendasBrutasDoMes do vb:<conta> (lista vazia só vale como "sem venda" quando a conta também vendeu R$ 0 no mês).
 // cortado = o ML tem mais páginas que VA_PAGINAS_MAX (não dá para usar r.cortado de paginasEmParalelo: a última página cheia também "corta").
-async function lerMesVendasAnuncio(m, vbMes, progresso) {
+// parar (histórico): a sincronização pediu a vez → { falha: 'parado' } antes da próxima página (o mês pela metade não é gravado).
+async function lerMesVendasAnuncio(m, vbMes, progresso, parar) {
     let paginas = 1, cortado = false;
     // v2.10: página lida neste ciclo fica guardada (naCiclo, só as linhas por anúncio): a retomada não pede de novo.
     const pagina = async p => {
+        if (parar && parar()) return { falha: 'parado' };
         const r = await naCiclo('vendasAnuncio', 'va|' + m + '|' + p, async () => {
-            let b = await buscarJson(urlVendasAnuncio(m, p));
-            if (!b) { await bateVivo(progresso); await espera(PAUSA_MS); b = await buscarJson(urlVendasAnuncio(m, p)); }   // 1 nova tentativa
+            let b = await buscarJsonMotivo(urlVendasAnuncio(m, p), VA_TEMPO_MS);
+            // Até 3 novas tentativas (2 s, 6 s, 15 s; o Retry-After do ML quando ele pede calma), com batida antes de cada uma. Sessão caída não repete.
+            for (let k = 0; b.falha && k < VA_ESPERAS_MS.length && !(parar && parar()); k++) {
+                await bateVivo(progresso);
+                await espera(Math.max(VA_ESPERAS_MS[k], b.espera || 0));
+                b = await buscarJsonMotivo(urlVendasAnuncio(m, p), VA_TEMPO_MS);
+            }
             await bateVivo(progresso);
-            if (b && b.login) return { falha: 'login' };
-            if (!b || !b.json) return { falha: 'sem resposta' };
+            if (b.login) return { falha: 'login' };
+            if (b.falha && parar && parar()) return { falha: 'parado' };
+            if (b.falha || !b.json) return { falha: b.falha || 'sem resposta' };
             const x = SHC.mlVendasBrutas(null, b.json);
             return x.temTabela ? { paginas: x.paginas, porAnuncio: x.porAnuncio } : { falha: 'formato mudou' };
         });
@@ -765,42 +958,56 @@ async function lerMesVendasAnuncio(m, vbMes, progresso) {
     });
     return { porAnuncio, itens, paginas, linhas: r.linhas.length, cortado };
 }
-async function sincronizarVendasAnuncio(sellerId, progresso) {
-    const k = 'vbAnuncio:' + sellerId, M0 = (((await SHC.lerChave(k)) || {}).meses) || {}, hoje = SHC.hoje(), atual = hoje.slice(0, 7);
+// Mês de vendas por anúncio lido DEPOIS de fechar (inteiro ou no teto de páginas): não é relido. O MESMO critério no filtro da leitura e na
+// conta do "quanto falta" do histórico (antes: mês lido antes de fechar contava como pronto e ficava cortado para sempre).
+const fechadoLidoVA = (M, m) => !!(M[m] && String(M[m].lidoEm || '') > fimDoMes(m) && (M[m].completo || M[m].paginas >= VA_PAGINAS_MAX));
+// v2.11: modo 'recentes' (a sincronização) = só o atual e o anterior (este só até ser lido fechado); 'historico' (lerHistorico) = os
+// meses antigos ainda não lidos fechados, gravando a cada mês e parando quando a sincronização pede a vez (histParar). Sem modo: todos.
+async function sincronizarVendasAnuncio(sellerId, progresso, modo) {
+    const k = 'vbAnuncio:' + sellerId, M0 = (((await SHC.lerChave(k)) || {}).meses) || {}, hoje = SHC.hoje(), atual = hoje.slice(0, 7), hist = modo === 'historico';
     const treze = []; for (let i = 0; i < VB_MESES; i++) treze.push(mesAntes(atual, i));
     // Mês fechado lido DEPOIS de fechar não é relido: inteiro, ou cortado no teto (o page_quantity de mês fechado não muda; reler
     // gastaria as mesmas VA_PAGINAS_MAX páginas a cada sincronização para dar de novo "lido só em parte"). Como o Faturamento.
-    const fechadoLido = m => !!(M0[m] && String(M0[m].lidoEm || '') > fimDoMes(m) && (M0[m].completo || M0[m].paginas >= VA_PAGINAS_MAX));
-    const meses = treze.filter((m, i) => i < 2 || !fechadoLido(m));
+    const fechadoLido = m => fechadoLidoVA(M0, m);
+    // v3.1: o histórico também tenta o mês atual e o anterior que a sincronização não conseguiu ler (nunca lidos), PRIMEIRO: a tela de
+    // famílias não fica 3 h em "não respondeu" esperando a próxima sincronização.
+    const meses = treze.filter((m, i) => (hist ? (i >= 2 ? !fechadoLido(m) : !M0[m]) : modo === 'recentes' ? i === 0 || (i === 1 && !fechadoLido(m)) : i < 2 || !fechadoLido(m)));
     const vb = await SHC.lerVendasBrutas(sellerId), inicio = Date.now(), novos = {}, itens = {}, diag = {}, naoLidos = [], cortados = [];
-    let login = false;
-    for (let i = 0; i < meses.length; i++) {
-        const m = meses[i];
-        if (i) await espera(PAUSA_MS);
-        if (progresso) await progresso({}, { feito: i, de: meses.length, unidade: 'meses', mesAgora: m, restanteSeg: SHC.estimaMeses(inicio, i, meses.length, Date.now()) });
-        const r = await lerMesVendasAnuncio(m, vb && SHC.vendasBrutasDoMes(vb.dias, m), progresso);
-        diag[m] = r.falha || (r.cortado ? 'cortado' : 'ok');
-        if (progresso) await progresso({}, { feito: i + 1, de: meses.length, unidade: 'meses', meses: { [m]: diag[m] } });
-        if (r.falha) {
-            naoLidos.push(m);
-            if (r.falha === 'login') { login = true; naoLidos.push(...meses.slice(i + 1)); break; }   // sessão caiu: guarda o que já leu e para
-            continue;
-        }
-        if (r.cortado) cortados.push(m);   // lido só em parte: grava o que leu (completo:false, a tela avisa); fechado, não é relido
-        novos[m] = { porAnuncio: r.porAnuncio, paginas: r.paginas, linhas: r.linhas, completo: !r.cortado, lidoEm: hoje, lidoTs: Date.now() };   // lidoTs: até que hora o mês foi lido (ritmo)
-        Object.assign(itens, r.itens);
-    }
-    const lidos = Object.keys(novos);
-    if (!lidos.length && meses.length) return { falha: login ? 'login' : 'indisponivel', diag };   // nada respondeu: o que havia fica
-    const snap = await mudaChave(k, v => {
+    let login = false, parado = false, seguidas = 0;
+    const grava = () => mudaChave(k, v => {
         v.meses = Object.assign({}, v.meses || {}, novos);
         Object.keys(v.meses).forEach(m => { if (treze.indexOf(m) < 0) delete v.meses[m]; });
         v.itens = Object.assign({}, v.itens || {}, itens);
         Object.keys(v.itens).forEach(id => { if (!treze.some(m => v.meses[m] && v.meses[m].porAnuncio && v.meses[m].porAnuncio[id])) delete v.itens[id]; });
         Object.assign(v, { ts: Date.now(), naoLidos, mesesLidos: treze.filter(m => v.meses[m] && v.meses[m].completo) });
     });
+    for (let i = 0; i < meses.length; i++) {
+        const m = meses[i];
+        if (hist && histParar) { parado = true; break; }   // a sincronização pediu a vez: o resto fica para a próxima
+        if (i) await espera(PAUSA_MS);
+        if (progresso) await progresso({}, { feito: i, de: meses.length, unidade: 'meses', mesAgora: m, restanteSeg: SHC.estimaMeses(inicio, i, meses.length, Date.now()) });
+        const r = await lerMesVendasAnuncio(m, vb && SHC.vendasBrutasDoMes(vb.dias, m), progresso, hist ? () => histParar : null);
+        if (r.falha === 'parado') { parado = true; break; }   // a sincronização pediu a vez no meio do mês: ele fica para a próxima
+        diag[m] = r.falha || (r.cortado ? 'cortado' : 'ok');
+        if (progresso) await progresso({}, { feito: i + 1, de: meses.length, unidade: 'meses', meses: { [m]: diag[m] } });
+        if (r.falha) {
+            naoLidos.push(m);
+            if (r.falha === 'login') { login = true; naoLidos.push(...meses.slice(i + 1)); break; }   // sessão caiu: guarda o que já leu e para
+            // v3.1: 2 meses seguidos sem resposta (cada página já tentou 4 vezes) e nada lido agora = o ML está fora: o resto fica para a próxima.
+            if (++seguidas >= 2 && !Object.keys(novos).length) { naoLidos.push(...meses.slice(i + 1)); break; }
+            continue;
+        }
+        seguidas = 0;
+        if (r.cortado) cortados.push(m);   // lido só em parte: grava o que leu (completo:false, a tela avisa); fechado, não é relido
+        novos[m] = { porAnuncio: r.porAnuncio, paginas: r.paginas, linhas: r.linhas, completo: !r.cortado, lidoEm: hoje, lidoTs: Date.now() };   // lidoTs: até que hora o mês foi lido (ritmo)
+        Object.assign(itens, r.itens);
+        if (hist) await grava();   // segundo plano (sem ciclo): o mês lido fica gravado mesmo se o worker morrer no próximo
+    }
+    const lidos = Object.keys(novos);
+    if (!lidos.length && meses.length && !parado) return { falha: login ? 'login' : 'indisponivel', diag };   // nada respondeu: o que havia fica
+    const snap = await grava();
     const noAtual = ((snap.meses[atual] || {}).porAnuncio) || {};
-    return { meses: lidos.length - cortados.length, de: meses.length, naoLidos, cortados, diag, mesesLidos: snap.mesesLidos.length,
+    return { meses: lidos.length - cortados.length, de: meses.length, naoLidos, cortados, diag, mesesLidos: snap.mesesLidos.length, parado,
         anuncios: Object.keys(noAtual).filter(id => (+(noAtual[id] || {}).bruto || 0) > 0).length };
 }
 // "13 meses · 142 anúncios com venda no mês" ou "11 de 13 meses lidos · dez/25 e mai/26 não responderam (tento de novo na próxima)"
@@ -820,12 +1027,81 @@ const PA = 'https://pa.mercadolivre.com.br/pa/api/admin-pads/ajax';
 const ADS_LIMITE = 50, ADS_PAGINAS_MAX = 60;   // até 3.000 anúncios patrocinados
 const diaMenos = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') - n * 864e5).toISOString().slice(0, 10);
 const periodo = (de, ate) => 'dateFrom=' + de + '&dateTo=' + ate;
+// Pedido do Ads dentro do ciclo (naCiclo): a resposta boa fica guardada e a retomada depois de uma queda não pede de novo.
+// reduz(json) = o que guardar (a lista de anúncios guarda só o que o Copiloto usa). null/login/erro nunca ficam guardados.
+const adsNoCiclo = (url, reduz) => naCiclo('ads', url.replace(PA, ''), async () => {
+    const b = await buscarJsonPA(url);
+    return b && b.json ? { json: reduz ? reduz(b.json) : b.json } : b;
+});
+// v3.1 (29/09/2026, mapeado ao vivo): o ML passou a desviar (302 → ads.mercadolivre.com.br/accounts) as chamadas ao pa.* que não
+// vêm de uma página do ML. Seguir o desvio vira erro de CORS em chrome://extensions → o fundo pede SEM seguir (redirect:'manual');
+// desviou (ou 401/403, ou 200 que não é JSON) → a MESMA chamada pela aba aberta do painel (copiloto-ml.js, 'ler_json_pa').
+// → { json } | { login: true } | { falha: 'sem_aba' } (nenhuma aba do painel respondeu) | null (ML fora/erro).
+let paPelaAba = false;   // desviou uma vez nesta leitura: as próximas chamadas já vão direto pela aba
+async function buscarJsonPA(url) {
+    if (!paPelaAba) {
+        let r;
+        try { r = await fetch(url, comTempo({ credentials: 'include', cache: 'no-store', redirect: 'manual', headers: { accept: 'application/json' } })); } catch (e) { return null; }
+        if (ehLogin(r.url)) return { login: true };
+        const desvio = r.type === 'opaqueredirect' || (r.status >= 300 && r.status < 400) || r.status === 401 || r.status === 403;
+        if (!desvio && !r.ok) return null;   // 429/500…: o ML não respondeu (o que havia fica)
+        if (!desvio) { try { return { json: await r.json() }; } catch (e) { /* HTML no lugar de JSON: tela do desvio → tenta pela aba */ } }
+        paPelaAba = true;
+    }
+    let a = await lerPaginaPorAba('ler_json_pa', url);
+    if (a && a.desvio && !a.dados) {
+        // A aba nunca diz "login" no 'ler_json_pa' (só desvio): sem sessão do ML o pa.* também desvia. Prova a sessão ANTES de
+        // culpar a conta de anúncios (não abre /accounts nem gasta a janela de 6 h) → "Entre no Mercado Livre".
+        const s = await buscarHtml(BASE + '/anuncios');
+        if (s && s.login) return { login: true };
+        if (await liberarContaAds()) a = await lerPaginaPorAba('ler_json_pa', url);
+    }
+    if (a && a.dados) return { json: a.dados };
+    if (!a) return { falha: 'sem_aba' };
+    if (a.login) return { login: true };
+    return a.desvio ? { falha: adsLiberou ? 'ads_escolher_conta' : 'ads_sem_conta' } : null;
+}
+// v3.1 (29/09/2026, ao vivo na conta DIASCOM): desvio TAMBÉM pela aba = a conta de anúncios ainda não foi aberta neste Chrome. Abrir
+// ads.mercadolivre.com.br/accounts uma vez (o ML desvia para /hub/summary?advertiserId=N e fixa a conta) libera o pa.*. O Copiloto abre
+// essa página numa aba em SEGUNDO PLANO, espera carregar (até 15 s), fecha e tenta de novo pela aba do painel. Não clica em nada nem
+// escolhe conta. No máximo 1 vez por leitura e 1 vez a cada 6 h por conta. Continuou desviando depois de abrir → o ML quer que a pessoa
+// escolha a conta de anúncios (mais de um anunciante) → 'ads_escolher_conta'. ponytail: sem a permissão "tabs" o endereço final da aba
+// não é visível (e não é pedida), então "pede escolha" é deduzido do desvio depois de abrir.
+const ADS_CONTAS = 'https://ads.mercadolivre.com.br/accounts', ADS_LIBERA_MS = 6 * 3600e3, ADS_LIBERA_ESPERA_MS = 15000;
+let adsConta = '', adsLiberou = null;   // null = não tentou nesta leitura · true = abriu agora · false = não abriu (já abriu nas últimas 6 h)
+function abrirEmSegundoPlano(url, ms) {
+    return new Promise(resolve => {
+        let id = null, fim = false;
+        // Carregou (ou 15 s): 1,5 s para a página fixar a conta, fecha a aba. Aba já fechada pela pessoa → o remove falha calado.
+        const acaba = () => {
+            if (fim) return;
+            fim = true;
+            chrome.tabs.onUpdated.removeListener(ouve);
+            espera(1500).then(() => (id !== null ? chrome.tabs.remove(id) : null)).catch(() => {}).then(() => resolve());
+        };
+        const ouve = (tid, info) => { if (tid === id && info && info.status === 'complete') acaba(); };
+        chrome.tabs.onUpdated.addListener(ouve);
+        setTimeout(acaba, ms);
+        chrome.tabs.create({ url, active: false }).then(t => { id = t.id; if (fim) chrome.tabs.remove(id).catch(() => {}); }, acaba);
+    });
+}
+async function liberarContaAds() {
+    if (adsLiberou !== null) return false;
+    adsLiberou = false;
+    const k = 'shc:adsLibera:' + adsConta, g = (await chrome.storage.local.get(k))[k];
+    if (g && Date.now() - g < ADS_LIBERA_MS) return false;
+    await chrome.storage.local.set({ [k]: Date.now() });   // antes de abrir: se o fundo cair no meio, não abre de novo em seguida
+    await abrirEmSegundoPlano(ADS_CONTAS, ADS_LIBERA_ESPERA_MS);
+    return (adsLiberou = true);
+}
+const falhaAds = b => (b && b.login ? 'login' : (b && b.falha) || 'indisponivel');
+const ADS_SEM_ABA = SHC.ADS_SEM_ABA;   // store.js: as telas reconhecem a etapa pulada por este texto
 async function lerCampanhas(de, ate, progresso) {
     const campanhas = [];
     for (let n = 0; n < 20; n++) {
-        const b = await buscarJson(PA + '/campaigns/search?' + periodo(de, ate) + '&limit=' + ADS_LIMITE + '&offset=' + (n * ADS_LIMITE) + '&filters[statuses]=A,D');
+        const b = await adsNoCiclo(PA + '/campaigns/search?' + periodo(de, ate) + '&limit=' + ADS_LIMITE + '&offset=' + (n * ADS_LIMITE) + '&filters[statuses]=A,D');
         await bateVivo(progresso);
-        if (!b || b.login || !b.json || !Array.isArray(b.json.results)) return { falha: b && b.login ? 'login' : 'indisponivel' };
+        if (!b || b.login || !b.json || !Array.isArray(b.json.results)) return { falha: falhaAds(b) };
         const r = SHC.adsCampanhas(b.json);
         campanhas.push(...r.campanhas);
         if (!r.campanhas.length || campanhas.length >= r.total) break;
@@ -833,10 +1109,14 @@ async function lerCampanhas(de, ate, progresso) {
     }
     return { campanhas };
 }
+// Sem aba do painel para o plano B: etapa pulada (não é erro vermelho) e o ads:<conta> anterior fica.
+const semAba = r => (r.falha === 'sem_aba' ? { pulado: true, semAba: true } : r);
 async function sincronizarAds(sellerId, progresso) {
+    paPelaAba = false;   // cada leitura tenta o fundo de novo (se o ML parar de desviar, volta sozinho)
+    adsConta = sellerId; adsLiberou = null;
     const ate = SHC.hoje(), de = diaMenos(ate, 29), antAte = diaMenos(de, 1), antDe = diaMenos(antAte, 29);
     const atual = await lerCampanhas(de, ate, progresso);
-    if (atual.falha) return atual;
+    if (atual.falha) return semAba(atual);
     if (!atual.campanhas.length) {
         const snap = { ts: Date.now(), temAds: false, periodo: { de, ate } };
         await SHC.salvarAds(sellerId, snap);
@@ -845,7 +1125,7 @@ async function sincronizarAds(sellerId, progresso) {
     const campanhas = atual.campanhas;
     for (const c of campanhas) {   // "Desempenho ao competir por impressões": falha numa campanha não derruba o resto
         await espera(PAUSA_MS);
-        const b = await buscarJson(PA + '/campaigns/' + encodeURIComponent(c.id) + '/metrics?' + periodo(de, ate));
+        const b = await adsNoCiclo(PA + '/campaigns/' + encodeURIComponent(c.id) + '/metrics?' + periodo(de, ate));
         c.share = b && b.json ? SHC.adsShare(b.json) : null;
         await progresso({ adsCampanhas: campanhas.length });   // mantém o service worker acordado com muitas campanhas
     }
@@ -854,20 +1134,21 @@ async function sincronizarAds(sellerId, progresso) {
     let total = null;
     for (let n = 0; n < ADS_PAGINAS_MAX; n++) {
         await espera(PAUSA_MS);
-        const b = await buscarJson(PA + '/ads?' + periodo(de, ate) + '&limit=' + ADS_LIMITE + '&offset=' + (n * ADS_LIMITE)
+        const b = await adsNoCiclo(PA + '/ads?' + periodo(de, ate) + '&limit=' + ADS_LIMITE + '&offset=' + (n * ADS_LIMITE)
             + (advertiserId ? '&advertiserId=' + encodeURIComponent(advertiserId) : '')
-            + '&filters%5Bstatuses%5D=A%2CP%2CI%2CG%2CR%2CC%2CS%2CX%2CY%2CM%2CH%2CZ&comparisonDateFrom=' + antDe + '&comparisonDateTo=' + antAte);
-        if (!b || b.login || !b.json || !Array.isArray(b.json.results)) return { falha: b && b.login ? 'login' : 'indisponivel' };
+            + '&filters%5Bstatuses%5D=A%2CP%2CI%2CG%2CR%2CC%2CS%2CX%2CY%2CM%2CH%2CZ&comparisonDateFrom=' + antDe + '&comparisonDateTo=' + antAte,
+            j => (Array.isArray(j.results) ? { results: { length: j.results.length }, lidos: SHC.adsAnuncios(j) } : j));
+        if (!b || b.login || !b.json || !(Array.isArray(b.json.results) || b.json.lidos)) return semAba({ falha: falhaAds(b) });
         const chave = a => (a.itemId || 'cat:' + a.produtoCatalogoId) + '|' + a.campanhaId;   // catálogo vem sem itemId (id do produto)
-        const r = SHC.adsAnuncios(b.json), novos = r.anuncios.filter(a => !vistos.has(chave(a)));
+        const r = b.json.lidos || SHC.adsAnuncios(b.json), novos = r.anuncios.filter(a => !vistos.has(chave(a)));
         total = r.total;
         novos.forEach(a => { vistos.add(chave(a)); anuncios.push(a); });
         await progresso({ adsAnuncios: anuncios.length }, { feito: anuncios.length, de: total, unidade: total ? 'anúncios' : null });
         if (!novos.length || b.json.results.length < ADS_LIMITE || anuncios.length >= total) break;   // fim, ou o ML repetiu a página
     }
-    const res = await buscarJson(PA + '/campaigns/metrics?' + periodo(de, ate));
+    const res = await adsNoCiclo(PA + '/campaigns/metrics?' + periodo(de, ate));
     await bateVivo(progresso);
-    const ant = await buscarJson(PA + '/campaigns/metrics?' + periodo(antDe, antAte));
+    const ant = await adsNoCiclo(PA + '/campaigns/metrics?' + periodo(antDe, antAte));
     await bateVivo(progresso);
     const campAnt = await lerCampanhas(antDe, antAte, progresso), porId = {};
     (campAnt.campanhas || []).forEach(c => { porId[c.id] = c.metricas; });
@@ -1017,6 +1298,14 @@ async function lerPedidosAfiliados(de, ate, progresso) {
     }
     return Object.assign(SHC.afilPedidosAgrega(vendas), { periodo: { de, ate }, total, completo: completo && (total === null || vendas.length >= total) });
 }
+// v3.1: Campanhas exclusivas (estado da página, 1 GET). ponytail: só a 1ª página (20); não se sabe se a página aceita ?page=N —
+// a tela diz "mostrando 20 de N". Confirmar ao vivo numa conta com mais de 20 antes de paginar. → SHC.afilExclusivasDoEstado | null.
+async function lerExclusivasAfiliados() {
+    return naCiclo('afiliados', 'exclusivas', async () => {
+        const r = await SHC.buscarVendo(BASE + '/seller-affiliates/target-campaign', comTempo({ credentials: 'include', cache: 'no-store' }));
+        return r.ok && !ehLogin(r.url) ? SHC.afilExclusivasDoEstado(SHC.mlExtraiEstado(await r.text())) : null;
+    });
+}
 async function sincronizarAfiliados(sellerId, progresso) {
     const c = await lerCampanhaAfiliados(progresso);
     if (c.falha) return c;
@@ -1029,9 +1318,10 @@ async function sincronizarAfiliados(sellerId, progresso) {
     const ate = SHC.hoje(), de = diaMenos(ate, 29), m = await lerMetricasAfiliados(de, ate, progresso);   // 30 dias com hoje, como no Mercado Ads
     if (m.falha) return m;
     // Pedidos: falha deles não derruba a etapa (a tela diz "não consegui ler os pedidos agora").
-    let pe = null;
+    let pe = null, ex = null;
     try { await espera(PAUSA_MS); pe = await lerPedidosAfiliados(de, ate, progresso); } catch (x) { pe = null; }
-    const snap = { ts: Date.now(), temAfiliados: true, campanha: c, metricas: m, pedidos: pe && !pe.falha ? pe : null };
+    try { await espera(PAUSA_MS); ex = await lerExclusivasAfiliados(); } catch (x) { ex = null; }   // v3.1: falha aqui também não derruba a etapa
+    const snap = { ts: Date.now(), temAfiliados: true, campanha: c, metricas: m, pedidos: pe && !pe.falha ? pe : null, exclusivas: ex };
     await SHC.gravarChave('afil:' + sellerId, snap);
     return snap;
 }
@@ -1118,7 +1408,14 @@ async function atualizarAlertas(conta) {
     // v2.7: perguntas, reputação e remessas do Full com inconformidade/multa (lista + detalhes já lidos).
     const remessas = rem ? SHC.remessasResumo(rem, remDet, hoje.slice(0, 7), hoje) : null;
     const nfe = await Promise.all([hoje.slice(0, 7), mesAntes(hoje.slice(0, 7), 1)].map(m => SHC.lerChave('nfe:' + c + ':' + m)));   // v2.8: nota de venda rejeitada/com erro
-    const anom = SHC.anomalias(c, { alertas: r, posvenda: pvd, frete: frh, conferir: cnf, rateio: rat, cert, medidas: med, titulos, perguntas: perg, reputacao: rep, remessas, nfe }, cfg);   // v2.8: módulos desligados não contam
+    const fatura = await SHC.lerFaturas(c);   // v3.1: custo novo na fatura
+    // v3.1 (pedido da dona 26/09): SKUs que pedem ação no faturamento por família (repor, enviar ao Full, baixar preço, parados) — só o que já está guardado.
+    let familias = null;
+    try {
+        const [va, cat, cores] = await Promise.all([SHC.lerChave('vbAnuncio:' + c), SHC.lerChave('cat:' + c), SHC.lerChave('cores:' + c)]);
+        if (va) familias = SHC.familiasAcoes(SHC.familias(va, cat, an, {}, hoje.slice(0, 7), { cfg, hoje, cores: cores || {} }), (an && an.itens) || [], full, { hoje });
+    } catch (e) { familias = null; /* derivado: nunca derruba os alertas */ }
+    const anom = SHC.anomalias(c, { alertas: r, posvenda: pvd, frete: frh, conferir: cnf, rateio: rat, cert, medidas: med, titulos, perguntas: perg, reputacao: rep, remessas, nfe, fatura, familias }, cfg);   // v2.8: módulos desligados não contam
     const snapAnom = Object.assign({ ts: Date.now() }, anom, { itens: anom.itens.slice(0, 200) });
     await chrome.storage.local.set({ 'shc:anomalias': snapAnom, ['shc:anomalias:' + c]: snapAnom });   // por conta também: "suas contas juntas" (SHC.dadosContas)
     const rp = await roboPromoPassada(c, cfg).catch(() => null);   // v2.9: robô de promoções (só sugere; nenhum GET a mais)
@@ -1274,7 +1571,7 @@ const PATCH_ETAPA = {
         cobrancasIncompletas: co.incompletos.length ? co.incompletos : null, cobrancasNaoLidas: co.naoLidos.length ? co.naoLidos : null,
         anunciosComVendasMes: co.anunciosVendas, fretesPorTitulo: co.porTitulo, fretesPendentes: co.pendentes }),
     full: fu => ({ temFull: fu.temFull, fullProdutos: fu.produtos.length, fullEm: Date.now() }),
-    ads: ad => ({ temAds: ad.temAds, adsCampanhas: (ad.campanhas || []).length, adsAnuncios: (ad.anuncios || []).length, adsEm: Date.now() }),
+    ads: ad => (ad.semAba ? null : { temAds: ad.temAds, adsCampanhas: (ad.campanhas || []).length, adsAnuncios: (ad.anuncios || []).length, adsEm: Date.now() }),   // sem aba: o status do Ads anterior fica
     repasse: rp => Object.assign({ repasseConectado: !rp.semPermissao }, rp.semPermissao ? {} : { repasseEm: Date.now(), repassePaginas: rp.paginas }),
     afiliados: af => ({ temAfiliados: !!af.temAfiliados, afiliadosEm: Date.now() }),
     alertas: al => ({ alertasCriticos: al.criticos, anomalias: al.anomalias ? al.anomalias.total : null }),
@@ -1301,10 +1598,15 @@ const O_QUE_FAZER = {
     sem_sessao: 'Entre no Mercado Livre neste Chrome e sincronize de novo.',
     ml_indisponivel: 'O Mercado Livre não respondeu. Tente de novo em alguns minutos.',
     sem_login_mp: 'Entre no Mercado Pago neste Chrome e sincronize de novo.',
+    ads_sem_conta: 'Abra o Mercado Ads uma vez neste Chrome e clique em Sincronizar agora.',   // v3.1: conta de anúncios não liberada
+    ads_escolher_conta: 'Abra o Mercado Ads e escolha a conta de anúncios. Depois clique em Sincronizar agora.',
 };
 async function sincronizar(origem) {
     if (emAndamento) return emAndamento;
     emAndamento = (async () => {
+        // v2.11: o histórico em segundo plano dá a vez (para antes do próximo pedido ao ML) — nunca dois leitores ao mesmo tempo.
+        histParar = true;
+        if (historicoEm) await historicoEm.catch(() => {});
         const anterior = await SHC.lerStatus(), agora = Date.now(), ETAPAS = SHC.SYNC_ETAPAS;
         // Etapas (ficam gravadas depois do fim): todas na fila, com o resumo da última vez em resumoAnterior.
         const etapas = {};
@@ -1402,7 +1704,7 @@ async function sincronizar(origem) {
         ciclo = cic;
         if (cic) await salvaCiclo();
         const feita = id => !!(cic && cic.feitas[id]);
-        const codigo = falha => (falha === 'login' ? 'sem_sessao' : 'ml_indisponivel');
+        const codigo = falha => (falha === 'login' ? 'sem_sessao' : /^ads_/.test(falha) ? falha : 'ml_indisponivel');
         // Cada etapa depois dos anúncios falha sozinha: o que ela tinha gravado antes fica, e o status ganha erro<Etapa>.
         // resumo(r) = texto curto do que foi lido; r.semPermissao = etapa pulada (não é erro).
         // v2.10: etapa já feita neste ciclo não roda de novo (os campos do status dela voltam do ciclo no fim).
@@ -1438,36 +1740,27 @@ async function sincronizar(origem) {
                         await chrome.storage.local.remove('shc:fiscalPrimeiro');
                     }
                 } catch (x) { fiscalCedo = null; }
-                let e = await etapa('promos', () => sincronizarPromos(conta, progresso),   // anúncios lidos: a sincronização vale
-                    r => (r.vazio ? 'Nenhuma promoção disponível' : Q(r.propostas, 'proposta', 'propostas') + ' em ' + Q(r.familias, 'produto', 'produtos')));
-                pr = e.r || null; erroPromos = e.erro || null;
-                // v2.9: Afiliados logo depois das promoções (1 página + poucos GETs): no fim da fila ela não rodava quando o Faturamento
-                // demorava ou a sincronização era interrompida, e a aba ficava vazia.
-                e = await etapa('afiliados', () => sincronizarAfiliados(conta, progresso), SHC.afilResumo);
-                af = e.r || null; erroAfiliados = e.erro || null;
-                e = await etapa('vendasBrutas', () => sincronizarVendasBrutas(conta, progresso), resumoVendasBrutas);   // antes das cobranças: o fechamento soma os dias
+                // v2.11: ordem por prioridade — o que as telas usam primeiro (vendas, Fechamento, Full, Ads, pós-venda, famílias) e as etapas
+                // leves antes das pesadas (promoções, fiscal, faturas + NF-e). Os meses antigos ficam para o histórico (lerHistorico).
+                let e = await etapa('vendasBrutas', () => sincronizarVendasBrutas(conta, progresso), resumoVendasBrutas);   // antes das cobranças: o fechamento soma os dias
                 erroVendasBrutas = e.erro || null;
-                e = await etapa('faturamento', () => sincronizarCobrancas(conta, progresso), resumoFaturamento);
+                e = await etapa('faturamento', () => sincronizarCobrancas(conta, progresso, 'recentes'), resumoFaturamento);
                 co = e.r || null; erroCobrancas = e.erro || null;
-                // v2.8: + NF-e das vendas (sincronizarNfe): falha dela não derruba as faturas (o erro fica em nfe:<conta>:<mês>).
-                e = await etapa('faturas', async () => {
-                    const r = await sincronizarFaturas(conta, progresso);
-                    let nf = null;
-                    try { nf = await sincronizarNfe(conta, progresso); } catch (x) { nf = null; }
-                    return r && r.falha ? r : Object.assign({}, r, { nfeVendas: nf });
-                }, r => Q((r.faturas || []).length, 'fatura', 'faturas') + (r.notasFiscais ? ' · ' + Q(r.notasFiscais, 'nota fiscal', 'notas fiscais') : '')
-                    + (r.nfeVendas && r.nfeVendas.notas ? ' · ' + Q(r.nfeVendas.notas, 'nota de venda', 'notas de venda') : ''));
-                erroFaturas = e.erro || null;
-                try { await gravarRateio(conta); } catch (x) { /* rateio é derivado: sem ele a página só não mostra a conferência */ }
                 e = await etapa('full', () => sincronizarFullERemessas(conta, progresso), resumoFull);
                 fu = e.r || null; erroFull = e.erro || null;
                 e = await etapa('ads', () => sincronizarAds(conta, progresso),
-                    r => (r.temAds ? Q((r.campanhas || []).length, 'campanha', 'campanhas') + ' · ' + Q((r.anuncios || []).length, 'anúncio', 'anúncios') : 'Nenhuma campanha no Mercado Ads'));
+                    r => (r.semAba ? ADS_SEM_ABA : r.temAds ? Q((r.campanhas || []).length, 'campanha', 'campanhas') + ' · ' + Q((r.anuncios || []).length, 'anúncio', 'anúncios') : 'Nenhuma campanha no Mercado Ads'));
                 ad = e.r || null; erroAds = e.erro || null;
-                e = await etapa('repasse', () => sincronizarRepasse(conta, progresso),
-                    r => (r.semPermissao ? 'Mercado Pago não conectado' : r.semItens ? 'Nenhuma venda nova no Mercado Pago' : Q(r.meses, 'mês', 'meses') + ' de repasse'), mpErro);
-                rp = e.r || null;
-                erroRepasse = e.erro ? mpErro(e.erro) : null;   // sem permissão não é erro: "conecte para comparar"
+                e = await etapa('posvenda', () => sincronizarPosVenda(conta), resumoPosVenda);
+                pv = e.r || null; erroPosVenda = e.erro || null;
+                e = await etapa('vendasAnuncio', () => sincronizarVendasAnuncio(conta, progresso, 'recentes'), resumoVendasAnuncio);   // v2.6: famílias
+                erroVendasAnuncio = e.erro || null;
+                e = await etapa('promos', () => sincronizarPromos(conta, progresso),   // anúncios lidos: a sincronização vale
+                    r => (r.vazio ? 'Nenhuma promoção disponível' : Q(r.propostas, 'proposta', 'propostas') + ' em ' + Q(r.familias, 'produto', 'produtos')));
+                pr = e.r || null; erroPromos = e.erro || null;
+                // v2.9: Afiliados logo depois das promoções (1 página + poucos GETs).
+                e = await etapa('afiliados', () => sincronizarAfiliados(conta, progresso), SHC.afilResumo);
+                af = e.r || null; erroAfiliados = e.erro || null;
                 e = await etapa('saude', async () => {
                     const cedo = fiscalCedo ? await fiscalCedo.catch(() => null) : null;
                     if (cedo && !cedo.falha) return cedo;
@@ -1478,10 +1771,20 @@ async function sincronizar(origem) {
                     return f && f.ts >= cic.inicio ? f : fiscalCompartilhado(conta, progresso);
                 }, resumoSaude);
                 erroSaude = e.erro || null;
-                e = await etapa('posvenda', () => sincronizarPosVenda(conta), resumoPosVenda);
-                pv = e.r || null; erroPosVenda = e.erro || null;
-                e = await etapa('vendasAnuncio', () => sincronizarVendasAnuncio(conta, progresso), resumoVendasAnuncio);   // v2.6: famílias (no fim: ninguém espera)
-                erroVendasAnuncio = e.erro || null;
+                // v2.8: + NF-e das vendas (sincronizarNfe): falha dela não derruba as faturas (o erro fica em nfe:<conta>:<mês>).
+                e = await etapa('faturas', async () => {
+                    const r = await sincronizarFaturas(conta, progresso);
+                    let nf = null;
+                    try { nf = await sincronizarNfe(conta, progresso, 'recentes'); } catch (x) { nf = null; }
+                    return r && r.falha ? r : Object.assign({}, r, { nfeVendas: nf });
+                }, r => Q((r.faturas || []).length, 'fatura', 'faturas') + (r.notasFiscais ? ' · ' + Q(r.notasFiscais, 'nota fiscal', 'notas fiscais') : '')
+                    + (r.nfeVendas && r.nfeVendas.notas ? ' · ' + Q(r.nfeVendas.notas, 'nota de venda', 'notas de venda') : ''));
+                erroFaturas = e.erro || null;
+                try { await gravarRateio(conta); } catch (x) { /* rateio é derivado: sem ele a página só não mostra a conferência */ }
+                e = await etapa('repasse', () => sincronizarRepasse(conta, progresso),
+                    r => (r.semPermissao ? 'Mercado Pago não conectado' : r.semItens ? 'Nenhuma venda nova no Mercado Pago' : Q(r.meses, 'mês', 'meses') + ' de repasse'), mpErro);
+                rp = e.r || null;
+                erroRepasse = e.erro ? mpErro(e.erro) : null;   // sem permissão não é erro: "conecte para comparar"
                 // v2.7: radar leve (Resumo, perguntas, reputação: 3 GETs) antes de contar as anomalias; se falhar, o anterior fica e a etapa continua.
                 e = await etapa('alertas', async () => { try { await sincronizarRadar(conta, progresso); } catch (x) { /* radar é derivado */ } return atualizarAlertas(conta); },
                     r => (r.anomalias && r.anomalias.total ? SHC.qtd(r.anomalias.total, 'ponto de atenção', 'pontos de atenção') : 'Nada pede sua atenção agora'));
@@ -1519,15 +1822,102 @@ async function sincronizar(origem) {
             await salvaCiclo();
         }
         if (ciclo === cic) ciclo = null;
+        // v2.11: andamento do histórico ("7 de 12 meses") no mesmo status, só com o que está gravado; a leitura vem 1 min depois (alarme).
+        histFalta = false;
+        if (an && an.sellerId && an.sellerId !== 'atual') {
+            try { const h = await historicoConta(an.sellerId); st.historico = Object.assign(h, { lendo: false, rodadas: 0 }); histFalta = h.falta > 0; } catch (x) { /* fica o de antes */ }
+        }
         await salvar();
         return st;
     })();
     try { return await emAndamento; } finally {
         emAndamento = null;
+        // v2.11: os meses antigos (Faturamento, vendas por anúncio, NF-e do mês passado) vêm em segundo plano, 1 min depois (alarme
+        // 'shc-historico'), sem travar a barra. O andamento ("7 de 12 meses") já fica no status agora, só com o que está gravado.
+        histParar = false;
+        if (histFalta) alarmeHist(true, 1);
         // Custos do ERP junto: no botão Sincronizar (no máximo a cada 10 min) e na automática (a cada 6 h). Não segura a sincronização.
         const iv = origem === 'manual' ? 10 * 60e3 : 6 * 3600e3;
-        sincronizarCustos('tiny', iv).catch(() => {}).then(() => sincronizarCustos('omie', iv).catch(() => {}));
+        sincronizarCustos('tiny', iv).catch(() => {}).then(() => sincronizarCustos('omie', iv).catch(() => {})).then(() => sincronizarCustos('bling', iv).catch(() => {}));
     }
+}
+
+// ── v2.11: HISTÓRICO EM SEGUNDO PLANO. A sincronização lê só o que as telas usam agora (mês atual e anterior); os 11 meses mais antigos do
+// Faturamento e das vendas por anúncio e a 1ª leitura da NF-e do mês passado vêm depois, aqui, sem travar a barra da sincronização.
+// Começa 1 min depois de cada sincronização (agendarHistorico); o alarme 'shc-historico' (a cada HIST_ALARME_MIN) só existe enquanto falta mês: se o
+// worker morrer, ela continua de onde parou (o que já foi gravado por mês não é lido de novo). A sincronização que começa pede a vez
+// (histParar): o histórico para antes do próximo pedido ao ML e o mês pela metade fica para a próxima vez (nunca vira zero).
+// Andamento em shc:status.historico = { feitos, de (os 12 meses antes do atual), falta, lendo, ts }: "Histórico: 7 de 12 meses lidos".
+const HIST_ALARME_MIN = 5, HIST_RODADAS_MAX = 3;
+let historicoEm = null, histParar = false, histFalta = false;
+// Só o armazenamento: feitos = meses antes do atual com o Faturamento lido (ou cortado no teto); falta = o que ainda há para tentar (meses do
+// Faturamento, meses das vendas por anúncio do 2º para trás, e a NF-e do mês passado se nunca foi tentada). Até HIST_RODADAS_MAX rodadas por
+// sincronização: o que continuar falhando fica para depois da próxima (nunca fica martelando o ML a cada 5 min).
+async function historicoConta(conta) {
+    const atual = SHC.hoje().slice(0, 7), meses = SHC.janelasCobranca(SHC.hoje(), true).map(j => j.mes).filter(m => m < atual);
+    const cob = (await SHC.lerChave('ml:cobrancas:' + conta)) || {}, fat = new Set([...(cob.mesesLidos || []), ...(cob.incompletos || [])]);
+    const va = ((await SHC.lerChave('vbAnuncio:' + conta)) || {}).meses || {};
+    // v3.1: o mês anterior e o atual que a sincronização nunca conseguiu ler também contam (o histórico tenta de novo em 5 min).
+    const vaOk = m => (m === mesAntes(atual, 1) ? !!va[m] : fechadoLidoVA(va, m));
+    const feitos = meses.filter(m => fat.has(m)).length, vaFalta = meses.filter(m => !vaOk(m)).length + (va[atual] ? 0 : 1);
+    const nfe = await SHC.lerChave('nfe:' + conta + ':' + mesAntes(atual, 1));
+    // v3.1: meses a reler 1 vez (frete de devoluções, migrarFreteDevolucao); os dos últimos 40 dias ficam com a sincronização.
+    const recentes = new Set(SHC.janelasCobranca(SHC.hoje(), false).map(j => j.mes)), releer = (cob.releer || []).filter(m => meses.indexOf(m) >= 0 && !recentes.has(m)).length;
+    return { feitos, de: meses.length, falta: meses.length - feitos + vaFalta + (nfe ? 0 : 1) + releer, ts: Date.now() };   // NF-e já tentada (mesmo com erro) fica para a sincronização
+}
+// diag = {etapa: {'AAAA-MM': 'ok'|…}} lido no histórico: entra no diagnóstico por mês da etapa (o "ver detalhes" mostra o mês que não respondeu).
+const gravaHistorico = (h, diag) => emFilaStatus(async () => {
+    const st = await SHC.lerStatus();
+    st.historico = h;
+    Object.keys(diag || {}).forEach(id => { const e = (st.etapas || (st.etapas = {}))[id] || (st.etapas[id] = {}); e.meses = juntaMeses(e.meses, diag[id]); });
+    await SHC.salvarStatus(st);
+});
+// v3.1: alertas recalculados FORA da sincronização (o histórico trouxe meses novos: parados, família) → o número do status acompanha o do ícone.
+async function atualizaAlertasStatus(conta) {
+    const al = await atualizarAlertas(conta);
+    await emFilaStatus(async () => { const st = await SHC.lerStatus(); Object.assign(st, PATCH_ETAPA.alertas(al)); await SHC.salvarStatus(st); });
+}
+const alarmeHist = (liga, emMin) => { try { if (liga) chrome.alarms.create('shc-historico', { delayInMinutes: emMin || HIST_ALARME_MIN, periodInMinutes: HIST_ALARME_MIN }); else if (chrome.alarms.clear) chrome.alarms.clear('shc-historico'); } catch (e) { /* sem alarme: começa de novo no fim da próxima sincronização */ } };
+function lerHistorico() {
+    if (emAndamento) return Promise.resolve(null);   // a sincronização chama de novo quando terminar
+    if (historicoEm) return historicoEm;
+    historicoEm = (async () => {
+        const conta = await SHC.contaAtual();
+        if (!conta || conta === 'atual') return null;
+        const rodadas = (((await SHC.lerStatus()).historico) || {}).rodadas || 0;
+        let h = await historicoConta(conta);
+        if (!h.falta || rodadas >= HIST_RODADAS_MAX) { alarmeHist(false); await gravaHistorico(Object.assign(h, { lendo: false, rodadas })); return h; }
+        // 1 GET: a sessão do ML aberta agora ainda é desta conta (nunca grava o histórico de uma conta na outra).
+        // Sessão caída (login/indisponível/outra conta): conta a rodada e desliga o alarme no teto (antes: 1 GET a cada 5 min sem fim).
+        if (await confereSessao(conta)) { await gravaHistorico(Object.assign(h, { lendo: false, rodadas: rodadas + 1 })); if (rodadas + 1 >= HIST_RODADAS_MAX) alarmeHist(false); return h; }
+        alarmeHist(true);
+        await gravaHistorico(Object.assign(h, { lendo: true, rodadas }));
+        // Andamento: recalcula "N de 12" no máximo a cada 3 s; nas outras chamadas só mantém o worker acordado. O diagnóstico por mês
+        // (conta.meses) vai para a etapa correspondente do status.
+        let ultima = Date.now(), etapaHist = 'faturamento';
+        const diag = {};
+        const anda = async (patch, conta_) => {
+            if (conta_ && conta_.meses) diag[etapaHist] = juntaMeses(diag[etapaHist], conta_.meses);
+            if (Date.now() - ultima < 3000 || histParar) return bateVivo(null);
+            ultima = Date.now();
+            await gravaHistorico(Object.assign(await historicoConta(conta), { lendo: true, rodadas }), diag);
+        };
+        const lido = {};
+        try {
+            lido.cobrancas = await sincronizarCobrancas(conta, anda, 'historico');
+            etapaHist = 'vendasAnuncio';
+            if (!histParar) lido.vendasAnuncio = await sincronizarVendasAnuncio(conta, anda, 'historico');
+            etapaHist = 'faturas';
+            if (!histParar) lido.nfe = await sincronizarNfe(conta, anda, 'historico');
+            if (!histParar) await gravarRateio(conta).catch(() => {});   // meses novos no rateio das faturas
+        } catch (e) { lido.erro = String((e && e.message) || e); /* o que foi gravado por mês fica; o resto na próxima vez */ }
+        h = await historicoConta(conta);
+        h.lido = lido;
+        await gravaHistorico(Object.assign(h, { lendo: false, rodadas: histParar ? rodadas : rodadas + 1 }), diag);
+        if (!histParar) { if (!h.falta || rodadas + 1 >= HIST_RODADAS_MAX) alarmeHist(false); if (!emAndamento) await atualizaAlertasStatus(conta).catch(() => {}); }   // mês que não respondeu: mais 1 rodada em 5 min (até 3); depois só na próxima sincronização
+        return h;
+    })().finally(() => { historicoEm = null; histParar = false; });
+    return historicoEm;
 }
 
 // ── Custos do ERP pelo fundo (Tiny: token; Omie: app_key + app_secret), com o que o seller já colou no painel (erp:tiny / erp:omie).
@@ -1539,7 +1929,30 @@ const ERPS = {
         puxar: (c, o) => SHC.tinyPuxar(c, o), resumo: r => SHC.tinyResumo(r), mesma: (a, b) => a === b },
     omie: { chave: () => SHC.OMIE_CHAVE, origem: () => SHC.OMIE_ORIGEM, cred: t => (t && t.appKey && t.appSecret ? { appKey: t.appKey, appSecret: t.appSecret } : null), nome: 'Omie',
         puxar: (c, o) => SHC.omiePuxar(c, o), resumo: r => SHC.omieResumo(r), mesma: (a, b) => !!a && !!b && a.appKey === b.appKey && a.appSecret === b.appSecret },
+    // Bling (v3.1, bling.js): OAuth do aplicativo do próprio seller. Tokens renovados no meio da leitura vão logo para erp:bling (salvarBling).
+    bling: { chave: () => SHC.BLING_CHAVE, origem: () => SHC.BLING_ORIGENS, cred: t => (t && t.clientId && t.clientSecret && t.refresh ? t : null), nome: 'Bling',
+        puxar: (c, o) => SHC.blingPuxar(c, Object.assign({ salvar: tk => salvarBling(c, tk) }, o)), resumo: r => SHC.blingResumo(r),
+        mesma: (a, b) => !!a && !!b && a.clientId === b.clientId && a.clientSecret === b.clientSecret },
 };
+// Grava tokens novos do Bling só se o seller não desconectou/trocou de aplicativo no meio. tk = null → apaga os tokens (refresh vencido: "Conecte de novo").
+async function salvarBling(cred, tk) {
+    const agora = await SHC.lerChave(SHC.BLING_CHAVE);
+    if (!agora || agora.clientId !== cred.clientId || agora.clientSecret !== cred.clientSecret) return;
+    const x = Object.assign({}, agora, tk || { reconectar: true });
+    if (!tk) ['access', 'refresh', 'expira', 'renovado'].forEach(k => delete x[k]); else delete x.reconectar;
+    await SHC.gravarChave(SHC.BLING_CHAVE, x);
+}
+// {acao:'bling_conectar', code}: o painel fez o launchWebAuthFlow (state conferido lá) e já guardou Client ID/Secret; aqui o code vira tokens
+// (só em erp:bling) e os custos são importados na hora. → a resposta de sincronizarCustos('bling') | {ok:false, msg}.
+async function conectarBling(code) {
+    const t = await SHC.lerChave(SHC.BLING_CHAVE);
+    if (!t || !t.clientId || !t.clientSecret) return { ok: false, erp: 'bling', msg: 'Cole o Client ID e o Client Secret do seu aplicativo do Bling.' };
+    try {
+        const tk = await SHC.blingTrocarCodigo(t, code, { fetch: (u, i) => fetch(u, comTempo(i)) });
+        await salvarBling(t, tk);
+    } catch (e) { return { ok: false, erp: 'bling', erro: (e && e.erro) || 'outro', msg: (e && e.msg) || 'Não consegui falar com o Bling. Tente de novo.' }; }
+    return sincronizarCustos('bling', 0);
+}
 // SKUs dos anúncios da conta ainda sem custo (depois da importação) → número. null sem retrato.
 async function skusSemCusto() {
     const itens = ((await SHC.lerAnuncios()) || {}).itens || [];
@@ -1580,7 +1993,7 @@ function sincronizarCustos(erp, intervaloMs) {
         const t = await SHC.lerChave(E.chave()), cred = E.cred(t);
         if (!cred) return { semToken: true, erp };
         let pode = false;
-        try { pode = !!(chrome.permissions && await chrome.permissions.contains({ origins: [E.origem()] })); } catch (e) { /* sem permissão */ }
+        try { pode = !!(chrome.permissions && await chrome.permissions.contains({ origins: [].concat(E.origem()) })); } catch (e) { /* sem permissão */ }
         if (!pode) return { semPermissao: true, erp };
         if (intervaloMs && t.ultima && Date.now() - (t.ultima.ts || 0) < intervaloMs) return { recente: true, erp, ultima: t.ultima };
         try {
@@ -1592,7 +2005,10 @@ function sincronizarCustos(erp, intervaloMs) {
             if (E.mesma(E.cred(agora), cred)) await SHC.gravarChave(E.chave(), Object.assign({}, agora, { ultima: Object.assign({ ts: Date.now() }, r) }));
             if (r.atualizados) await atualizarAlertas().catch(() => {});
             return Object.assign({ ok: true, erp, resumo: E.resumo(r) }, r);
-        } catch (e) { return { ok: false, erp, erro: (e && e.erro) || 'outro', msg: (e && e.msg) || 'Não consegui falar com o ' + E.nome + '. Tente de novo em alguns minutos.' }; }
+        } catch (e) {
+            if (erp === 'bling' && e && e.erro === 'reconectar') await salvarBling(cred, null).catch(() => {});   // refresh vencido: some o token, o painel pede "Conectar de novo"
+            return { ok: false, erp, erro: (e && e.erro) || 'outro', msg: (e && e.msg) || 'Não consegui falar com o ' + E.nome + '. Tente de novo em alguns minutos.' };
+        }
         finally { await custosProgresso(null).catch(() => {}); }
     })();
     return custosAndando.finally(() => { custosAndando = null; });
@@ -1604,15 +2020,16 @@ function sincronizarCustos(erp, intervaloMs) {
 // (erroSaude). total = linhas do ML (família fechada é 1 linha sem MLB → vai em familias); completo = leu todas as linhas.
 const lerPaginaFiscal = r => Object.assign(SHC.mlPaginaAnuncios(r), SHC.mlLinhasDaPagina(r));
 async function sincronizarSaude(sellerId, progresso) {
-    const t = await buscarJson(BASE + '/anuncios/api/tasks'), tarefas = t && t.json ? SHC.mlTarefasAnuncios(t.json) : null;
+    // v2.11: cada resposta fica guardada no ciclo (naCiclo): a parte fiscal que começa cedo não é relida se o worker cair no meio.
+    const t = await naCiclo('saude', 'tasks', () => buscarJson(BASE + '/anuncios/api/tasks')), tarefas = t && t.json ? SHC.mlTarefasAnuncios(t.json) : null;
     if (!tarefas) return { falha: t && t.login ? 'login' : 'indisponivel' };
     let total = SHC.mlSemFiscal(tarefas), linhas = 0;
     const itens = [], familias = [], vistos = new Set();
     for (let n = 1; total > 0 && n <= PAGINAS_ANUNCIOS_MAX; n++) {
         if (n > 1) await espera(PAUSA_MS);
         // Página 1 sem linha nenhuma pode ser tela intermediária: tenta a aba (como sincronizarAnuncios).
-        const pag = await lerPaginaML(BASE + '/anuncios?filters=WITHOUT_FISCAL_DATA&page=' + n, 'ler_pagina_anuncios', lerPaginaFiscal,
-            n === 1 ? d => !(d.itens || []).length && !(d.familias || []).length : null);
+        const pag = await naCiclo('saude', 'fiscal|' + n, () => lerPaginaML(BASE + '/anuncios?filters=WITHOUT_FISCAL_DATA&page=' + n, 'ler_pagina_anuncios', lerPaginaFiscal,
+            n === 1 ? d => !(d.itens || []).length && !(d.familias || []).length : null));
         if (pag.falha) { if (n === 1) return { falha: pag.falha }; break; }
         const d = pag.dados || {};
         if (n === 1 && typeof d.total === 'number') total = d.total;
@@ -1765,7 +2182,9 @@ async function lerTelaAnuncio(itemId) {
     const r = SHC.mlExtraiEstado(b.html), f = r ? SHC.mlFotosDoEstado(r, b.html) : null, m = r ? SHC.mlMedidasDoEstado(r) : null;
     // A categoria não traz o MLB: só vale se a tela é deste anúncio (fotos/medidas, quando vieram, dizem o mesmo MLB).
     const c = r && (!f || !f.itemId || f.itemId === itemId) && (!m || !m.itemId || m.itemId === itemId) ? SHC.mlCategoriaDoEstado(r) : null;
-    return { f: f && !(f.itemId && f.itemId !== itemId) ? f : null, m: m && !(m.itemId && m.itemId !== itemId) ? m : null, c, r, html: b.html };
+    // v3.1: competição no catálogo (brick competition_task) da MESMA leitura; só vale se a linha "Seu anúncio" é este MLB.
+    const k = r ? SHC.mlCompeticaoDoEstado(r) : null;
+    return { f: f && !(f.itemId && f.itemId !== itemId) ? f : null, m: m && !(m.itemId && m.itemId !== itemId) ? m : null, c, k: k && k.itemId === itemId ? k : null, r, html: b.html };
 }
 // Só as fotos (robô) → { f (SHC.mlFotosDoEstado), jwt e csrf (só em memória, para gravar AGORA) } | { falha }
 async function lerFotosAnuncio(itemId) {
@@ -1795,6 +2214,10 @@ const guardaMedidas = (conta, id, sku, m) => {
 const guardaCategoria = (conta, id, c) => mudaChave('cat:' + conta, v => {
     v.porItem = v.porItem || {}; v.porItem[id] = { familia: c.familia, sub: c.sub || '', categoriaId: c.categoriaId || '', ts: Date.now() }; v.ts = Date.now();
 });
+// v3.1: catcomp:<conta> = { ts, porItem:{MLB: SHC.compCatRegistra(...)} } — quem ganha o catálogo, preço para ganhar, alavancas e winRate por dia.
+const guardaCompCat = (conta, id, k) => mudaChave('catcomp:' + conta, v => { v.porItem = v.porItem || {}; v.porItem[id] = SHC.compCatRegistra(v.porItem[id], k, SHC.hoje()); v.ts = Date.now(); });
+const COMPCAT_VALIDO_MS = 864e5;   // anúncio perdendo no catálogo: a tela é relida 1 vez por dia (linha do tempo do winRate)
+const perdeCatalogo = it => !!it && /^(perdendo|restrito|dividindo)$/.test(String(it.competicao || ''));
 const guardaVisitas = (conta, id, lida) => mudaChave('visitas:' + conta, v => { v.porItem = v.porItem || {}; v.porItem[id] = SHC.visitasJunta(v.porItem[id], lida, SHC.hoje()); v.ts = Date.now(); });
 const vencido = (e, ms) => !e || !(Date.now() - (e.ts || 0) < ms);
 const FOTOS_RECUO_MS = 864e5;
@@ -1813,10 +2236,11 @@ const semCategoria = e => !(e && e.familia) && !emRecuo(e);   // v2.6: ainda sem
 async function lerSaudeItem(conta, id, perm, fotosAnt, visAnt, forcar, med) {
     let erros = 0;
     const md = med || {}, so = !!md.soCategoria, querFotos = !so && (forcar || fotosVencidas(fotosAnt)), querMed = !so && (forcar || medidasVencidas(md.ant, md.recente));
-    const querCat = so || !!md.semCat;
-    if (perm && (querFotos || querMed || querCat)) {
+    const querCat = so || !!md.semCat, querComp = !so && !!md.comp;
+    if (perm && (querFotos || querMed || querCat || querComp)) {
         const t = await lerTelaAnuncio(id);
         if (t.falha === 'login') return { login: true, erros };
+        if (t.k && !so) await guardaCompCat(conta, id, t.k); else if (querComp && !t.falha) await falhaEm('catcomp:' + conta, id);   // sem o brick: recuo de 24 h que dobra
         if (t.f) { if (!so) await guardaFotos(conta, id, t.f); } else if (querFotos) { erros++; await falhaFotos(conta, id); }
         if (t.m) { if (!so) await guardaMedidas(conta, id, md.sku, t.m); } else if (querMed) await falhaEm('medidas:' + conta, id);
         if (t.c) await guardaCategoria(conta, id, t.c); else if (querCat && !t.falha) await falhaEm('cat:' + conta, id);
@@ -1833,10 +2257,10 @@ let saudeEmCurso = null;
 async function rodadaSaude(conta) {
     if (saudeEmCurso) return saudeEmCurso;
     saudeEmCurso = (async () => {
-        const [an, fs, vs, ms, perm, cs, va] = await Promise.all([SHC.lerAnuncios(conta), SHC.lerChave('fotos:' + conta), SHC.lerChave('visitas:' + conta),
-            SHC.lerChave('medidas:' + conta), temPermissaoWww(), SHC.lerChave('cat:' + conta), SHC.lerChave('vbAnuncio:' + conta)]);
-        const pf = (fs && fs.porItem) || {}, pv = (vs && vs.porItem) || {}, pm = (ms && ms.porItem) || {}, pc = (cs && cs.porItem) || {}, sku = {};
-        ((an && an.itens) || []).filter(SHC.anuncioAtivo).forEach(i => { if (!(i.itemId in sku)) sku[i.itemId] = i.sku || ''; });
+        const [an, fs, vs, ms, perm, cs, va, kc] = await Promise.all([SHC.lerAnuncios(conta), SHC.lerChave('fotos:' + conta), SHC.lerChave('visitas:' + conta),
+            SHC.lerChave('medidas:' + conta), temPermissaoWww(), SHC.lerChave('cat:' + conta), SHC.lerChave('vbAnuncio:' + conta), SHC.lerChave('catcomp:' + conta)]);
+        const pf = (fs && fs.porItem) || {}, pv = (vs && vs.porItem) || {}, pm = (ms && ms.porItem) || {}, pc = (cs && cs.porItem) || {}, pk = (kc && kc.porItem) || {}, sku = {}, comp = {};
+        ((an && an.itens) || []).filter(SHC.anuncioAtivo).forEach(i => { if (!(i.itemId in sku)) sku[i.itemId] = i.sku || ''; if (perdeCatalogo(i) && vencido(pk[i.itemId], COMPCAT_VALIDO_MS) && !emRecuo(pk[i.itemId])) comp[i.itemId] = true; });
         const ativos = Object.keys(sku);
         const [vm, vd, vu] = ativos.length ? await Promise.all([SHC.lerVendasMes(ativos), SHC.lerVendas(ativos), SHC.lerUltimaVenda()]) : [{}, {}, {}];
         const vendas = id => Object.keys(vm[id] || {}).reduce((s, m) => s + (+vm[id][m] || 0), 0);
@@ -1849,7 +2273,7 @@ async function rodadaSaude(conta) {
         const extras = perm ? Object.keys(fatVA).filter(id => !(id in sku) && fatVA[id] > 0 && semCategoria(pc[id])).sort((a, b) => fatVA[b] - fatVA[a]) : [];
         const soCat = new Set(extras);
         const alvo = ativos.map((id, k) => ({ id, k, v: vendas(id), f: fatVA[id] || 0, r: recente[id] ? 1 : 0 })).sort((a, b) => b.r - a.r || b.v - a.v || b.f - a.f || a.k - b.k).map(x => x.id)
-            .filter(id => (perm && (fotosVencidas(pf[id]) || medidasVencidas(pm[id], recente[id]) || semCategoria(pc[id]))) || vencido(pv[id], VISITAS_VALIDO_MS))
+            .filter(id => (perm && (fotosVencidas(pf[id]) || medidasVencidas(pm[id], recente[id]) || semCategoria(pc[id]) || comp[id])) || vencido(pv[id], VISITAS_VALIDO_MS))
             .concat(extras).slice(0, SAUDE_MAX);
         let feito = 0, erros = 0, login = false;
         try {
@@ -1857,7 +2281,7 @@ async function rodadaSaude(conta) {
             for (const id of alvo) {
                 if (feito) await espera(SAUDE_PAUSA_MS);
                 const r = soCat.has(id) ? await lerSaudeItem(conta, id, perm, null, null, false, { soCategoria: true })
-                    : await lerSaudeItem(conta, id, perm, pf[id], pv[id], false, { ant: pm[id], sku: sku[id], recente: recente[id], semCat: semCategoria(pc[id]) });
+                    : await lerSaudeItem(conta, id, perm, pf[id], pv[id], false, { ant: pm[id], sku: sku[id], recente: recente[id], semCat: semCategoria(pc[id]), comp: comp[id] });
                 erros += r.erros;
                 if (r.login) { login = true; break; }   // sessão caiu: para e tenta na próxima rodada
                 feito++;
@@ -1898,9 +2322,22 @@ async function medidasAgora(conta, itemId) {
     if (t.falha === 'login') return { ok: false, motivo: 'sem_sessao' };
     if (t.f) await guardaFotos(conta, itemId, t.f);
     if (t.c) await guardaCategoria(conta, itemId, t.c);
+    if (t.k) await guardaCompCat(conta, itemId, t.k);
     if (!t.m) { await falhaEm('medidas:' + conta, itemId); return { ok: false, motivo: 'ml_indisponivel' }; }
     const res = await guardaMedidas(conta, itemId, sku, t.m);
     return { ok: true, itemId, medidas: res.entrada, mudou: !!res.mudanca, mudanca: res.mudanca };
+}
+// v3.1: "Ler a concorrência agora" (aba Catálogo): o mesmo GET da tela "Alterar anúncio" (fotos/medidas/categoria que vierem nele também ficam).
+// → { ok:true, itemId, comp (catcomp:<conta>.porItem[MLB]) } | { ok:false, motivo:'semPermissao'|'sem_sessao'|'sem_catalogo'|'ml_indisponivel' }
+async function compCatAgora(conta, itemId) {
+    if (!(await temPermissaoWww())) return { ok: false, motivo: 'semPermissao' };
+    const t = await lerTelaAnuncio(itemId);
+    if (t.falha) return { ok: false, motivo: t.falha === 'login' ? 'sem_sessao' : 'ml_indisponivel' };
+    if (t.f) await guardaFotos(conta, itemId, t.f);
+    if (t.c) await guardaCategoria(conta, itemId, t.c);
+    if (!t.k) return { ok: false, motivo: 'sem_catalogo' };
+    const v = await guardaCompCat(conta, itemId, t.k);
+    return { ok: true, itemId, comp: v.porItem[itemId] };
 }
 // v2.5.2: marca do seller num anúncio (SHC.medidasMarca): 'alterar' = clicou em "Alterar no ML"; 'fui_eu' = a mudança vista em `em`
 // foi dele (sai do aviso e do chamado). Só guarda na extensão; nada vai ao ML. → { ok:true, itemId, medidas } | { ok:false, motivo:'nada' }
@@ -2130,6 +2567,47 @@ async function juntarAnuncios(conta, itens) {
     return snap.itens.length;
 }
 
+// v3.1 Agenda do Canal ({acao:'canal_ler_anuncios', itemIds}): lê só os anúncios que faltam no retrato, com a MESMA leitura da lista de
+// Anúncios da sincronização (lerPaginaML + SHC.mlPaginaAnuncios), buscando pelo código. Só GET. Visto ao vivo em 29/09/2026: /anuncios/lista
+// desvia (302) para /anuncios; /anuncios?search=MLB… traz o anúncio. Só vale a linha com o mesmo código, e nunca junta página de outra conta
+// (dono diferente da conta aberta no Copiloto; página sem dono = a sessão deste Chrome, como em confereSessao).
+// → { ok:true, lidos:[MLB…] } | { ok:false, motivo:'login'|'outra_conta'|'indisponivel', lidos:[] }
+async function lerAnunciosPorId(ids) {
+    const conta = await SHC.contaAtual(), achados = [];
+    const alvo = [...new Set((ids || []).map(String).filter(i => /^MLB\d{6,14}$/.test(i)))].slice(0, 20);
+    let falhas = 0, login = false, outra = false;
+    for (const id of alvo) {
+        const pag = await lerPaginaML(BASE + '/anuncios?search=' + id, 'ler_pagina_anuncios', SHC.mlPaginaAnuncios, null);
+        if (pag.falha) { falhas++; login = login || pag.falha === 'login'; continue; }
+        const d = pag.dados || {}, dono = d.conta && d.conta.sellerId;
+        if (dono && conta !== 'atual' && String(dono) !== String(conta)) { outra = true; continue; }
+        achados.push(...(d.itens || []).filter(i => i && i.itemId === id));
+        await espera(PAUSA_MS / 2);
+    }
+    if (achados.length) await juntarAnuncios(conta, achados);
+    const lidos = [...new Set(achados.map(i => i.itemId))];
+    if (!lidos.length && (outra || (alvo.length && falhas === alvo.length))) return { ok: false, motivo: outra ? 'outra_conta' : login ? 'login' : 'indisponivel', lidos };
+    return { ok: true, lidos };
+}
+
+// v3.1 Robô do Canal (alarme 'shc-canal'): com shc:canal:robo.ligado, 1 vez por dia monta a agenda dos próximos dias do canal escolhido na
+// Agenda (shc:canal:sel) com a MESMA regra da tela (SHC.canalRoboPassada) e guarda em shc:canal:plano:<canal> (o painel avisa).
+// Só GET; não cria nada no ML: quem clica "Criar" em cada transmissão é a seller.
+async function roboCanal() {
+    const sf = await SHC.lerChave('shc:canal:sel'), k = 'shc:canal:plano:' + sf, agora = new Date();
+    const salvo = sf ? await SHC.lerChave(k) : null;
+    if (!sf || !SHC.canalRoboDeveRodar(await SHC.lerChave('shc:canal:robo'), salvo, agora)) return { ok: false };
+    const buscar = async (caminho, json) => {
+        bateVivo();
+        const r = await SHC.buscarVendo(BASE + caminho, comTempo({ credentials: 'include', cache: 'no-store' }));
+        if (ehLogin(r.url) || !r.ok) throw new Error('ml');
+        return json ? r.json() : r.text();
+    };
+    const reg = await SHC.canalRoboPassada(buscar, sf, salvo, agora);
+    await SHC.gravarChave(k, reg);
+    return { ok: true, n: reg.robo.n };
+}
+
 // Selo de frete na tela do ML → abre o painel lateral já na aba Frete daquele anúncio.
 // O painel é aberto na hora (sem await antes), para não perder o clique do seller.
 function abrirFrete(itemId, tabId) {
@@ -2202,10 +2680,16 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         vendasBrutasMes(String(msg.mes || '')).then(responder, () => responder({ ok: false, motivo: 'indisponivel' }));
         return true;
     }
-    if (msg.acao === 'sincronizar_custos') {   // botão "Sincronizar custos" em qualquer tela da extensão ou na aba do ML; erp: 'tiny' (padrão) | 'omie'
+    if (msg.acao === 'sincronizar_custos') {   // botão "Sincronizar custos" em qualquer tela da extensão ou na aba do ML; erp: 'tiny' (padrão) | 'omie' | 'bling'
         if (!(daExtensao(sender) || daAbaDoML(sender))) return false;
-        const erp = msg.erp === 'omie' ? 'omie' : 'tiny';
-        sincronizarCustos(erp, 0).then(responder, () => responder({ ok: false, erp, msg: 'Não consegui falar com o ' + ERPS[erp].nome + '. Tente de novo em alguns minutos.' }));
+        // Sem erp (painel lateral sem Tiny/Omie guardado): o Tiny, ou o Bling se só ele estiver conectado.
+        const escolhe = async () => (['tiny', 'omie', 'bling'].indexOf(msg.erp) >= 0 ? msg.erp : (!((await SHC.lerChave(SHC.TINY_CHAVE)) || {}).token && ERPS.bling.cred(await SHC.lerChave(SHC.BLING_CHAVE)) ? 'bling' : 'tiny'));
+        escolhe().then(erp => sincronizarCustos(erp, 0).then(responder, () => responder({ ok: false, erp, msg: 'Não consegui falar com o ' + ERPS[erp].nome + '. Tente de novo em alguns minutos.' })));
+        return true;
+    }
+    if (msg.acao === 'bling_conectar') {   // só o painel (a extensão): o code do launchWebAuthFlow vira tokens aqui no fundo
+        if (!daExtensao(sender) || !/^[\w.~-]{4,512}$/.test(String(msg.code || ''))) return false;
+        conectarBling(String(msg.code)).then(responder, () => responder({ ok: false, erp: 'bling', msg: 'Não consegui falar com o Bling. Tente de novo.' }));
         return true;
     }
     if ((msg.acao === 'promos_pagina' && msg.dados) || (msg.acao === 'anuncios_pagina' && Array.isArray(msg.itens))) {
@@ -2215,6 +2699,11 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
             return msg.acao === 'promos_pagina' ? juntarPagina(conta, msg.dados).then(() => ({ ok: true }))
                 : juntarAnuncios(conta, msg.itens).then(n => ({ ok: true, anuncios: n }));
         }).then(responder, () => responder({ ok: false }));
+        return true;
+    }
+    if (msg.acao === 'canal_ler_anuncios') {   // v3.1: Agenda do Canal lê os anúncios que o Copiloto ainda não tinha (só GET)
+        if (!daExtensao(sender) || !Array.isArray(msg.itemIds)) return false;
+        lerAnunciosPorId(msg.itemIds).then(responder, () => responder({ ok: false, lidos: [] }));
         return true;
     }
     if (msg.acao === 'recalcular_alertas') { atualizarAlertas().then(r => responder({ ok: true, criticos: r.criticos, anomalias: r.anomalias ? r.anomalias.total : null }), () => responder({ ok: false })); return true; }
@@ -2263,6 +2752,13 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         if (!(daExtensao(sender) || daAbaDoML(sender))) return false;
         if (!/^MLB\d{6,14}$/.test(String(msg.itemId || ''))) { responder({ ok: false, motivo: 'item' }); return false; }
         SHC.contaAtual().then(c => medidasAgora(c, String(msg.itemId)).then(r => { if (r.ok) atualizarAlertas(c).catch(() => {}); return r; })).then(responder, () => responder({ ok: false, motivo: 'ml_indisponivel' }));
+        return true;
+    }
+    // v3.1: {acao:'catalogo_agora', itemId} → compCatAgora (1 GET da tela "Alterar anúncio"; só leitura).
+    if (msg.acao === 'catalogo_agora') {
+        if (!(daExtensao(sender) || daAbaDoML(sender))) return false;
+        if (!/^MLB\d{6,14}$/.test(String(msg.itemId || ''))) { responder({ ok: false, motivo: 'item' }); return false; }
+        SHC.contaAtual().then(c => compCatAgora(c, String(msg.itemId))).then(responder, () => responder({ ok: false, motivo: 'ml_indisponivel' }));
         return true;
     }
     // v2.5.2: {acao:'medidas_marca', itemId, tipo:'alterar'|'fui_eu', em (só no fui_eu)} → medidasMarca.

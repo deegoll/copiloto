@@ -18,6 +18,7 @@
         try { p = new URL(url).pathname; } catch (e) { return null; }
         if (/^\/anuncios\/lista\/promos\/?$/.test(p)) return 'promos';
         if (/^\/anuncios(\/lista)?\/?$/.test(p)) return 'anuncios';   // o ML redireciona /anuncios/lista → /anuncios (visto em 24/09/2026)
+        if (/^\/vendas\/omni\/lista\/?$/.test(p)) return 'vendas';     // v3.1: lista de Vendas (lucro de cada venda)
         return null;
     };
 
@@ -35,11 +36,12 @@
 
     SHC.telaDataCurta = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')) ? d.slice(8, 10) + '/' + d.slice(5, 7) : '';
 
-    /** Etiqueta do anúncio (saída de SHC.sobraAnuncio) → { cls: luc|ate|pre|sem, titulo, sub }. */
+    /** Etiqueta do anúncio (saída de SHC.sobraAnuncio) → { cls: luc|ate|pre|sem, st, vl }. Mesmas palavras da lateral (ESPEC item 10):
+     *  "Dá lucro" · "Abaixo da meta" · "Prejuízo" + "R$ 152,97 · 25,5%" (negativo: "−R$ 5,28 · −5,9%"). */
     SHC.telaChip = function (s) {
-        if (!s || s.sobra === null || s.sobra === undefined) return { cls: 'sem', titulo: '＋ Informar custo', sub: '' };
-        const cls = s.classe === 'prejuizo' ? 'pre' : (s.classe === 'apertado' ? 'ate' : 'luc');
-        return { cls, titulo: (s.sobra < 0 ? 'Prejuízo ' : 'Lucro ') + moeda(Math.abs(s.sobra)), sub: 'margem ' + pct(s.pct) };
+        if (!s || s.sobra === null || s.sobra === undefined) return { cls: 'sem', st: '＋ Informar custo', vl: '' };
+        const cls = s.classe === 'prejuizo' || s.sobra < 0 ? 'pre' : (s.classe === 'apertado' ? 'ate' : 'luc');
+        return { cls, st: cls === 'pre' ? 'Prejuízo' : cls === 'ate' ? 'Abaixo da meta' : 'Dá lucro', vl: (s.sobra < 0 ? '−' : '') + moeda(Math.abs(s.sobra)) + ' · ' + pct(s.pct) };
     };
 
     /** Linha de veredito da conta (tooltip): "Lucro · margem 25,5% · acima da sua meta de 10%". */
@@ -155,34 +157,69 @@
      */
     SHC.telaSaude = function (itemId, d) {
         const x = d || {}, out = [], f = x.fotos && x.fotos.porItem && x.fotos.porItem[itemId];
-        if (f && f.qtd > 0) out.push({ cls: 'fo', txt: f.max ? f.qtd + ' de ' + f.max + ' fotos' : SHC.qtd(f.qtd, 'foto', 'fotos'), extra: f.problemas > 0 ? f.problemas + ' com problema' : '',
+        // Fotos: só quando falta foto ou o ML marcou alguma (anúncio com todas as fotos não ganha etiqueta: menos texto na linha).
+        if (f && f.qtd > 0 && !(f.max && f.qtd >= f.max && !(f.problemas > 0))) out.push({ cls: 'fo', txt: f.max ? f.qtd + '/' + f.max + ' fotos' : SHC.qtd(f.qtd, 'foto', 'fotos'), extra: f.problemas > 0 ? f.problemas + ' com erro' : '',
             titulo: 'Fotos do anúncio', tip: 'A 1ª foto é a capa.' + (f.max ? ' O Mercado Livre aceita até ' + f.max + ' fotos.' : '')
                 + (f.problemas > 0 ? ' O Mercado Livre marcou ' + SHC.qtd(f.problemas, 'foto', 'fotos') + ' deste anúncio: abra “Alterar anúncio” para ver.' : '') });
-        if (x.fiscal && Array.isArray(x.fiscal.itens) && x.fiscal.itens.indexOf(itemId) >= 0) out.push({ cls: 'fi', txt: 'Sem dados fiscais', titulo: 'Sem dados fiscais',
+        if (x.fiscal && Array.isArray(x.fiscal.itens) && x.fiscal.itens.indexOf(itemId) >= 0) out.push({ cls: 'fi', txt: 'Sem dado fiscal', titulo: 'Sem dados fiscais',
             tip: 'Sem dados fiscais o ML não emite a NF-e desta venda. Corrija no Editor em massa.', link: SHC.FISCAL_EDITOR });
         const v = x.visitas && x.visitas.porItem && x.visitas.porItem[itemId], r = v ? SHC.radarVisitas(v.dias, x.hoje, x.cfg && x.cfg.radar_queda_pct) : null;
         if (r && r.classe !== 'poucos' && r.variacaoPct !== null) {
             const p = (r.variacaoPct > 0 ? '+' : r.variacaoPct < 0 ? '−' : '') + Math.round(Math.abs(r.variacaoPct)) + '%';
-            out.push({ cls: r.classe === 'caindo' ? 'cai' : r.classe === 'subindo' ? 'sobe' : 'est', txt: 'Visitas ' + p + ' em 7 dias', titulo: 'Visitas do anúncio',
+            out.push({ cls: r.classe === 'caindo' ? 'cai' : r.classe === 'subindo' ? 'sobe' : 'est', txt: 'Visitas ' + p, titulo: 'Visitas do anúncio (7 dias)',
                 tip: 'Últimos 7 dias: ' + SHC.qtd(r.ult7, 'visita', 'visitas') + '. Nos 7 dias antes: ' + SHC.qtd(r.ant7, 'visita', 'visitas') + '.'
                     + (r.classe === 'caindo' ? ' No painel do Copiloto, aba Saúde, veja o que fazer.' : '') });
         }
         // Medidas da embalagem: diferente de outro anúncio do mesmo SKU (balão com as duas medidas) e mudança feita pelo ML nos últimos 30 dias.
         // Vermelho só para o anúncio que foge da medida de referência (e só quando a diferença pesa no frete); o da referência ganha a amarela.
+        // O chip já diz QUAL anúncio está diferente ("Medida ≠ #4248981180", clicável: abre esse anúncio no ML); com 2 ou mais, a lista vai no balão.
         const g = (x.medDiv || []).find(d => d.anuncios.some(a => a.itemId === itemId));
         if (g) {
-            const eu = g.anuncios.find(a => a.itemId === itemId), outro = eu.foge ? g.referencia : g.anuncios.find(a => a.foge), pesa = g.maiorDiferencaKg >= 0.01;
-            out.push({ cls: eu.foge && pesa ? 'md' : 'mdr', txt: eu.foge ? 'Medidas diferentes de outro anúncio do mesmo SKU' : 'Outro anúncio do SKU tem medida diferente', titulo: 'Medidas da embalagem',
-                tip: 'Este anúncio: ' + SHC.medidaTxt(eu) + '. Outro anúncio do SKU ' + g.sku + ' (' + outro.itemId + '): ' + SHC.medidaTxt(outro) + '. '
-                    + (pesa ? 'Anúncios do mesmo produto com medidas diferentes podem pagar fretes diferentes; corrija para a medida certa.' : 'Mesmo peso considerado; só as medidas da caixa diferem.') });
+            const eu = g.anuncios.find(a => a.itemId === itemId), pesa = g.maiorDiferencaKg >= 0.01;
+            const outros = eu.foge ? [g.referencia] : g.anuncios.filter(a => a.foge && a.itemId !== itemId);
+            const um = outros.length === 1 ? outros[0] : null, num = id => String(id).replace(/^MLB/, '');
+            out.push({ cls: eu.foge && pesa ? 'md' : 'mdr', txt: um ? 'Medida ≠ #' + num(um.itemId) : 'Medida ≠ ' + outros.length + ' anúncios', titulo: 'Medidas da embalagem',
+                link: um && /^MLB\d+$/.test(um.itemId) ? 'https://produto.mercadolivre.com.br/MLB-' + num(um.itemId) : undefined,
+                tip: 'Este anúncio: ' + SHC.medidaTxt(eu) + '. '
+                    + (um ? 'Outro anúncio do SKU ' + g.sku + ' (' + um.itemId + '): ' + SHC.medidaTxt(um) + '. '
+                        : 'Outros anúncios do SKU ' + g.sku + ' com medida diferente: ' + outros.map(a => a.itemId + ' (' + SHC.medidaTxt(a) + ')').join('; ') + '. ')
+                    + (pesa ? 'Anúncios do mesmo produto com medidas diferentes podem pagar fretes diferentes; corrija para a medida certa.' : 'Mesmo peso considerado; só as medidas da caixa diferem.')
+                    + (um ? ' Clique para abrir o ' + um.itemId + '.' : '') });
         }
         const mu = x.medidas && x.medidas.porItem && x.medidas.porItem[itemId] ? SHC.medidasMudadas(x.medidas.porItem, (x.agora || Date.now()) - 30 * 864e5, { itemId })[0] : null;
         if (mu) {
             const ml = mu.quem === 'ml', quando = SHC.medidasQuando(mu);
-            out.push({ cls: 'mm', txt: (ml ? 'O ML alterou as medidas ' : 'A medida mudou ') + quando, titulo: ml ? 'O ML alterou as medidas' : 'A medida da embalagem mudou',
+            out.push({ cls: 'mm', txt: (ml ? 'ML mudou a medida ' : 'Medida mudou ') + quando, titulo: ml ? 'O ML alterou as medidas' : 'A medida da embalagem mudou',
                 tip: 'Antes: ' + SHC.medidaTxt(mu.antes) + '. Agora: ' + SHC.medidaTxt(mu.depois) + '. ' + (ml ? 'O' : 'Se não foi você, o') + ' texto do chamado está no painel do Copiloto, aba Saúde.' });
         }
         return out;
+    };
+
+    /**
+     * v3.1: etiqueta do catálogo no anúncio que está PERDENDO (catcomp:<conta>.porItem[MLB], lida há até 7 dias na tela "Alterar anúncio").
+     * → { l1: 'Perdendo p/ <loja>', l2: 'ganhar: R$ X', res: 'lucro R$ Y' | 'prejuízo R$ Y' | 'informe o custo' | '', resCls: ok|pr|'', titulo, tip } | null.
+     * sg = sobra no preço para ganhar (SHC.sobraAtacado num degrau de 1 un.: mesma tarifa % e mesmo frete) | null (sem custo).
+     * A lista do ML dizendo "ganhando" agora vale mais que a leitura antiga.
+     */
+    SHC.telaCatalogo = function (it, kc, sg, agora) {
+        if (!kc || !/^perdendo/.test(String(kc.estado || '')) || kc.souVencedor || (it && it.competicao === 'ganhando')) return null;
+        if (!(kc.ts > (agora || Date.now()) - 7 * 864e5)) return null;
+        const v = kc.vencedor, pg = kc.precoGanhar, acoes = SHC.compCatAcoes ? SHC.compCatAcoes(kc, sg) : [];
+        const semCusto = !sg || sg.sobra === null || sg.sobra === undefined;
+        const res = !pg ? '' : semCusto ? 'informe o custo' : (sg.sobra >= 0 ? 'lucro ' : 'prejuízo ') + moeda(Math.abs(sg.sobra));
+        const ALAV = { logistica: 'entrega melhor', parcelamento: 'Premium', frete: 'frete grátis' };
+        const alav = acoes.find(a => ALAV[a.tipo]);
+        // Baixar para o preço do ML dá prejuízo e há outra alavanca (entrega, Premium, frete): a etiqueta diz a alavanca, como o painel;
+        // o preço com prejuízo fica só no balão.
+        const naoCompensa = !!pg && !semCusto && sg.sobra < 0 && !!alav;
+        const l2 = naoCompensa ? 'ganhar: ' + ALAV[alav.tipo] : pg ? 'ganhar: ' + moeda(pg).replace(' ', ' ') : alav ? 'ganhar: ' + ALAV[alav.tipo] : 'ver no painel';
+        const tip = (v ? 'Quem ganha: ' + (v.loja || 'outra loja') + (v.preco ? ' a ' + moeda(v.preco) : '') + (v.logistica ? ' (' + v.logistica + ')' : '') + '. ' : '')
+            + (kc.voce && kc.voce.preco ? 'Você: ' + moeda(kc.voce.preco) + (kc.voce.logistica ? ' (' + kc.voce.logistica + ')' : '') + '. ' : '')
+            + (pg ? 'Preço para ganhar (do ML): ' + moeda(pg) + (semCusto ? '. Informe o custo para saber se ainda dá lucro. ' : ' → ' + res + ' por venda (estimativa: mesma tarifa % e mesmo frete). ') : '')
+            + (kc.winRate !== null && kc.winRate !== undefined ? 'Suas visitas no catálogo (7 dias): ' + pct(kc.winRate) + '. ' : '')
+            + (acoes.length ? 'O que fazer: ' + acoes.map((a, i) => (i + 1) + ') ' + a.txt).join(' ') + ' ' : '')
+            + (kc.hist && kc.hist.length ? 'Lido em ' + SHC.telaDataCurta(kc.hist[kc.hist.length - 1].d) + '. ' : '') + 'Linha do tempo no painel do Copiloto, aba Catálogo.';
+        return { l1: 'Perdendo p/ ' + (v && v.loja ? v.loja : 'outra loja'), l2, res: naoCompensa ? '' : res, resCls: naoCompensa || !pg || semCusto ? '' : sg.sobra >= 0 ? 'ok' : 'pr', titulo: 'Concorrência no catálogo', tip };
     };
 
     /** Linhas do ML na conta de 1 venda (V9: frete do comprador + custo operacional). Preço − linhas negativas = você recebe. */
@@ -304,6 +341,31 @@
     /** Pausa a tela quando o layout do ML mudou: ≥ 5 falhas e nenhum acerto no passe. */
     SHC.telaDevePausar = res => !!res && res.falha >= 5 && res.ok === 0;
 
+    // Dinheiro escrito pelo ML. Visto ao vivo (29/09/2026, MLB1274479372): "R$ 251" redondo, SEM ",00" — comparar com moeda(v)
+    // ("R$ 251,00") deixava a linha sem faixa. Aceita também "R$ 1.234,56", nbsp/espaço fino, "R$251" e os centavos numa folha à
+    // parte (o DOM é lido com espaço entre as folhas: "R$ 251 05").
+    const NUM_RS = '(\\d{1,3}(?:\\.\\d{3})+|\\d+)(?:\\s?,\\s?(\\d{1,2})|\\s(\\d{2}))?';
+    const RE_RS = { todo: new RegExp('^[−-]?\\s?R\\$\\s?' + NUM_RS + '$'), fim: new RegExp('(?:^|\\s)[−-]?\\s?R\\$\\s?' + NUM_RS + '$'),
+        faixa: new RegExp('^R\\$\\s?' + NUM_RS + '\\s(?:a|até|-|–)\\s(?:R\\$\\s?)?' + NUM_RS + '$'),
+        // solto: centavos em folha à parte também ("R$ 251 05"); ponto final depois do valor vale; "R$ 251 10% OFF" não vira 251,10.
+        solto: new RegExp('R\\$\\s?' + NUM_RS + '(?![\\d%])', 'g') };
+    const rsDe = (m, i) => +m[i].replace(/\./g, '') + ((m[i + 1] || m[i + 2]) ? +(m[i + 1] || m[i + 2]).padEnd(2, '0') / 100 : 0);
+    const txtRS = t => String(t === null || t === undefined ? '' : t).replace(/\s+/g, ' ').trim();
+    const mesmoRS = (x, v) => v !== null && v !== undefined && isFinite(v) && Math.abs(x - Math.abs(v)) < 0.005;
+    /** O texto do ML É o valor v ("R$ 251", "R$ 251,00"…)? noFim: o texto termina no valor ("A pagar R$ 27,05"). */
+    SHC.telaEhValor = function (txt, v, noFim) {
+        const m = (noFim ? RE_RS.fim : RE_RS.todo).exec(txtRS(txt));
+        return !!m && mesmoRS(rsDe(m, 1), v);
+    };
+    /** O texto do ML tem o valor v em algum lugar ("Tarifa −R$ 41,39 … Você recebe R$ 251")? */
+    SHC.telaTemValor = function (txt, v) {
+        const re = new RegExp(RE_RS.solto.source, 'g'), t = txtRS(txt);
+        for (let m = re.exec(t); m; m = re.exec(t)) if (mesmoRS(rsDe(m, 1), v)) return true;
+        return false;
+    };
+    /** Faixa de valores do ML ("R$ 200 a R$ 251": família com Clássico e Premium / variações). */
+    SHC.telaEhFaixaRS = txt => RE_RS.faixa.test(txtRS(txt));
+
     /** Custo digitado na etiqueta → dados para gravar (V12: origem 'manual', que o Tiny nunca troca). */
     SHC.telaCustoDigitado = (custo, titulo) => ({ custo, titulo: String(titulo || '').slice(0, 120), origem: 'manual' });
     /** Mensagem da página para o fundo (V15): leva a conta do estado; sem ela o fundo descarta. */
@@ -377,6 +439,97 @@
             dica: res.concluido ? 'Tudo pronto! O Copiloto já está trabalhando para você.' : 'Já vem o próximo passo.' };
     };
 
+    // ── v3.1: lista de Vendas (/vendas/omni/lista) — "aqui tinha que mostrar se deu lucro ou não" (dona, 26/09/2026) ──
+    // Estado Flox visto ao vivo em 26/09: 1 brick "row-<pack>_<pedido>" por venda, com identificationData {id "#<pedido>", date, shippingType}
+    // e productData {price, quantity, products[] {label, price, quantity, sku "SKU: X", url com o MLB}}. Lê SÓ esses blocos (e o status, para
+    // não somar venda cancelada): nome, apelido e endereço do comprador ficam em outros bricks e nunca são lidos. Nada é guardado.
+    const txtF = v => typeof v === 'string' ? v : (v && typeof v === 'object' ? String(v.text || v.label || v.title || '') : '');
+    const unF = v => { const x = parseInt(txtF(v).replace(/\D+/g, ''), 10); return x > 0 ? x : 1; };   // "1 unidade", "2 unidades"
+    /** Estado da lista de Vendas → [{ pedido, idTxt, envio, preco, precoTxt, unidades, cancelada, produtos:[{itemId, sku, titulo, preco, qtd}] }] | null (sem estado Flox). */
+    SHC.mlVendasDaLista = function (r) {
+        const st = SHC.achaBrickStack ? SHC.achaBrickStack(r) : null;
+        if (!st) return null;
+        const b = st.brickStack, out = [];
+        Object.keys(b).forEach(k => {
+            const m = /^row-(?:(\d*)_)?(\d{6,})$/.exec(k), d = m && b[k] && b[k].data;
+            if (!d || !d.productData) return;
+            const idd = d.identificationData || {}, pd = d.productData;
+            const lista = Array.isArray(pd.products) && pd.products.length ? pd.products : [pd];
+            const produtos = lista.map(p => {
+                const mm = /MLB-?(\d{6,14})/i.exec(String(p.url || ''));
+                return { itemId: mm ? 'MLB' + mm[1] : '', sku: SHC.normalizaSku ? SHC.normalizaSku(txtF(p.sku)) : txtF(p.sku), titulo: txtF(p.label).slice(0, 120),
+                    preco: SHC.valorRS(txtF(p.price)), qtd: unF(p.quantity) };
+            });
+            out.push({ pedido: m[2], idTxt: txtF(idd.id).replace(/\D+/g, '') || m[2], envio: txtF(idd.shippingType), preco: SHC.valorRS(txtF(pd.price)), precoTxt: txtF(pd.price),
+                unidades: unF(pd.quantity), cancelada: /cancelad/i.test(txtF((d.statusActionsData || {}).status)), produtos });
+        });
+        return out;
+    };
+
+    /**
+     * Lucro de 1 venda: preço − tarifa (mesma % do anúncio no retrato da lista de Anúncios) − frete − imposto − custo × unidades.
+     * Frete: o cobrado deste pedido no Faturamento (frete:<conta>:pedidos, já lido pela sincronização); senão o frete de hoje do anúncio
+     * por peça (ou o custo operacional do ML, quando o comprador paga o frete) e a conta sai "estimado".
+     * anuncio(MLB) → item do retrato | null; custoDe(produto) → dados do custo | null; pedidos = frete:<conta>:pedidos.pedidos.
+     * → null (sem base: anúncio fora do retrato, venda cancelada, valores que não fecham) | { semCusto:[produto] } | a conta.
+     */
+    SHC.telaVendaConta = function (v, anuncio, custoDe, cfg, pedidos) {
+        cfg = Object.assign({}, SHC.PADRAO, cfg || {});
+        const ps = ((v && v.produtos) || []).filter(p => /^MLB\d+$/.test(p.itemId));
+        if (!v || v.cancelada || !ps.length || ps.length !== v.produtos.length) return null;
+        const its = ps.map(p => anuncio(p.itemId));
+        if (its.some(it => !it || !(it.preco > 0) || typeof it.tarifa !== 'number')) return null;
+        const soma = a => r2(a.reduce((t, x) => t + x, 0));
+        let val = ps.map(p => (p.preco > 0 ? p.preco : 0) * p.qtd);
+        const total = v.preco > 0 ? v.preco : soma(val);
+        if (!(total > 0)) return null;
+        if (ps.length === 1) val = [total];
+        else if (Math.abs(soma(val) - total) > 0.05) {          // o preço de cada produto pode ser o da linha (não o unitário)
+            if (Math.abs(soma(ps.map(p => p.preco || 0)) - total) > 0.05) return null;
+            val = ps.map(p => p.preco);
+        }
+        const cs = ps.map(p => custoDe(p)), semCusto = ps.filter((p, i) => !(SHC.num((cs[i] || {}).custo) > 0));
+        if (semCusto.length) return { semCusto };
+        const itens = ps.map((p, i) => ({ itemId: p.itemId, sku: p.sku || its[i].sku || '', qtd: p.qtd, valor: r2(val[i]), tarifa: r2(val[i] * its[i].tarifa / its[i].preco),
+            taxaPct: its[i].tarifa / its[i].preco * 100, tipo: its[i].tipo || '', custoUn: SHC.num(cs[i].custo), outrosUn: SHC.num(cs[i].outros) || 0 }));
+        const fp = pedidos && pedidos[v.pedido];
+        let frete, taxaOp = 0, freteFonte;
+        if (fp && typeof fp.cobrado === 'number') { frete = fp.cancelado ? 0 : fp.cobrado; freteFonte = 'faturamento'; }
+        else {
+            freteFonte = 'estimado';
+            frete = soma(ps.map((p, i) => its[i].freteComprador ? 0 : (its[i].frete || 0) * p.qtd));
+            taxaOp = soma(ps.map((p, i) => its[i].freteComprador && SHC.num(its[i].taxaOperacional) > 0 ? SHC.num(its[i].taxaOperacional) * p.qtd : 0));
+        }
+        const impostoPct = SHC.num(cfg.imposto_pct) || 0, tarifa = soma(itens.map(x => x.tarifa));
+        const custo = soma(itens.map(x => x.custoUn * x.qtd)), outros = soma(itens.map(x => x.outrosUn * x.qtd));
+        const imposto = r2(total * impostoPct / 100), recebe = r2(total - tarifa - frete - taxaOp);
+        const sobra = r2(recebe - custo - outros - imposto), pctV = sobra / total * 100, alvo = SHC.num(cfg.margem_alvo_pct) || 0;
+        return { total, tarifa, frete, taxaOp, freteFonte, freteComprador: its.every(it => !!it.freteComprador), recebe, custo, outros, impostoPct, imposto,
+            sobra, pct: pctV, itens, classe: sobra < 0 ? 'prejuizo' : (pctV < alvo ? 'apertado' : 'lucrativo') };
+    };
+    /** Etiqueta da venda: "Lucro R$ X · Y%" (verde; amarelo abaixo da meta), "Prejuízo R$ X" (vermelho) ou "＋ Informar custo"; es = 'estimado' (frete estimado). */
+    SHC.telaChipVenda = function (c) {
+        if (!c || c.semCusto) return { cls: 'sem', st: '＋ Informar custo', vl: '', es: '' };
+        const cls = c.sobra < 0 ? 'pre' : (c.classe === 'apertado' ? 'ate' : 'luc');
+        return { cls, st: cls === 'pre' ? 'Prejuízo' : 'Lucro', vl: moeda(Math.abs(c.sobra)) + (cls === 'pre' ? '' : ' · ' + pct(c.pct)), es: c.freteFonte === 'estimado' ? 'frete estimado' : '' };
+    };
+    /** Conta linha a linha do balão da venda → [{cls, rot, v, neg}]. */
+    SHC.telaVendaLinhas = function (c) {
+        const est = c.freteFonte === 'estimado', l = [{ cls: 'ml', rot: 'Valor da venda', v: c.total }];
+        c.itens.forEach(x => l.push({ cls: 'ml', rot: 'Tarifa de venda do ML (' + pct(x.taxaPct) + (x.tipo ? ' · ' + x.tipo : '') + ')' + (c.itens.length > 1 ? ' · ' + x.itemId : '') + '*', v: x.tarifa, neg: 1 }));
+        if (!est) l.push({ cls: 'ml', rot: 'Frete cobrado neste pedido (Faturamento do ML)', v: c.frete, neg: 1 });
+        else {
+            if (c.frete > 0 || !(c.taxaOp > 0)) l.push({ cls: 'ml', rot: c.freteComprador ? 'Frete: por conta do comprador' : 'Frete por sua conta (estimado)**', v: c.frete, neg: 1 });
+            if (c.taxaOp > 0) l.push({ cls: 'ml', rot: 'Custo operacional do ML (estimado)**', v: c.taxaOp, neg: 1 });
+        }
+        l.push({ cls: 'ml tot', rot: '= Você recebe' + (est ? ' (estimado)' : ''), v: c.recebe });
+        c.itens.forEach(x => l.push({ cls: 'seu', rot: 'Custo' + (x.sku ? ' do SKU ' + x.sku : ' do produto') + (x.qtd > 1 ? ' × ' + x.qtd : ''), v: r2(x.custoUn * x.qtd), neg: 1 }));
+        if (c.outros > 0) l.push({ cls: 'seu', rot: 'Outros custos', v: c.outros, neg: 1 });
+        l.push({ cls: 'seu', rot: 'Imposto (' + pct(c.impostoPct) + ' da venda)', v: c.imposto, neg: 1 });
+        l.push({ cls: 'tot', rot: c.sobra < 0 ? '= Prejuízo' : '= Lucro', v: Math.abs(c.sobra) });
+        return l;
+    };
+
     if (typeof module !== 'undefined' && module.exports) module.exports = SHC;
 
     // ── Daqui para baixo: só no navegador (content script) ──────────────────────────────────
@@ -396,6 +549,7 @@
     let estado = null;                         // { url, r, itens|promos }
     let cfgC = null, custosC = null, fretesC = null, skuC = null, versao = 0;
     let saudeC = null;                   // {fiscal, fotos, visitas} da conta (etiquetas de saúde); null = reler
+    let vendasC = null;                  // lista de Vendas: { porId (retrato dos anúncios), pedidos (frete:<conta>:pedidos) }; null = reler
     const ultimaBusca = new Map();             // url → ts do último fetch (máx. 1 a cada 30 s)
     const linhas = new Map();                  // anúncios: itemId → { el, sig, els }
     const grupos = new Map();                  // promos: chave da família → { grupo, sig, els, viavel }
@@ -570,6 +724,46 @@
         return Array.prototype.filter.call(el.querySelectorAll('span,p,div,b,strong,a,label,small'),
             e => e.childElementCount === 0 && !(e.closest && e.closest('.shc-w,.shcp-bar')));
     }
+    // Texto com espaço entre as folhas: "R$" + "251" + "05" em 3 spans → "R$ 251 05" (o textContent colaria "R$25105").
+    function textoSep(e) {
+        const tc = e.textContent || '';
+        if (!e.childElementCount) return tc;
+        let s = '';
+        const tw = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+        for (let n = tw.nextNode(); n; n = tw.nextNode()) s += ' ' + n.nodeValue;
+        return s;
+    }
+    // O elemento da linha cujo texto é o valor (teste), o último da linha e o mais de dentro (o "Você recebe" vem depois do preço).
+    function achaValor(el, teste) {
+        let achou = null;
+        for (const e of el.querySelectorAll('*')) {
+            const tc = e.textContent || '';
+            if (tc.length > 40 || tc.indexOf('$') < 0 || !teste(textoSep(e)) || e.closest('.shc-w,.shcp-bar')) continue;
+            achou = e;                            // ordem do documento: o de dentro vem depois do de fora
+        }
+        return achou;
+    }
+    // Sem o valor na linha: a faixa vai no FIM do bloco onde entrou na última linha achada (mesmo caminho de filhos a partir da
+    // linha); sem referência ainda, no fim da célula do último valor em R$ da linha. Nunca some calado.
+    let caminhoFaixa = null;
+    const filhos = a => Array.prototype.filter.call(a.children, x => !x.classList.contains('shc-w'));
+    function caminhoAte(de, ate) {
+        const p = [];
+        for (let a = ate; a && a !== de; a = a.parentElement) p.unshift(filhos(a.parentElement).indexOf(a));
+        return p;
+    }
+    function fimDaCelula(el) {
+        if (caminhoFaixa) {
+            let a = el;
+            for (const i of caminhoFaixa) { const f = filhos(a)[i]; if (!f) break; a = f; }
+            return a;
+        }
+        const rs = folhas(el).filter(e => /R\$/.test(e.textContent || ''));
+        let a = rs[rs.length - 1];
+        if (!a) return el;
+        while (a.parentElement && a.parentElement !== el) a = a.parentElement;
+        return a;
+    }
     const LEGENDA = '<div class="nota"><span style="color:#FDE68A">■</span> números do Mercado Livre &nbsp; <span style="color:#93C5FD">■</span> seus números</div>';
     const tr = (cls, rot, vals, neg) => '<tr class="' + cls + '"><td>' + esc(rot) + '</td>'
         + vals.map(v => '<td>' + (neg ? '− ' : '') + esc(typeof v === 'number' ? moeda(v) : v) + '</td>').join('') + '</tr>';
@@ -632,48 +826,95 @@
             + expl(SHC.telaExplica('frete', v)) + '<div class="nota">Clique no selo para ver o frete no painel do Copiloto.</div>';
     }
 
+    // Onde entra a faixa do Copiloto: depois da LINHA do valor "Você recebe", nunca entre o valor e o ⓘ do ML (o ⓘ caía sozinho
+    // embaixo das etiquetas). 1º a linha do ML (.sll-list-text-line, a mesma âncora do atacado); senão, sobe só por embrulhos do
+    // próprio valor e pula os irmãos sem texto (ícones) que vêm logo depois; sem ícone nenhum, fica logo depois do valor (como antes).
+    function depoisDoValor(alvo, cel) {
+        const linha = alvo.closest && alvo.closest('.sll-list-text-line');
+        if (linha && linha !== cel && cel.contains(linha)) return linha;
+        const txt = norm(alvo.textContent), semTexto = e => e && !norm(e.textContent) && !(e.closest && e.closest('.shc-w'));
+        for (let a = alvo; a && a !== cel; a = a.parentElement) {
+            let ref = a;
+            while (semTexto(ref.nextElementSibling)) ref = ref.nextElementSibling;
+            if (ref !== a) {
+                // valor + ⓘ numa linha flex sem quebra: a faixa vai depois da linha inteira (dentro dela seria espremida ao lado do ⓘ).
+                // ponytail: heurística sem retrato da coluna no ML; se o ML trocar o DOM, o plano A (.sll-list-text-line) é o que vale.
+                const P = ref.parentElement, cs = P && getComputedStyle(P);
+                return P && P !== cel && P.parentElement !== cel && /flex/.test(cs.display) && cs.flexWrap === 'nowrap' ? P : ref;
+            }
+            const p = a.parentElement;
+            if (!p || p === cel || p.childElementCount !== 1 || norm(p.textContent) !== txt) break;
+        }
+        return alvo;
+    }
+
     function renderAnuncio(it, ctx) {
         const el = document.getElementById(it.itemId);
         if (!el) return 'skip';
         const sd = SHC.telaSaude(it.itemId, ctx.saude);   // na assinatura: só a linha cujas etiquetas mudaram é redesenhada
-        const sig = ctx.v0 + '|' + (degraus.has(it.itemId) ? 'd' : '') + '|' + sd.map(c => c.cls + c.txt + (c.extra || '')).join(',');
+        // v3.1: catálogo perdendo (catcomp:) → "Perdendo p/ <loja>" + "ganhar: R$ X · lucro/prejuízo" (sobra no preço para ganhar, como o atacado).
+        const kc = ((ctx.saude && ctx.saude.catcomp && ctx.saude.catcomp.porItem) || {})[it.itemId], cK = kc && kc.precoGanhar ? ctx.custos.get(it.itemId) : null;
+        const cp = SHC.telaCatalogo(it, kc, kc && kc.precoGanhar ? SHC.sobraAtacado(it, { qtd: 1, preco: kc.precoGanhar }, cK && cK.dados, ctx.cfg) : null);
+        const sig = ctx.v0 + '|' + it.recebe + '|' + (degraus.has(it.itemId) ? 'd' : '') + '|' + sd.map(c => c.cls + c.txt + (c.extra || '')).join(',') + (cp ? '|' + cp.l1 + cp.l2 + cp.res : '');
         const st = linhas.get(it.itemId);
         if (st && st.completo && st.el === el && st.sig === sig && st.els.every(e => e.isConnected)) return 'ok';
         if (st) st.els.forEach(e => e.remove());
         linhas.delete(it.itemId);
         const fs = folhas(el);
-        const alvoTxt = norm(moeda(it.recebe));
-        let alvo = null;
-        for (let i = fs.length - 1; i >= 0; i--) if (norm(fs[i].textContent) === alvoTxt) { alvo = fs[i]; break; }
-        if (!alvo) return 'falha';
+        // "Você recebe": "R$ 251,00" ou "R$ 251" (redondo); família/variações vêm como faixa ("R$ 200 a R$ 251", recebe = null).
+        const alvo = achaValor(el, it.recebe !== null ? t => SHC.telaEhValor(t, it.recebe) : SHC.telaEhFaixaRS);
         const els = [], c = ctx.custos.get(it.itemId), cfg = ctx.cfg;
         let completo = true;              // falhou alguma âncora (atacado/frete) → tenta de novo no próximo passe
         const s = SHC.sobraAnuncio(it, c && c.dados, cfg);
+        const temCusto = !!(c && c.dados && SHC.num(c.dados.custo) > 0);
         const w = nossoW('div');
+        w.classList.add('shc-an');           // uma faixa só: etiquetas lado a lado, quebrando na largura da coluna
         if (s && s.sobra !== null) {
             const ch = SHC.telaChip(s), b = mk('span', 'shc-r ' + ch.cls);
-            b.appendChild(mk('b', '', ch.titulo));
-            b.appendChild(mk('i', '', ch.sub));
+            b.appendChild(mk('span', 'st', ch.st));
+            b.appendChild(mk('span', 'vl', ch.vl));
             b.setAttribute('data-shc-sim', it.itemId);
             w.appendChild(comTip(b, () => tipAnuncio(it, s, cfg)));
-        } else {
+        } else if (!temCusto) {            // com custo e sem "Você recebe" (pausado, família): sem lucro na tela, nunca número inventado
             const bt = mk('button', 'shc-add', '＋ Informar custo');
             bt.type = 'button';
             bt.addEventListener('click', e => { e.preventDefault(); abrePop(bt, { sku: it.sku, chave: it.itemId, titulo: it.titulo }); });
             w.appendChild(bt);
+        } else {                           // tem custo, mas o ML não deu um "Você recebe" único: etiqueta neutra, sem número
+            const el = mk('span', 'shc-s', 'Lucro: não dá para saber');
+            w.appendChild(comTip(el, () => '<h5>Lucro: não dá para saber</h5><div class="exp">O ML não mostra um "Você recebe" único nesta linha '
+                + '(anúncio pausado, variações ou Clássico e Premium com valores diferentes). Sem ele, o Copiloto não calcula o lucro.</div>'));
         }
-        // Saúde: fotos, dados fiscais (link para o Editor em massa) e radar de visitas, embaixo do lucro.
-        if (sd.length) {
-            const box = mk('span', 'shc-sd');
-            sd.forEach(c => {
-                const el = mk(c.link ? 'a' : 'span', 'shc-s ' + c.cls, c.txt);
-                if (c.extra) { el.appendChild(document.createTextNode(' · ')); el.appendChild(mk('b', '', c.extra)); }
-                if (c.link) { el.href = c.link; el.target = '_blank'; el.rel = 'noopener'; }
-                box.appendChild(comTip(el, () => '<h5>' + esc(c.titulo) + '</h5><div class="exp">' + esc(c.tip) + '</div>'));
-            });
-            w.appendChild(box);
+        // Saúde: fotos, dados fiscais (link para o Editor em massa), visitas e medidas (link para o outro anúncio), na mesma faixa do lucro.
+        sd.forEach(c => {
+            const el = mk(c.link ? 'a' : 'span', 'shc-s ' + c.cls, c.txt);
+            if (c.extra) { el.appendChild(document.createTextNode(' · ')); el.appendChild(mk('b', '', c.extra)); }
+            if (c.link) { el.href = c.link; el.target = '_blank'; el.rel = 'noopener'; }
+            w.appendChild(comTip(el, () => '<h5>' + esc(c.titulo) + '</h5><div class="exp">' + esc(c.tip) + '</div>'));
+        });
+        if (cp) {
+            const k = mk('span', 'shc-cp'), l2 = mk('span', 'l2', cp.l2);
+            k.appendChild(mk('span', 'l1', cp.l1));
+            if (cp.res) { l2.appendChild(document.createTextNode(' · ')); l2.appendChild(mk('b', cp.resCls, cp.res)); }
+            k.appendChild(l2);
+            w.appendChild(comTip(k, () => '<h5>' + esc(cp.titulo) + '</h5><div class="exp">' + esc(cp.tip) + '</div>'));
         }
-        alvo.insertAdjacentElement('afterend', w);
+        let res = 'ok';
+        if (!w.childElementCount) {        // nada a mostrar (tem custo, sem "Você recebe" e sem aviso de saúde)
+            linhas.set(it.itemId, { el, sig, els, completo: true });
+            return alvo ? 'ok' : 'skip';
+        }
+        if (alvo) {
+            const ref = depoisDoValor(alvo, el);
+            caminhoFaixa = caminhoAte(el, ref.parentElement);
+            ref.insertAdjacentElement('afterend', w);
+        } else {
+            // Valor não achado: a faixa vai no fim da célula e tenta de novo no próximo passe. Só conta como falha (pausa com ≥ 5 e
+            // nenhum acerto) quando o ML deu um "Você recebe" único e ele não está na tela; pausado/sem valor/fora do retrato não pausa.
+            const semRef = !caminhoFaixa;
+            fimDaCelula(el).appendChild(w);
+            if (it.recebe !== null) { res = 'falha'; completo = false; } else if (semRef) completo = false;
+        }
         els.push(w);
 
         // Atacado: um chip por degrau, alinhado com a linha "preço de atacado" da coluna Preço.
@@ -704,9 +945,8 @@
         if (!it.freteDeduzido && it.frete !== null) {
             const v = SHC.telaVariacaoFrete(ctx.fretes[it.itemId], it.frete, ctx.hoje), selo = SHC.telaSeloFrete(v);
             if (selo) {
-                const m = norm(moeda(it.frete));
                 const i0 = fs.findIndex(e => /frete/i.test(e.textContent || ''));
-                const fl = i0 < 0 ? null : fs.slice(i0).find(e => { const t = norm(e.textContent); return t === m || t.endsWith(' ' + m); });
+                const fl = i0 < 0 ? null : fs.slice(i0).find(e => SHC.telaEhValor(e.textContent, it.frete, true));   // "R$ 27,05" ou "A pagar R$ 27"
                 if (fl) {
                     const w2 = nossoW('span'), bt = mk('button', 'shc-fr ' + selo.cls, selo.txt);
                     bt.type = 'button';
@@ -718,6 +958,80 @@
             }
         }
         linhas.set(it.itemId, { el, sig, els, completo });
+        return res;
+    }
+
+    // ── Vendas: 1 etiqueta por venda, depois do valor da venda. A linha é achada pelo nº da venda ("#2000…" ou o link do detalhe);
+    // sobe até o maior bloco que só tem essa venda. ponytail: sem retrato do DOM da lista de Vendas; se o ML mudar, a venda fica sem
+    // etiqueta (nunca aviso de erro nem número inventado).
+    const semEsp = s => String(s || '').replace(/\s+/g, '');
+    function idsNaTela(quero) {
+        const m = new Map();
+        folhas(document.body).forEach(e => {
+            const t = e.textContent || '';
+            if (t.length > 60) return;
+            const x = /(\d{10,})/.exec(t);
+            if (x && quero.has(x[1]) && !m.has(x[1])) m.set(x[1], e);
+        });
+        quero.forEach(id => { if (!m.has(id)) { const a = document.querySelector('a[href*="/vendas/' + id + '/"]'); if (a) m.set(id, a); } });
+        return m;
+    }
+    function linhaDaVenda(el, quero) {
+        let a = el;
+        while (a.parentElement && a.parentElement !== document.body) {
+            const ns = new Set((a.parentElement.textContent || '').match(/\d{10,}/g) || []);
+            let n = 0;
+            ns.forEach(x => { if (quero.has(x)) n++; });
+            if (n > 1) break;
+            a = a.parentElement;
+        }
+        return a;
+    }
+    function precoDaVenda(row, v) {
+        const alvo = semEsp(v.precoTxt);
+        if (!alvo) return null;
+        let achou = null;
+        for (const e of row.querySelectorAll('*')) {
+            if (semEsp(e.textContent) !== alvo || e.closest('.shc-w')) continue;
+            if (!achou || achou.contains(e)) achou = e;
+            else break;
+        }
+        return achou;
+    }
+    function tipVenda(v, c, cfg) {
+        return '<h5>Resultado desta venda</h5><div class="sub">' + esc([v.unidades > 1 ? v.unidades + ' unidades' : '1 unidade',
+            c.itens.map(x => x.sku ? 'SKU ' + x.sku : x.itemId).join(', '), /full/i.test(v.envio) ? 'Full' : ''].filter(Boolean).join(' · ')) + '</div><table>'
+            + SHC.telaVendaLinhas(c).map(l => tr(l.cls, l.rot, [l.v], l.neg)).join('') + '</table>'
+            + '<div class="res ' + SHC.telaClasseRes(c.classe) + '">' + esc(SHC.telaResultado(c, cfg)) + (c.freteFonte === 'estimado' ? ' (estimado)' : '') + '</div>'
+            + '<div class="nota">* Tarifa: a mesma % que o ML cobra hoje neste anúncio (lista de Anúncios).</div>'
+            + (c.freteFonte === 'estimado' ? '<div class="nota">** Frete estimado: o de hoje do anúncio, um envio por peça. Quando o Faturamento desta venda for lido, entra o valor cobrado.</div>' : '')
+            + LEGENDA;
+    }
+    function renderVenda(x, ctx) {
+        const v = x.v, c = x.c;
+        if (!c) return 'skip';                      // sem base (anúncio fora do retrato, cancelada): sem etiqueta
+        const idEl = ctx.idEls.get(v.idTxt);
+        if (!idEl) return 'skip';
+        const row = linhaDaVenda(idEl, ctx.quero), ch = SHC.telaChipVenda(c), chave = 'v' + v.pedido;
+        const sig = ctx.v0 + '|' + ch.cls + ch.vl + ch.es, st = linhas.get(chave);
+        if (st && st.el === row && st.sig === sig && st.els.every(e => e.isConnected)) return 'ok';
+        if (st) st.els.forEach(e => e.remove());
+        const w = nossoW('div');
+        w.classList.add('shc-an');
+        if (c.semCusto) {
+            const p = c.semCusto[0], bt = mk('button', 'shc-add', '＋ Informar custo');
+            bt.type = 'button';
+            bt.addEventListener('click', e => { e.preventDefault(); abrePop(bt, { sku: p.sku, chave: p.itemId, titulo: p.titulo }); });
+            w.appendChild(bt);
+        } else {
+            const b = mk('span', 'shc-r ' + ch.cls);
+            b.appendChild(mk('span', 'st', ch.st));
+            b.appendChild(mk('span', 'vl', ch.vl));
+            w.appendChild(comTip(b, () => tipVenda(v, c, ctx.cfg)));
+            if (ch.es) w.appendChild(comTip(mk('span', 'shc-s', ch.es), () => tipVenda(v, c, ctx.cfg)));   // ao lado (dentro, a etiqueta esticava na coluna)
+        }
+        depoisDoValor(precoDaVenda(row, v) || idEl, row).insertAdjacentElement('afterend', w);
+        linhas.set(chave, { el: row, sig, els: [w] });
         return 'ok';
     }
 
@@ -791,9 +1105,9 @@
         const rec = SHC.recomendaPromo(ls.filter(l => l.sobra !== null), cfg, (ls.find(l => l.custoDados) || {}).custoDados);
         const melhor = SHC.telaMelhor(rec);
         ls.forEach(l => {
-            const p = l.p, m = norm(moeda(p.preco)), rcb = moeda(p.recebe).replace('R$ ', '');
-            const cand = fs.filter(e => !usados.has(e) && norm(e.textContent) === m && e.closest('.sc-list-row'));
-            const alvo = cand.find(e => (e.closest('.sc-list-row').textContent || '').indexOf(rcb) >= 0)
+            const p = l.p;                   // preço e "você recebe" como o ML escreve: "R$ 318" ou "R$ 318,00"
+            const cand = fs.filter(e => !usados.has(e) && SHC.telaEhValor(e.textContent, p.preco) && e.closest('.sc-list-row'));
+            const alvo = cand.find(e => SHC.telaTemValor(textoSep(e.closest('.sc-list-row')), p.recebe))
                 || cand.find(e => /você recebe/i.test(e.closest('.sc-list-row').textContent || ''));
             if (!alvo) return;
             usados.add(alvo);
@@ -864,7 +1178,7 @@
     // ── Dados (estado do ML + o que o seller informou) ──
     async function buscaEstado() {
         const url = location.href, t = ultimaBusca.get(url) || 0;
-        if (Date.now() - t < 30000) return null;
+        if (Date.now() - t < 30000) return undefined;   // cedo demais (≠ null: buscou e não veio)
         ultimaBusca.set(url, Date.now());
         try {
             const r = await fetch(url, { credentials: 'include' });
@@ -882,6 +1196,9 @@
             estado = { url: location.href, tela, r, itens: [...porId.values()], porId };
             custosC = null; fretesC = null;
             if (itens.length) manda(SHC.telaMsgPagina('anuncios_pagina', r, { url: location.href, itens }));
+        } else if (tela === 'vendas') {
+            estado = { url: location.href, tela, r, vendas: SHC.mlVendasDaLista(r) || [] };   // nada vai para o fundo: nada da venda é guardado
+            custosC = null;
         } else {
             estado = { url: location.href, tela, r, promos: SHC.mlPromosDoEstado(r), semCalc: SHC.telaPromosSemCalculo(r) };
             custosC = null;
@@ -902,7 +1219,9 @@
         const url = location.href;
         if (semSolucao.has(url) || !mlbFaltando().length) return;
         const r = await buscaEstado();
-        if (!r || SHC.telaDe(location.href) !== 'anuncios' || location.href !== url) return;
+        if (SHC.telaDe(location.href) !== 'anuncios' || location.href !== url) return;
+        if (r === null) { semSolucao.add(url); return agenda(0); }   // buscou e não veio: as linhas faltando ganham a faixa só da tela
+        if (!r) return;
         usaEstado('anuncios', r);
         if (mlbFaltando().length) semSolucao.add(url);   // não insiste: no máx. 1 busca extra por URL
         agenda(0);
@@ -912,14 +1231,21 @@
         versao++;
         if (o === 'custos' || o === 'tudo') { custosC = null; cfgC = null; }
         if (o === 'fretes' || o === 'tudo') fretesC = null;
-        if (o === 'sku' || o === 'tudo') { skuC = null; custosC = null; saudeC = null; }   // saudeC: SKUs com medidas diferentes vêm do retrato
+        if (o === 'sku' || o === 'tudo') { skuC = null; custosC = null; saudeC = null; vendasC = null; }   // saudeC: SKUs com medidas diferentes vêm do retrato
     }
     async function cfgAtual() { if (!cfgC) cfgC = await SHC.lerCfg(); return cfgC; }
 
     async function ctxAnuncios() {
         if (!(await garanteEstado('anuncios'))) return null;
-        const itens = estado.itens.filter(i => i.preco !== null && i.recebe !== null);
-        if (!custosC) {
+        // Todas as linhas ganham faixa: também as sem preço/"Você recebe" (pausada, família com faixa de valores) e, se buscar de novo
+        // não trouxe o anúncio (confereAnunciosNovos), a linha só da tela (SKU lido da própria linha) — sem lucro, só "＋ Informar custo".
+        const itens = estado.itens.slice();
+        if (semSolucao.has(location.href)) mlbFaltando().forEach(e => {
+            const f = folhas(e).map(x => /^\s*SKU:?\s*(\S.*?)\s*$/i.exec(x.textContent || '')).find(Boolean);
+            const sku = f ? (SHC.normalizaSku ? SHC.normalizaSku(f[1]) : f[1]) : '';
+            itens.push({ itemId: e.id, sku, familia: '', titulo: '', tipo: '', preco: null, tarifa: null, frete: null, recebe: null });
+        });
+        if (!custosC || itens.some(i => !custosC.has(i.itemId))) {
             const infos = itens.map(i => ({ sku: i.sku, familia: i.familia, itemId: i.itemId }));
             const m = await SHC.custosDe(infos), out = new Map();
             infos.forEach(i => out.set(i.itemId, m.get(i)));
@@ -927,7 +1253,7 @@
         }
         if (!fretesC) fretesC = await SHC.lerFretes(itens.map(i => i.itemId));
         if (!saudeC) {
-            const [fiscal, fotos, visitas, medidas, snap] = await Promise.all([SHC.lerFiscal(), SHC.lerFotos(), SHC.lerVisitas(), SHC.lerMedidas(), SHC.lerAnuncios()]).catch(() => [null, null, null, null, null]);
+            const [fiscal, fotos, visitas, medidas, snap, catcomp] = await Promise.all([SHC.lerFiscal(), SHC.lerFotos(), SHC.lerVisitas(), SHC.lerMedidas(), SHC.lerAnuncios(), SHC.lerCatComp()]).catch(() => [null, null, null, null, null, null]);
             // SKUs com medidas diferentes: com o retrato da conta inteira (a tela mostra só uma página de anúncios). Desempate pelas
             // vendas (vm|ml, unidades por mês), igual ao painel: os dois apontam a mesma referência.
             const ids = medidas && medidas.porItem ? Object.keys(medidas.porItem) : [];
@@ -935,10 +1261,37 @@
             const vendas = {};
             ids.forEach(id => { vendas[id] = Object.keys(vm[id] || {}).reduce((s, m) => s + (+vm[id][m] || 0), 0); });
             const medDiv = ids.length ? SHC.medidasDivergentes(medidas.porItem, (snap && snap.itens) || [], { vendas }) : [];
-            saudeC = { fiscal, fotos, visitas, medidas, medDiv };
+            saudeC = { fiscal, fotos, visitas, medidas, medDiv, catcomp };
         }
         const cfg = await cfgAtual();
         return { cfg, custos: custosC, fretes: fretesC, hoje: SHC.hoje(), itens, saude: Object.assign({ cfg, hoje: SHC.hoje() }, saudeC) };
+    }
+
+    // Lista de Vendas: retrato dos anúncios (tarifa %, frete, SKU) + frete cobrado por pedido (Faturamento) + custos. Só leitura do que já existe.
+    async function ctxVendas() {
+        if (!(await garanteEstado('vendas'))) return null;
+        const cfg = await cfgAtual();
+        if (!vendasC) {
+            const conta = await SHC.contaAtual();
+            const [snap, fp] = await Promise.all([SHC.lerAnuncios(conta), SHC.lerChave('frete:' + conta + ':pedidos')]);
+            const porId = new Map();
+            ((snap && snap.itens) || []).forEach(i => { if (i && i.itemId && !porId.has(i.itemId)) porId.set(i.itemId, i); });
+            vendasC = { porId, pedidos: (fp && fp.pedidos) || {} };
+            custosC = null;
+        }
+        const chaveP = p => p.itemId + '|' + p.sku;
+        if (!custosC) {
+            const infos = new Map();
+            estado.vendas.forEach(v => v.produtos.forEach(p => {
+                const it = vendasC.porId.get(p.itemId);
+                if (!infos.has(chaveP(p))) infos.set(chaveP(p), { sku: p.sku || (it && it.sku) || '', familia: (it && it.familia) || '', itemId: p.itemId });
+            }));
+            const m = await SHC.custosDe([...infos.values()]), out = new Map();
+            infos.forEach((i, k) => out.set(k, m.get(i)));
+            custosC = out;
+        }
+        const custoDe = p => (custosC.get(chaveP(p)) || {}).dados || null, anuncio = id => vendasC.porId.get(id) || null;
+        return { cfg, vendas: estado.vendas.map(v => ({ v, c: SHC.telaVendaConta(v, anuncio, custoDe, cfg, vendasC.pedidos) })) };
     }
 
     async function ctxPromos() {
@@ -1003,10 +1356,12 @@
             const tela = SHC.telaDe(location.href);
             if (!tela || pausado) return;
             const g = geracao, v0 = versao;   // versão do começo: se mudar no meio, as linhas ficam velhas e são redesenhadas
-            const ctx = tela === 'anuncios' ? await ctxAnuncios() : await ctxPromos();
+            const ctx = tela === 'anuncios' ? await ctxAnuncios() : tela === 'vendas' ? await ctxVendas() : await ctxPromos();
             if (!ctx || g !== geracao) return;
             ctx.v0 = v0;
-            const jobs = tela === 'anuncios' ? ctx.itens.map(it => () => renderAnuncio(it, ctx)) : ctx.familias.map(f => () => renderFamilia(f, ctx));
+            if (tela === 'vendas') { ctx.quero = new Set(ctx.vendas.map(x => x.v.idTxt)); ctx.idEls = idsNaTela(ctx.quero); }
+            const jobs = tela === 'anuncios' ? ctx.itens.map(it => () => renderAnuncio(it, ctx)) : tela === 'vendas' ? ctx.vendas.map(x => () => renderVenda(x, ctx))
+                : ctx.familias.map(f => () => renderFamilia(f, ctx));
             const res = await fatias(jobs, g);
             if (!res || g !== geracao) return;
             if (tela === 'promos') { desenhaBarra(ctx.cont); aplicaFiltro(); }
@@ -1014,7 +1369,7 @@
                 if (++falhasSeguidas >= 2) return pausar();
                 agenda(2000);             // pode ser a tela ainda montando: confere de novo antes de pausar
             } else falhasSeguidas = 0;
-            if (res.ok > 0) talvezTour(tela);
+            if (res.ok > 0 && SHC.TOUR_PASSOS[tela]) talvezTour(tela);   // Vendas não tem tour
             if (tela === 'anuncios' && !lucroMarcado && document.querySelector('.shc-w .shc-r')) {   // 1ª etiqueta de lucro/prejuízo vista
                 lucroMarcado = true;
                 SHC.telaMarcaLucro().catch(() => { lucroMarcado = false; });
@@ -1036,7 +1391,7 @@
     function trocaTela() {
         geracao++;
         hrefAtual = location.href;
-        estado = null; custosC = null; fretesC = null; saudeC = null;
+        estado = null; custosC = null; fretesC = null; saudeC = null; vendasC = null;
         degraus.clear(); pedidosAt.clear(); filaAt.length = 0;
         soViaveis = false; pausado = false; falhasSeguidas = 0;
         escondeTip(); fechaPop(); fimTour(true);
@@ -1237,7 +1592,8 @@
         if (ks.some(k => k.indexOf('ml:anuncios:') === 0)) o = o ? 'tudo' : 'sku';
         if (ks.some(k => k.indexOf('fh|ml|') === 0)) o = o ? 'tudo' : 'fretes';
         // Saúde (fiscal:/fotos:/visitas:/medidas:): sem mudar a versão; a assinatura de cada linha diz qual redesenhar.
-        if (ks.some(k => /^(fiscal|fotos|visitas|medidas):/.test(k))) { saudeC = null; if (!o) return agenda(1000); }
+        if (ks.some(k => /^(fiscal|fotos|visitas|medidas|catcomp):/.test(k))) { saudeC = null; if (!o) return agenda(1000); }
+        if (ks.some(k => /^frete:.*:pedidos$/.test(k))) { vendasC = null; if (!o) { versao++; return agenda(1000); } }   // frete cobrado lido: a venda sai de "estimado"
         if (!o) return;
         invalida(o);
         agenda(o === 'fretes' ? 400 : 100);
