@@ -20,6 +20,26 @@ span.shc-w{display:inline}
 .shc-an>.shc-r{height:auto;min-height:20px}   /* "Abaixo da meta" numa coluna estreita: o valor desce para a 2ª linha dentro da própria etiqueta */
 .shc-r .st,.shc-r .vl{flex:1 0 auto}.shc-r:focus-visible,.shc-at:focus-visible,.shcp:focus-visible{outline:2px solid #3483FA;outline-offset:1px}
 
+/* v3.3 Venda (lista de Vendas, pedido da dona 01/10): linha discreta logo abaixo do preço, no texto do ML — sem caixa, sem borda, sem
+   fundo; só o ponto colorido e o número em negrito. Nada corta no meio da palavra: "● Lucro ≈" + [número · % · sem custo] numa linha
+   (18 px); na coluna estreita do ML (~80 px) o grupo do número desce para a 2ª linha (36 px) e o que não cabe ao lado do número
+   (%, "sem custo") some inteiro — fica na 2ª linha escondida do .shc-vx. O balão (mouse ou Tab) mostra a conta inteira.
+   ponytail: "≈ R$ 1.234,56" estimado numa coluna de 80 px passa para uma 3ª linha (54 px) em vez de cortar; nunca some número. */
+.shc-w.shc-vd{flex:1 0 100%;width:100%;max-width:100%;margin-top:2px}
+.shc-vl{display:flex;flex-wrap:wrap;align-items:center;column-gap:4px;max-width:300px;font-size:13px;line-height:18px;font-weight:400;color:#666;white-space:nowrap;cursor:help;--t:#475569}
+.shc-vl>.shc-vr,.shc-vl>.shc-va{flex:none}
+.shc-vl>.shc-vr::before{content:"";display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%;background:var(--t);vertical-align:1px}
+.shc-vx{display:flex;flex-wrap:wrap;column-gap:4px;flex:0 1 auto;min-width:min-content;height:18px;overflow:hidden}   /* o número nunca corta */
+.shc-vx>*{flex:none}
+.shc-vx>b{font-size:inherit;font-weight:700;color:var(--t);font-variant-numeric:tabular-nums}
+.shc-vl.luc{--t:#047857}.shc-vl.ate{--t:#B45309}.shc-vl.pre{--t:#B91C1C}.shc-vl.liq b{color:#333}.shc-vl.can{--t:#94A3B8}.shc-vl.can b{color:#666}
+.shc-vx>.shc-vp::before,.shc-vx>button.shc-lk::before{content:"· ";color:#666}
+.shc-vl.ck{cursor:pointer}
+button.shc-lk{display:inline;margin:0;padding:0;border:0;background:none;box-shadow:none;min-height:0;height:auto;width:auto;font:inherit;line-height:18px;color:#3483FA;cursor:pointer;text-decoration:none}
+button.shc-lk:hover{text-decoration:underline}
+.shc-vl:focus-visible{outline:2px solid #3483FA;outline-offset:1px}
+button.shc-lk:focus-visible{outline:none;box-shadow:inset 0 -2px 0 #3483FA}   /* dentro do .shc-vx (overflow:hidden), o contorno de fora seria cortado */
+
 /* Saúde do anúncio: fotos, dados fiscais, visitas e medidas */
 .shc-s{display:inline-block;padding:0 6px;border-radius:6px;border:1px solid #E2E8F0;background:#F8FAFC;color:#475569;font-size:10.5px;font-weight:700;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help;text-decoration:none}
 .shc-s b,.shc-an .shc-s b{color:#B91C1C;font-weight:700;font-size:inherit}   /* o ML aumenta o <b> da coluna; aqui fica do tamanho da etiqueta */

@@ -2,7 +2,7 @@
 // Sem servidor: cada seller cria o SEU aplicativo no Bling (só leitura de Produtos) e cola aqui o Client ID e o Client Secret.
 // Entrada: chrome.identity.launchWebAuthFlow no painel (state aleatório conferido) → o fundo troca o code por tokens.
 // access_token vale 6 h (renova sozinho antes de vencer e com 401); refresh_token vale 30 dias (renovar devolve um novo).
-// Só LEITURA: GET https://api.bling.com.br/Api/v3/produtos?pagina=N&limite=100&criterio=2 (ativos). Custo = precoCusto (ou fornecedor.precoCusto),
+// Só LEITURA: GET https://api.bling.com.br/Api/v3/produtos?pagina=N&limite=100&criterio=5 (todos; v3.2, antes 2 = ativos)&filtroSaldoEstoque=1|0|2 (as 3 faixas de estoque). Custo = precoCusto (ou fornecedor.precoCusto),
 // SKU = codigo. Limite do Bling: 3 pedidos por segundo → no mínimo 400 ms entre pedidos.
 // Tudo só em chrome.storage.local 'erp:bling' = {clientId, clientSecret, access, refresh, expira, renovado, ultima} — nunca em log nem na tela.
 // Funções puras no topo (tests/copiloto/teste_erp_bling.js); blingPuxar recebe fetch/espera/salvar para rodar em node.
@@ -81,10 +81,18 @@
         if (status === 403) return { ok: false, erro: 'escopo', msg: 'O seu aplicativo do Bling não tem permissão de ler Produtos. Marque Produtos (leitura) no aplicativo e conecte de novo.' };
         if (status === 429) return { ok: false, erro: 'limite', msg: 'O Bling pediu para esperar (muitos acessos). Tente de novo em alguns minutos.' };
         if (!j || !Array.isArray(j.data)) return { ok: false, erro: 'outro', msg: 'O Bling respondeu num formato que o Copiloto não conhece' + (tipoErro(j) ? ' (' + tipoErro(j).slice(0, 60) + ')' : '') + '.' };
+        // v3.2 (cruzamento ERP × ML, erp-cruzar.js): da MESMA resposta, situacao (A/I), formato (V = pai com variações, E = kit/composição),
+        // idProdutoPai (variação) e estoque.saldoVirtualTotal. Sem situacao (resposta antiga) = ativo.
+        const saldo = p => { const v = p.estoque && p.estoque.saldoVirtualTotal; const n = typeof v === 'number' ? v : parseFloat(v); return isFinite(n) ? n : null; };
         const produtos = j.data.map(p => p || {}).map(p => ({
+            id: p.id === undefined || p.id === null ? '' : String(p.id),
             sku: SHC.normalizaSku(p.codigo),
             custo: dec(p.precoCusto) || dec(p.fornecedor && p.fornecedor.precoCusto),
             titulo: String(p.nome || '').replace(/\s+/g, ' ').trim().slice(0, 120),
+            situacao: !p.situacao || p.situacao === 'A' ? 'A' : 'I',
+            tipo: p.formato === 'V' ? 'pai' : p.formato === 'E' ? 'kit' : (+p.idProdutoPai > 0 ? 'variacao' : 'simples'),
+            paiId: +p.idProdutoPai > 0 ? String(p.idProdutoPai) : '',
+            estoque: saldo(p),
         })).filter(p => p.sku);
         return { ok: true, produtos, n: j.data.length };
     };
@@ -101,26 +109,36 @@
         const noRitmo = async () => { const falta = ultimoPedido + o.ritmo - o.agora(); if (ultimoPedido && falta > 0) await o.espera(falta); ultimoPedido = o.agora(); };
         const renovar = async () => { await noRitmo(); const t = await SHC.blingRenovar(c, o); c = Object.assign(c, t); await o.salvar(t); };
         if (!c.access || !(c.expira - o.agora() > 5 * 60e3)) await renovar();
-        const todos = [];
-        let pagina = 1, renovou = false, tentativa = 0;
-        while (pagina <= 1000) {
-            await noRitmo();
-            let j = null, status = 0;
-            try {
-                const r = await o.fetch(PRODUTOS + '?' + new URLSearchParams({ pagina: String(pagina), limite: String(POR_PAGINA), criterio: '2' }).toString(),
-                    { method: 'GET', headers: { Accept: 'application/json', Authorization: 'Bearer ' + c.access } });
-                status = r.status; j = await r.json().catch(() => null);
-            } catch (e) { throw { erro: 'rede', msg: 'Não consegui falar com o Bling. Confira a internet e tente de novo.' }; }
-            const r = SHC.blingLerProdutos(j, status);
-            if (!r.ok && r.erro === 'token' && !renovou) { renovou = true; await renovar(); continue; }
-            if (!r.ok && r.erro === 'limite' && tentativa < o.esperasLimite.length) { await o.espera(o.esperasLimite[tentativa++]); continue; }
-            if (!r.ok) throw { erro: r.erro === 'token' ? 'reconectar' : r.erro, msg: r.msg };
-            tentativa = 0;
-            todos.push(...r.produtos);
-            o.progresso(pagina, null);
-            if (r.n < POR_PAGINA) break;
-            pagina++;
+        // F5 (igual ao core/ERPBling.php): o filtroSaldoEstoque do Bling tem PADRÃO 1 (só saldo positivo) — sem ele, a peça esgotada
+        // ou toda no Full nunca trazia custo. Lê as 3 faixas (1 positivo → 0 zerado → 2 negativo), sem repetir produto (id). As faixas
+        // não se cruzam: um id já visto voltando = o Bling ignorou o filtro (devolveu tudo); a 1ª faixa já trouxe o catálogo e as outras
+        // são puladas. todos.porFaixa = quantos vieram de cada faixa (vai para erp:bling.ultima).
+        const todos = [], ids = new Set(), porFaixa = {};
+        let renovou = false, tentativa = 0, lidas = 0;
+        faixas: for (const faixa of [1, 0, 2]) {
+            porFaixa[faixa] = 0;
+            for (let pagina = 1; pagina <= 1000;) {
+                await noRitmo();
+                let j = null, status = 0;
+                try {
+                    // v3.2: criterio=5 (todos: ativos E inativos) — o cruzamento ERP × ML precisa do inativo ("à venda no ML, mas inativo no Bling").
+                    const r = await o.fetch(PRODUTOS + '?' + new URLSearchParams({ pagina: String(pagina), limite: String(POR_PAGINA), criterio: '5', filtroSaldoEstoque: String(faixa) }).toString(),
+                        { method: 'GET', headers: { Accept: 'application/json', Authorization: 'Bearer ' + c.access } });
+                    status = r.status; j = await r.json().catch(() => null);
+                } catch (e) { throw { erro: 'rede', msg: 'Não consegui falar com o Bling. Confira a internet e tente de novo.' }; }
+                const r = SHC.blingLerProdutos(j, status);
+                if (!r.ok && r.erro === 'token' && !renovou) { renovou = true; await renovar(); continue; }
+                if (!r.ok && r.erro === 'limite' && tentativa < o.esperasLimite.length) { await o.espera(o.esperasLimite[tentativa++]); continue; }
+                if (!r.ok) throw { erro: r.erro === 'token' ? 'reconectar' : r.erro, msg: r.msg };
+                tentativa = 0;
+                if (faixa !== 1 && r.produtos.some(p => p.id && ids.has(p.id))) { porFaixa.ignorado = true; break faixas; }
+                r.produtos.forEach(p => { if (!p.id || !ids.has(p.id)) { if (p.id) ids.add(p.id); todos.push(p); porFaixa[faixa]++; } });
+                o.progresso(++lidas, null);
+                if (r.n < POR_PAGINA) break;
+                pagina++;
+            }
         }
+        todos.porFaixa = porFaixa;
         return todos;
     };
 

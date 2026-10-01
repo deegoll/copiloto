@@ -15,11 +15,86 @@
     SHC.normalizaSku = s => String(s || '').replace(/^\s*SKU[:\s]*/i, '').trim().toUpperCase().replace(/\s+/g, ' ').replace(/\|/g, '-').slice(0, 80);
     SHC.chaveSku = sku => { const n = SHC.normalizaSku(sku); return n ? 'c|sku|' + n : ''; };
     // Ordem ÚNICA de busca do custo de um anúncio (v2.4, V13): SKU → anúncio (MLB…) → família (F…). Devolve {chave, dados} ou null.
+    // Exceção (30/09/2026, SHC.mlbNaFrente): anúncio com vários SKUs ou com SKU que a linha da lista não mostra → anúncio → SKU → família.
     // O painel lateral (P.lerCustosPainel) e as etiquetas usam esta mesma ordem.
+    // Kit (produto composto): c|sku|<KIT>.kit = [{sku, q}] (SKU do componente normalizado × quantidade) e .outros = embalagem do kit.
+    // Custo do kit = Σ custo do componente × q (+ "outros" do kit, como qualquer SKU). Custo DIGITADO no próprio kit ganha do
+    // calculado (mesma regra do Tiny: origem 'manual', sem origem ou valor do ERP trocado à mão). Kit incompleto: não usa soma
+    // (segue para o custo do próprio kit vindo do ERP/planilha, depois anúncio e família). SHC.kitDe diz o que falta.
+    // ponytail: kit dentro de kit não soma — o componente precisa de custo próprio (vira "falta"); resolver em cadeia se pedirem.
+    const custoDigitado = d => SHC.num(d.custo) > 0 && (d.origem === 'manual' || !d.origem || (d.origem === 'erp' && d.custoErp !== undefined && SHC.num(d.custo) !== d.custoErp));
+    SHC.ehKit = d => !!d && Array.isArray(d.kit) && d.kit.length > 0;
+    SHC.kitDe = function (custos, d) {
+        if (!SHC.ehKit(d)) return null;
+        let soma = 0; const faltam = [];
+        d.kit.forEach(c => { const x = custos[SHC.chaveSku(c.sku)], v = x ? SHC.num(x.custo) : 0; if (v > 0) soma += v * c.q; else faltam.push(c.sku); });
+        return { custo: faltam.length ? null : Math.round(soma * 100) / 100, faltam };
+    };
+    // SKUs do anúncio (it.sku + it.skus, sem repetir): anúncio com variações pode ter um SKU por variação.
+    SHC.skusDoAnuncio = info => (info && info.sku ? [info.sku] : []).concat(info && Array.isArray(info.skus) ? info.skus : []).filter((s, i, a) => s && a.indexOf(s) === i);
+    // O custo gravado no PRÓPRIO anúncio (c|ml|MLB…) vem ANTES do SKU quando (30/09/2026, relato "anúncio sem SKU"):
+    //   • o anúncio tem mais de um SKU (variações): um custo só para o anúncio é mais certo que o de uma das variações;
+    //   • o SKU não aparece na linha da lista (skuFonte ≠ 'lista': veio das variações, do mesmo produto, das vendas, do Full ou da leitura
+    //     anterior) — o anúncio aparecia como "anúncio sem SKU" e o custo foi digitado nele: o lucro não troca de número sem aviso.
+    SHC.mlbNaFrente = info => !!info && (SHC.skusDoAnuncio(info).length > 1 || (!!info.skuFonte && info.skuFonte !== 'lista'));
+    const custoDaChave = (custos, k) => {
+        const d = custos[k];
+        if (!d) return null;
+        if (SHC.ehKit(d) && !custoDigitado(d)) { const r = SHC.kitDe(custos, d); if (r.custo > 0) return { chave: k, dados: Object.assign({}, d, { custo: r.custo, origem: 'kit' }) }; }
+        return SHC.num(d.custo) > 0 ? { chave: k, dados: d } : null;
+    };
     SHC.custoDeAnuncio = function (custos, info) {
-        const tentativas = [info.sku ? SHC.chaveSku(info.sku) : '', info.itemId ? SHC.chave('ml', info.itemId) : '', info.familia ? SHC.chave('ml', info.familia) : ''].filter(Boolean);
-        for (const k of tentativas) { const d = custos[k]; if (d && SHC.num(d.custo) > 0) return { chave: k, dados: d }; }
+        const mlb = info.itemId ? SHC.chave('ml', info.itemId) : '', fam = info.familia ? SHC.chave('ml', info.familia) : '';
+        const doSku = () => {
+            // Vários SKUs com custo (variações de custos diferentes): usa o MAIOR — o lucro do anúncio nunca sai inflado.
+            let melhor = null;
+            SHC.skusDoAnuncio(info).forEach(s => { const r = custoDaChave(custos, SHC.chaveSku(s)); if (r && (!melhor || SHC.num(r.dados.custo) > SHC.num(melhor.dados.custo))) melhor = r; });
+            return melhor;
+        };
+        const ordem = SHC.mlbNaFrente(info) ? [() => mlb && custoDaChave(custos, mlb), doSku] : [doSku, () => mlb && custoDaChave(custos, mlb)];
+        ordem.push(() => fam && custoDaChave(custos, fam));
+        for (const f of ordem) { const r = f(); if (r) return r; }
         return null;
+    };
+    // Leitura de custos com kit: traz também os SKUs de dentro dos kits lidos (1 leitura a mais, só quando há kit).
+    async function comComponentes(custos) {
+        const falta = new Set();
+        Object.keys(custos).forEach(k => { if (SHC.ehKit(custos[k])) custos[k].kit.forEach(c => { const ck = SHC.chaveSku(c.sku); if (ck && !(ck in custos)) falta.add(ck); }); });
+        return falta.size ? Object.assign(await area().get([...falta]), custos) : custos;
+    }
+    // Composição digitada, uma linha por item: "SKU x 2", "SKU;2", "SKU 2" ou só "SKU" (= 1). SKU repetido soma.
+    // → {itens:[{sku, q}], erros:[texto]}. O kit não pode conter ele mesmo; quantidade inteira de 1 a 999.
+    SHC.lerComposicao = function (texto, skuKit) {
+        const kit = SHC.normalizaSku(skuKit), itens = [], erros = [];
+        String(texto || '').split(/\r?\n/).forEach((lin, i) => {
+            const t = lin.trim();
+            if (!t) return;
+            const m = /^(.*?\S)\s*(?:\s+[x×*]\s*|\s*[;,\t]\s*|\s+)(\d+)$/i.exec(t), sku = SHC.normalizaSku(m ? m[1] : t), q = m ? +m[2] : 1;
+            if (!sku) return erros.push('Linha ' + (i + 1) + ': falta o SKU.');
+            if (!(q >= 1 && q <= 999)) return erros.push('Linha ' + (i + 1) + ': a quantidade vai de 1 a 999.');
+            if (sku === kit) return erros.push('Linha ' + (i + 1) + ': o kit não pode ter ele mesmo dentro.');
+            const ja = itens.find(x => x.sku === sku);
+            if (ja) ja.q += q; else itens.push({ sku, q });
+        });
+        return { itens, erros };
+    };
+    // Grava a composição no c|sku|<KIT> sem mexer no custo digitado, na origem nem nas medidas. itens vazio = deixa de ser kit.
+    SHC.salvarKit = async function (sku, itens, outros) {
+        const k = SHC.chaveSku(sku);
+        if (!k) return null;
+        const a = (await area().get(k))[k] || {}, kit = (itens || []).filter(c => c && SHC.chaveSku(c.sku) && c.q >= 1).map(c => ({ sku: SHC.normalizaSku(c.sku), q: Math.round(c.q) }));
+        if (kit.length) a.kit = kit; else delete a.kit;
+        const o = SHC.num(outros);
+        if (o > 0) a.outros = o; else if (outros !== undefined) delete a.outros;
+        if (!kit.length && !(SHC.num(a.custo) > 0) && !Object.keys(a).some(m => !CAMPOS_DE_CUSTO[m])) { await area().remove(k); return null; }
+        await area().set({ [k]: a });
+        return a;
+    };
+    // Todos os kits gravados + os custos dos componentes: {kits: [{sku, dados}], custos: {c|sku|…: dados}}
+    SHC.lerKits = async function () {
+        const todos = await area().get(null), custos = {}, kits = [];
+        Object.keys(todos).forEach(k => { if (k.indexOf('c|sku|') === 0) { custos[k] = todos[k]; if (SHC.ehKit(todos[k])) kits.push({ sku: k.slice(6), dados: todos[k] }); } });
+        return { kits: kits.sort((x, y) => x.sku.localeCompare(y.sku, 'pt-BR')), custos };
     };
     // Onde gravar um custo novo: no SKU quando existe (serve para todos os canais), senão no anúncio.
     SHC.chaveParaGravar = info => (info.sku ? SHC.chaveSku(info.sku) : '') || SHC.chave('ml', info.itemId || info.familia);
@@ -124,12 +199,12 @@
     SHC.custosDe = async function (infos) {
         const chaves = new Set();
         infos.forEach(i => {
-            if (i.sku) chaves.add(SHC.chaveSku(i.sku));
+            SHC.skusDoAnuncio(i).forEach(s => chaves.add(SHC.chaveSku(s)));
             if (i.familia) chaves.add(SHC.chave('ml', i.familia));
             if (i.itemId) chaves.add(SHC.chave('ml', i.itemId));
         });
         chaves.delete('');
-        const custos = chaves.size ? await area().get([...chaves]) : {};
+        const custos = chaves.size ? await comComponentes(await area().get([...chaves])) : {};
         const out = new Map();
         infos.forEach(i => out.set(i, SHC.custoDeAnuncio(custos, i)));
         return out;
@@ -253,6 +328,9 @@
     // secao:'envio'|'entrega', de, ts, envio, fabrica, entrega, quem?}, historico:[{ordenadas, pesoKg, de, ate, vistoAte, fonte, quem?}] (máx. 20), alterar?:[ts], falhaTs?, falhas?}},
     // (quem 'seller' = o seller disse "Fui eu"; alterar = cliques em "Alterar no ML") mudancas:[{itemId, sku, antes, depois, em, vistoAte, fonte}] (máx. 100, a mais nova 1º), lidos, de, semPermissao}. null = ainda não lido.
     SHC.lerMedidas = async conta => SHC.lerChave('medidas:' + (conta || await SHC.contaAtual()));
+    // v3.2 (background.js juntarEditor): editor:<conta> = {ts, total, completo, porItem:{MLB: SHC.editorLinha + variacoes:[SHC.editorVariacoes]}} — Editor em massa,
+    // lido só quando a seller abre a tela. ml:anuncios:<conta> ganhou familias:[{id:'TR…', tipo:'familia'|'verMais', familyId, titulo, estoque, esperado, itens:[MLB]}] e linhas.
+    SHC.lerEditor = async conta => SHC.lerChave('editor:' + (conta || await SHC.contaAtual()));
     // v3.1 (background.js): catcomp:<conta> = {ts, porItem:{MLB: SHC.compCatRegistra(...) = SHC.mlCompeticaoDoEstado + {ts, hist:[{d, e, w, g, vp}]} (ou só falhaTs/falhas)}}.
     SHC.lerCatComp = async conta => SHC.lerChave('catcomp:' + (conta || await SHC.contaAtual()));
     // v2.5.3 (background.js): posvenda:<conta> = {ts, reclamacoes, mensagens, devolucoes} (null = aba não achada; só totais, nada do comprador)
@@ -398,12 +476,16 @@
         const lista = itens || [], grupos = new Map();
         lista.forEach((it, i) => {
             if (!it || (!it.dentroDeFamilia && it.preco === null && lista[i + 1] && lista[i + 1].dentroDeFamilia)) return;   // linha-mãe de família
-            const k = it.sku ? 'sku:' + SHC.normalizaSku(it.sku) : 'mlb:' + it.itemId;
-            const g = grupos.get(k) || { vendas: 0, custo: false, sku: it.sku || '', itemId: it.itemId, titulo: it.titulo || '' };
-            const v = (vm || {})[it.itemId] || {};
-            Object.keys(v).forEach(m => { if (m >= desde) g.vendas += Number(v[m]) || 0; });
-            if (!g.custo && SHC.custoDeAnuncio(custos || {}, it)) g.custo = true;
-            grupos.set(k, g);
+            // Anúncio com variações de SKUs diferentes (it.skus): entra no grupo de CADA SKU (igual às linhas da tela de custos), com as
+            // vendas do anúncio em cada um (o ML não separa as vendas por variação aqui) e o custo daquele SKU (ou o do próprio anúncio).
+            const skus = SHC.skusDoAnuncio(it), v = (vm || {})[it.itemId] || {};
+            (skus.length ? skus : ['']).forEach(s => {
+                const k = s ? 'sku:' + SHC.normalizaSku(s) : 'mlb:' + it.itemId;
+                const g = grupos.get(k) || { vendas: 0, custo: false, sku: s, itemId: it.itemId, titulo: it.titulo || '' };
+                Object.keys(v).forEach(m => { if (m >= desde) g.vendas += Number(v[m]) || 0; });
+                if (!g.custo && SHC.custoDeAnuncio(custos || {}, s && skus.length > 1 ? { sku: s, itemId: it.itemId, familia: it.familia } : it)) g.custo = true;
+                grupos.set(k, g);
+            });
         });
         const todos = [...grupos.values()];
         const venderam = todos.filter(g => g.vendas > 0).sort((a, b) => b.vendas - a.vendas);
@@ -668,9 +750,55 @@
         return novo;
     };
 
+    // ── Despesas fixas do mês (pesquisa aprovada pela dona): aluguel, salários, embalagem, sistemas, contador. cfg.despesas_fixas = [{nome, valor}].
+    // Valor por mês, soma simples. Entram no Fechamento DEPOIS do lucro ("Sobra no fim do mês"). Lista vazia = sem a linha (nunca 0 inventado).
+    SHC.DESPESA_MAX = 10000000;
+    /** Lista guardada em cfg → só as linhas válidas (nome e valor ≥ 0), sempre um array NOVO. */
+    SHC.despesasFixas = cfg => ((cfg && Array.isArray(cfg.despesas_fixas)) ? cfg.despesas_fixas : [])
+        .map(d => ({ nome: String((d && d.nome) || '').replace(/\s+/g, ' ').trim().slice(0, 40), valor: SHC.num(d && d.valor), desde: d && /^\d{4}-\d{2}$/.test(d.desde || '') ? d.desde : null }))
+        .filter(d => d.nome && d.valor !== null && d.valor >= 0 && d.valor <= SHC.DESPESA_MAX).map(d => Object.assign({ nome: d.nome, valor: SHC.r2(d.valor) }, d.desde ? { desde: d.desde } : {}));
+    /**
+     * Linhas digitadas [{nome, valor (texto)}] → { lista:[{nome, valor}], erros:[{i, campo:'nome'|'valor', texto}] }.
+     * Linha toda vazia é ignorada. Valor: SHC.num, de 0 a 10 milhões (0 digitado vale). Nome: obrigatório, até 40 letras.
+     */
+    SHC.lerDespesasFixas = function (linhas) {
+        const lista = [], erros = [];
+        (linhas || []).forEach((l, i) => {
+            const nome = String((l && l.nome) || '').replace(/\s+/g, ' ').trim(), txtV = String((l && l.valor) === null || (l && l.valor) === undefined ? '' : l.valor).trim();
+            if (!nome && !txtV) return;
+            const v = SHC.num(txtV);
+            if (!nome) erros.push({ i, campo: 'nome', texto: 'Dê um nome à despesa (ex.: Aluguel).' });
+            if (v === null || v < 0 || v > SHC.DESPESA_MAX) erros.push({ i, campo: 'valor', texto: (nome ? nome.slice(0, 40) : 'Valor') + ': use um valor em reais por mês, de 0 a 10.000.000 (ex.: 1.500).' });
+            else if (nome) lista.push({ nome: nome.slice(0, 40), valor: SHC.r2(v) });
+        });
+        return { lista, erros };
+    };
+    /**
+     * Despesas fixas que valem para o mês (AAAA-MM). hoje = 'AAAA-MM-DD'. → null (lista vazia ou mês que ainda não começou)
+     * | { valor, mensal, n, proporcional, dias, diasMes }. Mês em andamento = proporcional aos dias corridos (mensal × dia de hoje ÷ dias do mês).
+     */
+    SHC.despesasFixasDoMes = function (lista, mes, hoje) {
+        // desde (AAAA-MM do cadastro): a despesa só vale do mês em que foi cadastrada em diante (nunca num Fechamento de antes dela).
+        const ls = (Array.isArray(lista) ? lista : []).filter(d => d && !(d.desde && d.desde > mes));
+        if (!ls.length || !/^\d{4}-\d{2}$/.test(mes || '')) return null;
+        const mensal = SHC.r2(ls.reduce((s, d) => s + (SHC.num(d.valor) || 0), 0));
+        const diasMes = new Date(+mes.slice(0, 4), +mes.slice(5, 7), 0).getDate(), mesHoje = /^\d{4}-\d{2}-\d{2}/.test(hoje || '') ? hoje.slice(0, 7) : null;
+        if (mesHoje && mes > mesHoje) return null;
+        const proporcional = mesHoje === mes, dias = proporcional ? Math.min(diasMes, +hoje.slice(8, 10)) : diasMes;
+        return { valor: proporcional ? SHC.r2(mensal * dias / diasMes) : mensal, mensal, n: ls.length, proporcional, dias, diasMes };
+    };
+    /** Grava só a lista (objeto cfg NOVO). Não marca cfg.configurado: salvar despesas não pode inventar "imposto 0%". */
+    SHC.salvarDespesasFixas = async function (lista) {
+        const r = await area().get('cfg'), atual = Object.assign({}, r.cfg || {}), antes = SHC.despesasFixas(atual), mes = SHC.hoje().slice(0, 7);
+        // desde: o da mesma despesa já guardada (pelo nome); despesa nova = o mês de hoje
+        atual.despesas_fixas = SHC.despesasFixas({ despesas_fixas: (lista || []).map(d => Object.assign({}, d, { desde: (d && d.desde) || ((antes.find(a => a.nome === String((d && d.nome) || '').replace(/\s+/g, ' ').trim().slice(0, 40)) || {}).desde) || mes })) });
+        await area().set({ cfg: atual });
+        return Object.assign({}, SHC.PADRAO, atual);
+    };
+
     SHC.lerCustos = async function (chaves) {
         if (!chaves.length) return {};
-        return await area().get(chaves);
+        return comComponentes(await area().get(chaves));   // kit: vêm junto os SKUs de dentro
     };
     SHC.salvarCusto = async function (canal, id, dados) {
         const k = SHC.chave(canal, id);

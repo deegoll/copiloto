@@ -47,7 +47,13 @@
 // famílias; as etapas leves antes das pesadas), mês atual lido só a partir dos dias novos (cob:<conta>:<mês>, nfe incremental), mês fechado
 // lido 1 vez e nunca relido inteiro, e os 11 meses antigos (Faturamento, vendas por anúncio, NF-e do mês passado) em SEGUNDO PLANO
 // (lerHistorico + alarme 'shc-historico', shc:status.historico = "7 de 12 meses"), sem travar a sincronização.
-importScripts('calc.js', 'store.js', 'ml-extrator.js', 'tiny.js', 'omie.js', 'bling.js', 'fechamento.js', 'agenda-canal.js');
+importScripts('calc.js', 'store.js', 'ml-extrator.js', 'tiny.js', 'omie.js', 'bling.js', 'erp-cruzar.js', 'fechamento.js', 'agenda-canal.js', 'licenca.js');   // licenca.js: F1, "Entrar com o SellerHub" + passe do plano (nada é travado ainda)
+// v3.2: TikTok Shop — núcleo (cópia de copiloto-nucleo/src) + tiktok.js. Só LÊ a resposta que a tela aberta pela seller recebeu:
+// nenhum fetch, nenhum alarme para o TikTok. Mensagens 'tiktok_captura' e 'tiktok_ligar' e o registro dos scripts: SHC.tt.instalarFundo.
+importScripts('nucleo/util.js', 'nucleo/modelo.js', 'nucleo/tarifas.js', 'nucleo/motor.js', 'nucleo/conciliacao.js', 'nucleo/adaptador.js', 'nucleo/adaptadores/tiktok.js', 'tiktok.js');
+// v3.2.0: TikTok TRAVADO (calc.js SHC.MODULOS_TRAVADOS): sem as permissões no manifest e sem as mensagens/registro de scripts.
+// Liberar = descomentar a linha abaixo junto com o resto da lista em calc.js.
+// SHC.tt.instalarFundo();
 
 const BASE = 'https://vendedores.mercadolivre.com.br';
 const PAGINAS_MAX = 40;          // promoções: 25 famílias por página → até 1.000 produtos
@@ -64,13 +70,7 @@ const TEMPO_MS = 25000;
 const comTempo = (o, ms) => Object.assign(o, (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? { signal: AbortSignal.timeout(ms || TEMPO_MS) } : {});
 
 function preparar() {
-    // Antes da 1ª conta nova: o número antigo. + o "•" do resumo da semana ainda não visto (shc:anomalias é gravado sem ele).
-    SHC.lerAnomalias().then(async a => {
-        const c = (a && a.conta) || await SHC.contaAtual(), sem = c && c !== 'atual' ? await SHC.lerChave('resumo:' + c + ':semanal') : null;
-        const rp = c && c !== 'atual' ? await SHC.lerChave('robopromo:' + c) : null;   // v2.9: sugestão nova do robô de promoções ainda não vista
-        const base = a || { total: (((await SHC.lerAlertas()) || {}).criticos) || 0 };
-        selo((sem && sem.novo) || (rp && rp.novo) ? Object.assign({}, base, { semanalNovo: !!(sem && sem.novo), promoNovo: !!(rp && rp.novo) }) : (a || base.total));
-    }).catch(() => {});
+    seloAgora().catch(() => {});
     retomarInterrompida().catch(() => {});
     if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
     chrome.alarms.create('shc-sync', { periodInMinutes: INTERVALO_MIN, delayInMinutes: 1 });
@@ -78,23 +78,45 @@ function preparar() {
     chrome.alarms.create('shc-robo', { periodInMinutes: ROBO_ALARME_MIN, delayInMinutes: 30 });
     // v3.1: Robô do Canal (roboCanal): confere a cada 6 h e monta no máximo 1 vez por dia, só se a seller ligou na Agenda.
     if (chrome.alarms.get) Promise.resolve(chrome.alarms.get('shc-canal')).then(x => { if (!x) chrome.alarms.create('shc-canal', { delayInMinutes: 20, periodInMinutes: 360 }); }, () => {});
-    // v2.7: resumo da semana (só marca "novo"). Recriar a cada abertura trocaria o alarme que ficou para trás (Chrome fechado na segunda 8h)
-    // pelo da semana seguinte: só cria se ainda não existe; e a semana perdida é gerada agora (semanalAtrasado).
-    const criaSemanal = () => chrome.alarms.create('shc-semanal', { when: proximaSegunda8h(Date.now()), periodInMinutes: 7 * 24 * 60 });
-    if (chrome.alarms.get) Promise.resolve(chrome.alarms.get('shc-semanal')).then(x => { if (!x) criaSemanal(); }, criaSemanal); else criaSemanal();
-    semanalAtrasado(Date.now()).catch(() => {});
+    // v3.2: resumo para a equipe (do dia e/ou da semana; Ajustes: resumo_freq e resumo_hora). Um alarme a cada 30 min confere se já passou
+    // da hora e o resumo do período ainda não foi gerado (Chrome fechado na hora → gera quando abrir). Substitui o 'shc-semanal' (8h fixo).
+    // ponytail: confere de 30 em 30 min (sai até 30 min depois da hora); alarme com hora exata só se a dona pedir.
+    chrome.alarms.create('shc-resumo', { periodInMinutes: 30, delayInMinutes: 1 });
+    if (chrome.alarms.clear) chrome.alarms.clear('shc-semanal');
+    resumosDevidos(Date.now()).catch(() => {});
+    // F1 (licenca.js): cria o inst desta instalação e garante o alarme de renovação do passe (só se a seller entrou com o SellerHub).
+    if (SHC.licencaPreparar) SHC.licencaPreparar().catch(() => {});
 }
-// Já passou da segunda 8h desta semana e o resumo guardado é de antes disso (ou não existe) → gera o da semana, como o alarme faria.
-async function semanalAtrasado(agora) {
+// Ícone = anomalias + o "•" do que ainda não foi visto: resumo do dia/da semana e sugestão do robô de promoções (v2.9). Um cálculo só,
+// usado por quem refaz o selo fora da sincronização (preparar, alarme do resumo, "visto"); a sincronização faz o mesmo em atualizarAlertas.
+async function seloAgora() {
+    const a = await SHC.lerAnomalias(), c = (a && a.conta) || await SHC.contaAtual(), tem = c && c !== 'atual';
+    const [sem, dn, rp] = tem ? await Promise.all([SHC.lerChave(chaveResumo(c, 'semana')), SHC.lerChave(chaveResumo(c, 'dia')), SHC.lerChave('robopromo:' + c)]) : [];
+    const base = a || { total: (((await SHC.lerAlertas()) || {}).criticos) || 0 }, sn = !!(sem && sem.novo), dnv = !!(dn && dn.novo), rn = sn && dnv ? 'ambos' : sn ? true : dnv ? 'dia' : false;
+    selo(rn || (rp && rp.novo) ? Object.assign({}, base, { semanalNovo: rn, promoNovo: !!(rp && rp.novo) }) : (a || base.total));
+}
+const horaResumo = cfg => { const n = SHC.num(cfg && cfg.resumo_hora); return n !== null && n >= 0 && n <= 23 ? Math.floor(n) : 8; };
+// Passou da hora de hoje (dia) ou da segunda nessa hora (semana) e o guardado é de antes disso, não existe ou é do formato antigo
+// (v2.7, sem periodo) → gera e marca "novo". Só com as vendas lidas HOJE (vb.ts desde a meia-noite): antes disso ontem está pela metade
+// e o texto sairia com uma queda falsa — espera; o fim de sincronizar() chama de novo.
+async function resumosDevidos(agora) {
     const c = await SHC.contaAtual();
     if (!c || c === 'atual') return null;
-    const s = await SHC.lerChave('resumo:' + c + ':semanal'), ultimaSegunda = proximaSegunda8h(agora) - 7 * 864e5;
-    if (s && s.ts >= ultimaSegunda) return null;
-    return gerarResumoSemanal(c, 'alarme');
+    const cfg = await SHC.lerCfg(), hora = horaResumo(cfg), freq = cfg.resumo_freq || 'ambos', hojeH = new Date(agora), meiaNoite = new Date(agora);
+    hojeH.setHours(hora, 0, 0, 0); meiaNoite.setHours(0, 0, 0, 0);
+    const vb = await SHC.lerVendasBrutas(c);
+    if (!vb || (vb.ts && vb.ts < meiaNoite.getTime())) return false;   // sem vb.ts (leitura antiga) não dá para saber: segue
+    const marco = { dia: freq !== 'semana' && hojeH.getTime() <= agora ? hojeH.getTime() : null, semana: freq !== 'dia' ? proximaSegunda8h(agora, hora) - 7 * 864e5 : null };
+    for (const per of ['dia', 'semana']) {
+        if (marco[per] === null) continue;
+        const s = await SHC.lerChave(chaveResumo(c, per));
+        if (!s || s.ts < marco[per] || !s.periodo) await gerarResumo(c, per, 'alarme');
+    }
+    return true;
 }
-// Próxima segunda-feira às 8h (hora local); se hoje é segunda antes das 8h, hoje mesmo.
-function proximaSegunda8h(agora) {
-    const d = new Date(agora); d.setHours(8, 0, 0, 0);
+// Próxima segunda-feira às 8h (ou na hora dada; hora local); se hoje é segunda antes dessa hora, hoje mesmo.
+function proximaSegunda8h(agora, hora) {
+    const d = new Date(agora); d.setHours(hora === undefined ? 8 : hora, 0, 0, 0);
     let dias = (8 - d.getDay()) % 7;   // 0 = segunda
     if (dias === 0 && d.getTime() <= agora) dias = 7;
     d.setDate(d.getDate() + dias);
@@ -132,8 +154,10 @@ chrome.alarms.onAlarm.addListener(a => {
     else if (a.name === 'shc-historico') lerHistorico().catch(() => {});   // v2.11: meses antigos em segundo plano (continua de onde parou)
     else if (a.name === 'shc-saude' && !emAndamento && !historicoEm) SHC.contaAtual().then(c => rodadaSaude(c)).catch(() => {});   // não disputa com a sincronização nem com o histórico
     else if (a.name === 'shc-robo') SHC.contaAtual().then(c => roboPassada(c, false)).catch(() => {});
-    else if (a.name === 'shc-semanal') SHC.contaAtual().then(c => gerarResumoSemanal(c, 'alarme')).catch(() => {});   // v2.7: só gera e marca "novo"
+    else if (a.name === 'shc-resumo') resumosDevidos(Date.now()).catch(() => {});   // v3.2: resumo do dia/da semana na hora de Ajustes (só gera e marca "novo")
+    else if (a.name === 'shc-semanal') SHC.contaAtual().then(c => gerarResumo(c, 'semana', 'alarme')).catch(() => {});   // v2.7: alarme antigo (até o preparar tirar)
     else if (a.name === 'shc-canal') roboCanal().catch(() => {});   // v3.1: Robô do Canal (só monta a agenda; criar no ML é o clique da seller)
+    else if (a.name === SHC.LICENCA_ALARME) SHC.licencaRenovar().then(r => SHC.licencaAgendar(r)).catch(() => {});   // F1: renova o passe (1 de cada vez)
 });
 
 // Página inteira do painel do vendedor, com a sessão do Chrome → { html } | { login: true } (mandou para o login) | null (ML fora/erro).
@@ -141,7 +165,9 @@ const ehLogin = u => /login|registration|\/lgz\//i.test(u || '');
 async function buscarHtml(url) {
     try {
         const r = await SHC.buscarVendo(url, comTempo({ credentials: 'include', cache: 'no-store' }));   // login sem CORS → url de login
-        if (ehLogin(r.url)) return { login: true };
+        // 401 = sessão pedindo login/verificação sem desviar (Mercado Pago ao vivo 01/10/2026: /activities → 401 com a sessão em
+        // "Escolha um método de verificação"); antes virava null → "o Mercado Livre não respondeu" (#23).
+        if (ehLogin(r.url) || r.status === 401) return { login: true };
         return r.ok ? { html: await r.text() } : null;
     } catch (e) { return null; }
 }
@@ -182,30 +208,68 @@ async function gravarFretes(itens) {
     await SHC.registraFretes(SHC.fretesQueMudaram(mapa, await SHC.lerFretes(ids), SHC.hoje()));
 }
 
+// v3.2.0 (pergunta da dona 01/10): "Saiu da promoção" — o retrato novo contra o anterior, só os MLB lidos AGORA (SHC.promoSaiuRegistra)
+// → promoSaiu:<conta>. Chamar dentro da fila das gravações. Derivado: nunca derruba a leitura. → quantos eventos novos.
+async function gravarPromoSaiu(conta, antes, depois, lote) {
+    try {
+        const t = Date.now(), ids = new Set((lote || []).map(i => i && i.itemId)), k = 'promoSaiu:' + conta, ant = await SHC.lerChave(k);
+        const novo = SHC.promoSaiuRegistra(ant, antes && antes.itens, ((depois && depois.itens) || []).filter(i => i && ids.has(i.itemId)), t);
+        if (!novo || novo === ant) return 0;
+        await SHC.gravarChave(k, novo);
+        return novo.eventos.filter(e => e.ts === t).length;
+    } catch (e) { return 0; }
+}
+
 // Gravações do retrato da conta uma de cada vez (sincronização e abas não se atropelam).
 let filaRetrato = Promise.resolve();
 const emFila = fn => (filaRetrato = filaRetrato.then(fn, fn));
 
+// SKU que a lista de Anúncios não mostra (anúncio com variações): o que o Copiloto já leu em outras telas do ML (vendas por anúncio,
+// Full) + o retrato anterior. Só leitura do que já está guardado. → opc de SHC.mesclaAnuncios.
+async function fontesSku(conta, antes) {
+    let vb = null, full = null, editor = null;
+    try { [vb, full, editor] = await Promise.all([SHC.lerChave('vbAnuncio:' + conta), SHC.lerFull(conta), SHC.lerChave('editor:' + conta)]); } catch (e) { /* sem as outras telas: só o retrato */ }
+    return { antes, conhecidos: SHC.skusConhecidos({ vbAnuncio: vb, full, editor }) };
+}
+// Depois de ler vendas por anúncio e Full: completa o SKU vazio do retrato já gravado (sem esperar a próxima leitura dos Anúncios).
+async function completarSkusRetrato(conta) {
+    await emFila(async () => {
+        const snap = await SHC.lerAnuncios(conta);
+        if (!snap || !Array.isArray(snap.itens) || !snap.itens.some(i => i && !i.sku)) return;
+        const itens = SHC.completaSkus(snap.itens, (await fontesSku(conta, null)).conhecidos);
+        if (itens.some((it, i) => it !== snap.itens[i])) await SHC.salvarAnuncios(conta, Object.assign({}, snap, { itens }));
+    });
+}
+
 // Lista de Anúncios, todas as páginas. progresso() grava o andamento (e mantém o service worker acordado).
+// v3.2 (auditoria 30/09/2026: o Copiloto via ~170 de 383 MLB): as páginas + as famílias fechadas + os "Ver mais N opções de venda", pelo
+// MESMO GET que a página usa (SHC.mlLeituraCompleta, uma chamada de cada vez com a pausa de sempre). O total do ML conta LINHAS.
+// Auditoria 01/10/2026: o ML pediu calma (429/503) → espera o Retry-After (mín. 10 s) e NÃO repete o GET em cada aba (seria 1 + N abas sem pausa).
+// 200 com documentGroup vazio pode ser o fundo sem o contexto da sessão → tenta a aba também; se ela não ajudar, devolve o que o fundo trouxe.
+async function abrirNaLista(id, page) {
+    const url = BASE + SHC.mlUrlAbrir(id, page), b = await buscarJsonMotivo(url);
+    if (b.json && Array.isArray(b.json.documentGroup) && b.json.documentGroup.length) return b.json;
+    if (b.falha === 'ocupado') { await espera(Math.max(10000, b.espera || 0)); return null; }
+    const a = await lerPaginaPorAba('ler_json_ml', url);   // plano B: a aba aberta do painel busca com a sessão dela
+    return a && a.dados ? a.dados : (b.json || null);
+}
 async function sincronizarAnuncios(progresso) {
-    const itens = [], vistos = new Set();
-    let paginas = 0, total = null, conta = null, via = '', completo = true, dePag = null;
-    for (let n = 1; ; n++) {
-        if (n > PAGINAS_ANUNCIOS_MAX) { completo = false; break; }
-        const url = BASE + '/anuncios/lista' + (n > 1 ? '?page=' + n : '');
-        const pag = await lerPaginaML(url, 'ler_pagina_anuncios', SHC.mlPaginaAnuncios, n === 1 ? d => !d.itens.length : null);
-        if (pag.falha) { if (n === 1) return { falha: pag.falha }; completo = false; break; }
-        const d = pag.dados || {}, lidos = Array.isArray(d.itens) ? d.itens : [];
-        if (n === 1) { total = typeof d.total === 'number' ? d.total : null; conta = d.conta || null; via = pag.via; dePag = total !== null && lidos.length ? Math.max(1, Math.ceil(total / lidos.length)) : null; }
-        // Página do meio sem linha nenhuma e sem total do ML: pode ser tela intermediária → leitura incompleta (só junta, não apaga).
-        if (!lidos.length && n > 1 && total === null) completo = false;
-        if (!lidos.some(i => i && i.itemId && !vistos.has(i.itemId))) break;   // passou da última página
-        lidos.forEach(i => { if (i && i.itemId) vistos.add(i.itemId); });
-        itens.push(...lidos);
-        paginas = n;
-        await progresso({ paginasAnuncios: n, anuncios: vistos.size }, { feito: n, de: dePag, unidade: dePag ? 'páginas' : null });
-        await espera(PAUSA_MS);
-    }
+    // Cada página e cada família lida fica guardada no ciclo (naCiclo): a etapa leva ~9 min e a retomada depois de uma queda não volta do zero.
+    // Família que veio vazia não é guardada (a retomada pede de novo).
+    const abrir = async (id, p) => {
+        const v = await naCiclo('anuncios', 'abre|' + id + '|' + p, async () => {
+            const j = await abrirNaLista(id, p);
+            return j ? (Array.isArray(j.documentGroup) && j.documentGroup.length ? { j } : { j, falha: 'vazio' }) : null;
+        });
+        return v ? v.j : null;
+    };
+    const lc = await SHC.mlLeituraCompleta({
+        maxPaginas: PAGINAS_ANUNCIOS_MAX, progresso, pausa: () => espera(PAUSA_MS), abrir,
+        ler: n => naCiclo('anuncios', 'p|' + n, () => lerPaginaML(BASE + '/anuncios/lista' + (n > 1 ? '?page=' + n : ''), 'ler_pagina_anuncios', SHC.mlPaginaAnuncios, n === 1 ? d => !(d.chaves || d.itens).length : null)),
+    });
+    if (lc.falha) return { falha: lc.falha };
+    const itens = lc.itens, vistos = new Set(itens.map(i => i && i.itemId).filter(Boolean)), { paginas, total, conta, via, familias } = lc;
+    const completo = lc.completo;
     // Pausados/inativos/restritos: filtro OMNI_INACTIVE (mapeado ao vivo em 24/09/2026; o frete deles aparece igual).
     for (let n = 1; n <= 20 && paginas > 0; n++) {
         const url = BASE + '/anuncios?filters=OMNI_INACTIVE&page=' + n + '&sort=DEFAULT';
@@ -218,46 +282,83 @@ async function sincronizarAnuncios(progresso) {
         await progresso({ anuncios: vistos.size });
         await espera(PAUSA_MS);
     }
-    // Página do meio sem linhas (tela intermediária do ML) não é "fim da lista": leu menos que o ML diz → só junta.
-    if (total !== null && vistos.size < total) completo = false;
-
     const sellerId = conta && conta.sellerId ? conta.sellerId : 'atual';
     if (conta && conta.sellerId) await SHC.registraConta(conta.sellerId, conta.apelido);   // v2.8: guarda também o nome da própria conta (nunca o e-mail)
     // Nenhum anúncio lido e o ML não disse "0": pode ser tela mudada. Não apaga o retrato que já existe.
     if (!itens.length && total !== 0) return { sellerId, snap: await SHC.lerAnuncios(sellerId), paginas, total, via, completo: false };
-    // Leitura completa substitui o retrato (anúncio excluído some); leitura interrompida só junta.
+    // Leitura completa substitui o retrato (anúncio excluído some); leitura interrompida só junta. O SKU que a lista não mostra
+    // (anúncio com variações) é completado com o das outras telas e com o já conhecido do mesmo anúncio (fontesSku).
     const snap = await emFila(async () => {
-        const s = SHC.mesclaAnuncios(completo ? null : await SHC.lerAnuncios(sellerId), itens, { paginas, total, completo });
+        const antes = await SHC.lerAnuncios(sellerId);
+        const s = SHC.mesclaAnuncios(completo ? null : antes, itens, { paginas, total, linhas: lc.linhas, completo, familias }, await fontesSku(sellerId, antes));
         await SHC.salvarAnuncios(sellerId, s);
+        await gravarPromoSaiu(sellerId, antes, s, itens);   // v3.2.0: o sino vem na etapa Alertas desta sincronização
         return s;
     });
     await emFila(() => gravarFretes(itens));   // F4: frete só da lista de Anúncios, no preço atual (na fila das gravações)
     // Histórico da competição (comp:<conta>): um registro por anúncio só quando o estado, o motivo ou o preço muda.
     await emFila(async () => { const k = 'comp:' + sellerId; await SHC.gravarChave(k, SHC.compRegistra(await SHC.lerChave(k), itens, SHC.hoje())); });
+    // v3.2: degraus de atacado dos anúncios que a lista marca "Com N preço(s) de atacado" (o MESMO GET do balão do ML) → atacado:<conta>.
+    await lerAtacado(sellerId, itens.filter(i => i && i.atacado).map(i => i.itemId));
+    await erpConferir(sellerId).catch(() => {});   // v3.2: cruzamento ERP × ML com a lista nova (só o que já está guardado)
     return { sellerId, snap, paginas, total, via, completo };
+}
+
+// v3.2 Preço de atacado: atacado:<conta> = { ts, porItem:{ MLB: { degraus:[{qtd, preco, revisar?}], ts } } } (degraus [] = lido, sem atacado).
+// Só GET, um de cada vez com a pausa de sempre; o ML responde 424 para anúncio sem atacado. ponytail: teto de 40 por sincronização.
+const ATACADO_MAX = 40;
+async function lerAtacado(conta, ids) {
+    const porItem = {};
+    for (const id of [...new Set(ids)].slice(0, ATACADO_MAX)) {
+        if (!/^MLB\d{6,14}$/.test(String(id))) continue;
+        const b = await buscarJsonMotivo(BASE + '/anuncios/api/listing/tooltip?type=tiered_pricing&documentId=' + id);
+        if (b.json) porItem[id] = SHC.mlAtacadoDoTooltip(b.json);
+        else if (b.falha === 'erro 424') porItem[id] = [];
+        else if (b.login || b.falha === 'ocupado') break;
+        await espera(PAUSA_MS);
+    }
+    await gravarAtacado(conta, porItem);
+}
+async function gravarAtacado(conta, porItem) {
+    const ids = Object.keys(porItem);
+    if (!ids.length) return;
+    await emFila(async () => {
+        const k = 'atacado:' + conta, ant = await SHC.lerChave(k), p = Object.assign({}, (ant && ant.porItem) || {}), ts = Date.now();
+        ids.forEach(id => { p[id] = { degraus: SHC.atacadoLimpo(porItem[id]), ts }; });
+        await SHC.gravarChave(k, { ts, porItem: p });
+    });
 }
 
 // Central de promoções, todas as páginas. O frete NÃO sai daqui (preços de proposta ≠ preço atual).
 // v2.4 (V14): grava em ml:promos:<conta>. 0 famílias: retrato vazio só com a frase do ML ("sem promoções"); senão falha e o anterior fica.
+// F6 (auditoria 30/09): página do MEIO que falha não corta o retrato calada — grava completo:false com o total da Central, junta com o
+// retrato anterior (as famílias que não vieram agora ficam) e devolve falha (o painel diz "X de Y"). F15: caixas sem a conta do ML
+// (aporte/redução de tarifa) entram como semCalculo [{familia, promo, datas}] — antes sumiam do painel.
 async function sincronizarPromos(conta, progresso) {
-    const familias = [], propostas = [];
-    let paginas = 0, via = '', vazio = false;
+    const familias = [], propostas = [], semCalculo = [];
+    let paginas = 0, via = '', vazio = false, total = null, falhou = 0;
     for (let n = 1; n <= PAGINAS_MAX; n++) {
         const url = BASE + '/anuncios/lista/promos' + (n > 1 ? '?page=' + n : '');
         // Página lida neste ciclo fica guardada (naCiclo): a retomada depois de uma queda não pede de novo.
         const pag = await naCiclo('promos', 'p|' + n, () => lerPaginaML(url, 'ler_pagina_promos', SHC.mlPromosDoEstado, n === 1 ? d => !d.familias.length : null));
-        if (pag.falha) { if (n === 1) return { falha: pag.falha }; break; }
-        if (n === 1) { via = pag.via; vazio = !!pag.dados.vazio; }
+        if (pag.falha) { if (n === 1) return { falha: pag.falha }; falhou = n; break; }
+        if (n === 1) { via = pag.via; vazio = !!pag.dados.vazio; total = typeof pag.dados.total === 'number' ? pag.dados.total : null; }
         const novas = pag.dados.familias.filter(f => !familias.some(x => x.chave === f.chave));
         if (!novas.length) break;                         // passou da última página
         familias.push(...novas);
         propostas.push(...pag.dados.propostas.filter(p => novas.some(f => f.chave === p.familia)));
+        semCalculo.push(...(pag.dados.semCalculo || []).filter(c => novas.some(f => f.chave === c.familia)).map(c => ({ familia: c.familia, promo: c.nome, datas: c.datas, semCalculo: true })));
         paginas = n;
         await progresso({ paginas: n });
         await espera(PAUSA_MS);
     }
-    if (familias.length) await SHC.salvarPromos(conta, { ts: Date.now(), paginas, familias, propostas });
-    else if (vazio) await SHC.salvarPromos(conta, { ts: Date.now(), paginas: 1, familias: [], propostas: [], vazio: true });
+    if (falhou) {
+        const ant = await SHC.lerPromos(conta), snap = SHC.juntaPromosParcial(ant, { familias, propostas, semCalculo }, { paginas, total, falhou });
+        await SHC.salvarPromos(conta, Object.assign({ ts: Date.now() }, snap));
+        return { falha: 'indisponivel', familias: snap.familias.length, total };
+    }
+    if (familias.length) await SHC.salvarPromos(conta, { ts: Date.now(), paginas, familias, propostas, semCalculo, total, completo: true });
+    else if (vazio) await SHC.salvarPromos(conta, { ts: Date.now(), paginas: 1, familias: [], propostas: [], semCalculo: [], vazio: true, completo: true });
     else return { falha: 'indisponivel' };   // 0 famílias sem o sinal do ML: pode ser tela mudada — não apaga o que havia
     return { familias: familias.length, propostas: propostas.length, paginas, via, vazio: !familias.length };
 }
@@ -354,6 +455,7 @@ async function sincronizarCobrancas(sellerId, progresso, modo) {
     if (!hist) {   // v3.1: 1 vez por conta, antes de ler a marca (ela ganha os meses a reler)
         await migrarFreteDevolucao(sellerId).catch(() => {});
         await migrarPorDiaTipo(sellerId).catch(() => {});
+        await migrarPorFatura(sellerId).catch(() => {});
     }
     const marca = 'ml:cobrancas:' + sellerId, antes = (await SHC.lerChave(marca)) || {}, hoje = SHC.hoje(), atual = hoje.slice(0, 7), anterior = mesAntes(atual, 1);
     const doze = SHC.janelasCobranca(hoje, true), recentes = new Set(SHC.janelasCobranca(hoje, false).map(j => j.mes));
@@ -394,7 +496,9 @@ async function sincronizarCobrancas(sellerId, progresso, modo) {
         if (seguidas >= COB_PARA_APOS && !algum) { naoLidos.push(j.mes); await diag(j.mes, 'sem resposta'); await andou(1); continue; }
         await progresso({}, conta());
         // v2.11: mês com as cobranças guardadas de uma leitura inteira → só a partir dos dias novos (2 dias antes da última leitura).
-        const g = guard[j.mes], de = g && g.ate >= j.de ? [j.de, diaMenos(g.ate, COB_INC_DIAS)].sort()[1] : j.de;
+        // v3.4: guardadas por versão anterior (sem a fatura de cada cobrança) não servem: o mês é lido inteiro de novo.
+        const g = guard[j.mes] && guard[j.mes].linhas.every(c => c && c.fatura !== undefined) ? guard[j.mes] : null;
+        const de = g && g.ate >= j.de ? [j.de, diaMenos(g.ate, COB_INC_DIAS)].sort()[1] : j.de;
         const r = await lerDividindo(de, j.ate, vistos, 0, 1, andou, aoLer, hist ? () => histParar : null);
         noMes = 0;
         if (r.falha === 'parado') { parado = true; break; }   // histórico parou para a sincronização: o mês fica para a próxima vez
@@ -441,7 +545,9 @@ async function sincronizarCobrancas(sellerId, progresso, modo) {
         if (!r.cortado && j.mes < atual && lidosAgora.indexOf(prox) < 0) {
             const px = guard[prox] ? { linhas: guard[prox].linhas.filter(c => String(c.data || '') === prox + '-01') }
                 : await lerPeriodoCobrancas(prox + '-01', prox + '-01', vistos, null, null);   // sem `parar`: 1 GET pequeno; parar aqui gravava o mês sem o Ads do último dia
-            if (!px.falha) todas.push(...px.linhas.filter(c => c.tipo === 'ads' && String(c.dataRef || '').slice(0, 7) === j.mes));
+            // v3.4: Ads E Publicidade de Seguidores (c.tipo é 'outro' no Seguidores: o tipo do fechamento sai do texto). Antes o Seguidores
+            // do último dia sumia do mês lido sozinho (ao vivo: 9,73 de 31/07 fora da publicidade da fatura de agosto).
+            if (!px.falha) todas.push(...px.linhas.filter(c => /^ads(_seguidores)?$/.test(SHC.tipoCustoFechamento(c.texto, c.id)) && String(c.dataRef || '').slice(0, 7) === j.mes));
         }
         if (!r.cortado) await gravarFechamento(sellerId, todas, [j.mes]);
         await SHC.salvarPendentes(sellerId, res.pendentes);
@@ -523,9 +629,14 @@ async function gravarFreteHist(conta, cobs, mesesLidos) {
         hist.conta.variacaoPct = null;
         Object.keys(hist.porAnuncio).forEach(id => Object.assign(hist.porAnuncio[id], { variacaoPct: null, subiu: false, semLeitura: true }));
     }
+    // v3.3: frete do anúncio no dia de cada venda (fh|ml) = a régua do "cobrado a mais" (antes: o frete de hoje para os 30 dias inteiros).
+    const idsFr = [...new Set(arr.map(p => p.itemId).concat(varr.map(v => v.itemId)).filter(id => id && porItem[id]))];
+    const fretesDia = vendasLidas && idsFr.length && SHC.lerFretes ? await SHC.lerFretes(idsFr).catch(() => null) : null;
     const snap = Object.assign({ ts: Date.now(), fonte: arr.some(p => !p.aprox) ? 'faturamento' : (arr.length ? 'guardado' : 'nada'), aprox: arr.filter(p => p.aprox).length,
-        vendasLidas, semLeitura }, hist, { conciliacao: vendasLidas ? SHC.conciliaFrete(arr, porItem, varr, hoje) : null,
-        devolucoes: SHC.devolucoesResumo(Object.keys(devs).map(k => Object.assign({ pedido: k }, devs[k])), hoje) });
+        vendasLidas, semLeitura }, hist, { conciliacao: vendasLidas ? SHC.conciliaFrete(arr, porItem, varr, hoje, fretesDia) : null,
+        // v3.2: ida = frete de envio da mesma venda; freteEstornado = o ML devolveu o frete do envio (venda cancelada) → contestação da tarifa de devolução.
+        devolucoes: SHC.devolucoesResumo(Object.keys(devs).map(k => Object.assign({ pedido: k }, devs[k], pedidos[k] && pedidos[k].cancelado ? { freteEstornado: true }
+            : pedidos[k] && pedidos[k].cobrado > 0 ? { ida: pedidos[k].cobrado } : {})), hoje) });
     await SHC.gravarChave('frete:' + conta + ':hist', snap);
     return snap;
 }
@@ -536,7 +647,8 @@ async function gravarConferir(conta, cobs, lidosAgora, itens) {
     const porId = {};
     (itens || []).forEach(i => { if (i && i.itemId && !porId[i.itemId]) porId[i.itemId] = i; });
     const lista = SHC.fech.conferir((cobs || []).filter(c => c && meses.indexOf(String(c.data || '').slice(0, 7)) >= 0), porId);
-    const snap = { ts: Date.now(), meses, qtd: lista.length, valor: SHC.r2(lista.reduce((s, x) => s + (x.diferenca || 0), 0)), itens: lista.slice(0, 100) };
+    // v3.3: valor = só o que dá para pedir de volta (como o "Dá para recuperar"); as dúvidas ("pode estar certo") contam em qtd, sem R$.
+    const snap = { ts: Date.now(), meses, qtd: lista.length, valor: SHC.r2(lista.reduce((s, x) => s + (x.duvida ? 0 : x.diferenca || 0), 0)), itens: lista.slice(0, 100) };
     await SHC.gravarChave('conferir:' + conta, snap);
     return snap;
 }
@@ -591,6 +703,22 @@ async function migrarPorDiaTipo(conta) {
     await SHC.gravarChave(kM, feitas);
     return true;
 }
+// ── v3.4: migração ÚNICA por conta (shc:migra:porFatura). O "Confere com a fatura do ML" linha por linha precisa da fatura de cada cobrança
+// (fech.porFatura, SHC.fechamentoDasCobrancas). Os 3 meses fechados mais recentes lidos sem ela vão para `releer` (mesmo caminho da
+// migrarPorDiaTipo). ponytail: só 3 meses (o cartão mostra a última fatura fechada); fatura mais antiga fica no ciclo por data.
+async function migrarPorFatura(conta) {
+    const kM = 'shc:migra:porFatura', feitas = (await SHC.lerChave(kM)) || {};
+    if (!conta || conta === 'atual' || feitas[conta]) return false;
+    const k = 'ml:cobrancas:' + conta, marca = await SHC.lerChave(k), atual = SHC.hoje().slice(0, 7), desde = mesAntes(atual, 3), velhos = [];
+    for (const m of ((marca && marca.mesesLidos) || []).filter(m => m < atual && m >= desde)) {
+        const f = await SHC.lerChave(SHC.chaveFech(conta, m));
+        if (f && (!f.porFatura || f.semFatura) && (!f.porDia || Object.keys(f.porDia).length)) velhos.push(m);   // mês sem cobrança não precisa
+    }
+    if (velhos.length) await SHC.gravarChave(k, Object.assign({}, marca, { releer: [...new Set([...(marca.releer || []), ...velhos])].sort() }));
+    feitas[conta] = 1;
+    await SHC.gravarChave(kM, feitas);
+    return true;
+}
 
 // Resumo da etapa: "11 de 12 meses lidos · dez/25 não respondeu (tento de novo na próxima)".
 function resumoFaturamento(r) {
@@ -611,7 +739,7 @@ async function gravarFechamento(sellerId, todas, meses) {
     // Mês lido inteiro (ou o atual até hoje) sem cobrança nenhuma = 0 de verdade: grava zerado (porDia vazio = lido; sem ele o rateio e o
     // "Confere com a fatura" achavam que o mês não foi lido).
     for (const m of meses) {
-        const f = fech[m] || { mes: m, porTipo: {}, porDia: {}, estornos: 0, total: 0, qtdVendas: 0, pedidos: {}, tipos: SHC.FECH_TIPOS_VERSAO };
+        const f = fech[m] || { mes: m, porTipo: {}, porDia: {}, estornos: 0, total: 0, qtdVendas: 0, pedidos: {}, tipos: SHC.FECH_TIPOS_VERSAO, porFatura: {} };
         const b = vb && SHC.vendasBrutasDoMes(vb.dias, m);
         if (b) f.vendasBrutas = b;   // soma dos dias lidos ({valor, dias, …}): a página marca "parcial (N de M dias)" se faltar dia
         gravar[m] = Object.assign(f, { parcial: m === atual, ate: m === atual ? hoje : fimDoMes(m), ts: Date.now() });
@@ -943,7 +1071,8 @@ async function lerMesVendasAnuncio(m, vbMes, progresso, parar) {
         });
         if (r.falha) return r;
         if (p === 1 && r.paginas) { paginas = Math.min(VA_PAGINAS_MAX, r.paginas); cortado = r.paginas > VA_PAGINAS_MAX; }
-        return r.porAnuncio.map(a => Object.assign({ id: a.itemId }, a));
+        // F4: id = MLB|SKU — a tabela traz uma linha por variação do mesmo MLB; com id = MLB, as variações sumiam como "repetidas".
+        return r.porAnuncio.map(a => Object.assign({ id: a.itemId + '|' + (a.sku || '') }, a));
     };
     const p1 = await pagina(1);
     if (p1.falha) return p1;
@@ -952,10 +1081,18 @@ async function lerMesVendasAnuncio(m, vbMes, progresso, parar) {
     if (!r.linhas.length) return vbMes && vbMes.valor === 0 ? { porAnuncio: {}, itens: {}, paginas, linhas: 0 } : { falha: 'vazio' };
     if (paginas > 1 && r.linhas.length <= (paginas - 1) * VA_LINHAS) return { falha: 'incompleto' };   // o ML repetiu ou pulou página
     const porAnuncio = {}, itens = {};
+    // A tabela pode trazer uma linha por variação (mesmo MLB, SKU de cada uma): SOMA no MLB (F4; antes a última linha sobrescrevia)
+    // e guarda cada variação em porVariacao[SKU] = {bruto, unidades}. As visitas são do anúncio: a maior, não a soma.
     r.linhas.forEach(a => {
-        porAnuncio[a.itemId] = { bruto: a.bruto, unidades: a.unidades, vendas: a.vendas, visitas: a.visitas, sku: a.sku || '' };
-        itens[a.itemId] = { sku: a.sku || '', titulo: a.titulo || '' };
+        const n = v => SHC.num(v) || 0, pa = porAnuncio[a.itemId];
+        if (!pa) porAnuncio[a.itemId] = { bruto: a.bruto, unidades: a.unidades, vendas: a.vendas, visitas: a.visitas, sku: a.sku || '' };
+        else Object.assign(pa, { bruto: SHC.r2(n(pa.bruto) + n(a.bruto)), unidades: n(pa.unidades) + n(a.unidades), vendas: n(pa.vendas) + n(a.vendas), visitas: Math.max(n(pa.visitas), n(a.visitas)) });
+        if (a.sku) { const p = porAnuncio[a.itemId], v = (p.porVariacao || (p.porVariacao = {}))[a.sku] || (p.porVariacao[a.sku] = { bruto: 0, unidades: 0 }); v.bruto = SHC.r2(v.bruto + n(a.bruto)); v.unidades += n(a.unidades); }
+        const x = itens[a.itemId] || (itens[a.itemId] = { sku: '', titulo: a.titulo || '', skus: [] });
+        if (a.sku) { if (!x.sku) x.sku = a.sku; if (x.skus.indexOf(a.sku) < 0) x.skus.push(a.sku); }
     });
+    // porVariacao só quando há mais de uma variação (anúncio simples fica igual ao de antes).
+    Object.values(porAnuncio).forEach(p => { if (p.porVariacao && Object.keys(p.porVariacao).length < 2) delete p.porVariacao; });
     return { porAnuncio, itens, paginas, linhas: r.linhas.length, cortado };
 }
 // Mês de vendas por anúncio lido DEPOIS de fechar (inteiro ou no teto de páginas): não é relido. O MESMO critério no filtro da leitura e na
@@ -972,12 +1109,12 @@ async function sincronizarVendasAnuncio(sellerId, progresso, modo) {
     // v3.1: o histórico também tenta o mês atual e o anterior que a sincronização não conseguiu ler (nunca lidos), PRIMEIRO: a tela de
     // famílias não fica 3 h em "não respondeu" esperando a próxima sincronização.
     const meses = treze.filter((m, i) => (hist ? (i >= 2 ? !fechadoLido(m) : !M0[m]) : modo === 'recentes' ? i === 0 || (i === 1 && !fechadoLido(m)) : i < 2 || !fechadoLido(m)));
-    const vb = await SHC.lerVendasBrutas(sellerId), inicio = Date.now(), novos = {}, itens = {}, diag = {}, naoLidos = [], cortados = [];
+    const vb = await SHC.lerVendasBrutas(sellerId), inicio = Date.now(), novos = {}, itens = {}, diag = {}, naoLidos = [], cortados = [], vazios = [];
     let login = false, parado = false, seguidas = 0;
     const grava = () => mudaChave(k, v => {
         v.meses = Object.assign({}, v.meses || {}, novos);
         Object.keys(v.meses).forEach(m => { if (treze.indexOf(m) < 0) delete v.meses[m]; });
-        v.itens = Object.assign({}, v.itens || {}, itens);
+        v.itens = SHC.juntaItensVendas(v.itens || {}, itens);   // soma os skus[] do gravado e do lido agora (não troca o anúncio inteiro)
         Object.keys(v.itens).forEach(id => { if (!treze.some(m => v.meses[m] && v.meses[m].porAnuncio && v.meses[m].porAnuncio[id])) delete v.itens[id]; });
         Object.assign(v, { ts: Date.now(), naoLidos, mesesLidos: treze.filter(m => v.meses[m] && v.meses[m].completo) });
     });
@@ -990,6 +1127,9 @@ async function sincronizarVendasAnuncio(sellerId, progresso, modo) {
         if (r.falha === 'parado') { parado = true; break; }   // a sincronização pediu a vez no meio do mês: ele fica para a próxima
         diag[m] = r.falha || (r.cortado ? 'cortado' : 'ok');
         if (progresso) await progresso({}, { feito: i + 1, de: meses.length, unidade: 'meses', meses: { [m]: diag[m] } });
+        // #23 (ao vivo 01/10/2026): no dia 1º o mês atual vem com a tabela vazia ("Não há vendas para mostrar neste período") e era o
+        // único mês da sincronização → "o ML não respondeu" em toda sincronização do dia. Tabela vazia é resposta: não conta como ML fora.
+        if (r.falha === 'vazio') { vazios.push(m); seguidas = 0; continue; }
         if (r.falha) {
             naoLidos.push(m);
             if (r.falha === 'login') { login = true; naoLidos.push(...meses.slice(i + 1)); break; }   // sessão caiu: guarda o que já leu e para
@@ -1000,21 +1140,22 @@ async function sincronizarVendasAnuncio(sellerId, progresso, modo) {
         seguidas = 0;
         if (r.cortado) cortados.push(m);   // lido só em parte: grava o que leu (completo:false, a tela avisa); fechado, não é relido
         novos[m] = { porAnuncio: r.porAnuncio, paginas: r.paginas, linhas: r.linhas, completo: !r.cortado, lidoEm: hoje, lidoTs: Date.now() };   // lidoTs: até que hora o mês foi lido (ritmo)
-        Object.assign(itens, r.itens);
+        Object.assign(itens, SHC.juntaItensVendas(r.itens, itens));   // os meses vêm do mais novo ao mais antigo: vale o sku/título do mais novo, os skus[] se somam
         if (hist) await grava();   // segundo plano (sem ciclo): o mês lido fica gravado mesmo se o worker morrer no próximo
     }
     const lidos = Object.keys(novos);
-    if (!lidos.length && meses.length && !parado) return { falha: login ? 'login' : 'indisponivel', diag };   // nada respondeu: o que havia fica
+    if (!lidos.length && naoLidos.length && !parado) return { falha: login ? 'login' : 'indisponivel', diag };   // nada respondeu: o que havia fica
     const snap = await grava();
     const noAtual = ((snap.meses[atual] || {}).porAnuncio) || {};
-    return { meses: lidos.length - cortados.length, de: meses.length, naoLidos, cortados, diag, mesesLidos: snap.mesesLidos.length, parado,
+    return { meses: lidos.length - cortados.length, de: meses.length, naoLidos, cortados, vazios, diag, mesesLidos: snap.mesesLidos.length, parado,
         anuncios: Object.keys(noAtual).filter(id => (+(noAtual[id] || {}).bruto || 0) > 0).length };
 }
 // "13 meses · 142 anúncios com venda no mês" ou "11 de 13 meses lidos · dez/25 e mai/26 não responderam (tento de novo na próxima)"
 // Mês cortado (vendas demais): " · set/26 lido só em parte (vendas demais para ler inteiro)".
 function resumoVendasAnuncio(r) {
     const nl = r.naoLidos || [], ct = r.cortados || [];
-    const parte = ct.length ? ' · ' + ct.map(mesCurto).join(' e ') + ' lido' + (ct.length > 1 ? 's' : '') + ' só em parte (vendas demais para ler inteiro)' : '';
+    const parte = (ct.length ? ' · ' + ct.map(mesCurto).join(' e ') + ' lido' + (ct.length > 1 ? 's' : '') + ' só em parte (vendas demais para ler inteiro)' : '')
+        + ((r.vazios || []).length ? ' · ' + r.vazios.slice(0, 3).map(mesCurto).join(', ') + (r.vazios.length > 3 ? ' e mais ' + (r.vazios.length - 3) : '') + ': o ML ainda não mostra venda por anúncio' : '');
     if (nl.length) return resumoFaturamento({ meses: r.meses, de: r.de, naoLidos: nl, lidas: 0 }) + parte;
     return SHC.qtd(r.mesesLidos || 0, 'mês', 'meses') + ' · ' + SHC.qtd(r.anuncios || 0, 'anúncio com venda no mês', 'anúncios com venda no mês') + parte;
 }
@@ -1024,12 +1165,13 @@ function resumoVendasAnuncio(r) {
 // as páginas, 50 por vez) e totais por dia. Só LÊ: nada de criar/alterar campanha, orçamento ou lance.
 // Falhou → o retrato anterior fica e o status ganha erroAds. Nenhuma campanha → {temAds:false}.
 const PA = 'https://pa.mercadolivre.com.br/pa/api/admin-pads/ajax';
-const ADS_LIMITE = 50, ADS_PAGINAS_MAX = 60;   // até 3.000 anúncios patrocinados
+const ADS_LIMITE = 50, ADS_PAGINAS_MAX = 60, ADS_PASSADAS = 3;   // até 3.000 anúncios patrocinados; a lista é relida até 3 vezes (ordem instável)
 const diaMenos = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') - n * 864e5).toISOString().slice(0, 10);
 const periodo = (de, ate) => 'dateFrom=' + de + '&dateTo=' + ate;
 // Pedido do Ads dentro do ciclo (naCiclo): a resposta boa fica guardada e a retomada depois de uma queda não pede de novo.
 // reduz(json) = o que guardar (a lista de anúncios guarda só o que o Copiloto usa). null/login/erro nunca ficam guardados.
-const adsNoCiclo = (url, reduz) => naCiclo('ads', url.replace(PA, ''), async () => {
+// passada (anúncios patrocinados): 2ª e 3ª leitura da mesma URL não podem voltar a resposta guardada da 1ª.
+const adsNoCiclo = (url, reduz, passada) => naCiclo('ads', (passada ? 'p' + passada + ':' : '') + url.replace(PA, ''), async () => {
     const b = await buscarJsonPA(url);
     return b && b.json ? { json: reduz ? reduz(b.json) : b.json } : b;
 });
@@ -1096,18 +1238,28 @@ async function liberarContaAds() {
 }
 const falhaAds = b => (b && b.login ? 'login' : (b && b.falha) || 'indisponivel');
 const ADS_SEM_ABA = SHC.ADS_SEM_ABA;   // store.js: as telas reconhecem a etapa pulada por este texto
+// v3.2: a lista de campanhas também vem em páginas de 50 e a ordem pode mudar entre as páginas (como a dos anúncios, #24):
+// junta por id da campanha e relê a lista (até ADS_PASSADAS) até fechar o total. Não fechou → completo:false (a etapa diz "X de Y").
+// Falha na 1ª passada = falha da leitura; numa passada extra fica o que já veio.
 async function lerCampanhas(de, ate, progresso) {
-    const campanhas = [];
-    for (let n = 0; n < 20; n++) {
-        const b = await adsNoCiclo(PA + '/campaigns/search?' + periodo(de, ate) + '&limit=' + ADS_LIMITE + '&offset=' + (n * ADS_LIMITE) + '&filters[statuses]=A,D');
-        await bateVivo(progresso);
-        if (!b || b.login || !b.json || !Array.isArray(b.json.results)) return { falha: falhaAds(b) };
-        const r = SHC.adsCampanhas(b.json);
-        campanhas.push(...r.campanhas);
-        if (!r.campanhas.length || campanhas.length >= r.total) break;
-        await espera(PAUSA_MS);
+    const campanhas = [], vistos = new Set();
+    let total = null, fim = false;
+    for (let passada = 0; passada < ADS_PASSADAS && !(total !== null && campanhas.length >= total); passada++) {
+        for (let n = 0; n < 20; n++) {
+            if (n || passada) await espera(PAUSA_MS);
+            const b = await adsNoCiclo(PA + '/campaigns/search?' + periodo(de, ate) + '&limit=' + ADS_LIMITE + '&offset=' + (n * ADS_LIMITE) + '&filters[statuses]=A,D', null, passada);
+            await bateVivo(progresso);
+            if (!b || b.login || !b.json || !Array.isArray(b.json.results)) { if (!passada) return { falha: falhaAds(b) }; break; }
+            const r = SHC.adsCampanhas(b.json), novas = r.campanhas.filter(c => !vistos.has(c.id));
+            if (r.total !== null) total = r.total;
+            novas.forEach(c => { vistos.add(c.id); campanhas.push(c); });
+            if (!r.campanhas.length || b.json.results.length < ADS_LIMITE || (total !== null && campanhas.length >= total)) { fim = true; break; }   // F21: sem total, até a página curta
+            if (total !== null && (n + 1) * ADS_LIMITE >= total) break;   // fim da lista pelo offset
+            if (!novas.length && !passada) break;   // 1ª passada com a página inteira repetida: o ML ignora o offset
+        }
+        if (total === null) break;   // sem total não há como saber o que falta
     }
-    return { campanhas };
+    return { campanhas, total, completo: total === null ? fim : campanhas.length >= total };
 }
 // Sem aba do painel para o plano B: etapa pulada (não é erro vermelho) e o ads:<conta> anterior fica.
 const semAba = r => (r.falha === 'sem_aba' ? { pulado: true, semAba: true } : r);
@@ -1131,20 +1283,28 @@ async function sincronizarAds(sellerId, progresso) {
     }
     const advertiserId = (campanhas.find(c => c.advertiserId) || {}).advertiserId || '';
     const anuncios = [], vistos = new Set();
-    let total = null;
-    for (let n = 0; n < ADS_PAGINAS_MAX; n++) {
-        await espera(PAUSA_MS);
-        const b = await adsNoCiclo(PA + '/ads?' + periodo(de, ate) + '&limit=' + ADS_LIMITE + '&offset=' + (n * ADS_LIMITE)
-            + (advertiserId ? '&advertiserId=' + encodeURIComponent(advertiserId) : '')
-            + '&filters%5Bstatuses%5D=A%2CP%2CI%2CG%2CR%2CC%2CS%2CX%2CY%2CM%2CH%2CZ&comparisonDateFrom=' + antDe + '&comparisonDateTo=' + antAte,
-            j => (Array.isArray(j.results) ? { results: { length: j.results.length }, lidos: SHC.adsAnuncios(j) } : j));
-        if (!b || b.login || !b.json || !(Array.isArray(b.json.results) || b.json.lidos)) return semAba({ falha: falhaAds(b) });
-        const chave = a => (a.itemId || 'cat:' + a.produtoCatalogoId) + '|' + a.campanhaId;   // catálogo vem sem itemId (id do produto)
-        const r = b.json.lidos || SHC.adsAnuncios(b.json), novos = r.anuncios.filter(a => !vistos.has(chave(a)));
-        total = r.total;
-        novos.forEach(a => { vistos.add(chave(a)); anuncios.push(a); });
-        await progresso({ adsAnuncios: anuncios.length }, { feito: anuncios.length, de: total, unidade: total ? 'anúncios' : null });
-        if (!novos.length || b.json.results.length < ADS_LIMITE || anuncios.length >= total) break;   // fim, ou o ML repetiu a página
+    let total = null, fim = false;   // F21: fim = a lista acabou de verdade (página curta ou total alcançado)
+    const chave = a => (a.itemId || 'cat:' + a.produtoCatalogoId) + '|' + a.campanhaId;   // catálogo vem sem itemId (id do produto)
+    // Ao vivo 01/10/2026 (259 anúncios): a ordem muda entre as páginas (offset) — cada página repete uns 7 da anterior e outros nunca
+    // aparecem; uma passada trouxe 236 de 259, três trouxeram 258. Junta por anúncio+campanha e repete a lista (como o Editor em massa)
+    // até chegar ao total. Falha numa passada extra: fica o que já veio.
+    for (let passada = 0; passada < ADS_PASSADAS && !(total !== null && anuncios.length >= total); passada++) {
+        for (let n = 0; n < ADS_PAGINAS_MAX; n++) {
+            await espera(PAUSA_MS);
+            const b = await adsNoCiclo(PA + '/ads?' + periodo(de, ate) + '&limit=' + ADS_LIMITE + '&offset=' + (n * ADS_LIMITE)
+                + (advertiserId ? '&advertiserId=' + encodeURIComponent(advertiserId) : '')
+                + '&filters%5Bstatuses%5D=A%2CP%2CI%2CG%2CR%2CC%2CS%2CX%2CY%2CM%2CH%2CZ&comparisonDateFrom=' + antDe + '&comparisonDateTo=' + antAte,
+                j => (Array.isArray(j.results) ? { results: { length: j.results.length }, lidos: SHC.adsAnuncios(j) } : j), passada);
+            if (!b || b.login || !b.json || !(Array.isArray(b.json.results) || b.json.lidos)) { if (!passada) return semAba({ falha: falhaAds(b) }); break; }
+            const r = b.json.lidos || SHC.adsAnuncios(b.json), novos = r.anuncios.filter(a => !vistos.has(chave(a)));
+            total = r.total;
+            novos.forEach(a => { vistos.add(chave(a)); anuncios.push(a); });
+            await progresso({ adsAnuncios: anuncios.length }, { feito: anuncios.length, de: total, unidade: total ? 'anúncios' : null });
+            if (b.json.results.length < ADS_LIMITE || (total !== null && anuncios.length >= total)) { fim = true; break; }
+            if (total !== null && (n + 1) * ADS_LIMITE >= total) break;   // chegou ao fim da lista pelo offset
+            if (!novos.length && !passada) break;   // 1ª passada com a página inteira repetida: o ML ignora o offset (nas outras, repetir é o normal)
+        }
+        if (total === null) break;   // sem total não há como saber o que falta
     }
     const res = await adsNoCiclo(PA + '/campaigns/metrics?' + periodo(de, ate));
     await bateVivo(progresso);
@@ -1153,8 +1313,8 @@ async function sincronizarAds(sellerId, progresso) {
     const campAnt = await lerCampanhas(antDe, antAte, progresso), porId = {};
     (campAnt.campanhas || []).forEach(c => { porId[c.id] = c.metricas; });
     const resumoAnt = ant && ant.json ? SHC.adsResumo(ant.json) : null;
-    const snap = { ts: Date.now(), temAds: true, periodo: { de, ate }, advertiserId, campanhas, anuncios, totalAnuncios: total,
-        completo: total === null || anuncios.length >= total, resumo: res && res.json ? SHC.adsResumo(res.json) : null,
+    const snap = { ts: Date.now(), temAds: true, periodo: { de, ate }, advertiserId, campanhas, totalCampanhas: atual.total, campanhasCompleto: atual.completo, anuncios, totalAnuncios: total,
+        completo: total === null ? fim : anuncios.length >= total, resumo: res && res.json ? SHC.adsResumo(res.json) : null,
         anterior: { periodo: { de: antDe, ate: antAte }, campanhas: porId, total: resumoAnt ? resumoAnt.total : null } };
     await SHC.salvarAds(sellerId, snap);
     return snap;
@@ -1367,7 +1527,7 @@ function selo(a) {
     const n = typeof a === 'number' ? a : (a && a.total) || 0, novo = !!(a && typeof a === 'object' && (a.semanalNovo || a.promoNovo));
     chrome.action.setBadgeText({ text: n > 0 ? (n > 99 ? '99+' : String(n)) : (novo ? '•' : '') }).catch(() => {});
     if ((n > 0 || novo) && chrome.action.setBadgeBackgroundColor) chrome.action.setBadgeBackgroundColor({ color: n > 0 && (typeof a === 'number' || (a && a.vermelho)) ? '#D93025' : '#B06000' }).catch(() => {});
-    if (chrome.action.setTitle) chrome.action.setTitle({ title: typeof a === 'number' ? 'Abrir o Copiloto' : SHC.anomaliasTitulo(a) + (a && a.semanalNovo ? ' · novo resumo da semana' : '')
+    if (chrome.action.setTitle) chrome.action.setTitle({ title: typeof a === 'number' ? 'Abrir o Copiloto' : SHC.anomaliasTitulo(a) + (a && a.semanalNovo ? ' · novo resumo ' + (a.semanalNovo === 'dia' ? 'do dia' : a.semanalNovo === 'ambos' ? 'do dia e da semana' : 'da semana') : '')
         + (a && a.promoNovo ? ' · o robô achou promoção que mantém a sua margem mínima' : '') }).catch(() => {});
 }
 async function atualizarAlertas(conta) {
@@ -1375,7 +1535,8 @@ async function atualizarAlertas(conta) {
     const [full, ads, an, cfg, lidos] = await Promise.all([SHC.lerFull(c), SHC.lerAds(c), SHC.lerAnuncios(c), SHC.lerCfg(), SHC.lerMesesVendasLidos(c)]);
     const comAds = new Set(((ads && ads.anuncios) || []).filter(a => a.custo > 0).map(a => a.itemId));
     const itens = ((an && an.itens) || []).filter(i => comAds.has(i.itemId)), chaves = new Set(), ids = new Set();
-    itens.forEach(i => { if (i.sku) chaves.add(SHC.chaveSku(i.sku)); chaves.add(SHC.chave('ml', i.itemId)); if (i.familia) chaves.add(SHC.chave('ml', i.familia)); });
+    // F2: o custo de TODAS as variações (antes só o 1º SKU: o alerta lia o lucro inflado).
+    itens.forEach(i => { SHC.skusDoAnuncio(i).forEach(s => chaves.add(SHC.chaveSku(s))); chaves.add(SHC.chave('ml', i.itemId)); if (i.familia) chaves.add(SHC.chave('ml', i.familia)); });
     ((full && full.produtos) || []).forEach(p => { if (p.sku) chaves.add(SHC.chaveSku(p.sku)); (p.itemIds && p.itemIds.length ? p.itemIds : [p.itemId]).forEach(id => { if (id) ids.add(id); }); });
     chaves.delete('');
     const [custos, vm] = await Promise.all([SHC.lerCustos([...chaves]), ids.size ? SHC.lerVendasMes([...ids]) : {}]);
@@ -1390,7 +1551,7 @@ async function atualizarAlertas(conta) {
     const perdendo = [...new Set(((an && an.itens) || []).filter(i => i && SHC.anuncioAtivo(i) && pv[i.itemId]).map(i => i.itemId))]
         .filter(id => SHC.radarVisitas(pv[id].dias, hoje, cfg.radar_queda_pct).classe === 'caindo').length;
     const saude = { semFiscal: fiscal && typeof fiscal.total === 'number' ? fiscal.total : 0, perdendo };
-    const r = SHC.alertasDe({ full, ads, itens, custos, cfg, vm, mesesLidos: lidos, hoje, conta: naConta, saude });
+    const r = SHC.alertasDe({ full, ads, itens, custos, cfg, vm, mesesLidos: lidos, hoje, conta: naConta, saude, sellerId: c });   // sellerId: mínimo do Full por conta (F23)
     await SHC.salvarAlertas({ ts: Date.now(), conta: c, criticos: r.criticos, full: r.full, ads: r.ads, contaFull: r.contaFull, saude: r.saude, lista: r.lista.slice(0, 200) });
     // v2.5.3: TODAS as anomalias (Full, estoque, frete, pagamento excedente, pós-venda, Ads, fiscal/certificado, visitas, medidas) → shc:anomalias e o ícone.
     // Certificado vencido numa remessa do Full (FF_SHIPPING_EXPIRED_CERTIFICATE) vira cert:<conta> quando o Faturador não disse nada mais novo.
@@ -1415,11 +1576,19 @@ async function atualizarAlertas(conta) {
         const [va, cat, cores] = await Promise.all([SHC.lerChave('vbAnuncio:' + c), SHC.lerChave('cat:' + c), SHC.lerChave('cores:' + c)]);
         if (va) familias = SHC.familiasAcoes(SHC.familias(va, cat, an, {}, hoje.slice(0, 7), { cfg, hoje, cores: cores || {} }), (an && an.itens) || [], full, { hoje });
     } catch (e) { familias = null; /* derivado: nunca derruba os alertas */ }
-    const anom = SHC.anomalias(c, { alertas: r, posvenda: pvd, frete: frh, conferir: cnf, rateio: rat, cert, medidas: med, titulos, perguntas: perg, reputacao: rep, remessas, nfe, fatura, familias }, cfg);   // v2.8: módulos desligados não contam
+    const prejuizo = await SHC.lerChave('prejuizo:' + c);   // v3.2: venda nova no prejuízo (sincronizarVendasPrejuizo)
+    // v3.2.0: saiu da promoção (promoSaiu:<conta>) e promoção que termina em até N dias (retrato da Central × retrato dos anúncios).
+    let promo = [];
+    try {
+        const [saiu, promos] = await Promise.all([SHC.lerChave('promoSaiu:' + c), SHC.lerPromos(c)]), its = (an && an.itens) || [];
+        promo = SHC.promoAlertas(saiu, SHC.promoTermina(its, promos, hoje, cfg.promo_aviso_dias), Date.now(), its);
+    } catch (e) { promo = []; /* derivado: nunca derruba os alertas */ }
+    const anom = SHC.anomalias(c, { alertas: r, posvenda: pvd, frete: frh, conferir: cnf, rateio: rat, cert, medidas: med, titulos, perguntas: perg, reputacao: rep, remessas, nfe, fatura, familias, prejuizo, promo }, cfg);   // v2.8: módulos desligados não contam
     const snapAnom = Object.assign({ ts: Date.now() }, anom, { itens: anom.itens.slice(0, 200) });
     await chrome.storage.local.set({ 'shc:anomalias': snapAnom, ['shc:anomalias:' + c]: snapAnom });   // por conta também: "suas contas juntas" (SHC.dadosContas)
     const rp = await roboPromoPassada(c, cfg).catch(() => null);   // v2.9: robô de promoções (só sugere; nenhum GET a mais)
-    selo(Object.assign({}, anom, { semanalNovo: !!(sem && sem.novo), promoNovo: !!(rp && rp.novo) }));
+    const diaNovo = !!((await SHC.lerChave(chaveResumo(c, 'dia'))) || {}).novo;   // v3.2: resumo do dia ainda não visto
+    selo(Object.assign({}, anom, { semanalNovo: sem && sem.novo ? true : diaNovo ? 'dia' : false, promoNovo: !!(rp && rp.novo) }));
     r.anomalias = anom;
     return r;
 }
@@ -1433,10 +1602,11 @@ async function roboPromoPassada(c, cfg) {
     if (!((cfg.robopromo || {}).ligado) || !SHC.moduloLigado(cfg, 'promo')) return ant ? Object.assign({}, ant, { novo: false }) : null;
     const [promos, an] = await Promise.all([SHC.lerPromos(c), SHC.lerAnuncios(c)]);
     if (!promos) return ant;
-    const skuDe = {};
-    ((an && an.itens) || []).forEach(i => { if (i && i.sku && i.itemId) skuDe[i.itemId] = i.sku; });
+    const itemDe = {};
+    ((an && an.itens) || []).forEach(i => { if (i && i.itemId && !itemDe[i.itemId]) itemDe[i.itemId] = i; });
     // Custo como a etiqueta da Central e o painel: SKU do anúncio → anúncio (MLB) → família.
-    const infos = promos.propostas.map(p => ({ sku: skuDe[p.itemId] || '', itemId: p.itemId, familia: p.familia }));
+    // F3: o item inteiro (todos os SKUs + skuFonte), para variação usar o maior custo e não só o do 1º SKU.
+    const infos = promos.propostas.map(p => { const i = itemDe[p.itemId] || {}; return { sku: i.sku || '', skus: i.skus || [], skuFonte: i.skuFonte || '', itemId: p.itemId, familia: p.familia || i.familia || '' }; });
     const custos = await SHC.custosDe(infos), porProp = new Map(promos.propostas.map((p, i) => [p, (custos.get(infos[i]) || {}).dados || null]));
     const novo = SHC.roboPromoPassada(ant, SHC.roboPromoSugestoes(promos, p => porProp.get(p), cfg), SHC.roboPromoMargem(cfg), Date.now());
     await SHC.gravarChave(k, novo);
@@ -1480,6 +1650,8 @@ async function sincronizarFull(sellerId, progresso) {
         if (lida.produtos.length < FULL_LIMITE || (lida.totalProdutos !== null && (n + 1) * FULL_LIMITE >= lida.totalProdutos)) break;
     }
     full = SHC.mlFullDoEstado(pg.json, paginas);
+    // F22: teto de FULL_PAGINAS_MAX (1.000 produtos) com o ML dizendo que há mais → parcial (a aba diz "1.000 de 1.050 lidos").
+    if (full.totalProdutos > ((full.produtos || []).length)) full.parcial = true;
     await SHC.salvarFull(sellerId, Object.assign({ ts: Date.now() }, full));
     return full;
 }
@@ -1729,7 +1901,7 @@ async function sincronizar(origem) {
             if (an.falha) { erro = codigo(an.falha); await termina('anuncios', 'erro', null, erro); }   // 'sem_sessao' só quando o ML mandou para o login
             else {
                 if (cic && !an.retomada) cic.conta = an.sellerId;
-                if (!an.retomada) await termina('anuncios', 'ok', Q(an.snap ? an.snap.itens.length : 0, 'anúncio', 'anúncios'), null, an);
+                if (!an.retomada) await termina('anuncios', 'ok', SHC.resumoLeituraAnuncios(an.snap), null, an);   // F20: "… · li X de Y linhas do ML"
                 const conta = an.sellerId;
                 // v2.5.3 (D6): 1ª sincronização depois de instalar/atualizar, ou conta ainda sem dados fiscais → a parte fiscal começa JÁ, junto
                 // com as promoções (sem o andamento: a barra é da etapa atual). A etapa 'saude' depois só usa o resultado.
@@ -1749,12 +1921,14 @@ async function sincronizar(origem) {
                 e = await etapa('full', () => sincronizarFullERemessas(conta, progresso), resumoFull);
                 fu = e.r || null; erroFull = e.erro || null;
                 e = await etapa('ads', () => sincronizarAds(conta, progresso),
-                    r => (r.semAba ? ADS_SEM_ABA : r.temAds ? Q((r.campanhas || []).length, 'campanha', 'campanhas') + ' · ' + Q((r.anuncios || []).length, 'anúncio', 'anúncios') : 'Nenhuma campanha no Mercado Ads'));
+                    r => (r.semAba ? ADS_SEM_ABA : r.temAds ? (r.campanhasCompleto === false && r.totalCampanhas ? (r.campanhas || []).length + ' de ' + r.totalCampanhas + ' campanhas (leitura parcial)' : Q((r.campanhas || []).length, 'campanha', 'campanhas')) + ' · ' + Q((r.anuncios || []).length, 'anúncio', 'anúncios')
+                        + (r.completo === false && r.totalAnuncios ? ' de ' + r.totalAnuncios + ' (leitura parcial)' : '') : 'Nenhuma campanha no Mercado Ads'));   // #24: parcial não passa por completo
                 ad = e.r || null; erroAds = e.erro || null;
                 e = await etapa('posvenda', () => sincronizarPosVenda(conta), resumoPosVenda);
                 pv = e.r || null; erroPosVenda = e.erro || null;
                 e = await etapa('vendasAnuncio', () => sincronizarVendasAnuncio(conta, progresso, 'recentes'), resumoVendasAnuncio);   // v2.6: famílias
                 erroVendasAnuncio = e.erro || null;
+                try { await completarSkusRetrato(conta); } catch (x) { /* só completa SKU: falha não para a sincronização */ }
                 e = await etapa('promos', () => sincronizarPromos(conta, progresso),   // anúncios lidos: a sincronização vale
                     r => (r.vazio ? 'Nenhuma promoção disponível' : Q(r.propostas, 'proposta', 'propostas') + ' em ' + Q(r.familias, 'produto', 'produtos')));
                 pr = e.r || null; erroPromos = e.erro || null;
@@ -1786,7 +1960,10 @@ async function sincronizar(origem) {
                 rp = e.r || null;
                 erroRepasse = e.erro ? mpErro(e.erro) : null;   // sem permissão não é erro: "conecte para comparar"
                 // v2.7: radar leve (Resumo, perguntas, reputação: 3 GETs) antes de contar as anomalias; se falhar, o anterior fica e a etapa continua.
-                e = await etapa('alertas', async () => { try { await sincronizarRadar(conta, progresso); } catch (x) { /* radar é derivado */ } return atualizarAlertas(conta); },
+                // v3.2: + 1 GET da lista de Vendas (venda nova no prejuízo → prejuizo:<conta>); se falhar, fica o de antes.
+                e = await etapa('alertas', async () => { try { await sincronizarRadar(conta, progresso); } catch (x) { /* radar é derivado */ }
+                    try { await sincronizarVendasPrejuizo(conta, progresso); } catch (x) { /* derivado: nunca derruba os alertas */ }
+                    return atualizarAlertas(conta); },
                     r => (r.anomalias && r.anomalias.total ? SHC.qtd(r.anomalias.total, 'ponto de atenção', 'pontos de atenção') : 'Nada pede sua atenção agora'));
                 al = e.r || null;
             }
@@ -1836,6 +2013,7 @@ async function sincronizar(origem) {
         // 'shc-historico'), sem travar a barra. O andamento ("7 de 12 meses") já fica no status agora, só com o que está gravado.
         histParar = false;
         if (histFalta) alarmeHist(true, 1);
+        resumosDevidos(Date.now()).catch(() => {});   // v3.2: o resumo que esperava as vendas de hoje (vb.ts) sai agora
         // Custos do ERP junto: no botão Sincronizar (no máximo a cada 10 min) e na automática (a cada 6 h). Não segura a sincronização.
         const iv = origem === 'manual' ? 10 * 60e3 : 6 * 3600e3;
         sincronizarCustos('tiny', iv).catch(() => {}).then(() => sincronizarCustos('omie', iv).catch(() => {})).then(() => sincronizarCustos('bling', iv).catch(() => {}));
@@ -1953,13 +2131,43 @@ async function conectarBling(code) {
     } catch (e) { return { ok: false, erp: 'bling', erro: (e && e.erro) || 'outro', msg: (e && e.msg) || 'Não consegui falar com o Bling. Tente de novo.' }; }
     return sincronizarCustos('bling', 0);
 }
+// v3.2 Cruzamento ERP × ML (erp-cruzar.js): só o que já está guardado (erp:produtos:<erp>, ml:anuncios, editor, ml:full), nenhuma chamada.
+// O ERP é o conectado com o retrato mais novo; sem ERP conectado, o erpx:<conta> velho sai. → erpx:<conta> | null.
+// opc.avisar = 1ª conferência depois de conectar (a janela do painel lateral); fica até a seller fechar ({acao:'erp_visto'}).
+async function erpConferir(conta, opc) {
+    conta = conta || await SHC.contaAtual();
+    let melhor = null;
+    for (const e of Object.keys(ERPS)) {
+        const ret = await SHC.lerChave('erp:produtos:' + e);
+        if (ret && Array.isArray(ret.itens) && ERPS[e].cred(await SHC.lerChave(ERPS[e].chave())) && (!melhor || (ret.ts || 0) > (melhor.ret.ts || 0))) melhor = { e, ret };
+    }
+    const k = 'erpx:' + conta;
+    if (!melhor) { if (await SHC.lerChave(k)) await chrome.storage.local.remove(k); return null; }
+    const [snap, editor, full, ant] = await Promise.all([SHC.lerAnuncios(conta), SHC.lerChave('editor:' + conta), SHC.lerFull(conta), SHC.lerChave(k)]);
+    if (!snap || !Array.isArray(snap.itens) || !snap.itens.length) return null;
+    const x = SHC.erpConferir({ erp: melhor.e, nome: ERPS[melhor.e].nome, produtos: melhor.ret.itens, snap, editor, full,
+        avisar: !!(opc && opc.avisar) || !!(ant && ant.avisar && ant.erp === melhor.e) });
+    await SHC.gravarChave(k, x);
+    return x;
+}
+async function erpConferirTodas(opc) {
+    let cs = [];
+    try { cs = await SHC.contas(); } catch (e) { cs = []; }
+    const ids = cs.length ? cs.map(c => c.sellerId) : [await SHC.contaAtual()];
+    for (const id of ids) await erpConferir(id, opc).catch(() => null);
+}
 // SKUs dos anúncios da conta ainda sem custo (depois da importação) → número. null sem retrato.
 async function skusSemCusto() {
     const itens = ((await SHC.lerAnuncios()) || {}).itens || [];
     if (!itens.length) return null;
-    const chaves = [...new Set(itens.map(i => i.sku && SHC.chaveSku(i.sku)).filter(Boolean))];
-    const c = chaves.length ? await chrome.storage.local.get(chaves) : {};
-    return chaves.filter(k => !(SHC.num((c[k] || {}).custo) > 0)).length;
+    // F27: todos os SKUs de cada anúncio (variações) e a mesma regra do lucro (SHC.custosDe: SKU, kit, custo no anúncio, família) —
+    // antes só o 1º SKU e só c|sku (kit somado ou custo digitado no anúncio contavam como "sem custo").
+    const infos = [];
+    itens.forEach(i => SHC.skusDoAnuncio(i).forEach(s => { const n = SHC.normalizaSku(s); if (n) infos.push({ sku: n, itemId: i.itemId, familia: i.familia }); }));
+    if (!infos.length) return 0;
+    const m = await SHC.custosDe(infos), com = new Set();
+    infos.forEach(x => { if (m.get(x)) com.add(x.sku); });
+    return new Set(infos.map(x => x.sku).filter(s => !com.has(s))).size;
 }
 // Gravações do status (sincronização e andamento dos custos) uma de cada vez: ler-mudar-gravar de uma nunca apaga o que a outra gravou.
 let filaStatus = Promise.resolve();
@@ -1999,10 +2207,17 @@ function sincronizarCustos(erp, intervaloMs) {
         try {
             await custosProgresso({ erp, feito: 0, de: null, unidade: 'páginas' });
             const produtos = await E.puxar(cred, { fetch: (u, i) => fetch(u, comTempo(i)), espera, progresso: (pg, pgs) => { custosProgresso({ erp, feito: pg, de: pgs, unidade: 'páginas' }).catch(() => {}); } });
+            // v3.2: retrato do ERP para o cruzamento ERP × ML (erp:produtos:<erp>, mesma forma nos 3 ERPs). SKU repetido: o ATIVO vale por
+            // último no custo (o Bling agora traz também os inativos, criterio=5).
+            await SHC.gravarChave('erp:produtos:' + erp, { ts: Date.now(), itens: SHC.erpNormaliza(produtos) });
+            produtos.sort((a, b) => (b.situacao === 'I') - (a.situacao === 'I'));   // inativos primeiro (sort estável)
             const r = await SHC.tinyGravar(produtos, erp);   // a tabela mostra de qual ERP veio
+            if (produtos.porFaixa) r.porFaixa = produtos.porFaixa;   // F5: Bling — quantos vieram com estoque positivo, zerado e negativo
             r.faltam = await skusSemCusto();
             const agora = await SHC.lerChave(E.chave());   // desconectou no meio: não volta a guardar a credencial
             if (E.mesma(E.cred(agora), cred)) await SHC.gravarChave(E.chave(), Object.assign({}, agora, { ultima: Object.assign({ ts: Date.now() }, r) }));
+            // Cruzamento ERP × ML em todas as contas. 1ª importação depois de conectar (sem "ultima" antes): o painel abre a janela do resumo.
+            await erpConferirTodas({ avisar: !(t && t.ultima) }).catch(() => {});
             if (r.atualizados) await atualizarAlertas().catch(() => {});
             return Object.assign({ ok: true, erp, resumo: E.resumo(r) }, r);
         } catch (e) {
@@ -2098,9 +2313,12 @@ async function sincronizarPosVenda(sellerId) {
     const est = SHC.mlExtraiEstado(b.html), r = SHC.mlPosVendaDoEstado(est);
     if (!r) return { falha: 'indisponivel' };   // tela mudada: não afirma "nada pendente"
     // v2.9: reclamações da lista (mesma página, nenhum GET a mais). O nº do pedido e o id da reclamação não são guardados. Sem a lista agora → fica a da leitura anterior.
-    const fl = SHC.posvendaReclamacoesDoFlox(est);
-    if (fl && fl.lista) Object.assign(r, { casos: fl.casos.map(c => { const x = Object.assign({}, c); delete x.pedido; delete x.claimId; return x; }), paginas: fl.paginas, casosTs: r.ts });
-    else { const ant = await SHC.lerChave('posvenda:' + sellerId); if (ant && Array.isArray(ant.casos)) Object.assign(r, { casos: ant.casos, paginas: ant.paginas || null, casosTs: ant.casosTs || ant.ts }); }
+    const fl = SHC.posvendaReclamacoesDoFlox(est), ant = await SHC.lerChave('posvenda:' + sellerId);
+    if (fl && fl.lista) Object.assign(r, { casos: fl.casos.map(c => { const x = Object.assign({}, c); delete x.pedido; delete x.claimId; delete x.descricao; return x; }), paginas: fl.paginas, casosTs: r.ts });
+    else if (ant && Array.isArray(ant.casos)) Object.assign(r, { casos: ant.casos, paginas: ant.paginas || null, casosTs: ant.casosTs || ant.ts });
+    // v3.2: nº do pedido (da venda do seller, não do comprador) → motivo/responsabilidade, só para cruzar com a tarifa de devolução do mesmo pedido.
+    const pp = SHC.posvendaJuntaPorPedido(ant && ant.porPedido, fl && fl.lista ? fl.casos : []);
+    if (pp) r.porPedido = pp;
     await SHC.gravarChave('posvenda:' + sellerId, r);
     return r;
 }
@@ -2355,7 +2573,8 @@ async function medidasMarca(conta, itemId, tipo, em) {
 // (radar de visitas caindo, sem foto marcada pelo ML, ≥ 3 fotos, intervalo e limite por dia). Grava a ordem (PUT event-request, M5) só com
 // SHC.ROBO_ESCRITA_CONFERIDA === true E cfg.robo_modo === 'automatico'; senão só gera sugestões.
 // robo:<conta> = { historico:[{ts, itemId, antes, depois, motivo, visitas7Antes, resultado:'ok'|'incerto'|'falhou'|'abortado'|'manual', pedido? (incerto), erro?, desfazer?}] (máx. 500),
-//   sugestoes:[{itemId, motivo, novaOrdem, ts}], ultimaPassada:'AAAA-MM-DD' }. O JWT da tela nunca é guardado.
+//   sugestoes:[{itemId, motivo, novaOrdem, ts, antes, visitas7Antes}], registro:[sugestões guardadas, SHC.roboRegistroJunta], ultimaPassada:'AAAA-MM-DD' }.
+//   O JWT da tela nunca é guardado. 'manual' com detectado:true = sugestão vista aplicada na leitura das fotos (SHC.roboSugestaoVista).
 const ROBO_ALARME_MIN = 180, ROBO_PAUSA_MS = 5000, ROBO_HIST_MAX = 500;
 const roboRegistra = (conta, e) => mudaChave('robo:' + conta, v => { v.historico = (v.historico || []).concat([e]).slice(-ROBO_HIST_MAX); });
 const roboMaxDia = cfg => { const n = SHC.num(cfg.robo_max_dia); return n !== null && n >= 0 ? n : 5; };
@@ -2431,14 +2650,18 @@ async function roboPassada(conta, manual) {
             const f = ((fs && fs.porItem) || {})[item.itemId], v = ((vs && vs.porItem) || {})[item.itemId];
             if (SHC.anuncioAtivo(item) && !(f && Array.isArray(f.ids) && f.ids.length)) semFotos++;
             const radar = SHC.radarVisitas(v && v.dias, hoje, cfg.radar_queda_pct);
+            // v3.1 registro: a última sugestão deste anúncio já aparece aplicada (ou as fotos mudaram) na leitura das fotos, sem "Já troquei"
+            // → vira 'manual' no histórico (o robô espera o intervalo e o efeito é medido). Só grava no robo:<conta> do Chrome, nunca no ML.
+            const r0 = (await SHC.lerChave(k)) || {}, vista = f ? SHC.roboSugestaoVista(r0.registro, item.itemId, f, r0.historico, Date.now()) : null;
+            if (vista) await roboRegistra(conta, vista);
             const d = SHC.roboDecide({ item, fotos: f, radar, cfg, historico: ((await SHC.lerChave(k)) || {}).historico || [], agora: Date.now() });
             if (d.registrar) await roboRegistra(conta, { ts: Date.now(), itemId: item.itemId, antes: d.registrar.antes, depois: d.registrar.depois, motivo: d.motivo, visitas7Antes: radar.ult7, resultado: 'manual' });
             if (d.acao !== 'girar') continue;
-            if (!grava) { sugestoes.push({ itemId: item.itemId, motivo: d.motivo, novaOrdem: d.novaOrdem, ts: Date.now() }); continue; }
+            if (!grava) { sugestoes.push({ itemId: item.itemId, motivo: d.motivo, novaOrdem: d.novaOrdem, ts: Date.now(), antes: f.ids.slice(), visitas7Antes: radar.ult7 }); continue; }
             if (feitos.length) await espera(ROBO_PAUSA_MS);
             feitos.push(await roboExecuta(conta, item.itemId, d.novaOrdem, d.motivo, { esperado: f.ids, visitas7Antes: radar.ult7 }));
         }
-        await mudaChave(k, r => { r.sugestoes = sugestoes; r.ultimaPassada = hoje; });
+        await mudaChave(k, r => { r.sugestoes = sugestoes; r.registro = SHC.roboRegistroJunta(r.registro, sugestoes); r.ultimaPassada = hoje; });
         return { ok: true, sugestoes: sugestoes.length, feitos, semFotos };
     })();
     try { return await roboEmCurso; } finally { roboEmCurso = null; }
@@ -2476,6 +2699,58 @@ async function lerDetalhesRemessas(conta) {
     return { lidas, de: alvo.length };
 }
 
+// ── v3.2: VENDA NOVA NO PREJUÍZO (etapa Alertas). 1 GET da 1ª página da lista de Vendas (estado embutido, só produto/valor/status/dia:
+// SHC.mlVendasDaLista) + a MESMA conta da etiqueta da lista (SHC.telaVendaConta: retrato dos anúncios, frete cobrado por pedido, custos).
+// Venda nova com custo que deu prejuízo → prejuizo:<conta> (SHC.vendasPrejuizo) e o alerta urgente no ícone e na Geral (SHC.anomalias).
+// Nada do comprador é lido nem guardado; só o nº do pedido (para nunca repetir) e o link da venda no ML. Módulo Conciliação desligado → nem lê.
+importScripts('ml-tela.js');   // só a parte pura (SHC.mlVendasDaLista, SHC.telaVendaConta): o resto do arquivo só roda numa página
+async function sincronizarVendasPrejuizo(conta, progresso) {
+    const k = 'prejuizo:' + conta, [cfg, ant] = await Promise.all([SHC.lerCfg(), SHC.lerChave(k)]);
+    if (!conta || conta === 'atual' || !SHC.moduloLigado(cfg, 'conciliacao') || !SHC.mlVendasDaLista || !SHC.vendasPrejuizo) return ant;
+    await bateVivo(progresso);
+    await espera(PAUSA_MS);
+    // F11: antes só a 1ª página (~25 vendas). Agora segue as páginas (só GET) até alcançar a leitura anterior (pedido já visto ou venda
+    // de antes do último dia lido), o total da lista ou o teto de 10. Página que falha ou só repete pedidos (o ML ignorou o parâmetro,
+    // ainda a confirmar ao vivo) para a leitura: os dias não alcançados ficam "lidos só em parte" (furo/cortes de SHC.vendasPrejuizo).
+    const lePag = async n => { const h = await buscarHtml(SHC.vendasListaPagina ? SHC.vendasListaPagina(n) : SHC.VENDAS_LISTA_URL); const e = h && h.html ? SHC.mlExtraiEstado(h.html) : null; return e ? { v: SHC.mlVendasDaLista(e), t: SHC.mlVendasTotal ? SHC.mlVendasTotal(e) : null } : null; };
+    const p1 = await lePag(1), vendas = p1 && p1.v;
+    if (!vendas) return ant;   // não leu (sessão, formato mudado): fica o de antes, nunca "nenhuma venda"
+    const hoje0 = SHC.hoje(), ate = [diaMenos(hoje0, 1), ant && ant.dia].filter(Boolean).sort()[0], ped = new Set(vendas.map(v => v.pedido));
+    const alcancou = () => vendas.some(v => (ant && ant.vistos && ant.vistos[v.pedido]) || ((SHC.dataVendaLista(v.quando, hoje0) || '9') < ate));
+    let paginasV = 1, cortadoV = false;
+    for (let n = 2; p1.t !== null && vendas.length < p1.t && !alcancou(); n++) {
+        if (n > 10) { cortadoV = true; break; }
+        await bateVivo(progresso);
+        await espera(PAUSA_MS);
+        const x = await lePag(n), novas = x && x.v ? x.v.filter(v => v && v.pedido && !ped.has(v.pedido)) : [];
+        if (!novas.length) { cortadoV = true; break; }
+        novas.forEach(v => { ped.add(v.pedido); vendas.push(v); });
+        paginasV = n;
+    }
+    // v3.3: as mesmas cobranças (mês e anterior), Ads, afiliados e Full da etiqueta da tela (SHC.vendaExtras) → aviso e etiqueta com a mesma conta.
+    const hojeX = SHC.hoje(), [anoX, mmX] = hojeX.slice(0, 7).split('-').map(Number), mesAntX = mmX === 1 ? (anoX - 1) + '-12' : anoX + '-' + String(mmX - 1).padStart(2, '0');
+    const [snap, fp, fh, cob1, cob0, adsX, afilX, fullX] = await Promise.all([SHC.lerAnuncios(conta), SHC.lerChave('frete:' + conta + ':pedidos'), SHC.lerChave('frete:' + conta + ':hist'),
+        SHC.lerChave('cob:' + conta + ':' + hojeX.slice(0, 7)), SHC.lerChave('cob:' + conta + ':' + mesAntX), SHC.lerChave('ads:' + conta), SHC.lerChave('afil:' + conta), SHC.lerChave('ml:full:' + conta)]);
+    const extras = SHC.vendaExtras ? SHC.vendaExtras({ cobs: [cob0, cob1], ads: adsX, afil: afilX, full: fullX, hoje: hojeX }) : null;
+    const porId = new Map();
+    ((snap && snap.itens) || []).forEach(i => { if (i && i.itemId && !porId.has(i.itemId)) porId.set(i.itemId, i); });
+    const anuncio = id => porId.get(id) || null, chaveP = x => x.itemId + '|' + x.sku, infos = new Map();
+    vendas.forEach(v => (v.produtos || []).forEach(x => {
+        const it = porId.get(x.itemId);
+        // Venda com o SKU da variação vendida: custo dela. Sem SKU: o anúncio inteiro (todas as variações, F3).
+        if (!infos.has(chaveP(x))) infos.set(chaveP(x), x.sku ? { sku: x.sku, familia: (it && it.familia) || '', itemId: x.itemId }
+            : { sku: (it && it.sku) || '', skus: (it && it.skus) || [], skuFonte: (it && it.skuFonte) || '', familia: (it && it.familia) || '', itemId: x.itemId });
+    }));
+    const m = infos.size ? await SHC.custosDe([...infos.values()]) : new Map(), custos = new Map();
+    infos.forEach((i, kk) => custos.set(kk, m.get(i)));
+    const custoDe = x => (custos.get(chaveP(x)) || {}).dados || null;
+    const tipico = id => { const a = fh && fh.porAnuncio && fh.porAnuncio[id], t = a && a.ult30 && a.ult30.tipico; return t > 0 ? t : null; };
+    const novo = SHC.vendasPrejuizo(vendas, ant, { anuncio, custoDe, cfg, pedidos: (fp && fp.pedidos) || {}, vendasFat: (fp && fp.vendas) || {}, tipico, extras, hoje: SHC.hoje(), agora: Date.now() });
+    Object.assign(novo, { paginas: paginasV, cortado: cortadoV });   // F11: quantas páginas da lista de Vendas e se parou antes de alcançar a leitura anterior
+    await SHC.gravarChave(k, novo);
+    return novo;
+}
+
 // ── v2.7: radar leve (etapa Alertas): Resumo (JSON), perguntas e reputação (estado embutido). Cada leitura é independente: a que falhar deixa a anterior.
 // Só quantidades, tempos, ids de anúncio e links; nada de texto de pergunta nem de comprador. ──
 async function sincronizarRadar(conta, progresso) {
@@ -2506,18 +2781,28 @@ async function sincronizarRadar(conta, progresso) {
     return out;
 }
 
-// ── v2.7: resumo da semana para o WhatsApp. Gera o TEXTO (SHC.resumoSemanal) com o que já está guardado (nenhum GET) → resumo:<conta>:semanal =
-// {ts, semana, texto, waLink, novo, origem}. O alarme de segunda 8h só marca novo:true (o ícone mostra "•"); quem envia é o seller, pelo link wa.me sem número. ──
-async function gerarResumoSemanal(conta, origem) {
+// ── v2.7 → v3.2: RESUMO PARA A EQUIPE (pedido da dona 30/09). Gera o TEXTO (SHC.resumoExecutivo) com o que já está guardado (nenhum GET) →
+// resumo:<conta>:dia (ontem, toda manhã) e resumo:<conta>:semanal (segunda) = {ts, periodo, de, ate, semana, texto, textoWa, waLink, encurtado, vendas, novo, origem}.
+// O alarme só gera e marca novo:true (o ícone mostra "•"); quem envia é o seller, pelo link wa.me sem número. ──
+const chaveResumo = (conta, periodo) => 'resumo:' + conta + ':' + (periodo === 'dia' ? 'dia' : 'semanal');
+async function gerarResumo(conta, periodo, origem) {
     if (!conta || conta === 'atual') return { ok: false, motivo: 'sem_conta' };
-    const hoje = SHC.hoje(), mes = hoje.slice(0, 7);
-    const [vb, va, cat, an, cfg, anom, perg, rep, cert, rem, remDet, contasMl] = await Promise.all([SHC.lerVendasBrutas(conta), SHC.lerChave('vbAnuncio:' + conta), SHC.lerChave('cat:' + conta), SHC.lerAnuncios(conta),
-        SHC.lerCfg(), SHC.lerChave('shc:anomalias:' + conta), SHC.lerChave('perguntas:' + conta), SHC.lerChave('reputacao:' + conta), SHC.lerChave('cert:' + conta), SHC.lerChave('ml:full:remessas:' + conta), SHC.lerChave('remessas:' + conta + ':detalhe'), SHC.lerChave('ml:contas')]);
-    // Lucro estimado e SKUs subindo/caindo no mês: a MESMA conta da aba Famílias (SHC.familias), com os custos por SKU/anúncio já guardados.
-    let lucro = null, skus = null;
+    // mes = o mês de ONTEM (o último dia do resumo): no dia 1º o lucro e o crescendo/caindo são do mês que acabou, não do mês novo quase sem dado.
+    const hoje = SHC.hoje(), mes = diaMenos(hoje, 1).slice(0, 7), per = periodo === 'dia' ? 'dia' : 'semana', L = k => SHC.lerChave(k);
+    const [vb, va, cat, an, cfg, anom, perg, rep, cert, rem, remDet, contasMl, visitas, comp, full, posvenda, conferir, fatura, frete, prejuizo] = await Promise.all([SHC.lerVendasBrutas(conta),
+        L('vbAnuncio:' + conta), L('cat:' + conta), SHC.lerAnuncios(conta), SHC.lerCfg(), L('shc:anomalias:' + conta), L('perguntas:' + conta), L('reputacao:' + conta), L('cert:' + conta),
+        L('ml:full:remessas:' + conta), L('remessas:' + conta + ':detalhe'), L('ml:contas'), L('visitas:' + conta), L('comp:' + conta), L('ml:full:' + conta), L('posvenda:' + conta),
+        L('conferir:' + conta), L('fat:' + conta), L('frete:' + conta + ':hist'), L('prejuizo:' + conta)]);   // v3.2: prejuizo = vendas no prejuízo (seção 🔴 do resumo)
+    const itens = (an && an.itens) || [];
+    // v3.2.0: seção 🏷️ Promoções (saiu da promoção no período + promoção que acaba em até N dias)
+    let promoSaiu = null, promoTermina = null;
+    try { const [ps, pr] = await Promise.all([L('promoSaiu:' + conta), SHC.lerPromos(conta)]); promoSaiu = ps; promoTermina = SHC.promoTermina(itens, pr, hoje, cfg.promo_aviso_dias); } catch (e) { promoSaiu = null; promoTermina = null; }
+    // Lucro, SKUs subindo/caindo (com o gargalo de quem caiu), sazonalidade e ações do Full: a MESMA conta da aba Famílias (SHC.familias).
+    let lucro = null, skus = null, sazonal = [], acoesFam = null;
     try {
-        const itens = (an && an.itens) || [], chaves = new Set();
-        itens.forEach(i => { if (i && i.sku) chaves.add(SHC.chaveSku(i.sku)); if (i && i.itemId) chaves.add(SHC.chave('ml', i.itemId)); if (i && i.familia) chaves.add(SHC.chave('ml', i.familia)); });
+        const chaves = new Set();
+        // F2: o custo de todas as variações, não só o do 1º SKU.
+        itens.forEach(i => { if (i) SHC.skusDoAnuncio(i).forEach(s => chaves.add(SHC.chaveSku(s))); if (i && i.itemId) chaves.add(SHC.chave('ml', i.itemId)); if (i && i.familia) chaves.add(SHC.chave('ml', i.familia)); });
         chaves.delete('');
         const custos = chaves.size ? await SHC.lerCustos([...chaves]) : {};
         const fam = SHC.familias(va, cat, an, custos, mes, { cfg, hoje });
@@ -2527,16 +2812,22 @@ async function gerarResumoSemanal(conta, origem) {
                 const total = fam.reduce((s, f) => s + (f.bruto || 0), 0), coberto = com.reduce((s, f) => s + (f.bruto || 0), 0);
                 lucro = { valor: SHC.r2(com.reduce((s, f) => s + f.lucro, 0)), parcial: com.length < fam.length || fam.some(f => f.lucroParcial), cobertoPct: total > 0 ? coberto / total * 100 : null };
             }
-            const todos = fam.flatMap(f => f.skus || []).filter(s => s && typeof s.variacaoPct === 'number' && s.brutoAnt > 0);
-            skus = { subindo: todos.filter(s => s.variacaoPct > 0).sort((a, b) => b.variacaoPct - a.variacaoPct).slice(0, 3), caindo: todos.filter(s => s.variacaoPct < 0).sort((a, b) => a.variacaoPct - b.variacaoPct).slice(0, 3) };
+            // Top 3 pelo R$ que ganhou/perdeu (não pelo %: +1.800% de R$ 20 não é o que mais importa).
+            const todos = fam.flatMap(f => (f.skus || []).map(s => ({ s, f }))).filter(x => x.s && typeof x.s.variacaoPct === 'number' && x.s.brutoAnt > 0), rs = x => x.s['variacaoR$'] || 0;
+            const gar = x => { try { return SHC.gargaloQueda(x.s, { mes: fam.mes, dias: fam.diasCobertos, familia: x.f, conta: fam, itens, visitas: visitas && visitas.porItem, comp, full, cfg, hoje }); } catch (e) { return null; } };
+            skus = { subindo: todos.filter(x => x.s.variacaoPct > 0).sort((a, b) => rs(b) - rs(a)).slice(0, 3).map(x => x.s),
+                caindo: todos.filter(x => x.s.variacaoPct < 0).sort((a, b) => rs(a) - rs(b)).slice(0, 3).map(x => Object.assign({}, x.s, { gargalo: gar(x) })) };
+            sazonal = fam.map(f => Object.assign({ familia: f.familia }, SHC.sazonalCompra(f, { hoje }))).filter(z => z.aplica);
+            acoesFam = SHC.familiasAcoes(fam, itens, full, { hoje });
         }
     } catch (e) { lucro = null; skus = null; }
-    const r = SHC.resumoSemanal(conta, { nome: SHC.nomeConta(conta, cfg, contasMl), vb, lucro, skus, anomalias: anom, perguntas: perg, reputacao: rep, cert,
-        remessas: rem ? SHC.remessasResumo(rem, remDet, mes, hoje) : null }, hoje);
-    const ant = await SHC.lerChave('resumo:' + conta + ':semanal');
-    const snap = { ts: Date.now(), semana: r.semana, texto: r.texto, waLink: r.waLink, vendas: r.vendas, novo: origem === 'alarme' ? true : !!(ant && ant.novo), origem: origem || 'pedido' };
-    await SHC.gravarChave('resumo:' + conta + ':semanal', snap);
-    if (origem === 'alarme') { const a = await SHC.lerAnomalias(); if (!a || String(a.conta) === String(conta)) selo(Object.assign({}, a || { total: 0 }, { semanalNovo: true })); }
+    const r = SHC.resumoExecutivo(conta, { nome: SHC.nomeConta(conta, cfg, contasMl), mes, vb, lucro, skus, itens, visitas, comp, sazonal, acoesFam, anomalias: anom, perguntas: perg,
+        reputacao: rep, cert, posvenda, conferir, fatura, frete, cfg, prejuizo, promoSaiu, promoTermina, remessas: rem ? SHC.remessasResumo(rem, remDet, mes, hoje) : null }, hoje, { periodo: per });
+    const k = chaveResumo(conta, per), ant = await SHC.lerChave(k);
+    const snap = { ts: Date.now(), periodo: per, de: r.de, ate: r.ate, semana: { de: r.de, ate: r.ate }, texto: r.texto, textoWa: r.textoWa, waLink: r.waLink, encurtado: r.encurtado, vendas: r.vendas,
+        novo: origem === 'alarme' ? true : !!(ant && ant.novo), origem: origem || 'pedido' };
+    await SHC.gravarChave(k, snap);
+    if (origem === 'alarme') await seloAgora();   // o "•" do robô de promoções não se perde
     return { ok: true, resumo: snap };
 }
 
@@ -2555,16 +2846,40 @@ async function juntarPagina(conta, dados) {
 }
 
 // A aba na lista de Anúncios manda a página que está na tela: entra no retrato da conta dela (já conferida).
-async function juntarAnuncios(conta, itens) {
-    const lote = itens.slice(0, 500);
+// v3.2: famílias abertas pela aba (SHC.mlParaAbrir + row/expanded) vêm em familias → snap.familias (pai separado dos itens).
+// lidoEm = quando a aba leu a página (o estado embutido é do carregamento da página): leitura mais velha que o retrato não entra (SHC.mesclaAnuncios).
+async function juntarAnuncios(conta, itens, familias, lidoEm) {
+    const lote = itens.slice(0, 500), fams = Array.isArray(familias) ? familias.filter(f => f && /^[A-Z]{2}\d+$/.test(String(f.id || ''))).slice(0, 100) : [];
+    let saiu = 0;
     const snap = await emFila(async () => {
         const antes = await SHC.lerAnuncios(conta);
-        const s = SHC.mesclaAnuncios(antes, lote);
-        if (SHC.retratoMudou(antes, s)) await SHC.salvarAnuncios(conta, s);   // nada novo: não regrava (nem avisa as abas)
+        const s = SHC.mesclaAnuncios(antes, lote, fams.length ? { familias: fams } : undefined, Object.assign(await fontesSku(conta, antes), { lidoEm }));
+        if (SHC.retratoMudou(antes, s) || fams.length) await SHC.salvarAnuncios(conta, s);   // nada novo: não regrava (nem avisa as abas)
+        saiu = await gravarPromoSaiu(conta, antes, s, lote);   // v3.2.0
         return s;
     });
     await emFila(() => gravarFretes(lote));
+    if (saiu && !emAndamento) atualizarAlertas(conta).catch(() => {});   // v3.2.0: "Saiu da promoção" já no sino (sincronização rodando: a etapa Alertas dela recalcula)
     return snap.itens.length;
+}
+
+// v3.2 Editor em massa (a seller abriu a tela; a aba leu só com GET): editor:<conta> = { ts, total, completo, porItem:{MLB: SHC.editorLinha + variacoes} }.
+// Leitura parcial só junta. Depois completa o SKU que a lista não mostra (anúncio com variações) no retrato. → quantos anúncios vieram.
+async function juntarEditor(conta, d) {
+    const porItem = {};
+    Object.keys(d.porItem).slice(0, 5000).forEach(id => { const o = d.porItem[id]; if (/^MLB\d{6,14}$/.test(id) && o && typeof o === 'object') porItem[id] = o; });
+    const n = Object.keys(porItem).length;
+    if (!n) return 0;
+    await emFila(async () => {
+        const k = 'editor:' + conta, ant = await SHC.lerChave(k), base = d.completo || !ant ? {} : Object.assign({}, ant.porItem || {});
+        // Variações que não vieram desta vez (GET que falhou, teto) ficam as já lidas: o SKU de cada variação não some (auditoria 01/10/2026).
+        const antP = (ant && ant.porItem) || {};
+        Object.keys(porItem).forEach(id => { const o = porItem[id], a = antP[id]; if (o.nVar > 0 && !(Array.isArray(o.variacoes) && o.variacoes.length) && a && Array.isArray(a.variacoes) && a.variacoes.length) porItem[id] = Object.assign({}, o, { variacoes: a.variacoes }); });
+        await SHC.gravarChave(k, { ts: Date.now(), total: typeof d.total === 'number' ? d.total : null, completo: !!d.completo, porItem: Object.assign(base, porItem) });
+    });
+    await completarSkusRetrato(conta);
+    await erpConferir(conta).catch(() => {});   // v3.2: o SKU de cada variação chegou — o cruzamento ERP × ML confere variação por variação
+    return n;
 }
 
 // v3.1 Agenda do Canal ({acao:'canal_ler_anuncios', itemIds}): lê só os anúncios que faltam no retrato, com a MESMA leitura da lista de
@@ -2687,9 +3002,38 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         escolhe().then(erp => sincronizarCustos(erp, 0).then(responder, () => responder({ ok: false, erp, msg: 'Não consegui falar com o ' + ERPS[erp].nome + '. Tente de novo em alguns minutos.' })));
         return true;
     }
+    // v3.2 cruzamento ERP × ML: {acao:'erp_conferir'} ("Conferir agora") refaz erpx:<conta> com o que já está guardado (nenhuma chamada ao ML);
+    // {acao:'erp_visto'} a seller fechou a janela do resumo (avisar:false).
+    if (msg.acao === 'erp_conferir' || msg.acao === 'erp_visto') {
+        if (!daExtensao(sender)) return false;
+        (async () => {
+            const conta = await SHC.contaAtual();
+            // avisar: o Tiny foi conectado pela tela (painel/painel lateral leem o Tiny direto) → todas as contas, com a janela do resumo.
+            if (msg.acao === 'erp_conferir' && msg.avisar === true) { await erpConferirTodas({ avisar: true }); return { ok: true, erpx: await SHC.lerChave('erpx:' + conta) }; }
+            if (msg.acao === 'erp_conferir') return { ok: true, erpx: await erpConferir(conta) };
+            const k = 'erpx:' + conta, x = await SHC.lerChave(k);
+            if (x && x.avisar) await SHC.gravarChave(k, Object.assign({}, x, { avisar: false }));
+            return { ok: true };
+        })().then(responder, () => responder({ ok: false }));
+        return true;
+    }
     if (msg.acao === 'bling_conectar') {   // só o painel (a extensão): o code do launchWebAuthFlow vira tokens aqui no fundo
         if (!daExtensao(sender) || !/^[\w.~-]{4,512}$/.test(String(msg.code || ''))) return false;
         conectarBling(String(msg.code)).then(responder, () => responder({ ok: false, erp: 'bling', msg: 'Não consegui falar com o Bling. Tente de novo.' }));
+        return true;
+    }
+    // F1 (licenca.js): só as telas da própria extensão. 'licenca_entrar': o painel fez o launchWebAuthFlow (state conferido lá) e manda
+    // o code + verifier; aqui vira passe + refresh. 'licenca_renovar': renovação única (a mesma promessa do alarme). 'licenca_sair': revoga.
+    if (msg.acao === 'licenca_entrar' || msg.acao === 'licenca_renovar' || msg.acao === 'licenca_sair') {
+        if (!daExtensao(sender)) return false;
+        let feito;
+        if (msg.acao === 'licenca_entrar') {
+            if (!/^[A-Za-z0-9_-]{16,128}$/.test(String(msg.code || '')) || !/^[A-Za-z0-9_-]{43,128}$/.test(String(msg.verifier || ''))) return false;
+            feito = SHC.licencaTrocarCodigo({ code: String(msg.code), verifier: String(msg.verifier), redirect: SHC.licencaRetorno(chrome.runtime.id) })
+                .then(r => { if (r.ok) SHC.licencaAgendar({ ok: true }); return r; });
+        } else if (msg.acao === 'licenca_renovar') feito = SHC.licencaRenovar().then(r => { SHC.licencaAgendar(r); return r; });
+        else feito = SHC.licencaSair().then(r => { SHC.licencaAgendar(null); return r; });
+        feito.then(responder, () => responder({ ok: false, erro: 'indisponivel', msg: 'O SellerHub não respondeu agora. Tente de novo em alguns minutos. O plano Grátis continua funcionando.' }));
         return true;
     }
     if ((msg.acao === 'promos_pagina' && msg.dados) || (msg.acao === 'anuncios_pagina' && Array.isArray(msg.itens))) {
@@ -2697,8 +3041,20 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         daContaAtual(msg).then(conta => {
             if (!conta) return { ok: false, motivo: 'conta' };   // conta faltando ou de outra conta do mesmo Chrome: descarta
             return msg.acao === 'promos_pagina' ? juntarPagina(conta, msg.dados).then(() => ({ ok: true }))
-                : juntarAnuncios(conta, msg.itens).then(n => ({ ok: true, anuncios: n }));
+                : juntarAnuncios(conta, msg.itens, msg.familias, typeof msg.lidoEm === 'number' ? msg.lidoEm : undefined).then(n => ({ ok: true, anuncios: n }));
         }).then(responder, () => responder({ ok: false }));
+        return true;
+    }
+    if (msg.acao === 'atacado_degraus' && /^MLB\d{6,14}$/.test(String(msg.itemId || '')) && Array.isArray(msg.degraus)) {   // v3.2: a tela leu os degraus de atacado
+        if (!daAbaDoML(sender)) return false;
+        daContaAtual(msg).then(conta => (conta ? gravarAtacado(conta, { [msg.itemId]: msg.degraus }).then(() => ({ ok: true })) : { ok: false, motivo: 'conta' }))
+            .then(responder, () => responder({ ok: false }));
+        return true;
+    }
+    if (msg.acao === 'editor_anuncios' && msg.dados && msg.dados.porItem && typeof msg.dados.porItem === 'object') {   // v3.2: Editor em massa aberto pela seller
+        if (!daAbaDoML(sender)) return false;
+        daContaAtual(msg).then(conta => (conta ? juntarEditor(conta, msg.dados).then(n => ({ ok: true, lidos: n })) : { ok: false, motivo: 'conta' }))
+            .then(responder, () => responder({ ok: false }));
         return true;
     }
     if (msg.acao === 'canal_ler_anuncios') {   // v3.1: Agenda do Canal lê os anúncios que o Copiloto ainda não tinha (só GET)
@@ -2779,18 +3135,20 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
             .then(responder, () => responder({ ok: false, resultado: 'falhou' }));
         return true;
     }
-    // v2.7: {acao:'resumo_semanal', agora?:true} → {ok, resumo} (guardado; agora = gera de novo com o que está guardado, nenhum GET);
-    // {acao:'resumo_semanal_visto'} → tira o "novo" (o ícone volta ao número das anomalias). Nada é enviado a ninguém.
+    // v2.7: {acao:'resumo_semanal', agora?:true, periodo?:'dia'|'semana' (v3.2; padrão semana)} → {ok, resumo} (guardado; agora = gera de novo com o
+    // que está guardado, nenhum GET); {acao:'resumo_semanal_visto'} → tira o "novo" do dia e da semana (o ícone volta ao número das anomalias). Nada é enviado a ninguém.
     if (msg.acao === 'resumo_semanal' || msg.acao === 'resumo_semanal_visto') {
         if (!daExtensao(sender)) return false;
         SHC.contaAtual().then(async c => {
             if (msg.acao === 'resumo_semanal_visto') {
-                const k = 'resumo:' + c + ':semanal', s = await SHC.lerChave(k);
-                if (s && s.novo) { await SHC.gravarChave(k, Object.assign(s, { novo: false })); const a = await SHC.lerAnomalias(); selo(a || 0); }
+                let mudou = false;
+                for (const k of [chaveResumo(c, 'semana'), chaveResumo(c, 'dia')]) { const s = await SHC.lerChave(k); if (s && s.novo) { await SHC.gravarChave(k, Object.assign(s, { novo: false })); mudou = true; } }
+                if (mudou) await seloAgora();   // o "•" do robô de promoções continua, se houver
                 return { ok: true };
             }
-            const s = msg.agora ? null : await SHC.lerChave('resumo:' + c + ':semanal');
-            return s ? { ok: true, resumo: s } : gerarResumoSemanal(c, 'pedido');
+            // Guardado do formato antigo (v2.7, sem periodo: sem emoji nem seções) → gera de novo no formato novo.
+            const per = msg.periodo === 'dia' ? 'dia' : 'semana', s = msg.agora ? null : await SHC.lerChave(chaveResumo(c, per));
+            return s && s.periodo ? { ok: true, resumo: s } : gerarResumo(c, per, 'pedido');
         }).then(responder, () => responder({ ok: false, motivo: 'erro' }));
         return true;
     }
@@ -2801,8 +3159,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
             const k = 'robopromo:' + c, s = await SHC.lerChave(k);
             if (s && s.novo) {
                 await SHC.gravarChave(k, Object.assign({}, s, { novo: false }));
-                const [a, sem] = await Promise.all([SHC.lerAnomalias(), SHC.lerChave('resumo:' + c + ':semanal')]);
-                selo(sem && sem.novo ? Object.assign({}, a || { total: 0 }, { semanalNovo: true }) : (a || 0));
+                await seloAgora();   // o "•" dos resumos (do dia também) continua
             }
             return { ok: true };
         }).then(responder, () => responder({ ok: false }));

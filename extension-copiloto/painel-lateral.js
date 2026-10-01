@@ -29,11 +29,14 @@
         (promos.propostas || []).forEach(p => { if (p.itemId && p.familia && !out[p.itemId]) out[p.itemId] = p.familia; });
         return out;
     };
-    // SKUs de uma família: anúncios dela (e das propostas dela) que aparecem na lista de Anúncios (skuDe = {MLB: SKU}).
+    // SKUs de uma família: anúncios dela (e das propostas dela) que aparecem na lista de Anúncios (skuDe = {MLB: [SKUs]};
+    // F7: anúncio com variações traz todos os SKUs, então o cartão cai no "Tem N SKUs: custos no Catálogo").
     P.skusDaFamilia = function (f, propsFam, skuDe) {
         const ids = (f.anuncios || []).concat((propsFam || []).map(p => p.itemId));
-        return [...new Set(ids.map(id => skuDe[id]).filter(Boolean))];
+        return [...new Set([].concat(...ids.map(id => [].concat(skuDe[id] || []))).filter(Boolean))];
     };
+    // Item do retrato → o que SHC.custosDe precisa (F3): todos os SKUs, de onde veio o SKU, o MLB e a família.
+    P.infoCusto = (it, familia) => ({ sku: (it && it.sku) || '', skus: (it && it.skus) || [], skuFonte: (it && it.skuFonte) || '', itemId: (it && it.itemId) || '', familia: (it && it.familia) || familia || '' });
 
     // Custos do painel numa leitura só. Ordem: SKU → anúncio (MLB) → família da Central (F…, custo antigo).
     // O anúncio vem antes da família: é onde o painel grava sem SKU (e o que as etiquetas da lista leem).
@@ -41,15 +44,23 @@
         const famI = {};
         fams.forEach(f => { famI[f.chave] = { familia: f.chave }; });
         const cardI = fams.map(f => { const s = ctx.skusFam[f.chave] || []; return { sku: s.length === 1 ? s[0] : '', itemId: (f.anuncios || [])[0] || '' }; });
-        const propI = props.map(p => ({ sku: ctx.skuDe[p.itemId] || '', itemId: p.itemId, familia: p.familia }));   // igual à etiqueta da Central
-        const grI = grupos.map(g => ({ sku: g.sku, itemId: g.itens[0].itemId }));
-        const res = await SHC.custosDe(Object.values(famI).concat(cardI, propI, grI));
+        // F3: a proposta leva o item inteiro do retrato (todos os SKUs + skuFonte), igual à etiqueta da Central.
+        const itemDe = ctx.itemDe || {};
+        const propI = props.map(p => itemDe[p.itemId] ? P.infoCusto(itemDe[p.itemId], p.familia) : { sku: [].concat((ctx.skuDe || {})[p.itemId] || [])[0] || '', itemId: p.itemId, familia: p.familia });
+        // Grupo do Catálogo = 1 SKU (F7). Anúncio de variações: o grupo de cada variação lê o custo DAQUELE SKU (depois o MLB).
+        // Anúncio de 1 SKU: skus/skuFonte do anúncio, a mesma ordem do lucro (SHC.mlbNaFrente).
+        const grI = grupos.map(g => { const it0 = g.itens[0]; return g.sku && SHC.skusDoAnuncio(it0).length > 1 ? { sku: g.sku, itemId: it0.itemId } : { sku: g.sku, skus: it0.skus, skuFonte: it0.skuFonte, itemId: it0.itemId }; });
+        // F19: custo de CADA anúncio (o maior das variações), para o lucro por anúncio (Ads, Frete, Afiliados) não usar o do 1º do grupo.
+        const vistos = new Set(), itI = [];
+        grupos.forEach(g => g.itens.forEach(it => { if (!vistos.has(it.itemId)) { vistos.add(it.itemId); itI.push(P.infoCusto(it)); } }));
+        const res = await SHC.custosDe(Object.values(famI).concat(cardI, propI, grI, itI));
         const deFam = ch => (ch && famI[ch] && res.get(famI[ch])) || null;
-        const custoFam = {}, custoProp = new Map(), custoGrupo = {};
+        const custoFam = {}, custoProp = new Map(), custoGrupo = {}, custoItem = {};
         fams.forEach((f, i) => { custoFam[f.chave] = res.get(cardI[i]) || deFam(f.chave); });
         props.forEach((p, i) => { custoProp.set(p, res.get(propI[i]) || custoFam[p.familia] || null); });
         grupos.forEach((g, i) => { custoGrupo[g.chave] = res.get(grI[i]) || deFam(ctx.famDeItem[g.itens[0].itemId]); });
-        return { custoFam, custoProp, custoGrupo };
+        itI.forEach(x => { custoItem[x.itemId] = res.get(x) || deFam(ctx.famDeItem[x.itemId]); });
+        return { custoFam, custoProp, custoGrupo, custoItem };
     };
     // Onde gravar: 1 SKU → no SKU; mais de 1 SKU → null (cada SKU no Catálogo); sem SKU → nos anúncios (MLB)
     // e também na família F… se o custo lido veio de lá (a Central de promoções lê a família primeiro).
@@ -233,6 +244,34 @@
             cliques: numDe(o, ['clicks', 'cliques']), impressoes: numDe(o, ['impressions', 'prints', 'impressoes']),
         };
     };
+    // F8: o patrocinado de CATÁLOGO vem com o id do produto de catálogo. Liga ao anúncio da seller pelo título quando só UM anúncio
+    // tem esse título (a mesma regra de ads.js A.porSku); sem ligação, soma em catalogoSemLigacao (a manchete diz "veredito sobre X de Y").
+    P.adsLigaCatalogo = function (snap, itens) {
+        if (!snap || !Array.isArray(snap.anuncios)) return snap;
+        const norm = SHC.normalizaTitulo || (t => String(t || '').toLowerCase().trim()), porTitulo = new Map();
+        (itens || []).forEach(i => { const t = norm(i.titulo); if (t) porTitulo.set(t, porTitulo.has(t) && porTitulo.get(t) !== i.itemId ? '' : i.itemId); });
+        let semLig = 0, ligados = 0;
+        const anuncios = snap.anuncios.map(a => {
+            const o = Object.assign({}, (a && a.metrics) || {}, (a && a.metricas) || {}, a || {});
+            if (!(o.catalogoProduto || o.type === 'catalog')) return a;
+            const id = porTitulo.get(norm(o.titulo || o.title));
+            if (id) { ligados++; return Object.assign({}, a, { itemId: id, catalogoProduto: false, type: 'catalogo_ligado', catalogoLigado: true }); }
+            semLig += numDe(o, ['cost', 'custo', 'investimento', 'gasto']) || 0;
+            return a;
+        });
+        return Object.assign({}, snap, { anuncios, catalogoLigados: ligados, catalogoSemLigacao: SHC.r2(semLig) });
+    };
+    // F22: Full com mais produtos que o teto de leitura (50 páginas de 20).
+    P.fullParcialTxt = f => 'Leitura em parte: ' + P.milhar(((f && f.produtos) || []).length) + ' de ' + P.milhar((f && f.totalProdutos) || 0) + ' produtos do Full lidos.';
+    // Anúncio finalizado no ML (closed, também "closed_migrated_to_up"): não é anúncio em venda (F24, Logística).
+    P.anuncioFinalizado = it => { let s = it && it.status; if (s && typeof s === 'object') s = s.id || s.label || ''; return /^(closed|finalizad)/i.test(String(s || '').trim()); };
+    P.adsNaoAchei = s => 'Não achei este anúncio nos ' + P.milhar(((s && s.anuncios) || []).length) + ' anúncios lidos do Mercado Ads (leitura em parte: pode estar entre os que faltaram).';
+    // Manchete do Ads com catálogo sem ligação: nunca afirma "dá lucro" quando a parte sem cálculo é maior que a calculada.
+    P.adsFatoCatalogo = function (fato, tipo, gastoTotal, semLig) {
+        if (!(semLig > 0) || !(gastoTotal > 0)) return fato;
+        const parte = 'Veredito sobre ' + SHC.moeda(SHC.r2(gastoTotal - semLig)) + ' de ' + SHC.moeda(gastoTotal) + ' (' + SHC.moeda(semLig) + ' de catálogo sem ligação a um anúncio seu).';
+        return tipo === 'compensa' && semLig > gastoTotal - semLig ? 'Ads: sem veredito da conta toda. ' + parte : fato + ' ' + parte;
+    };
     // Ponto de equilíbrio por anúncio: sobra antes do Ads = sobra por unidade (preço de hoje) × vendas do Ads; acima = o Ads custou
     // mais que essa sobra. ACOS = Ads ÷ receita do Ads; equilíbrio = margem antes do Ads (sobra ÷ preço). Sem custo → sem selo.
     // → [{a, it, sobraUn, margem, acos, antes, depois, acima, semCusto}] (acima primeiro, depois maior gasto); só anúncio com gasto.
@@ -265,8 +304,8 @@
     // alerta = a mesma regra do número no ícone (SHC.alertasDe): crítico, ou sem estoque com venda prevista ou abaixo do mínimo.
     // cad = c|sku|<SKU> (fullMinUn); mínimo em UNIDADES via SHC.fullMinimo — sem mínimo definido não há "abaixo do mínimo".
     P.CLASSES_FULL = { critico: 'Crítico', atencao: 'Atenção', saudavel: 'Saudável', excedente: 'Excedente', parado: 'Parado', sem_estoque: 'Sem estoque' };
-    P.saudeFull = function (p, prevQtd, cad) {
-        const aptas = P.un(p.aptas), v30 = P.un(p.vendas30), fm = SHC.fullMinimo(p, cad, prevQtd);
+    P.saudeFull = function (p, prevQtd, cad, conta) {
+        const aptas = P.un(p.aptas), v30 = P.un(p.vendas30), fm = SHC.fullMinimo(p, cad, prevQtd, conta);
         const out = { classe: null, dias: null, cobertura: null, minUn: fm.minUn, definido: fm.definido, abaixoMin: fm.abaixo, faltam: fm.faltam, sugerido: fm.sugerido, alerta: false };
         if (aptas === null) return out;
         const tem = Math.max(0, aptas);
@@ -286,12 +325,14 @@
     // Grava o mínimo em unidades no c|sku|<SKU> sem mexer no custo, na origem, na data do custo nem nas medidas.
     // Não usa SHC.salvarCustoSku: sem custo ele apaga o registro (o mínimo sumiria) e troca a data do custo.
     // un vazio/0 → sem mínimo. O fullMinDias antigo (dias) sai junto.
-    P.gravarMinSku = async function (sku, un) {
+    // F23: com 2+ contas (porConta = sellerId), grava o mínimo SÓ da conta aberta (fullMinUnConta); com 1 conta, o fullMinUn de sempre.
+    P.gravarMinSku = async function (sku, un, porConta) {
         const k = SHC.chaveSku(sku);
         if (!k) return false;
         const a = (await SHC.lerChave(k)) || {};
         delete a.fullMinDias;
-        if (un > 0) a.fullMinUn = Math.round(un); else delete a.fullMinUn;
+        if (porConta) a.fullMinUnConta = Object.assign({}, a.fullMinUnConta || {}, { [porConta]: un > 0 ? Math.round(un) : 0 });
+        else if (un > 0) a.fullMinUn = Math.round(un); else delete a.fullMinUn;
         await SHC.gravarChave(k, a);   // ponytail: registro vazio fica ({}); lerTudo já o ignora
         return true;
     };
@@ -399,11 +440,16 @@
         if (!e.pronto) return 'Medindo: o resultado aparece 7 dias depois da troca.';
         return `Antes: ${milhar(e.antes7)} visitas/7 dias · Depois: ${milhar(e.depois7)}${e.variacaoPct !== null ? ' (' + P.varPct(e.variacaoPct) + ')' : ''}`;
     };
+    // v3.2.0: efeito da saída da promoção nas vendas (SHC.promoSaiuEfeito). Sem vendas lidas do anúncio: diz isso, sem número inventado.
+    P.promoEfeitoTxt = ef => (!ef ? 'Sem vendas deste anúncio lidas no Faturamento para medir o efeito.' : !ef.pronto ? 'O efeito nas vendas aparece 7 dias depois da saída.'
+        : `Vendas: ${ef.antes7} → ${ef.depois7}${ef.variacaoPct !== null ? ' (' + P.varPct(ef.variacaoPct) + ')' : ''} · 7 dias antes × 7 depois.`);
     // "Já troquei": registra a troca feita pelo seller no ML (resultado 'manual', para medir o efeito) e tira a sugestão. → robo novo
+    // v3.1: a sugestão que sai fica no registro (robo.registro), para o "Registro do robô" mostrar que foi aplicada.
     P.jaTroquei = (robo, itemId, antes, depois, ult7, agora) => Object.assign({}, robo || {}, {
         historico: ((robo && robo.historico) || []).concat([{ ts: agora, itemId, antes: (antes || []).slice(), depois: (depois || []).slice(),
             motivo: 'Você trocou a ordem das fotos no Mercado Livre.', visitas7Antes: typeof ult7 === 'number' ? ult7 : null, resultado: 'manual' }]).slice(-500),
         sugestoes: ((robo && robo.sugestoes) || []).filter(s => s && s.itemId !== itemId),
+        registro: SHC.roboRegistroJunta(robo && robo.registro, ((robo && robo.sugestoes) || []).filter(s => s && s.itemId === itemId)),
     });
     // "Desfazer" só com a escrita conferida, na última troca do robô que chegou ao ML neste anúncio (ok ou incerto).
     P.podeDesfazer = function (historico, h) {
@@ -414,15 +460,117 @@
     P.historicoTxt = h => (h.resultado === 'manual' ? 'Você trocou a ordem das fotos' : h.resultado === 'ok' ? (h.desfazer ? 'Troca desfeita' : 'O robô trocou a ordem das fotos (a capa ficou)')
         : h.resultado === 'incerto' ? (h.desfazer ? 'O robô tentou desfazer a troca' : 'O robô tentou trocar a ordem das fotos (a capa fica)') + ', mas não deu para confirmar. Confira as fotos no Mercado Livre.'
         : 'O robô não trocou' + (h.erro ? ': ' + h.erro : '.'));
+    // ── v3.1 Registro do robô de fotos (30/09/2026): cada sugestão, se você aplicou e o efeito (7 dias antes × 7 depois, SHC.efeitoMudanca).
+    // Enquanto SHC.ROBO_ESCRITA_CONFERIDA = false o robô SÓ SUGERE: nada aqui diz que ele trocou a foto (entrada do robô só aparece com a escrita conferida).
+    P.ROBO_POUCO = 30;   // visitas nos 14 dias (7 antes + 7 depois) abaixo disso = "pouco dado" (a mesma régua do radar)
+    // Miniatura: URL montada do id da foto lido na tela "Alterar anúncio" (conferido na leitura real de 25/09/2026: as 8 fotos são D_<id>-O.jpg).
+    // Id de outro formato → sem miniatura (nunca adivinhar). Nada de URL é guardado.
+    P.fotoUrl = id => (/^\d+-MLB\d+_\d{6}$/.test(String(id || '')) ? 'https://http2.mlstatic.com/D_' + id + '-O.jpg' : '');
+    P.dataCurta = ts => new Date(ts).toLocaleDateString('pt-BR');
+    P.tituloCurto = t => { const s = String(t || '').trim(); return s.length > 52 ? s.slice(0, 51).trim() + '…' : s; };
+    // O que o robô sugeriu: ele só gira as fotos (SHC.roboGira): a capa fica, a 2ª vai para o fim. → { txt, capa, sobe, fim } (ids)
+    P.sugestaoFotos = function (s) {
+        const n = (s && s.novaOrdem) || [], a = (s && s.antes) || null;
+        const gira = n.length >= 3 && (!a || (SHC.roboGira(a) || []).join('|') === n.join('|'));
+        return gira ? { txt: 'Mover a 2ª foto para o fim; a 3ª passa a ser a 2ª. A capa continua a mesma.', capa: n[0], sobe: n[1], fim: n[n.length - 1] }
+            : { txt: 'Nova ordem das fotos. A capa continua a mesma.', capa: n[0] || '', sobe: '', fim: '' };
+    };
+    // Vendas por dia do anúncio (vd|ml|MLB: pedidos do Faturamento, {d, q?}) → {'AAAA-MM-DD': unidades}. Sem q = 1 (o Faturamento não traz a quantidade).
+    P.vendasPorDia = vd => { const o = {}; Object.keys(vd || {}).forEach(k => { const p = vd[k]; if (p && p.d) o[p.d] = (o[p.d] || 0) + (p.q > 0 ? p.q : 1); }); return o; };
+    const diaDoTs = ts => { const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+    /**
+     * Efeito de uma mudança nas fotos: visitas (e vendas, se houver leitura) 7 dias antes × 7 depois.
+     * → { estado:'medindo'|'pouco'|'bom'|'ruim'|'igual', cls:'at'|'ok'|'pr', txt, pronto, antes7, depois7, variacaoPct, vAntes, vDepois }
+     * bom/ruim = visitas mudaram limiar% ou mais (a mesma queda mínima do radar, padrão 20%).
+     */
+    P.roboEfeito = function (ts, diasVis, vd, hoje, limiar) {
+        const h = hoje || SHC.hoje(), e = SHC.efeitoMudanca(ts, diasVis, h), lim = SHC.num(limiar) > 0 ? SHC.num(limiar) : 20;
+        const v = vd && Object.keys(vd).length ? SHC.efeitoMudanca(ts, P.vendasPorDia(vd), h) : null;
+        const o = { pronto: e.pronto, antes7: e.antes7, depois7: e.depois7, variacaoPct: e.variacaoPct, vAntes: v ? v.antes7 : null, vDepois: v ? v.depois7 : null };
+        if (!e.pronto) {
+            const faltam = Math.round((Date.parse(diaDoTs(ts) + 'T12:00:00Z') + 8 * 864e5 - Date.parse(h + 'T12:00:00Z')) / 864e5);
+            return Object.assign(o, { estado: 'medindo', cls: 'at', txt: faltam > 1 ? 'Ainda medindo: o resultado sai em ' + faltam + ' dias (7 dias depois da mudança).'
+                : faltam === 1 ? 'Ainda medindo: o resultado sai amanhã.' : 'Ainda medindo: esperando a leitura das visitas dos 7 dias depois.' });
+        }
+        const vis = 'Visitas: ' + P.milhar(e.antes7) + ' → ' + P.milhar(e.depois7) + (e.variacaoPct !== null ? ' (' + P.varPct(e.variacaoPct) + ')' : '')
+            + (v ? ' · Vendas: ' + P.milhar(v.antes7) + ' → ' + P.milhar(v.depois7) : '') + ' · 7 dias antes × 7 depois.';
+        if (e.antes7 + e.depois7 < P.ROBO_POUCO) return Object.assign(o, { estado: 'pouco', cls: 'at', txt: 'Pouco dado para dizer se ajudou (menos de ' + P.ROBO_POUCO + ' visitas nas 2 semanas). ' + vis });
+        const p = e.variacaoPct;
+        if (p === null ? e.depois7 > e.antes7 : p >= lim) return Object.assign(o, { estado: 'bom', cls: 'ok', txt: 'Ajudou. ' + vis });
+        if (p !== null && p <= -lim) return Object.assign(o, { estado: 'ruim', cls: 'pr', txt: 'Piorou. ' + vis });
+        return Object.assign(o, { estado: 'igual', cls: 'at', txt: 'Sem mudança clara (menos de ' + lim + '%). ' + vis });
+    };
+    /**
+     * Registro do robô por anúncio: sugestões (robo.registro + as de agora), o que aconteceu com cada uma e o efeito; mudanças suas sem sugestão.
+     * → { itens:[{itemId, entradas:[{tipo:'sugestao'|'mudanca'|'robo', ts, itemId, motivo, s?, h?, estado, em, marcou, efeito|null}] (mais nova 1º)}]
+     *     (anúncio com a entrada mais nova 1º), total, sugestoes, aplicadas, pendentes, ignoradas, outras }
+     */
+    P.registroRobo = function (robo, fotos, visitas, vendas, hoje, limiar, agora) {
+        const r = robo || {}, hist = r.historico || [], regs = SHC.roboRegistroJunta(r.registro, r.sugestoes), porF = (fotos && fotos.porItem) || {}, porV = (visitas && visitas.porItem) || {};
+        const ef = (ts, id) => P.roboEfeito(ts, (porV[id] || {}).dias, (vendas || {})[id], hoje, limiar), usados = new Set(), ents = [];
+        regs.forEach((s, i) => {
+            const prox = regs.slice(i + 1).find(x => x.itemId === s.itemId) || null, est = SHC.roboSugestaoEstado(s, prox, porF[s.itemId], hist, agora || Date.now());
+            if (est.h) usados.add(est.h);
+            ents.push({ tipo: 'sugestao', ts: s.ts, itemId: s.itemId, motivo: s.motivo, s, h: est.h, estado: est.estado, em: est.em, marcou: !!(est.h && !est.h.detectado), efeito: est.em ? ef(est.em, s.itemId) : null });
+        });
+        hist.forEach(h => {
+            if (!h || !h.itemId || usados.has(h)) return;
+            if (h.resultado === 'manual' && Array.isArray(h.antes) && h.antes.length && h.antes.join('|') === (h.depois || []).join('|')) return;   // "Já troquei" sem mudança nas fotos
+            if (h.resultado === 'manual') ents.push({ tipo: 'mudanca', ts: h.ts, itemId: h.itemId, motivo: h.motivo || '', h, estado: 'mudanca', em: h.ts, marcou: !h.detectado, efeito: ef(h.ts, h.itemId) });
+            else if (SHC.ROBO_ESCRITA_CONFERIDA === true) ents.push({ tipo: 'robo', ts: h.ts, itemId: h.itemId, motivo: h.motivo || '', h, estado: 'robo', em: h.ts, marcou: false, efeito: SHC.roboGravou(h) ? ef(h.ts, h.itemId) : null });
+        });
+        const g = {};
+        ents.forEach(e => (g[e.itemId] || (g[e.itemId] = [])).push(e));
+        const itens = Object.keys(g).map(id => ({ itemId: id, entradas: g[id].sort((a, b) => b.ts - a.ts) })).sort((a, b) => b.entradas[0].ts - a.entradas[0].ts);
+        const n = k => ents.filter(e => e.estado === k).length;
+        return { itens, total: ents.length, sugestoes: ents.filter(e => e.tipo === 'sugestao').length, aplicadas: n('aplicada'), pendentes: n('pendente'), ignoradas: n('ignorada'), outras: n('outra') };
+    };
+    // Linha do cartão recolhido: "3 trocas feitas por você · 1 melhorou · 1 piorou" (trocas = aplicada, outra ou mudança sua). Sem troca → ''.
+    P.registroResumo = function (reg) {
+        const ts = [].concat(...((reg && reg.itens) || []).map(g => g.entradas)).filter(e => /^(aplicada|outra|mudanca)$/.test(e.estado));
+        if (!ts.length) return '';
+        const n = k => ts.filter(e => e.efeito && e.efeito.estado === k).length, bom = n('bom'), ruim = n('ruim');
+        return [SHC.qtd(ts.length, 'troca feita por você', 'trocas feitas por você'), bom ? bom + ' melhorou' : '', ruim ? ruim + ' piorou' : ''].filter(Boolean).join(' · ');
+    };
+    // Selo curto e frase da situação de uma entrada do registro.
+    P.registroSelo = e => ({ aplicada: ['ok', 'Aplicada'], pendente: ['az', 'Ainda não aplicada'], ignorada: ['cz', 'Ignorada'], outra: ['at', 'Mudou de outro jeito'], mudanca: ['cz', 'Mudança sua'] }[e.estado] || ['cz', 'Robô']);
+    P.registroEstadoTxt = function (e) {
+        const d = P.dataCurta;
+        if (e.estado === 'aplicada') return e.marcou ? 'Você aplicou no Mercado Livre e marcou “Já troquei” em ' + d(e.em) + '.' : 'Você aplicou no Mercado Livre: a leitura das fotos de ' + d(e.em) + ' mostrou a ordem sugerida.';
+        if (e.estado === 'outra') return 'Você mudou as fotos de outro jeito (visto em ' + d(e.em) + ').';
+        if (e.estado === 'ignorada') return SHC.ROBO_IGNORADA_DIAS + ' dias sem mudança nas fotos desde a sugestão.';
+        if (e.estado === 'pendente') return 'As fotos no Mercado Livre continuam na ordem de antes. Quem troca é você.';
+        if (e.estado === 'mudanca') return 'Você mudou a ordem das fotos no Mercado Livre' + (e.marcou ? '' : ' (visto na leitura das fotos)') + ', sem sugestão do robô.';
+        return P.historicoTxt(e.h || {});
+    };
+    // "Copiar registro": texto indentado (2 espaços por nível), agrupado por anúncio. tituloDe = id → título.
+    P.registroTxt = function (reg, tituloDe, hoje) {
+        const d = P.dataCurta, L = ['Registro do robô de fotos · Copiloto · ' + d(Date.parse((hoje || SHC.hoje()) + 'T12:00:00')),
+            'O robô só sugere. Quem troca as fotos no Mercado Livre é você.',
+            'Resumo: ' + [SHC.qtd(reg.sugestoes, 'sugestão', 'sugestões'), SHC.qtd(reg.aplicadas, 'aplicada', 'aplicadas'), reg.pendentes + ' ainda não ' + (reg.pendentes === 1 ? 'aplicada' : 'aplicadas'),
+                SHC.qtd(reg.ignoradas, 'ignorada', 'ignoradas')].concat(reg.outras ? [reg.outras + ' mudada' + (reg.outras === 1 ? '' : 's') + ' de outro jeito'] : []).join(' · ')];
+        reg.itens.forEach(g => {
+            L.push('', P.tituloCurto(tituloDe ? tituloDe(g.itemId) : g.itemId) + ' (' + g.itemId + ')');
+            g.entradas.forEach(e => {
+                L.push('  ' + d(e.ts) + ' · ' + (e.tipo === 'sugestao' ? 'Sugestão do robô' : e.tipo === 'mudanca' ? 'Mudança sua' : 'Robô'));
+                if (e.tipo === 'sugestao') L.push('    O que sugeriu: ' + P.sugestaoFotos(e.s).txt);
+                if (e.motivo && e.tipo === 'sugestao') L.push('    Por quê: ' + e.motivo);
+                L.push('    Situação: ' + P.registroSelo(e)[1] + '. ' + P.registroEstadoTxt(e));
+                L.push('    Efeito: ' + (e.efeito ? e.efeito.txt : 'nenhum a medir (as fotos não mudaram).'));
+            });
+        });
+        return L.join('\n');
+    };
     // ── Medidas da embalagem (medidas:<conta>, lidas pelo fundo na tela "Alterar anúncio"; null = ainda não lido) ──
     P.MED_DIAS = 30;   // mudança feita pelo ML nos últimos 30 dias: cartão, etiqueta na lista e alerta
     P.medLink = id => 'https://vendedores.mercadolivre.com.br/syi/core/modify?itemId=' + id;
     // Unidades vendidas por anúncio (vm|ml, soma dos meses) → {MLB: n}: desempata a medida de referência pelo anúncio que mais vende.
     P.vendasUn = vm => Object.keys(vm || {}).reduce((o, id) => { o[id] = Object.keys(vm[id] || {}).reduce((s, m) => s + (+vm[id][m] || 0), 0); return o; }, {});
     /** Pós-venda, % das vendas (v3.1, imagem tela-posvenda): casos ÷ unidades vendidas do anúncio no mês atual + o anterior (vm|ml) → número | null (sem anúncio ou sem venda lida: "—"). */
+    // F12: itemId pode ser uma lista (Clássico + Premium do mesmo SKU): soma as vendas de todos.
     P.posPctVendas = function (casos, itemId, vmx, hoje) {
-        const o = itemId && vmx && vmx[itemId], m = String(hoje || SHC.hoje()).slice(0, 7);
-        const un = o ? (+o[m] || 0) + (+o[P.mesMenos(m, 1)] || 0) : 0;
+        const m = String(hoje || SHC.hoje()).slice(0, 7);
+        const un = [].concat(itemId || []).filter((x, i, a) => x && a.indexOf(x) === i).reduce((s, id) => { const o = vmx && vmx[id]; return s + (o ? (+o[m] || 0) + (+o[P.mesMenos(m, 1)] || 0) : 0); }, 0);
         return un > 0 ? Math.round(casos / un * 1000) / 10 : null;
     };
     // Diferença que muda o peso considerado (o que conta no frete): só essas entram no alerta e no número do ícone.
@@ -551,7 +699,10 @@
         : { it, h: P.historicoFrete((fretes || {})[it.itemId]) }, { fa: (pa && pa[it.itemId]) || null }))
         .filter(l => l.comprador || l.it.frete > 0 || l.h || l.fa)
         .map(l => l.comprador ? l : Object.assign(l, { hoje: l.it.frete !== null && l.it.frete !== undefined ? l.it.frete : (l.h ? l.h.atual : null),
-            subiu: !!(l.h && l.h.anterior !== null && l.h.atual > l.h.anterior) || !!(l.fa && l.fa.subiu) }));
+            subiu: !!(l.h && l.h.anterior !== null && l.h.atual > l.h.anterior) || !!(l.fa && l.fa.subiu && !P.freteMultiplo(l.fa.ult30 && l.fa.ult30.medio, l.it.frete)) }));
+    // B1: frete cobrado 1,6× ou mais o frete do anúncio de hoje não é "o frete do anúncio subiu": é pedido de 2+ unidades (ou cobrança a
+    // conferir, que já está no "Frete cobrado a mais"). Sem isso a tela pedia revisão do anúncio por um pedido de 2 unidades.
+    P.freteMultiplo = (cobrado, anuncio) => anuncio > 0 && cobrado >= 1.6 * anuncio;
     // v3.1 (imagem tela-frete aprovada): a subida de UM anúncio em números, para a manchete e o "Precisa de você" da aba Frete.
     // De/para/data = os mesmos do chamado (P.baseChamado); sem eles, o frete cobrado 30 dias × 30 anteriores (sem data).
     // porMes = diferença × pedidos dos últimos 30 dias (Faturamento; senão as vendas lidas). Sem pedido → null (nunca inventado).
@@ -563,9 +714,25 @@
         if (b) { de = b.base; para = b.para; desde = b.desde; }
         else if (fa && fa.subiu && u && a && u.medio > 0 && a.medio > 0) { de = a.medio; para = u.medio; }
         else return null;
+        if (!(b && b.fonte === 'lista') && P.freteMultiplo(para, l.it.frete)) return null;   // B1: subida só de pedidos de 2+ unidades
         const dif = SHC.r2(para - de), ini = hoje ? new Date(Date.parse(hoje + 'T12:00:00Z') - 30 * 864e5).toISOString().slice(0, 10) : '';
         const n30 = u && u.pedidos ? u.pedidos : Object.keys(vendas || {}).filter(o => { const v = vendas[o]; return v && v.d && v.d > ini && !v.pc && v.f > 0; }).length;
         return { de, para, dif, pct: de > 0 ? Math.round(dif / de * 1000) / 10 : null, desde, n30: n30 || null, porMes: n30 ? SHC.r2(dif * n30) : null };
+    };
+    // v3.2 Mesmo SKU, frete diferente: envios de cada anúncio nos últimos 30 dias (pedidos com frete cobrado, como P.subidaFrete) e os
+    // grupos de SHC.freteMesmoSku só com anúncios ativos. vendas = {MLB: vd|ml}, porItem = medidas:<conta>.porItem.
+    P.envios30 = (vd, hoje) => { const ini = new Date(Date.parse((hoje || SHC.hoje()) + 'T12:00:00Z') - 30 * 864e5).toISOString().slice(0, 10);
+        return Object.keys(vd || {}).filter(o => { const v = vd[o]; return v && v.d && v.d > ini && !v.pc && v.f > 0; }).length; };
+    P.freteMesmoSku = function (itens, vendas, porItem, hoje) {
+        const at = (itens || []).filter(SHC.anuncioAtivo), env = {};
+        at.forEach(it => { env[it.itemId] = P.envios30((vendas || {})[it.itemId], hoje); });
+        return SHC.freteMesmoSku(at, { medidas: porItem || {}, vendas: env });
+    };
+    // v3.2 Atacado no detalhe do anúncio: cada degrau com o lucro por unidade (SHC.sobraAtacado) ou o que falta → [{ g, sa|null, av|null }].
+    // itens = retrato da conta (a tarifa do degrau não leva a redução da promoção: SHC.taxaTarifaFora).
+    P.atacadoDegraus = function (it, degraus, custoDados, cfg, itens) {
+        const s = SHC.sobraAnuncio(it, custoDados, cfg);
+        return (degraus || []).map(g => ({ g, sa: s && s.sobra !== null ? SHC.sobraAtacado(it, g, custoDados, cfg, itens) : null, av: SHC.atacadoAviso(it, g, s) }));
     };
 
     // Sincronização presa (V17): "sincronizando" sem batimento há mais de 5 min = abandonada (o Chrome fechou no meio).
@@ -918,9 +1085,10 @@
     // Catálogo: SKUs do retrato de anúncios (sem SKU → um grupo por MLB).
     P.agrupaSkus = function (itens) {
         const g = {};
+        // F7: anúncio de variações entra no grupo de CADA SKU dele (cada variação ganha a sua linha e o seu custo).
         P.anunciosReais(itens).forEach(it => {
-            const chave = it.sku ? 'sku:' + it.sku : 'mlb:' + it.itemId;
-            (g[chave] || (g[chave] = { chave, sku: it.sku || '', titulo: it.titulo, itens: [] })).itens.push(it);
+            const ss = SHC.skusDoAnuncio(it), chaves = ss.length ? ss.map(s => 'sku:' + s) : ['mlb:' + it.itemId];
+            chaves.forEach((chave, i) => (g[chave] || (g[chave] = { chave, sku: ss[i] || '', titulo: it.titulo, itens: [] })).itens.push(it));
         });
         return Object.values(g).sort((a, b) => String(a.titulo).localeCompare(String(b.titulo), 'pt-BR'));
     };
@@ -1090,33 +1258,41 @@
     };
     P.lerAjustes = txt => lerFaixas(txt, [['imposto_pct'].concat(SHC.FAIXAS.imposto_pct, 'Imposto'), ['margem_alvo_pct'].concat(SHC.FAIXAS.margem_alvo_pct, 'Meta')]);   // SHC.FAIXAS: a mesma do painel.html
     // Regras do robô de fotos (Saúde): queda mínima das visitas, intervalo por anúncio e máximo de trocas por dia.
+    // v3.2.0: "Avisar fim da promoção" (dias antes, inteiro de 0 a 15; vazio = padrão 2) → { valor } | { erro }
+    P.lerAvisoPromo = txt => {
+        if (String(txt || '').trim() === '') return { valor: SHC.PROMO_AVISO_DIAS };
+        const r = lerFaixas({ promo_aviso_dias: txt }, [['promo_aviso_dias', 0, 15, 'Aviso de fim da promoção']], true);
+        return r.erros.promo_aviso_dias ? { erro: r.erros.promo_aviso_dias } : { valor: r.patch.promo_aviso_dias };
+    };
     P.lerRegrasRobo = txt => lerFaixas(txt, [['radar_queda_pct', 5, 90, 'Queda mínima'], ['robo_intervalo_dias', 1, 60, 'Intervalo'], ['robo_max_dia', 1, 50, 'Máximo por dia']], true);
 
     // ── Painel em abas (v2.5.3): Geral primeiro; cada alerta só na aba do seu módulo ──
     // v2.9: ordem da perfumaria (ESPEC) e a aba nova Pós-venda.
-    P.ABAS = ['geral', 'full', 'posvenda', 'promo', 'ads', 'frete', 'catalogo', 'afiliados', 'saude', 'conciliacao', 'canal', 'ajustes'];
-    P.ROT_ABA = { geral: 'Geral', posvenda: 'Pós-venda', promo: 'Promoções', frete: 'Frete', catalogo: 'Catálogo', ads: 'Ads', full: 'Full', saude: 'Saúde', conciliacao: 'Conciliação', canal: 'Canal', afiliados: 'Afiliados', ajustes: 'Ajustes' };
+    P.ABAS = ['geral', 'full', 'posvenda', 'promo', 'ads', 'frete', 'catalogo', 'afiliados', 'saude', 'conciliacao', 'canal', 'tiktok', 'ajustes'];   // v3.2: + tiktok (opcional, começa desligada)
+    P.ROT_ABA = { geral: 'Geral', posvenda: 'Pós-venda', promo: 'Promoções', frete: 'Frete', catalogo: 'Catálogo', ads: 'Ads', full: 'Full', saude: 'Saúde', conciliacao: 'Conciliação', canal: 'Canal', afiliados: 'Afiliados', tiktok: 'TikTok', ajustes: 'Ajustes' };
     // v2.8 (pedido da dona: "sistema modular, escolher qual função exibir"): 1 linha por módulo desligável em Ajustes (nunca Geral/Ajustes).
     P.MODULOS = SHC.MODULOS;
     // v3.1 (imagem tela-ajustes): descrição curta, em minúscula, embaixo do nome da aba no interruptor de "Abas que aparecem".
     P.MODULO_DESC = { full: 'remessas, pontuação, envio', posvenda: 'reclamações, devoluções, mensagens', promo: 'com o robô de promoções',
         ads: 'resumo da conta e campanhas', frete: 'linha do tempo, anúncios, pedidos', catalogo: 'custos e competição', afiliados: 'vendas, comissão, pedidos',
-        saude: 'reputação, perguntas, fotos, fiscal', conciliacao: 'fechamento do mês', canal: 'agenda da semana' };
+        saude: 'reputação, perguntas, fotos, fiscal', conciliacao: 'fechamento do mês', canal: 'agenda da semana', tiktok: 'lucro por pedido, repasse, saúde' };
     /** Abas visíveis no topo, na ordem de P.ABAS (Geral e Ajustes sempre; o resto só se o módulo estiver ligado). */
     P.abasVisiveis = cfgAtual => P.ABAS.filter(a => a === 'geral' || a === 'ajustes' || SHC.moduloLigado(cfgAtual, a));
     // Alertas calculados no painel (P.alertas) → aba; os do fundo (shc:anomalias) que o painel não calcula: frete, pagamento e pós-venda.
     P.ABA_DO_ALERTA = { conta: 'full', full: 'full', ads: 'ads', fiscal: 'saude', visitas: 'saude', medidas: 'saude', medmud: 'saude' };
     // v2.7: 'perguntas' e 'reputacao' (aba Saúde desde a v2.9) e a remessa do Full com inconformidade/multa (tipo 'full' + remessaId, aba Full) também vêm do fundo.
     // v3.1: certificado/NF-e (fiscal) e custo novo na fatura ficam na Conciliação; o fiscal da Saúde é o do painel (P.ABA_DO_ALERTA), nunca em dobro.
-    const ROT_ANOM = { frete: 'Frete', pagamento: 'Cobrança', posvenda: 'Pós-venda', perguntas: 'Perguntas', reputacao: 'Reputação', fiscal: 'Fiscal', custo: 'Fatura' };
-    const LINK_ANOM = { posvenda: 'Abrir o pós-venda', perguntas: 'Responder no ML', reputacao: 'Ver a reputação no ML', remessa: 'Abrir a remessa no ML' };
+    const ROT_ANOM = { frete: 'Frete', pagamento: 'Cobrança', posvenda: 'Pós-venda', perguntas: 'Perguntas', reputacao: 'Reputação', fiscal: 'Fiscal', custo: 'Fatura', prejuizo: 'Venda no prejuízo', promo: 'Promoção' };   // v3.2: prejuizo; v3.2.0: promo
+    const LINK_ANOM = { posvenda: 'Abrir o pós-venda', perguntas: 'Responder no ML', reputacao: 'Ver a reputação no ML', remessa: 'Abrir a remessa no ML', prejuizo: 'Abrir a venda no ML', promo: 'Abrir a Central de promoções' };
     P.ROT_ANOM = ROT_ANOM;
     /** Alertas de UMA aba → [{tipo, rot, titulo, texto, link?, linkTxt?}]. anom só vale se for da conta aberta (anom.conta). */
     P.alertasDaAba = function (aba, al, anom, conta) {
         const rot = { conta: 'Conta', full: 'Full', ads: 'Ads', fiscal: 'Dados fiscais', visitas: 'Visitas', medidas: 'Medidas', medmud: 'Medidas' };
         const daqui = ((al && al.itens) || []).filter(i => P.ABA_DO_ALERTA[i.tipo] === aba).map(i => Object.assign({ rot: rot[i.tipo] || '' }, i));
         const doFundo = anom && String(anom.conta) === String(conta || '') ? (anom.itens || []).filter(i => i && i.aba === aba && ((ROT_ANOM[i.tipo] && P.ABA_DO_ALERTA[i.tipo] !== aba) || (i.tipo === 'full' && i.remessaId)))
-            .map(i => ({ tipo: i.tipo, rot: i.remessaId ? 'Remessa' : ROT_ANOM[i.tipo], titulo: '', texto: i.texto, link: i.link || '', remessaId: i.remessaId || '', qtd: i.qtd, vermelho: !!i.vermelho,
+            .map(i => ({ tipo: i.tipo, rot: i.remessaId ? 'Remessa' : i.tipo === 'prejuizo' && i.titulo ? i.titulo : ROT_ANOM[i.tipo], titulo: '',
+                // v3.2: prejuízo = título + motivo (sem "Venda no prejuízo" 2 vezes)
+                texto: i.tipo === 'prejuizo' && i.titulo ? i.motivo || '' : i.texto, link: i.link || '', remessaId: i.remessaId || '', qtd: i.qtd, vermelho: !!i.vermelho,
                 linkTxt: LINK_ANOM[i.remessaId ? 'remessa' : i.tipo] || (i.link ? 'Abrir no Mercado Livre' : '') })) : [];
         return daqui.concat(doFundo);
     };
@@ -1130,7 +1306,7 @@
      * al = P.alertas do painel (já calculado): a bolinha de cada aba passa a contar a MESMA lista do bloco "Alertas desta aba" (P.alertasDaAba),
      * na mesma unidade (P.nAlerta) — assim Full e Saúde, que o painel calcula, também ganham número.
      */
-    P.nAlerta = i => (i.tipo === 'posvenda' ? Math.max(1, Math.round(SHC.num(i.qtd) || 0)) : 1);
+    P.nAlerta = i => (i.tipo === 'posvenda' || i.tipo === 'prejuizo' ? Math.max(1, Math.round(SHC.num(i.qtd) || 0)) : 1);   // v3.2: vendas no prejuízo juntas contam cada venda (igual ao ícone)
     const alertaUrg = i => !!i.vermelho || i.tipo === 'pagamento';
     P.contadoresAbas = function (anom, conta, visiveis, extra, al) {
         const lido = !!(anom && Array.isArray(anom.itens) && String(anom.conta) === String(conta || ''));
@@ -1146,7 +1322,8 @@
             if (alertaUrg(i)) urgentes += n;
             if (!al) soma(porAba[i.aba] || (porAba[i.aba] = { n: 0, cor: 'at' }), i, n);
         });
-        ex.forEach(a => { if (!porAba[a]) porAba[a] = { n: Math.round(extra[a].n), cor: extra[a].cor === 'pr' ? 'pr' : 'at' }; });
+        // v3.2.0: a aba Promoções tem alertas do fundo (saiu da promoção / acabando) E os produtos com prejuízo: soma os dois.
+        ex.forEach(a => { const n = Math.round(extra[a].n), cor = extra[a].cor === 'pr' ? 'pr' : 'at'; if (!porAba[a]) porAba[a] = { n, cor }; else { porAba[a].n += n; if (cor === 'pr') porAba[a].cor = 'pr'; } });
         return { porAba, total, urgentes, lido };
     };
     /** Iniciais da pílula da conta: "Loja Exemplo" → "LE"; "Casa" → "CA"; sem apelido → "". */
@@ -1402,10 +1579,13 @@
     P.freteConta = function (h) {
         const c = P.concDe(h);
         if (!c || typeof c.vendas !== 'number') return null;
-        const pa = (c.pagoAMais || []).filter(p => p && !p.talvezUnidades).length;   // v3.1: o com * (pode ter 2+ unidades) não conta como "a mais"
-        return { cor: pa > 0 ? 'ruim' : (c.faltam > 0 ? 'atencao' : 'ok'), conc: c,
-            resumo: `${P.milhar(c.conciliados || 0)} ${c.conciliados === 1 ? 'pedido conciliado' : 'pedidos conciliados'} de ${P.milhar(c.vendas)} · faltam ${P.milhar(c.faltam || 0)}`
-                + (pa ? ` · ${pa} com frete a mais (${SHC.moeda(c.totalAMais || 0)})` : '') };
+        // v3.3: o MESMO total do cartão "Frete cobrado a mais" (P.freteCobrado = confirmado + para conferir, 30 dias); vermelho só com confirmado.
+        const fc = P.freteCobrado(c), pa = fc ? fc.contestar.n : 0;
+        return { cor: pa > 0 ? 'ruim' : (c.faltam > 0 || (fc && fc.n) ? 'atencao' : 'ok'), conc: c, total: fc ? fc.total : 0,
+            // v3.2.0: "N sem conciliar" e "N pedidos cobrados a mais no frete (R$)" no lugar de "faltam N" e "N com frete a mais": o título da
+            // Geral é feito destes pedaços e precisa se entender sozinho.
+            resumo: `${P.milhar(c.conciliados || 0)} ${c.conciliados === 1 ? 'pedido conciliado' : 'pedidos conciliados'} de ${P.milhar(c.vendas)} · ${P.milhar(c.faltam || 0)} sem conciliar`
+                + (fc && fc.n ? ` · ${fc.n} ${fc.n === 1 ? 'pedido cobrado' : 'pedidos cobrados'} a mais no frete (${SHC.moeda(fc.total)}${fc.conferir.n ? `, ${fc.conferir.n} para conferir` : ''})` : '') };
     };
     /**
      * v3.1: a conta do frete de UM pedido, linha a linha como no detalhe da venda do ML ("Envios −R$ 20,75 · Tarifa do Mercado Envios (por sua conta)").
@@ -1418,10 +1598,74 @@
         (p.linhas || []).forEach(l => out.push({ rot: String(l.t || 'Tarifa de envio'), val: (l.e ? '+' : '−') + m(l.v), cls: l.e ? 'est' : '' }));
         if (!(p.linhas || []).length) out.push({ rot: 'Detalhe por linha: aparece quando este mês for lido de novo no Faturamento', val: '', cls: 'fora' });
         out.push({ rot: 'Frete da venda cobrado (tarifas − estornos)', val: m(p.cobrado), cls: 'tot' });
-        if (typeof p.esperado === 'number') out.push({ rot: 'Frete do anúncio', val: m(p.esperado), cls: '' });
-        if (typeof p.diferenca === 'number') out.push({ rot: p.talvezUnidades ? 'A mais (pode ter mais de 1 unidade: confira)' : 'A mais', val: '+' + m(p.diferenca), cls: 'mais' });
+        if (typeof p.esperado === 'number') out.push({ rot: p.base === 'dia' ? 'Frete do anúncio no dia da venda' : p.base === 'hoje' ? 'Frete do anúncio hoje (o do dia da venda não foi guardado)' : 'Frete do anúncio', val: m(p.esperado), cls: '' });
+        if (typeof p.diferenca === 'number') out.push({ rot: p.vezes ? `A mais (cobrado ${p.vezes}× o frete do anúncio: pode ser ${p.vezes} unidades, confira)` : p.talvezUnidades && p.base === 'hoje' && p.cobrado < 1.6 * p.esperado ? 'A mais (comparado com o frete de hoje: confira se o frete do anúncio mudou)'
+            : p.talvezUnidades ? 'A mais (pode ter mais de 1 unidade: confira)' : 'A mais', val: '+' + m(p.diferenca), cls: 'mais' });
         if (p.dev > 0) out.push({ rot: 'Tarifa de devolução (frete de volta do produto): fora desta conta', val: m(p.dev), cls: 'fora' });
         return out;
+    };
+    /**
+     * v3.3 Cartão "Frete cobrado a mais" (pedido da dona 30/09, print 71): UMA lista, UM período, cada pedido uma vez.
+     * cc = conciliacao, hoje = 'AAAA-MM-DD', max = anúncios com linha própria (5).
+     * → { de, ate, total, n, contestar:{v, n}, conferir:{v, n}, produtos:[{id, v, n, vt, nt, tot, pctC, pctT, baixo, peds}], resto:{anuncios, pedidos, v}|null } | null
+     * total = contestar + conferir, sempre. Barra = parte do anúncio NO TOTAL (vermelho contestar + âmbar conferir): Σ produtos + resto = total.
+     * Sem porItem (frete:hist gravado antes da v3.3) a soma sai da lista pagoAMais (até 200 pedidos).
+     */
+    P.FRETE_BAIXO = 5;
+    P.freteCobrado = function (cc, hoje, max) {
+        if (!cc || typeof cc.vendas !== 'number') return null;
+        const r2 = SHC.r2, pa = cc.pagoAMais || [], lim = max || 5, por = {}, novo = !!cc.porItem;
+        const g = id => por[id] || (por[id] = { id, n: 0, v: 0, nt: 0, vt: 0, peds: [] });
+        if (novo) Object.keys(cc.porItem).forEach(id => { const x = cc.porItem[id]; Object.assign(g(id), { n: x.n || 0, v: x.v || 0, nt: x.nt || 0, vt: x.vt || 0 }); });
+        pa.forEach(p => {
+            if (!p || !p.itemId) return;
+            const y = g(p.itemId);
+            if (!novo) { if (p.talvezUnidades) { y.nt++; y.vt = r2(y.vt + p.diferenca); } else { y.n++; y.v = r2(y.v + p.diferenca); } }
+            y.peds.push(p);
+        });
+        const lista = Object.keys(por).map(k => por[k]).filter(y => y.n + y.nt > 0);
+        const contestar = { v: r2(lista.reduce((t, y) => t + y.v, 0)), n: lista.reduce((t, y) => t + y.n, 0) };
+        const conferir = { v: r2(lista.reduce((t, y) => t + y.vt, 0)), n: lista.reduce((t, y) => t + y.nt, 0) };
+        const total = r2(contestar.v + conferir.v), pc = v => (total > 0 ? Math.round(v / total * 1000) / 10 : 0);
+        lista.forEach(y => {
+            y.tot = r2(y.v + y.vt); y.pctC = pc(y.v); y.pctT = pc(y.vt); y.baixo = y.v > 0 && y.v < P.FRETE_BAIXO;
+            y.porEnvio = y.n ? r2(y.v / y.n) : null;
+            y.peds.sort((a, b) => ((a.talvezUnidades ? 1 : 0) - (b.talvezUnidades ? 1 : 0)) || (b.diferenca - a.diferenca));   // contestáveis primeiro
+        });
+        lista.sort((a, b) => (b.tot - a.tot) || (b.v - a.v));
+        const fora = lista.slice(lim), j = cc.janela || {};
+        const de = j.de || (hoje ? new Date(Date.parse(hoje + 'T12:00:00Z') - 29 * 864e5).toISOString().slice(0, 10) : ''), ate = j.ate || hoje || '';
+        return { de, ate, total, n: contestar.n + conferir.n, contestar, conferir, produtos: lista.slice(0, lim), todos: lista,
+            resto: fora.length ? { anuncios: fora.length, pedidos: fora.reduce((t, y) => t + y.n + y.nt, 0), v: r2(fora.reduce((t, y) => t + y.tot, 0)) } : null };
+    };
+    /**
+     * v3.3: "Frete do anúncio subiu" DENTRO do cartão, na MESMA janela (de) e sem repetir pedido: tira os que já estão na lista de cima (ids).
+     * subs = [{l, s}] (P.subidaFrete), vendas = {MLB: vd|ml}. Base = o frete de ANTES da subida (outra conta: aqui se pede revisão do ANÚNCIO).
+     * → { anuncios:[{id, base, para, desde, n, v, jaEmCima}], n, v, jaEmCima }
+     */
+    // B1: o vd|ml guarda o número do FRETE; a lista de cima guarda o da VENDA (pedido) e o do frete (pedidoFrete) quando são diferentes.
+    // ids = os dois números de cada pedido de cima (sem o corte de 200: numsFrete). fora = fretes de venda feita antes da janela (cc.foraJanela).
+    P.idsCobradoAMais = function (cc) {
+        const s = new Set((cc && cc.numsFrete) || []);
+        ((cc && cc.pagoAMais) || []).forEach(p => { s.add(String(p.pedido)); if (p.pedidoFrete) s.add(String(p.pedidoFrete)); });
+        return s;
+    };
+    P.freteSubidaJanela = function (subs, vendas, ids, de, fora) {
+        const r2 = SHC.r2, anuncios = [];
+        (subs || []).filter(x => x && x.s && x.s.desde && x.l && x.l.it).forEach(x => {
+            const id = x.l.it.itemId, desde = de && de > x.s.desde ? de : x.s.desde, r = P.pedidosAMais((vendas || {})[id], x.s.de, desde);
+            const novos = r.peds.filter(p => !ids.has(String(p.orderId)) && !(fora && fora.has(String(p.orderId))));
+            const ja = r.peds.concat(r.fora).filter(p => ids.has(String(p.orderId))).length;
+            if (novos.length || ja) anuncios.push({ id, base: x.s.de, para: x.s.para, desde: x.s.desde, n: novos.length, v: r2(novos.reduce((t, p) => t + p.dif, 0)), jaEmCima: ja });
+        });
+        anuncios.sort((a, b) => b.v - a.v);
+        return { anuncios, n: anuncios.reduce((t, a) => t + a.n, 0), v: r2(anuncios.reduce((t, a) => t + a.v, 0)), jaEmCima: anuncios.reduce((t, a) => t + a.jaEmCima, 0) };
+    };
+    /** v3.3: texto do chamado de VÁRIOS pedidos cobrados a mais (só os que dá para contestar), um bloco por pedido (SHC.fech.chamadoFrete). */
+    P.chamadoFreteLote = function (peds, tituloDe) {
+        const ok = (peds || []).filter(p => p && !p.talvezUnidades && p.diferenca > 0);
+        if (!ok.length || !SHC.fech || !SHC.fech.chamadoFrete) return '';
+        return ok.map(p => SHC.fech.chamadoFrete(Object.assign({}, p, { valor: p.diferenca }), tituloDe ? tituloDe(p.itemId) : '')).join('\n\n----------\n\n');
     };
     // ── Aba Frete (v2.5.3): tudo do frete COBRADO nos pedidos (frete:<conta>:hist), desde o 1º uso — sem esperar dias guardados ──
     /** Tem frete de pedido lido (do Faturamento, ou o guardado da versão anterior)? */
@@ -1469,6 +1713,20 @@
      * Proposta da Central que daria lucro mas ainda não é promoção confirmada fica à parte: "proposta: aceite no ML para entrar".
      * propostas = [{itemId, titulo, lucro, promo}]. → { prontos: [...] | null (agenda nunca montada), propostas: [...] sem os prontos }
      */
+    /**
+     * Canal 4b: o que a Agenda conferiu na lista do canal no ML (reg.conferencia, SHC.canalConfere).
+     * rotulo(s) → "✓ programada no ML" | "✓ enviada" | "✗ não achei no ML" | "✓ criada · a conferir no ML" (só o clique em Criar).
+     * semana → { titulo, detalhe, cor } (SHC.canalSemanaTxt) ou null quando nada foi criado/conferido.
+     */
+    P.canalConferido = function (reg) {
+        const cf = reg && reg.conferencia, itens = (cf && Array.isArray(cf.itens)) ? cf.itens : [];
+        const de = s => itens.find(i => i.id === s.id && i.itemId === s.itemId);
+        const feitas = ((reg && reg.plano) || []).filter(s => s && s.itemId && s.feito).length;
+        return {
+            rotulo: s => { const i = de(s); return !i || i.estado === 'nao_lido' ? '✓ criada · a conferir no ML' : SHC.canalConfRotulo(i); },
+            semana: itens.length && SHC.canalSemanaTxt ? SHC.canalSemanaTxt(cf) : feitas ? { titulo: 'Transmissões criadas ainda não conferidas no ML', detalhe: 'Abra a agenda e clique em “Conferir no ML”', cor: 'ne' } : null,
+        };
+    };
     P.canalParaProgramar = function (reg, propostas) {
         const prontos = reg && Array.isArray(reg.prontos) ? reg.prontos : null, ja = new Set((prontos || []).map(x => x.itemId));
         return { prontos, propostas: (propostas || []).filter(x => x && !ja.has(x.itemId)) };
@@ -1478,6 +1736,25 @@
         // v3.1: Full, Minha página e impostos do ML (tipos novos do Fechamento) entram nas tarifas; o frete de devoluções tem linha própria (nunca no frete das vendas).
         ['tarifas', 'Tarifas do ML', ['tarifa_venda', 'cobranca_mp', 'parcelamento', 'recebimento', 'full', 'minha_pagina', 'impostos_ml', 'outro']], ['frete', 'Frete por sua conta', ['frete']],
         ['devolucao', 'Frete de devoluções', ['devolucao']], ['ads', 'Ads', ['ads', 'ads_seguidores']], ['estornos', 'Estornos', ['estornos']], ['liquido', 'Líquido do ML (estimado)', ['liquido']]];
+    // F6: Central lida só em parte (uma página do meio não respondeu) → "Leitura incompleta: X de Y produtos". '' = completa.
+    P.promoIncompleta = s => !s || s.completo !== false ? '' : 'Leitura incompleta: li ' + (s.lidas || 0) + (typeof s.total === 'number' ? ' de ' + s.total : '')
+        + ' produtos da Central de promoções (a página ' + (s.falhouPagina || '?') + ' não respondeu). Os outros são da leitura anterior; sincronize de novo para completar.';
+    // F15: promoções da Central sem a conta do ML (aporte, redução de tarifa) — antes sumiam como "Sem proposta".
+    P.semCalcTxt = function (s, familia) {
+        const n = ((s && s.semCalculo) || []).filter(c => c && c.familia === familia).length;
+        return n ? SHC.qtd(n, 'promoção sem cálculo do ML', 'promoções sem cálculo do ML') + ': confira na Central de promoções.' : '';
+    };
+    // F10: venda do Faturamento que não achou anúncio (cobrança sem MLB) fica fora do custo dos produtos — o painel avisa, como o fechamento.
+    P.concNotaProdutos = function (pr) {
+        if (!pr) return '';
+        const t = [];
+        if (pr.faltam > 0) t.push('Lucro sem o custo de ' + SHC.qtd(pr.faltam, 'venda', 'vendas') + ': o Faturamento tem ' + (pr.faltam === 1 ? 'uma venda' : 'vendas') + ' a mais que as achadas nos anúncios (venda sem anúncio identificado ou cancelada no mês seguinte).'
+            + (pr.faltamDemais ? ' A diferença é grande: o custo dos produtos fica sem valor.' : ''));
+        if (pr.aviso) t.push(pr.aviso);
+        return t.join(' ');
+    };
+    // F26: "E mais N" pelo total de cobranças a conferir (cf.qtd), não só pelas guardadas (a lista guardada para em 100).
+    P.concMaisN = (cf, guardadas, noRec) => Math.max(guardadas + noRec, SHC.num(cf && cf.qtd) || 0) - noRec - 3;
     P.concResumo = function (casc) {
         const por = {};
         ((casc && casc.linhas) || []).forEach(l => { por[l.id] = l; });
@@ -1485,6 +1762,15 @@
             const ls = ids.map(k => por[k]).filter(Boolean), nulo = !ls.length || ls.some(l => l.valor === null || l.parcial);
             return { id, rotulo, tipo: ls[0] ? ls[0].tipo : 'info', valor: nulo ? null : SHC.r2(ls.reduce((s, l) => s + l.valor, 0)) };
         });
+    };
+    /** Despesas fixas no resumo da Conciliação: [] sem despesas cadastradas; senão Lucro do mês, − Despesas fixas e Sobra no fim do mês (a mesma conta do Fechamento). */
+    P.concDespesas = function (casc) {
+        const por = {};
+        ((casc && casc.linhas) || []).forEach(l => { por[l.id] = l; });
+        if (!por.despesas) return [];
+        const ln = (id, rotulo) => ({ id, rotulo, tipo: por[id] ? por[id].tipo : 'info', valor: por[id] ? por[id].valor : null });
+        // Custo dos produtos e Imposto entre o Líquido do ML e o Lucro: a conta fecha na tela (igual ao Fechamento completo).
+        return [ln('produtos', 'Custo dos produtos'), ln('imposto', 'Imposto'), ln('lucro', 'Lucro do mês'), Object.assign(ln('despesas', 'Despesas fixas'), { ajuda: /proporcional/i.test(por.despesas.ajuda || '') ? 'proporcional até hoje' : '' }), ln('sobra', 'Sobra no fim do mês')];
     };
 
     // ── v2.6: faturamento por família (aba Geral). As contas são de SHC.familias / curvaABC / metaMes (ml-extrator.js); aqui só o texto e o desenho. ──
@@ -1654,6 +1940,26 @@
         const n = SHC.num(txt);
         return n > 0 && n <= 1e9 ? { valor: SHC.r2(n), erro: '' } : { valor: null, erro: 'Meta do mês: use um valor em reais, por exemplo 50.000 (ou deixe em branco para ficar sem meta).' };
     };
+    // ── Despesas fixas do mês (Ajustes): as contas moram em store.js (SHC.despesasFixas / lerDespesasFixas / despesasFixasDoMes); aqui só o desenho. ──
+    P.DESP_EXEMPLOS = ['Aluguel', 'Salários', 'Sistemas'];
+    P.DESP_MAX_LINHAS = 20;
+    /** Valor guardado → texto do campo: 1500 → "1.500"; 1500.5 → "1.500,50". */
+    P.txtReais = v => { const n = SHC.num(v); return n === null ? '' : n.toLocaleString('pt-BR', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }); };
+    /** Linhas em edição [{nome, valor (texto)}] → HTML. Sem nenhuma: 3 linhas vazias com os exemplos (linha vazia não é salva). erros = SHC.lerDespesasFixas().erros */
+    P.despLinhasHtml = function (linhas, erros) {
+        const ls = linhas && linhas.length ? linhas : P.DESP_EXEMPLOS.map(() => ({ nome: '', valor: '' })), er = {};
+        (erros || []).forEach(e => { er[e.i + ':' + e.campo] = true; });
+        const verm = (i, c) => (er[i + ':' + c] ? ' style="border-color:#DC2626"' : '');
+        return ls.map((l, i) => `<div class="aj-desp" data-desp-i="${i}"><input class="inp" data-desp-nome maxlength="40" placeholder="Ex.: ${escF(P.DESP_EXEMPLOS[i % 3])}" aria-label="Nome da despesa ${i + 1}" value="${escF(l.nome || '')}"${verm(i, 'nome')}>`
+            + `<div class="aj-suf aj-pre"><i>R$</i><input class="inp" data-desp-valor inputmode="decimal" placeholder="0" aria-label="Valor por mês da despesa ${i + 1}" value="${escF(l.valor || '')}"${verm(i, 'valor')}><span>/mês</span></div>`
+            + `<button type="button" class="aj-tira" data-desp-tirar="${i}" aria-label="Tirar a despesa ${i + 1}" title="Tirar">×</button></div>`).join('');
+    };
+    /** Resumo do que está salvo: '' sem despesas; senão "Total: R$ 3.200 por mês (3 despesas). Neste mês, até hoje: R$ 2.986,67 (proporcional até hoje)." */
+    P.despTotalTxt = function (lista, hoje) {
+        if (!lista || !lista.length) return 'Nenhuma despesa salva. Sem elas, o Fechamento para no lucro do mês.';
+        const dm = SHC.despesasFixasDoMes(lista, String(hoje || '').slice(0, 7), hoje);
+        return `Total: ${SHC.moeda(dm.mensal)} por mês (${SHC.qtd(lista.length, 'despesa', 'despesas')}).` + (dm.proporcional && dm.dias < dm.diasMes ? ` Neste mês, proporcional até hoje: ${SHC.moeda(dm.valor)} (${dm.dias} de ${dm.diasMes} dias).` : '');
+    };
     /** Linha da meta (SHC.metaMes) → { texto, pct (0–100 do que já vendeu sobre a meta) | null, cor: 'ok' | 'atencao' | 'neutra', semMeta } */
     P.metaTxt = function (mm) {
         if (!mm) return { texto: '', pct: null, cor: 'neutra', semMeta: true };
@@ -1688,19 +1994,45 @@
 
     let cfg = Object.assign({}, SHC.PADRAO), snap = null, status = {}, anuncios = null, itens = [], guia = { feitos: {}, tours: {} };
     let conta = null, contas = {}, icone = false, famDeItem = {}, skusFam = {}, custoFam = {}, custoProp = new Map();
-    let fretes = {}, vendas = {}, grupos = [], resumos = [], custoGrupo = {}, propsPorFam = {}, skuDe = {}, geracao = 0;
+    let fretes = {}, vendas = {}, grupos = [], resumos = [], custoGrupo = {}, custoItem = {}, propsPorFam = {}, skuDe = {}, geracao = 0;
+    // F19: custo do PRÓPRIO anúncio (o maior das variações); o do grupo do Catálogo só de reserva.
+    const custoDoItem = it => custoItem[it.itemId] || custoGrupo[it.sku ? 'sku:' + it.sku : 'mlb:' + it.itemId] || null;
     let cadSku = {}, adsSnap = null, fechMes = null, retratos = {}, compAberto = false;
     let compHist = {}, concDe = {}, compGrupo = '', concMsg = {}, permCat = false, compCat = {};   // comp:<conta>, conc:<conta>:<MLB>; filtro e estado do "Ver quem está ganhando"; compCat = catcomp:<conta>.porItem (v3.1)
     let roboPromo = null, roboPromoMsg = '';   // v2.9: robopromo:<conta> (sugestões e histórico do robô de promoções); resposta do Salvar da margem
+    let promoSaiu = null;   // v3.2.0: promoSaiu:<conta> (gravado pelo fundo a cada leitura dos anúncios)
     let afil = null, simDe = {}, simMsg = {};   // afil:<conta>; sim:<conta>:<MLB> por anúncio; 'lendo' | texto do "Conferir com o Simulador do ML"
-    let adsFiltro = 'acima', adsDet = null, pedTodos = false, semTodos = false;   // adsDet = MLB aberto no detalhe da aba Ads; c|sku|… (medidas, fullMinUn), ads:<conta>, fech:<conta>:<mês>, {sellerId: itens}
+    let adsFiltro = 'acima', adsDet = null, semTodos = false;   // adsDet = MLB aberto no detalhe da aba Ads; c|sku|… (medidas, fullMinUn), ads:<conta>, fech:<conta>:<mês>, {sellerId: itens}
     let full = null, vm = {}, fullDias = 30, fullClasse = '';    // ml:full:<sellerId>, vm|ml|MLB = {'AAAA-MM': unidades}
     let remessas = null, custosMsg = '';   // ml:full:remessas:<sellerId>; resposta de "Sincronizar custos" (Catálogo)
     let mesesLidos = [], entreContas = [];   // meses lidos inteiros no Faturamento; mesmo produto entre contas (calculado 1 vez por carga)
     // Saúde dos anúncios: fiscal:/fotos:/visitas:/robo:<conta>; permissão de www (fotos); filtros e mensagens da aba
     let fiscal = null, fotos = null, visitas = null, robo = null, permWww = false, saudeMsg = '', roboMsg = '', fotoFaixa = '', radarBusca = '';
     let medidas = null, medSku = '', medMsg = '', medTxt = -1;   // medidas:<conta>; SKU aberto; resposta do "Conferir agora"/"Copiar"; texto do chamado à mostra
-    const saudeVer = { fiscal: false, fotos: false, marcadas: false, estavel: false, subindo: false, medidas: false, medmud: false };
+    let atacadoDe = {};   // v3.2: atacado:<conta>.porItem = { MLB: { degraus:[{qtd, preco, revisar?}], ts } }
+    // v3.2 cruzamento ERP × ML: erpx:<conta> (SHC.erpConferir, gravado pelo fundo). erpxJanela = a janela do resumo já aberta nesta sessão.
+    let erpx = null, erpxJanela = false;
+    // Janela (bottom sheet) logo depois de conectar o ERP: uma vez, até a seller fechar ou abrir a lista ({acao:'erp_visto'}).
+    function janelaErpx() {
+        if (!erpx || !erpx.avisar || erpxJanela || !SHC.erpxJanelaHtml) return;
+        erpxJanela = true;
+        $('#modal').innerHTML = SHC.erpxJanelaHtml(erpx);
+        $('#modal').setAttribute('role', 'dialog'); $('#modal').setAttribute('aria-modal', 'true');
+        $('#fundo').classList.add('on');
+        const b = $('#modal [data-erpx]'); if (b) b.focus();
+    }
+    function fechaJanelaErpx() {
+        if (!$('#fundo').classList.contains('on')) return;
+        $('#fundo').classList.remove('on'); $('#modal').innerHTML = '';
+        try { Promise.resolve(chrome.runtime.sendMessage({ acao: 'erp_visto' })).catch(() => {}); } catch (e) { /* fundo reiniciando */ }
+    }
+    $('#fundo').addEventListener('click', e => { if (e.target === $('#fundo')) fechaJanelaErpx(); });
+    $('#fundo').addEventListener('keydown', e => { if (e.key === 'Escape') fechaJanelaErpx(); });
+    let editor = null, pendAberta = '';   // v3.2: editor:<conta> (Editor em massa, lido quando a seller abre a tela); tipo de pendência aberto
+    // "Ver mais"/"Ver menos" das listas da Saúde: lembrados como os outros cartões (chave saude:ver:<lista>).
+    const saudeVer = {};
+    ['fiscal', 'fotos', 'marcadas', 'estavel', 'subindo', 'medidas', 'medmud', 'registro', 'pend'].forEach(k => Object.defineProperty(saudeVer, k, { enumerable: true,
+        get: () => aberto('saude:ver:' + k), set: v => { if (!!v !== aberto('saude:ver:' + k)) alterna('saude:ver:' + k); } }));
     let regrasAbertas = false;   // <details> "Regras do robô" aberto: continua aberto quando a aba é redesenhada (rodada lenta)
     const PERM_WWW = { origins: ['https://www.mercadolivre.com.br/*'] };   // "Permitir ler fotos e medidas dos anúncios" (tela Alterar anúncio: só GET)
     // v2.9: "Continuar sincronizando com o Chrome fechado" (Ajustes) = permissão OPCIONAL 'background': o Chrome segue rodando escondido
@@ -1736,11 +2068,39 @@
         ler(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
         gravar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* sem memória: fica só nesta abertura */ } },
     };
-    // Cartões recolhidos: só o resumo e "Ver mais"; o que a pessoa abriu fica lembrado.
-    const verAberto = new Set(Array.isArray(LS.ler('shc:painel:abertos')) ? LS.ler('shc:painel:abertos') : []);
+    // Cartões recolhidos: só o resumo e "Ver mais"; o que a pessoa abriu fica lembrado POR CONTA e por aba em chrome.storage.local
+    // 'ui:abertos' = {conta: {aba: [chaves]}} (a aba é o começo da chave: "frete:lista" → frete). A lista antiga (localStorage
+    // 'shc:painel:abertos', uma só para todas as contas) só vale enquanto 'ui:abertos' ainda está vazio.
+    let uiAbertos = {}, abertosDe;   // abertosDe = conta cujo estado está em verAberto (undefined = ainda não lido)
+    let verAberto = new Set(Array.isArray(LS.ler('shc:painel:abertos')) ? LS.ler('shc:painel:abertos') : []);
     const aberto = k => verAberto.has(k);
-    const alterna = k => { if (verAberto.has(k)) verAberto.delete(k); else verAberto.add(k); LS.gravar('shc:painel:abertos', [...verAberto].slice(-200)); };
-    const btVer = (k, mais, menos) => `<button class="lnk ver" data-ver="${esc(k)}" aria-expanded="${aberto(k)}">${aberto(k) ? (menos || 'Ver menos') : (mais || 'Ver mais')}</button>`;
+    const usaAbertos = (ui, ct) => {
+        uiAbertos = ui && typeof ui === 'object' ? ui : {};
+        if (ct === abertosDe) return;
+        abertosDe = ct;
+        const m = uiAbertos[ct || '_'];
+        if (m || Object.keys(uiAbertos).length) verAberto = new Set([].concat(...Object.values(m || {}).filter(Array.isArray)));
+    };
+    const alterna = k => {
+        if (verAberto.has(k)) verAberto.delete(k); else verAberto.add(k);
+        if (abertosDe === undefined) return;   // antes da 1ª leitura a conta ainda não é conhecida: não grava (vale só nesta abertura)
+        const m = {}, c = abertosDe || '_';
+        [...verAberto].slice(-200).forEach(x => { const a = String(x).split(':')[0]; (m[a] = m[a] || []).push(x); });
+        uiAbertos[c] = m;
+        // Relê antes de gravar: outro painel aberto (outra janela) pode ter gravado outras contas; só a desta conta muda.
+        Promise.resolve().then(() => SHC.lerChave('ui:abertos')).then(ui => {
+            uiAbertos = Object.assign(ui && typeof ui === 'object' ? ui : {}, { [c]: m });
+            return chrome.storage.local.set({ 'ui:abertos': uiAbertos });
+        }).catch(() => { /* sem memória: fica só nesta abertura */ });
+    };
+    // Um vocabulário só: fechado diz o que tem ("Ver mais (N)", "Ver a remessa"…); aberto é sempre "Ver menos".
+    const btVer = (k, mais) => `<button class="lnk ver" data-ver="${esc(k)}" aria-expanded="${aberto(k)}">${aberto(k) ? 'Ver menos' : (mais || 'Ver mais')}</button>`;
+    // Lista cortada em n: [o que fica à vista, botão "Ver mais (resto)" ↔ "Ver menos"] (o botão vai no FIM da lista).
+    const vmLista = (k, arr, n) => [aberto(k) ? arr : arr.slice(0, n), arr.length > n ? btVer(k, `Ver mais (${P.milhar(arr.length - n)})`) : ''];
+    // Lista longa aberta pelo cabeçalho: "Ver menos" repetido no fim (fecha e rola de volta até o cabeçalho).
+    const vmFim = k => aberto(k) ? `<p class="vm-fim"><button class="lnk ver" data-ver="${esc(k)}" data-fim aria-expanded="true">Ver menos</button></p>` : '';
+    // Listas com "Mostrar mais 100": fechar volta ao limite inicial.
+    const LIM_DE = { 'promo:lista': 'promo', 'frete:lista': 'frete', 'cat:lista': 'catalogo', 'full:produtos': 'full' };
     // Cartão pronto (<div class="card">cabeçalho…corpo</div>) recolhido: fica o cabeçalho (até fimCab), o resumo e "Ver mais".
     function dobra(html, chave, resumo, fimCab) {
         const f = fimCab || '</b>', i = html.indexOf(f) + f.length;
@@ -1761,10 +2121,10 @@
     // v2.7: perguntas:/resumo:/reputacao:/remessas:<c>:detalhe/resumo:<c>:semanal da conta; contas vistas neste Chrome (SHC.contas) e os dados das outras
     // (SHC.dadosContas, só com mais de 1 conta); vista do topo ('atual' | 'todas' | sellerId de outra conta); quantidades digitadas na próxima remessa.
     let perguntas = null, resumoML = null, reputacao = null, remDet = null, semanal = null, contasLista = [], dadosC = [], vista = 'atual', semanalMsg = '', semanalPedido = false;
+    let resumoDia = null, resumoAba = null;   // v3.2: resumo do dia (resumo:<conta>:dia, pedido ao abrir a aba "Do dia") e a aba escolhida no cartão
     let nfeV = [null, null], nfeCopiada = '';   // v2.8: nfe:<conta>:<mês atual> e <mês anterior>; chave da nota copiada por último
     const simQtd = {};
     const famCausas = new Set();
-    const abertos = new Set();
 
     function tempo(ts) {
         if (!ts) return '';
@@ -1797,15 +2157,17 @@
         const sims = ct && its0.length ? await chrome.storage.local.get(its0.map(it => 'sim:' + ct + ':' + it.itemId)) : {};
         if (eu !== geracao) return;
         const its = its0.map(it => P.comSimulador(it, sims['sim:' + ct + ':' + it.itemId], agoraSim));
-        const sd = {}, ppf = {}, sf = {};
-        its.forEach(it => { if (it.sku) sd[it.itemId] = it.sku; });
+        const sd = {}, ppf = {}, sf = {}, idI = {};
+        its.forEach(it => { const ss = SHC.skusDoAnuncio(it); if (ss.length) sd[it.itemId] = ss; idI[it.itemId] = it; });   // F7: todos os SKUs
         const fams = s ? s.familias : [], props = s ? s.propostas : [];
         props.forEach(p => { (ppf[p.familia] || (ppf[p.familia] = [])).push(p); });
         fams.forEach(f => { sf[f.chave] = P.skusDaFamilia(f, ppf[f.chave], sd); });
         const fdi = P.familiaPorItem(s), grs = P.agrupaSkus(its);
-        const cs = await P.lerCustosPainel(fams, props, grs, { skusFam: sf, skuDe: sd, famDeItem: fdi });
+        const cs = await P.lerCustosPainel(fams, props, grs, { skusFam: sf, skuDe: sd, itemDe: idI, famDeItem: fdi });
         const ids = its.map(it => it.itemId);
-        const skus = [...new Set(its.filter(it => it.sku).map(it => SHC.chaveSku(it.sku)))].filter(Boolean);
+        // F2: o custo de TODAS as variações (antes só o 1º SKU entrava e o lucro saía inflado).
+        const skusDe = it => SHC.skusDoAnuncio(it).map(SHC.chaveSku).filter(Boolean);
+        const skus = [...new Set([].concat(...its.map(skusDe)))];
         const outras = Object.keys(cts || {}).filter(id => id !== String(ct));
         const [fr, vd, ad, fch, rts, fu] = await Promise.all([
             ids.length ? SHC.lerFretes(ids) : {}, ids.length ? SHC.lerVendas(ids) : {},
@@ -1814,14 +2176,15 @@
             Promise.all(outras.map(id => SHC.lerAnuncios(id))),
             SHC.lerFull ? SHC.lerFull(ct || undefined) : SHC.lerChave('ml:full:' + (ct || 'atual')),
         ]);
-        const [rem, af, va, cta, cor, rpr] = await Promise.all([SHC.lerChave('ml:full:remessas:' + (ct || 'atual')), SHC.lerChave('afil:' + (ct || 'atual')),
-            SHC.lerChave('vbAnuncio:' + (ct || 'atual')), SHC.lerChave('cat:' + (ct || 'atual')), SHC.lerChave('cores:' + (ct || 'atual')), SHC.lerChave('robopromo:' + (ct || 'atual'))]);
+        const [rem, af, va, cta, cor, rpr, psa] = await Promise.all([SHC.lerChave('ml:full:remessas:' + (ct || 'atual')), SHC.lerChave('afil:' + (ct || 'atual')),
+            SHC.lerChave('vbAnuncio:' + (ct || 'atual')), SHC.lerChave('cat:' + (ct || 'atual')), SHC.lerChave('cores:' + (ct || 'atual')), SHC.lerChave('robopromo:' + (ct || 'atual')),
+            SHC.lerChave('promoSaiu:' + (ct || 'atual'))]);
         // Custos/medidas/EAN dos SKUs desta conta e das outras (EAN compara produto entre contas); vendas por mês (vm|ml)
         // dos anúncios e dos produtos do Full.
         const skusTodos = new Set(skus);
-        rts.forEach(r => ((r && r.itens) || []).forEach(it => { if (it.sku) skusTodos.add(SHC.chaveSku(it.sku)); }));
+        rts.forEach(r => ((r && r.itens) || []).forEach(it => skusDe(it).forEach(k => skusTodos.add(k))));
         ((fu && fu.produtos) || []).forEach(p => { if (p.sku) skusTodos.add(SHC.chaveSku(p.sku)); });   // mínimo do Full por SKU
-        Object.values((va && va.itens) || {}).forEach(x => { if (x && x.sku) skusTodos.add(SHC.chaveSku(x.sku)); });   // lucro por família (anúncio que já saiu da lista)
+        Object.values((va && va.itens) || {}).forEach(x => skusDe(x).forEach(k => skusTodos.add(k)));   // lucro por família (anúncio que já saiu da lista)
         const idsVm = [...new Set(ids.concat([].concat(...((fu && fu.produtos) || []).map(P.idsDoFull))))];
         const [cad, vms, lidos, cml] = await Promise.all([SHC.lerCustos([...skusTodos].filter(Boolean)), lerPorId('lerVendasMes', 'vm|ml|', idsVm),
             SHC.lerMesesVendasLidos ? SHC.lerMesesVendasLidos(ct || undefined) : SHC.lerChave('ml:cobrancas:' + ct).then(x => (x && x.mesesLidos) || []),
@@ -1837,22 +2200,30 @@
         let pc = false;
         try { pc = !!(chrome.permissions && chrome.permissions.contains && await chrome.permissions.contains(PERM_CAT)); } catch (e) { pc = false; }
         const saudeLida = await lerSaude(ct), ext = await lerExtras(ct);
+        let uiA = null; try { uiA = await SHC.lerChave('ui:abertos'); } catch (e) { uiA = null; }
+        let atq = null; try { atq = await SHC.lerChave('atacado:' + (ct || 'atual')); } catch (e) { atq = null; }   // v3.2: degraus de atacado
+        let ex = null; try { ex = await SHC.lerChave('erpx:' + (ct || 'atual')); } catch (e) { ex = null; }   // v3.2: cruzamento ERP × ML (gravado pelo fundo)
         if (eu !== geracao) return;
+        atacadoDe = (atq && atq.porItem) || {};
+        erpx = ex && ex.r ? ex : null;
+        janelaErpx();
+        usaAbertos(uiA, ct);   // "Ver mais"/"Ver menos" lembrados desta conta
         usaSaude(saudeLida);
         ({ posvenda, freteHist, conferir, cert, anom, rateio, fat, vb, rep, fechAnt, fechAnt2, fechAtual, canalPlano, perguntas, resumoML, reputacao, remDet, semanal, contasLista, dadosC, nfeV } = ext);
+        resumoDia = null;   // v3.2: pode ser de outra conta; o cartão aberto pede de novo ao fundo (guardado, nenhum GET)
         if (vista !== 'atual' && vista !== 'todas' && !contasLista.some(x => x.sellerId === vista)) vista = 'atual';
-        compHist = ch || {}; concDe = {}; permCat = pc; compCat = (kc && kc.porItem) || {}; afil = af || null; roboPromo = rpr || null; vbA = va || null; catA = cta || null; coresA = cor || {};
+        compHist = ch || {}; concDe = {}; permCat = pc; compCat = (kc && kc.porItem) || {}; afil = af || null; roboPromo = rpr || null; promoSaiu = psa || null; vbA = va || null; catA = cta || null; coresA = cor || {};
         simDe = {}; its0.forEach(it => { const x = sims['sim:' + ct + ':' + it.itemId]; if (x && x.hoje) simDe[it.itemId] = x; });
         idsComp.forEach(id => { const x = cc['conc:' + ct + ':' + id]; if (x) concDe[id] = x; });
 
         carregado = true;
         cfg = c; snap = s; status = statusDoFundo(st); anuncios = an; guia = g; conta = ct; contas = cts || {};
         itens = its; skuDe = sd; propsPorFam = ppf; skusFam = sf; famDeItem = fdi; grupos = grs;
-        custoFam = cs.custoFam; custoProp = cs.custoProp; custoGrupo = cs.custoGrupo;
+        custoFam = cs.custoFam; custoProp = cs.custoProp; custoGrupo = cs.custoGrupo; custoItem = cs.custoItem || {};
         resumos = grupos.map(gr => ({ g: gr, r: P.resumoSku(gr, (custoGrupo[gr.chave] || {}).dados || null, cfg) }));
         blingLigado = !!(blg && blg.clientId && blg.clientSecret && blg.refresh);
         tinyToken = tinyRecusado ? '' : (tk && tk.token) || '';   // token recusado pelo Tiny: pede outro (o velho fica guardado até o novo ser aceito)
-        fretes = fr; vendas = vd; icone = ic; cadSku = cad; adsSnap = ad || null; fechMes = fch || null; vm = vms; full = fu || null; remessas = rem || null; mesesLidos = lidos || []; custosMl = cml || {};
+        fretes = fr; vendas = vd; icone = ic; cadSku = cad; adsSnap = P.adsLigaCatalogo(ad, its) || null; fechMes = fch || null; vm = vms; full = fu || null; remessas = rem || null; mesesLidos = lidos || []; custosMl = cml || {};   // F8: catálogo ligado
         retratos = {}; if (ct) retratos[ct] = its; outras.forEach((id, i) => { if (rts[i]) retratos[id] = rts[i].itens || []; });
         entreContas = P.contasCompetindo(retratos, nomesContas(), sku => (cadSku[SHC.chaveSku(sku)] || {}).ean || '');   // nome = apelido de Ajustes ou "Conta …1234", nunca o do ML
 
@@ -1871,9 +2242,9 @@
         const c = ct || undefined, le = (fn, pref) => (SHC[fn] ? SHC[fn](c) : SHC.lerChave(pref + (ct || 'atual')));
         let pw = false;
         try { pw = !!(chrome.permissions && chrome.permissions.contains && await chrome.permissions.contains(PERM_WWW)); } catch (e) { pw = false; }
-        return [...await Promise.all([le('lerFiscal', 'fiscal:'), le('lerFotos', 'fotos:'), le('lerVisitas', 'visitas:'), le('lerRobo', 'robo:'), le('lerMedidas', 'medidas:')]), pw];
+        return [...await Promise.all([le('lerFiscal', 'fiscal:'), le('lerFotos', 'fotos:'), le('lerVisitas', 'visitas:'), le('lerRobo', 'robo:'), le('lerMedidas', 'medidas:'), le('lerEditor', 'editor:')]), pw];
     }
-    function usaSaude(sd) { [fiscal, fotos, visitas, robo, medidas, permWww] = sd; }
+    function usaSaude(sd) { [fiscal, fotos, visitas, robo, medidas, editor, permWww] = sd; }
     // Chaves da Geral, Conciliação e Canal (a Conciliação resume o mês passado, como o fechamento completo).
     async function lerExtras(ct) {
         const c = ct || 'atual', mesAnt = P.mesMenos(SHC.hoje().slice(0, 7), 1);
@@ -1970,11 +2341,12 @@
         const outra = vista !== 'todas' ? contasLista.find(x => x.sellerId === vista) : null;
         return `<div class="card" id="cardContasJuntas"><b style="font-size:13px">${outra ? esc(outra.nome) : 'Todas as contas'} · ${esc(P.mesLongo(mes))} até ${esc(P.dataBr(hoje))}</b>
           ${outra ? `<p class="recnota neutra" style="margin:6px 0 0">Você está com outra conta aberta no Mercado Livre. Para ver os detalhes desta, troque de conta lá e sincronize. Abaixo, o que já foi lido dela.</p>` : ''}
-          <table class="tabf"><thead><tr><th>Conta</th><th>Vendas brutas</th><th>Líquido</th><th>Alertas</th></tr></thead><tbody>
+          ${linhas.length > 3 ? `<p class="rs">${esc(SHC.qtd(linhas.length, 'conta', 'contas'))} · ${m(c.total.vendasBrutas)} bruto · ${m(c.total.liquido)} líquido ${btVer('geral:contas', `Ver mais (${linhas.length})`)}</p>` : ''}
+          ${linhas.length > 3 && !aberto('geral:contas') ? '' : `<table class="tabf"><thead><tr><th>Conta</th><th>Vendas brutas</th><th>Líquido</th><th>Alertas</th></tr></thead><tbody>
           ${linhas.map(x => `<tr><td>${esc(x.nome)}${x.parcial ? ' <span class="det">(parcial)</span>' : ''}</td><td>${m(x.vendasBrutas)}</td><td>${m(x.liquido)}</td><td>${x.alertas === null ? '—' : x.alertas}</td></tr>`
             + (x.motivo ? `<tr><td colspan="4" class="det" style="padding-top:0">${esc(x.motivo)}</td></tr>` : '')).join('')}</tbody>
           ${vista === 'todas' ? `<tfoot><tr><td>Total (${c.total.contasComVendas} de ${c.contas.length} contas)</td><td>${m(c.total.vendasBrutas)}</td><td>${m(c.total.liquido)}</td><td>${c.total.alertas === null ? '—' : c.total.alertas}</td></tr></tfoot>` : ''}</table>
-          <p class="det">Líquido = vendas brutas − canceladas e devolvidas − tudo o que o Mercado Livre cobrou no mês (a mesma conta do Fechamento). Só entram as contas em que você já entrou neste Chrome; os dados de cada uma são da última sincronização feita nela.</p>
+          <p class="det">Líquido = vendas brutas − canceladas e devolvidas − tudo o que o Mercado Livre cobrou no mês (a mesma conta do Fechamento). Só entram as contas em que você já entrou neste Chrome; os dados de cada uma são da última sincronização feita nela.</p>`}
           <div class="acoes" style="justify-content:flex-start;flex-wrap:wrap"><button class="bt leve" data-trocar-conta>Trocar de conta no Mercado Livre</button><button class="lnk" data-ir-aba="ajustes">Dar apelidos às contas</button></div></div>`;
     }
     function desenhaStatus() {
@@ -2022,6 +2394,7 @@
     // Topo de cada aba: só "Parcial" (1ª leitura) e a etapa lendo — a página começa pela manchete (ESPEC §3).
     // Os alertas só deste módulo vão para o fim da aba (#fa-<aba>), recolhidos, com o MESMO número da bolinha da aba (P.nAlerta).
     let alertasAgora = null;
+    const prejAutoAberto = new Set();
     function desenhaTopoAba() {
         desenhaContadores();   // v3.1: contador de cada aba, sino e "Todas"
         const el = $('#ta-' + aba);
@@ -2034,7 +2407,9 @@
         if (!fim) return;
         const lista = alertasAgora ? P.alertasDaAba(aba, alertasAgora, anom, conta) : [], k = 'al:' + aba, n = lista.reduce((s, i) => s + P.nAlerta(i), 0);
         const urg = lista.some(i => !!i.vermelho || i.tipo === 'pagamento');
-        fim.innerHTML = lista.length ? `<div class="card alab"><div class="gb-l"><i class="dot ${urg ? 'ruim' : 'atencao'}"></i><b>Alertas desta aba</b><span class="gb-v">${esc(SHC.qtd(n, 'alerta', 'alertas'))}</span>${btVer(k, 'Ver', 'Esconder')}</div>`
+        // v3.2: venda no prejuízo abre o bloco sozinho 1 vez por abertura do painel (depois a pessoa fecha se quiser)
+        if (lista.some(i => i.tipo === 'prejuizo') && !prejAutoAberto.has(k)) { prejAutoAberto.add(k); verAberto.add(k); }
+        fim.innerHTML = lista.length ? `<div class="card alab"><div class="gb-l"><i class="dot ${urg ? 'ruim' : 'atencao'}"></i><b>Alertas desta aba</b><span class="gb-v">${esc(SHC.qtd(n, 'alerta', 'alertas'))}</span>${btVer(k, `Ver mais (${n})`)}</div>`
             + (aberto(k) ? '<div class="gb-c">' + lista.map(i => `<div class="linha-comp"><b>${esc(i.rot)}${i.titulo ? ' · ' + esc(i.titulo) : ''}</b><small>${esc(i.texto)}</small>`
                 + (i.link && /^https:\/\/([a-z]+\.)*mercadolivre\.com\.br\//.test(i.link) ? `<a class="lnk" href="${esc(i.link)}" target="_blank" rel="noopener" style="font-size:11.5px">${esc(i.linkTxt || 'Abrir Gestão de envios Full')}</a>` : '') + '</div>').join('') + '</div>' : '')
             + '</div>' : '';
@@ -2045,7 +2420,7 @@
 
     // ── Guia até o fim (SHC.guiaProximo): cartão "Próximo passo" no topo ─────────────────────
     // Etapa que acabou de ficar pronta mostra "✓ Pronto" por ~2 s e o cartão já passa para a próxima.
-    let guiaUlt = null, guiaPronto = null, guiaLista = false, guiaTimer = null, carregado = false;
+    let guiaUlt = null, guiaPronto = null, guiaTimer = null, carregado = false;
     const estadoGuia = () => SHC.guiaProximo({ cfg, status, anuncios, custos: Object.assign({}, custosMl, cadSku), vm, guia, icone,
         temFull: full ? full.temFull : undefined, temPromos: snap && snap.vazio ? false : undefined });
     function desenhaGuia() {
@@ -2075,8 +2450,8 @@
         // Compacto: 1 linha (passo, título e os botões) + "Ver etapas", que abre o porquê, o detalhe e a lista.
         alvo.innerHTML = `<div class="g-lin"><small>Próximo passo · ${r.etapas.indexOf(p) + 1} de ${r.total}</small><b>${esc(def.titulo)}</b>`
           + `<button class="bt mini" data-guia-acao="${p.id}">${esc(def.botao)}</button>${def.pular ? `<button class="bt leve mini" data-guia-pular="${p.id}">${esc(def.pular)}</button>` : ''}`
-          + `<button class="lnk" data-guia-lista>${guiaLista ? 'Esconder etapas' : 'Ver etapas'}</button></div>`
-          + (guiaLista ? `<div class="prog"><i style="width:${Math.round(r.feitas / r.total * 100)}%"></i></div><p class="g-pq">${esc(def.porque)}</p>
+          + `<button class="lnk" data-guia-lista aria-expanded="${aberto('guia:lista')}">${aberto('guia:lista') ? 'Ver menos' : `Ver etapas (${r.total})`}</button></div>`
+          + (aberto('guia:lista') ? `<div class="prog"><i style="width:${Math.round(r.feitas / r.total * 100)}%"></i></div><p class="g-pq">${esc(def.porque)}</p>
           ${p.detalhe ? `<p class="g-det">${esc(p.detalhe)}${p.obs ? ` <span>· ${esc(p.obs)}</span>` : ''}</p>` : ''}`
             + '<div class="g-lista">' + r.etapas.map(e => `<div class="${e.feito || e.pulado ? 'ok' : ''}"><span>${e.feito ? '✓' : (e.pulado ? '–' : '○')}</span>${esc(e.titulo)}${e.pulado ? ' <small>(pulada)</small>' : ''}</div>`).join('') + '</div>' : '');
     }
@@ -2204,11 +2579,10 @@
         };
         let h = '<div class="card" id="promoPrecisa"><div class="ch"><h3>Precisa de você</h3><button class="ajuda" type="button" title="Produtos em que nenhuma proposta de promoção dá lucro, depois de tarifa, frete, imposto e custo. Não entre nelas." aria-label="Ajuda: Precisa de você">?</button></div>';
         if (pr.length) {
-            const n = aberto('promo:prj') ? pr.length : 3;
-            h += '<ul class="acoes">' + pr.slice(0, n).map(r => linha(r, 'pr')).join('') + '</ul>'
-                + (pr.length > 3 ? `<p class="rs">${esc(SHC.qtd(pr.length - 3, 'outro produto', 'outros produtos'))} com prejuízo ${btVer('promo:prj')}</p>` : '');
+            const [vis, bt] = vmLista('promo:prj', pr, 3);
+            h += '<ul class="acoes">' + vis.map(r => linha(r, 'pr')).join('') + '</ul>' + (bt ? `<p class="rs">${bt}</p>` : '');
         } else h += `<p class="est vazio"><span><b>Nenhum produto dá prejuízo.</b> ${at.length ? 'Confira os que ficam abaixo da meta.' : 'Todos com custo batem a sua meta.'}</span></p>`;
-        if (at.length) h += `<div class="pr-mais"><span>Abaixo da sua meta (${at.length})</span>${btVer('promo:abaixo')}</div>`
+        if (at.length) h += `<div class="pr-mais"><span>Abaixo da sua meta (${at.length})</span>${btVer('promo:abaixo', `Ver mais (${at.length})`)}</div>`
             + (aberto('promo:abaixo') ? '<ul class="acoes pr-abaixo">' + at.map(r => linha(r, 'at')).join('') + '</ul>' : '');
         return h + '</div>';
     }
@@ -2219,7 +2593,7 @@
         $('#promoTopo').innerHTML = snap ? manchetePromo(todos, lig, sugs, mTxt) : '';
         let h = '';
         const hist = ((roboPromo && roboPromo.historico) || []).slice(-30).reverse();
-        const histHtml = !hist.length ? '' : `<div class="hist-l"><span>Histórico do robô · ${esc(SHC.qtd(hist.length, 'sugestão guardada', 'sugestões guardadas'))}</span>${btVer('robopromo:hist')}</div>`
+        const histHtml = !hist.length ? '' : `<div class="hist-l"><span>Histórico do robô · ${esc(SHC.qtd(hist.length, 'sugestão guardada', 'sugestões guardadas'))}</span>${btVer('robopromo:hist', `Ver mais (${hist.length})`)}</div>`
             + (aberto('robopromo:hist') ? '<ul class="tl">' + hist.map(x => `<li class="ok"><div class="dt">${esc(P.quando(x.ts))} · sugeriu</div><div class="ev">${esc((x.titulo || x.itemId) + ' · ' + x.promo)}</div>`
                 + `<div class="sub">margem ${esc(SHC.pctTxt(x.pct))} · sobra ${esc(SHC.moeda(x.sobra))} por venda</div></li>`).join('') + '</ul>' : '');
         if (lig && sugs.length) {
@@ -2231,7 +2605,7 @@
                         + `<div class="lin">${s.datas ? `<span class="prazo">${esc(s.datas)}</span>` : ''}${etqPromo(cl, s.sobra, s.pct)}</div></div>`
                         + '<button class="bt pq ml" data-abrir-ml title="Abre a Central de promoções do Mercado Livre. Quem entra é você.">Entrar no ML</button></li>';
                 }).join('') + '</ul>'
-                + (sugs.length > 5 ? `<p class="rs">${esc(SHC.qtd(sugs.length - 5, 'outra promoção', 'outras promoções'))} ${btVer('robopromo:sug')}</p>` : '')
+                + (sugs.length > 5 ? `<p class="rs">${btVer('robopromo:sug', `Ver mais (${sugs.length - 5})`)}</p>` : '')
                 + histHtml + '</div>';
         } else if (hist.length) h += `<div class="card">${histHtml}</div>`;
         const auto = SHC.PROMO_ADESAO_CONFERIDA === true;
@@ -2265,12 +2639,28 @@
         await mudaRoboPromo({ margem_pct: v }, v === null ? '✓ O robô usa a sua meta de Ajustes.' : '✓ Margem mínima salva.');
     }
 
+    // v3.2.0 (pergunta da dona 01/10): "Saiu da promoção" (promoSaiu:<conta>, últimos 30 dias, o mais novo em cima) e, 7 dias depois,
+    // o efeito nas vendas (vd|ml: 7 dias antes × 7 depois, SHC.promoSaiuEfeito → P.promoEfeitoTxt).
+    function saiuPromoHtml() {
+        const evs = ((promoSaiu && promoSaiu.eventos) || []).slice().reverse(), hoje = SHC.hoje();
+        if (!evs.length) return '';
+        const [vis, bt] = vmLista('promo:saiu', evs, 3);
+        return `<div class="card" id="cardPromoSaiu"><div class="ch"><h3>Saiu da promoção</h3><span class="selo at">${esc(SHC.qtd(evs.length, 'produto', 'produtos'))} · 30 dias</span></div><ul class="acoes">`
+            + vis.map(e => `<li class="acao at"><div class="tx"><b title="${esc(e.titulo)}">${esc(e.titulo || e.itemId)}</b>`
+                + `<span>${esc('Voltou de ' + SHC.moeda(e.precoPromo) + ' para ' + SHC.moeda(e.precoAgora) + ' em ' + P.dataBr(e.quando).slice(0, 5) + (e.sku ? ' · SKU ' + e.sku : ''))}</span>`
+                + `<span>${esc(P.promoEfeitoTxt(SHC.promoSaiuEfeito(e, (vendas || {})[e.itemId], hoje)))}</span></div>`
+                + '<button class="bt pq ml" data-abrir-ml title="Abre a Central de promoções do Mercado Livre. Quem entra é você.">Central</button></li>').join('')
+            + '</ul>' + (bt ? `<p class="rs">${bt}</p>` : '') + '<p class="det">Vendas = pedidos lidos no Faturamento do ML (venda sem frete cobrado pode não entrar).</p></div>';
+    }
     function desenhaPromo() {
         const todos = snap && snap.familias.length ? snap.familias.map(f => resumoFamilia(f)) : null;
         desenhaRoboPromo(todos);
+        const ps = $('#promoSaiu');
+        if (ps) ps.innerHTML = saiuPromoHtml();
         const alvo = $('#listaPromo');
         // V14: estados sem lista — sem sessão, falha de leitura, lendo agora, nunca lido e "nenhuma promoção aberta" (retrato vazio).
-        const falhaPromo = status.erroPromos ? `<div class="recnota aviso" style="margin:0 0 8px">Não consegui ler as promoções na última sincronização.${snap ? ' Mostrando a leitura de ' + esc(tempo(snap.ts)) + '.' : ''}</div>` : '';
+        const falhaPromo = P.promoIncompleta(snap) ? `<div class="recnota aviso" style="margin:0 0 8px">${esc(P.promoIncompleta(snap))}</div>`
+            : status.erroPromos ? `<div class="recnota aviso" style="margin:0 0 8px">Não consegui ler as promoções na última sincronização.${snap ? ' Mostrando a leitura de ' + esc(tempo(snap.ts)) + '.' : ''}</div>` : '';
         if (!snap || !snap.familias.length) {
             const semSessao = status.erro === 'sem_sessao', lendo = status.estado === 'sincronizando' && !P.syncParado(status);
             const [tit, txt] = semSessao ? ['Entre no Mercado Livre', 'Abra o painel do vendedor do Mercado Livre neste Chrome (logado) e clique em “Sincronizar agora”.']
@@ -2284,7 +2674,7 @@
         }
         // Recolhido: só os números (tocar num número abre a lista filtrada); "Ver os N produtos" abre a lista inteira.
         const ab = aberto('promo:lista'), pv = $('#promoVer');
-        pv.hidden = false; pv.textContent = ab ? 'Ver menos' : 'Ver ' + SHC.qtd(todos.length, 'produto', 'produtos');
+        pv.hidden = false; pv.textContent = ab ? 'Ver menos' : `Ver mais (${P.milhar(todos.length)})`; pv.setAttribute('aria-expanded', String(ab));
         $('#promoTodos').hidden = false;
         $('#promoTodosRs').textContent = SHC.qtd(todos.reduce((s, r) => s + r.props.length, 0), 'proposta', 'propostas') + ' · busca · “por que esta é a melhor?”';
         $('#promoMais').hidden = !ab;
@@ -2312,7 +2702,7 @@
                 : (!temCusto || editando === chave)
                 ? `<div class="custo"><label>Custo do produto</label><input class="inp" data-custo="${esc(chave)}" inputmode="decimal" placeholder="R$ 0,00" value="${esc(temCusto ? nfr(SHC.num(r.custo.custo)) : '')}"><button class="bt" data-salvar="${esc(chave)}">Salvar</button></div>`
                 : `<div class="custo-ok">Custo <b>${SHC.moeda(SHC.num(r.custo.custo))}</b><button data-editar="${esc(chave)}">editar</button></div>`;
-            const mostrar = abertos.has(chave) ? r.props : r.props.slice(0, 3);
+            const [mostrar, maisProps] = vmLista('promo:prop:' + chave, r.props, 3);
             const props = r.props.length ? mostrar.map(l => {
                 const p = l.p;
                 // v3.1: etiqueta igual à da Central de promoções no ML; tarifa, envio e imposto só no "Ver a conta".
@@ -2322,15 +2712,15 @@
                 return `<div class="prop${selo ? ' destaque' : ''}"><div class="l1p"><span class="nome" title="${esc(p.promo)}">${esc(p.promo)}</span><span class="datas">${esc(p.datas)}${p.desconto_txt ? ' · ' + esc(p.desconto_txt) : ''}</span></div>
                   <div class="l2p"><span class="preco">${SHC.moeda(p.preco)}</span><span class="recebe">você recebe ${SHC.moeda(p.recebe)}</span></div>
                   <div class="l3p">${etqPromo(l.classe, l.sobra, l.pct)}${selo}${sugRobo.has(p.itemId + '|' + p.promo + '|' + p.preco) ? chipRobo : ''}</div>
-                  <details class="pdet"><summary>Ver a conta</summary><div class="det">Tarifa ${SHC.moeda(p.tarifa)}${p.tipo ? ' (' + esc(p.tipo) + ')' : ''} · Envio ${p.envio ? SHC.moeda(p.envio) : 'do comprador'}${l.imposto ? ' · Imposto ' + SHC.moeda(l.imposto) : ''}</div></details></div>`;
-            }).join('') + (r.props.length > 3 && !abertos.has(chave) ? `<button class="mais" data-abrir="${esc(chave)}">+ ${SHC.qtd(r.props.length - 3, 'proposta', 'propostas')}</button>` : '')
-                + notaRecomendacao(r)
-                : '<div class="det" style="margin-top:8px">Sem proposta de promoção para este produto agora.</div>';
+                  <details class="pdet vm-d"><summary><span class="vm-f">Ver a conta</span></summary><div class="det">Tarifa ${SHC.moeda(p.tarifa)}${p.tipo ? ' (' + esc(p.tipo) + ')' : ''} · Envio ${p.envio ? SHC.moeda(p.envio) : 'do comprador'}${l.imposto ? ' · Imposto ' + SHC.moeda(l.imposto) : ''}</div></details></div>`;
+            }).join('') + maisProps
+                + notaRecomendacao(r) + (P.semCalcTxt(snap, chave) ? `<div class="det" style="margin-top:6px">${esc(P.semCalcTxt(snap, chave))}</div>` : '')
+                : `<div class="det" style="margin-top:8px">${esc(P.semCalcTxt(snap, chave) || 'Sem proposta de promoção para este produto agora.')}</div>`;
             const expl = `<button class="lnk explique" data-explique="${esc(chave)}">${explicando === chave ? 'Fechar explicação' : (r.rec && r.rec.tipo === 'ideal' ? 'Por que esta é a melhor?' : 'Explique estas propostas')}</button>` + (explicando === chave ? caixaExplica(r) : '');
             return `<div class="card"><div class="fam">${f.foto ? `<img src="${esc(f.foto)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<img alt="">'}
               <div style="min-width:0"><div class="tit">${esc(f.titulo)}</div><div class="sub">${esc([onde, f.estoque, f.tipos].filter(Boolean).join(' · '))}</div></div></div>
               ${custoHtml}${props}${expl}</div>`;
-        }).join('') + botaoMais('promo', lista.length - limite.promo);
+        }).join('') + botaoMais('promo', lista.length - limite.promo) + vmFim('promo:lista');
     }
 
     // ── Frete ─────────────────────────────────────────────────────────────────────────────────
@@ -2368,6 +2758,171 @@
         if (typeof v === 'number' && v < 0) return `<span class="selo ok">caiu ${esc(pctSin(v))}</span>`;
         return (fa && fa.ult30 && fa.ult30.pedidos) || l.h ? '<span class="selo cz">estável</span>' : '';   // sem dado: o chip ao lado já diz "sem pedido/sem histórico"
     }
+    // v3.2: tarifa de devolução × pós-venda (SHC.fech.devolucoesDe) | null (frete de devoluções não lido). devCopiado = pedido do último texto copiado.
+    let devCopiado = '', recFrCopiado = '';   // recFrCopiado = pedido do frete copiado em "Como pedir de volta" (Conciliação)
+    const devContestar = () => (SHC.fech && SHC.fech.devolucoesDe ? SHC.fech.devolucoesDe(freteHist, posvenda) : null);
+    P.devContestar = devContestar;
+    async function copiarDev(pedido) {
+        const x = ((devContestar() || {}).itens || []).find(i => i.pedido === pedido && i.texto);
+        if (!x) return;
+        try { await navigator.clipboard.writeText(x.texto); devCopiado = pedido; }
+        catch (e) { devCopiado = ''; avisa('Não consegui copiar sozinho. Abra o fechamento completo e copie o texto de lá.', 8000); }
+        desenhaAba();   // a aba aberta (Frete ou Conciliação) mostra "✓ Copiado"
+    }
+    // ── v3.2 Logística por anúncio (pergunta da dona em 30/09: "o sistema consegue mensurar o tipo de logística do anúncio e me avisar se não é o
+    // modelo apropriado?"). SHC.logisticaDoAnuncio junta lista de Anúncios + medidas da tela "Alterar anúncio" + NF-e das vendas + Full + Reputação.
+    function logDados() {
+        const notas = [].concat(...nfeV.map(x => (x && x.notas) || [])), nfe = SHC.nfeLogisticaPorItem(notas, vendas);
+        // F13b: todos os MLB de cada produto do Full (variações e Clássico/Premium), não só o 1º.
+        const noFull = new Set([].concat(...((full && full.produtos) || []).filter(Boolean).map(P.idsDoFull)).filter(Boolean)), rep = {};
+        ((reputacao && reputacao.topItens) || []).forEach(t => { rep[t.itemId] = t.problemas; });
+        return it => {
+            const cad = it.sku ? cadSku[SHC.chaveSku(it.sku)] || {} : {};
+            return { medida: ((((medidas && medidas.porItem) || {})[it.itemId]) || {}).atual || null, medidaErp: SHC.medidaDe([cad.larguraCm, cad.alturaCm, cad.comprimentoCm], cad.pesoKg),
+                nfe: nfe[it.itemId] || null, noFull: noFull.has(it.itemId), repProblemas: rep[it.itemId] || null,
+                editor: ((editor && editor.porItem) || {})[it.itemId] || null };   // v3.2: forma de entrega do Editor em massa
+        };
+    }
+    const logDe = (it, dd) => SHC.logisticaDoAnuncio(it, (dd || logDados())(it));
+    // Etiqueta da forma de entrega: contorno próprio (.selo.ent), para não se confundir com os selos cinza de frete.
+    const seloLog = g => `<span class="selo ent${g.modeloAdequado === false ? ' at' : ''}" title="${esc(g.motivo)}">${esc(g.rotulo)}${g.certeza === 'provavel' ? '?' : ''}</span>`;
+    const NIVEL_LOG = { pr: 'pr', at: 'at', n: '' };
+    const naoConferido = a => (a.confirmado || /conferido/.test(a.fonte) ? '' : ' (ainda não conferido)');
+    const avisoLog = a => `<p class="det"><span class="pt ${NIVEL_LOG[a.nivel]}"></span><b>${esc(a.txt)}</b> <small>${esc(a.regra)} Fonte: ${esc(a.fonte)}${naoConferido(a)}.</small></p>`;
+    // Bloco "Logística" da aba Frete: quantos anúncios em cada modalidade, os que pedem atenção e os atrasos da conta (Reputação).
+    // Cartão "Logística deste anúncio" no detalhe da aba Frete: 3 linhas curtas (forma · status / despacho / veredito) e a fonte pequena no fim.
+    function cardLogistica(it) {
+        const g = logDe(it), full = g.modalidade === 'full';
+        const cabe = full ? (g.cabeNaMe2 === 'sem medida' ? 'Medidas: ainda não lidas.' : '')
+            : 'Cabe no Mercado Envios: ' + { sim: 'sim', nao: 'não', 'sem medida': 'sem medida lida' }[g.cabeNaMe2] + '.';
+        const st = g.status.charAt(0).toUpperCase() + g.status.slice(1);
+        return `<div class="card" id="frLog"><b style="font-size:13px">Logística deste anúncio</b>
+            <p style="margin:6px 0 0;font-size:12.5px"><b>${esc(g.rotulo)}</b>${g.certeza === 'provavel' ? ' (provável)' : ''}${g.flex === true ? ' · Flex ativo' : ''} · ${esc(g.status)}${g.statusTxt && g.statusTxt !== g.status ? ' (' + esc(g.statusTxt) + ')' : ''}</p>
+            <p class="det">${esc(g.prazoDespacho || 'Prazo de despacho: cada venda tem o seu (o Copiloto ainda não lê).')}${cabe ? ' ' + esc(cabe) : ''}</p>
+            ${g.avisos.map(avisoLog).join('') || (g.modeloAdequado ? '<p class="det" style="color:var(--verde);font-weight:650">✓ Forma de entrega adequada</p>' : '')}
+            <p class="det"><small>${esc(g.motivo)}${g.cabeFonte && !full ? ' Medida: ' + esc(g.cabeFonte) + '.' : ''} Status: ${esc(st)}.</small></p></div>`;
+    }
+    function blocoLogistica() {
+        // F24: finalizado não é anúncio em venda (fica fora); a contagem por forma é só dos ATIVOS, com "+ N pausados" à parte.
+        const dd = logDados(), ls = itens.filter(it => it && it.itemId && !P.anuncioFinalizado(it)).map(it => ({ it, g: logDe(it, dd) }));
+        if (!ls.length) return '';
+        const cont = {}, nPaus = ls.filter(x => !SHC.anuncioAtivo(x.it)).length;
+        ls.forEach(x => { if (SHC.anuncioAtivo(x.it)) cont[x.g.modalidade] = (cont[x.g.modalidade] || 0) + 1; });
+        const ord = { pr: 0, at: 1, n: 2 }, pior = g => Math.min(3, ...g.avisos.map(a => ord[a.nivel]));
+        const atencao = ls.filter(x => x.g.avisos.some(a => a.nivel !== 'n')).sort((a, b) => pior(a.g) - pior(b.g));
+        const inad = ls.filter(x => x.g.modeloAdequado === false).length, peloML = ls.filter(x => x.g.pausadoPeloML).length;
+        const mods = Object.keys(cont).sort((a, b) => cont[b] - cont[a]);
+        const at = ((reputacao && reputacao.variaveis) || []).find(v => v && (v.id === 'delayed_handling_time' || v.id === 'delays'));
+        const pc = v => String(v).replace('.', ',') + '%';
+        // Recolhido: a contagem por forma, quantos pedem atenção (ponto âmbar/vermelho) e os atrasos da conta — quem não abre vê que há algo.
+        const ptAv = atencao.length ? `<span class="pt ${atencao.some(x => pior(x.g) === 0) ? 'pr' : 'at'}"></span>` : '';
+        const resumo = esc(mods.map(k => SHC.LOGISTICA_ROTULO[k] + ' ' + P.milhar(cont[k])).join(' · ') + (nPaus ? ' + ' + SHC.qtd(nPaus, 'pausado', 'pausados') : '')) + (atencao.length ? ' · ' + ptAv + esc(atencao.length + ' com aviso') : '')
+            + (inad ? esc(' · ' + SHC.qtd(inad, 'modelo não adequado', 'modelos não adequados')) : '') + (peloML ? esc(' · ' + peloML + ' com restrição do ML') : '')
+            + (at && at.pct !== null ? esc(' · atrasos ' + pc(at.pct) + (at.limitePct !== null ? ' de ' + pc(at.limitePct) : '')) : '');
+        const dentro = `<table class="tabf"><thead><tr><th>Forma de entrega</th><th>Anúncios ativos</th></tr></thead><tbody>${mods.map(k => `<tr><td>${esc(SHC.LOGISTICA_ROTULO[k])}</td><td>${P.milhar(cont[k])}</td></tr>`).join('')}</tbody></table>`
+            + (nPaus ? `<p class="det">+ ${esc(SHC.qtd(nPaus, 'anúncio pausado', 'anúncios pausados'))} (fora da contagem).</p>` : '')
+            + (at && at.pct !== null ? `<p class="det"><b>Envios atrasados da conta: ${esc(pc(at.pct))}</b>${at.limitePct !== null ? ' · limite ' + esc(pc(at.limitePct)) : ''} (Reputação do ML). O atraso por anúncio o ML não mostra na lista.</p>` : '<p class="det">Envios atrasados: aparecem quando a Reputação for lida.</p>')
+            + (atencao.length ? vmLista('frete:logat', atencao, 5)[0].map(x => `<button class="card linha-fr" data-frete-det="${esc(x.it.itemId)}"><div class="tit">${esc(x.it.titulo)} ${seloLog(x.g)}</div><div class="sub">${esc(x.it.itemId)} · ${esc(x.g.status)}${x.g.statusTxt && x.g.statusTxt !== x.g.status ? ' (' + esc(x.g.statusTxt) + ')' : ''}</div>`
+                + x.g.avisos.filter(a => a.nivel !== 'n').map(a => `<p class="det"><span class="pt ${NIVEL_LOG[a.nivel]}"></span>${esc(a.txt)}${a.confirmado ? '' : ' <small>(limite ainda não conferido)</small>'}</p>`).join('') + '</button>').join('')
+                + (atencao.length > 5 ? `<p class="rs">${vmLista('frete:logat', atencao, 5)[1]}</p>` : '')
+                : '<p class="est vazio"><span><b>Nenhum aviso de logística.</b> Toque num anúncio para ver a forma de entrega dele.</span></p>')
+            + '<p class="det">Forma de entrega pela lista de Anúncios, pelas NF-e das vendas, pelo estoque do Full e pela tela “Alterar anúncio” (medidas). “?” = provável. O prazo de despacho de cada venda o Copiloto ainda não lê.</p>';
+        return blocoFr('frete:log', 'Logística', resumo, dentro);
+    }
+    // ── v3.3 Cartão "Frete cobrado a mais" (pedido da dona 30/09, print 71). fc = P.freteCobrado, sj = P.freteSubidaJanela, dd = 'DD/MM'.
+    // Título do anúncio: até 2 linhas com "…" (nome inteiro no title), barra numa linha própria abaixo: o texto nunca passa por cima dela.
+    // frCopiado = '*' (todos) ou o MLB do último chamado copiado. O Copiloto só copia: quem abre o chamado no ML é a seller (só leitura no ML).
+    let frCopiado = '';
+    async function copiarFrete(alvoId) {
+        const cc = P.concDe(freteHist), pa = (cc && cc.pagoAMais) || [];
+        const txt = P.chamadoFreteLote(alvoId === '*' ? pa : pa.filter(p => p.itemId === alvoId), tituloDe);
+        if (!txt) return;
+        try { await navigator.clipboard.writeText(txt); frCopiado = alvoId; }
+        catch (e) { frCopiado = ''; avisa('Não consegui copiar sozinho. Toque no número do pedido e confira a conta no ML.', 8000); }
+        desenhaAba();
+    }
+    const pctBarra = v => (v > 0 ? Math.max(1, v) : 0);   // parte do total (%); abaixo de 1% fica com 1% para aparecer
+    const r2s = vs => SHC.r2(vs.reduce((s, v) => s + v, 0));
+    // B1: np = pedidos do anúncio sem o corte de 200 (porItem); a tabela mostra os guardados e diz quantos ficaram de fora.
+    function tabelaFreteAMais(ps, dd, np, kv) {
+        const [vis, bt] = vmLista(kv, ps, 5), resto = Math.max(0, (np || 0) - ps.length);   // resto = pedidos que não vieram na lista guardada
+        const lk = p => (SHC.fech && SHC.fech.URL ? `<a class="lnk" href="${esc(SHC.fech.URL.cobranca(p.pedidoFrete || p.pedido))}" target="_blank" rel="noopener">${p.talvezUnidades ? 'Conferir no ML ↗' : 'Abrir a cobrança no ML ↗'}</a>` : '');
+        return `<table class="tabf fr-tp"><thead><tr><th>Pedido</th><th>Data</th><th>Cobrado × anúncio</th><th>A mais</th></tr></thead><tbody>`
+            + vis.map(p => `<tr${p.talvezUnidades ? ' class="fr-conf"' : ''}><td><button class="lnk" data-ver="fped:${esc(p.pedido)}" aria-expanded="${aberto('fped:' + p.pedido)}" title="Ver a conta deste frete">${esc(p.pedido)}</button>`
+                + (p.talvezUnidades ? `<span class="selo at">${p.vezes ? esc(p.vezes + '× · para conferir') : 'para conferir'}</span>` : '') + `</td><td>${esc(dd(p.data))}</td><td>${SHC.moeda(p.cobrado)} × ${SHC.moeda(p.esperado)}</td><td class="mais">+${SHC.moeda(p.diferenca)}</td></tr>`
+                + (aberto('fped:' + p.pedido) ? `<tr class="conta-ped"><td colspan="4">${P.contaFretePedido(p).map(l => `<div class="cl ${l.cls}"><span>${esc(l.rot)}</span><b>${esc(l.val)}</b></div>`).join('')}<div class="fr-lk">${lk(p)}</div></td></tr>` : '')).join('')
+            + `</tbody>${bt || resto > 0 ? `<tfoot><tr><td colspan="4">${bt}${resto > 0 ? `${bt ? ' · ' : ''}${esc(SHC.qtd(resto, 'pedido', 'pedidos'))} fora da lista guardada` : ''}</td></tr></tfoot>` : ''}</table>`;
+    }
+    function cartaoFreteAMais(fc, sj, dd) {
+        const temSub = sj && sj.anuncios.length;
+        if (!fc && !temSub) return '';
+        const q = (n, um, v) => esc(SHC.qtd(n, um, v)), m = SHC.moeda;
+        let h = `<div class="card fr-am" id="freteAMais"><div class="ch"><h3>Frete cobrado a mais</h3><button class="ajuda" type="button" title="Frete que o ML cobrou acima do frete do anúncio no dia da venda. Confirmado: diferença de 1 unidade, dá para contestar. Para conferir: frete 1,6× ou mais (ou 2×, 3× exatos), pode ser pedido com mais de 1 unidade. Cada pedido aparece uma vez só. Toque no número do pedido para ver a conta linha a linha." aria-label="Ajuda: Frete cobrado a mais">?</button></div>`;
+        const de = fc ? fc.de : '', ate = fc ? fc.ate : SHC.hoje();
+        h += `<p class="fr-per">Últimos 30 dias${de ? ` · ${esc(dd(de))} a ${esc(dd(ate))}` : ''}</p>`;
+        if (fc && fc.n) {
+            const c = fc.contestar, t = fc.conferir;
+            // B1: o total fica neutro (soma o certo com a dúvida); vermelho só no Confirmado. Linha zerada não aparece.
+            const hojeConf = fc.todos.some(y => y.peds.some(p => p.talvezUnidades && p.base === 'hoje' && !p.vezes && p.cobrado < 1.6 * p.esperado));
+            const nCop = fc.todos.reduce((s, y) => s + y.peds.filter(p => !p.talvezUnidades && p.diferenca > 0).length, 0);   // a cópia sai da lista guardada (até 200)
+            h += `<p class="fr-big"><b>${m(fc.total)}</b> em ${q(fc.n, 'pedido', 'pedidos')}</p><ul class="fr-split">`
+                + (c.n ? `<li class="fr-c"><span class="pt pr"></span><span class="r">Confirmado <small>dá para contestar</small></span><b>${m(c.v)}</b><small>${q(c.n, 'pedido', 'pedidos')}</small></li>` : '')
+                + (t.n ? `<li><span class="pt at"></span><span class="r">Para conferir <small>${hojeConf ? 'pode ter 2+ unidades ou falta o frete do dia' : 'pode ter 2+ unidades'}</small></span><b>${m(t.v)}</b><small>${q(t.n, 'pedido', 'pedidos')}</small></li>` : '') + '</ul>'
+                + (c.n && nCop ? `<div class="linha-bts"><button class="bt pq" data-fr-copiar="*">${frCopiado === '*' ? '✓ Copiado' : nCop < c.n ? `Copiar texto do chamado (os ${nCop} maiores de ${c.n} confirmados)` : c.n === 1 ? 'Copiar texto do chamado (1 pedido confirmado)' : `Copiar texto do chamado (${c.n} pedidos confirmados)`}</button></div>` : '');
+            const todos = aberto('frete:amaisTodos'), lista = todos ? fc.todos.slice(0, 50) : fc.produtos, alem = todos ? fc.todos.slice(50) : [];
+            h += '<p class="fr-sec">Por anúncio</p>' + lista.map(y => {
+                const tt = tituloDe(y.id), it = itens.find(x => x.itemId === y.id), k = 'fprod:' + y.id, ab = aberto(k), np = y.n + y.nt;
+                const aria = `${m(y.tot)} de ${m(fc.total)}` + (y.n ? `: ${m(y.v)} confirmado` : '') + (y.nt ? `${y.n ? ' e' : ':'} ${m(y.vt)} para conferir` : '');
+                return `<div class="fr-pd"><div class="fr-pd-l"><b class="fr-pd-t" title="${esc(tt)}">${esc(tt)}</b><b class="fr-pd-v">${m(y.tot)}</b></div>`
+                    + `<p class="fr-pd-m"><span>${esc(it && it.sku ? 'SKU ' + it.sku : y.id)}</span>`
+                    + (y.n ? `<span>${q(y.n, 'pedido', 'pedidos')} · +${m(y.porEnvio)}/envio</span>` : '')
+                    + (y.nt ? `<span class="selo at">Para conferir: ${q(y.nt, 'pedido', 'pedidos')} · ${m(y.vt)}</span>` : '') + '</p>'
+                    + `<div class="fr-bar" role="img" aria-label="${esc(aria)}"><i class="${y.baixo ? 'cz' : 'pr'}" style="width:${pctBarra(y.pctC)}%"></i><i class="at" style="width:${pctBarra(y.pctT)}%"></i></div>`
+                    + (y.baixo ? '<p class="fr-pd-n">Valor baixo: conteste junto com os outros.</p>' : '')
+                    + `<div class="fr-pd-a"><button class="lnk" data-ver="${esc(k)}" aria-expanded="${ab}">${ab ? 'Ver menos' : np === 1 ? 'Ver pedido' : `Ver pedidos (${np})`}</button>`
+                    + (y.n ? `<button class="lnk" data-fr-copiar="${esc(y.id)}">${frCopiado === y.id ? '✓ Copiado' : 'Copiar texto do chamado'}</button>` : '')
+                    + `<button class="lnk" data-frete-det="${esc(y.id)}">Detalhe do anúncio</button></div>`
+                    + (ab ? tabelaFreteAMais(y.peds, dd, np, k + ':todos') : '') + '</div>';
+            }).join('')
+                + (alem.length ? `<p class="rs">${esc(`e mais ${SHC.qtd(alem.length, 'anúncio', 'anúncios')} (${m(r2s(alem.map(y => y.tot)))} em ${SHC.qtd(alem.reduce((s, y) => s + y.n + y.nt, 0), 'pedido', 'pedidos')})`)}</p>` : '')
+                + (fc.resto ? `<p class="rs">${todos ? '' : esc(`${m(fc.resto.v)} em ${SHC.qtd(fc.resto.pedidos, 'pedido', 'pedidos')} nos outros anúncios · `)}${btVer('frete:amaisTodos', `Ver mais (${fc.resto.anuncios})`)}</p>` : '');
+        } else if (fc) h += '<p class="est vazio"><span><b>Nenhum pedido cobrado acima do frete do anúncio.</b> Nada para contestar nestes 30 dias.</span></p>';
+        if (temSub) {
+            const com = sj.anuncios.filter(a => a.n), [comV, comBt] = vmLista('frete:subiu', com, 3);
+            h += '<div class="fr-subiu"><p class="fr-sec">Frete do anúncio subiu</p>' + comV.map(a => {
+                const tt = tituloDe(a.id);
+                return `<div class="fr-pd"><div class="fr-pd-l"><b class="fr-pd-t" title="${esc(tt)}">${esc(tt)}</b><b class="fr-pd-v">${m(a.v)}</b></div>`
+                    + `<p class="fr-pd-m"><span>${m(a.base)} → ${m(a.para)} desde ${esc(dd(a.desde))}</span><span>${q(a.n, 'pedido', 'pedidos')} acima de ${m(a.base)}</span></p>`
+                    + `<div class="fr-pd-a"><button class="lnk" data-frete-det="${esc(a.id)}" data-frete-ir="frChamado">Pedir revisão do anúncio</button></div></div>`;
+            }).join('') + (comBt ? `<p class="rs">${comBt}</p>` : '')
+                + `<p class="det">${com.length ? 'Outra conta: frete cobrado × o frete de ANTES da subida. Aqui se pede a revisão do ANÚNCIO (peso e medidas); não entra no total de cima.' : ''}`
+                + (sj.jaEmCima ? ` ${esc(SHC.qtd(sj.jaEmCima, 'pedido de anúncio com frete que subiu já está', 'pedidos de anúncio com frete que subiu já estão'))} na lista de cima (não conto 2 vezes).` : '') + '</p></div>';
+        }
+        // Régua dita como é: "no dia da venda" só quando todo pedido teve o frete do dia guardado (base 'dia'); frete:hist antigo = "hoje".
+        const bs = new Set([].concat(...(fc ? fc.todos : []).map(y => y.peds)).map(p => p.base || 'hoje'));
+        const regua = !bs.size || !bs.has('dia') ? 'o frete do anúncio hoje' : bs.has('hoje') ? 'o frete do anúncio no dia da venda (sem o dia guardado, o de hoje)' : 'o frete do anúncio no dia da venda';
+        return h + `<p class="det">Régua: ${regua}. O Copiloto só copia o texto: quem abre o chamado no ML é você.</p></div>`;
+    }
+    // v3.2 Cartão "Mesmo SKU, frete diferente" (pedido da dona 30/09: HA-14253 com R$ 45,35 e R$ 58,75). Só aparece com diferença REAL:
+    // mesmo SKU, mesma faixa de preço do ML e frete maior que o dos outros anúncios (P.freteMesmoSku). Diferença de faixa de preço não é erro
+    // e fica só no balão da tela do ML. O Copiloto não altera nada: aponta e abre o anúncio.
+    function cartaoFreteMesmoSku() {
+        const gs = P.freteMesmoSku(itens, vendas, medidas && medidas.porItem, SHC.hoje());
+        if (!gs.length) return '';
+        const m = SHC.moeda, num = id => '#' + String(id).replace(/^MLB/, ''), tot = SHC.r2(gs.reduce((s, g) => s + g.custoMes, 0));
+        return '<div class="card fr-am" id="freteMesmoSku"><div class="ch"><h3>Mesmo SKU, frete diferente</h3><button class="ajuda" type="button" title="Anúncios do mesmo SKU na mesma faixa de preço deveriam pagar o mesmo frete. Quando um paga mais, quase sempre o peso ou a medida da embalagem está diferente nele. Diferença só por outra faixa de preço não entra aqui." aria-label="Ajuda: Mesmo SKU, frete diferente">?</button></div>'
+            + `<p class="fr-big"><b>${esc(SHC.qtd(gs.length, 'SKU', 'SKUs'))}</b>${esc(tot > 0 ? `com frete acima · ${m(tot)} a mais nos últimos 30 dias` : 'com frete acima dos outros anúncios')}</p>`
+            + gs.slice(0, 5).map(g => g.fogem.map(a => {
+                const tt = a.titulo || tituloDe(a.itemId), ns = g.normal.itemIds.slice(0, 3).map(num).join(', ') + (g.normal.itemIds.length > 3 ? '…' : '');
+                return `<div class="fr-pd"><div class="fr-pd-l"><b class="fr-pd-t" title="${esc(tt)}">${esc(`SKU ${g.sku} · ${num(a.itemId)}${a.tipo ? ' ' + a.tipo : ''}`)}</b><b class="fr-pd-v">+${esc(m(a.dif))}/envio</b></div>`
+                    + `<p class="fr-pd-m"><span>${esc(`paga ${m(a.frete)}; ${ns} paga${g.normal.itemIds.length > 1 ? 'm' : ''} ${m(g.normal.frete)}`)}</span><span>${esc('faixa ' + g.faixaTxt)}</span>`
+                    + `<span>${esc(a.vendas ? `${SHC.qtd(a.vendas, 'envio', 'envios')} em 30 dias = ${m(a.custoMes)}` : 'sem envio nos últimos 30 dias')}</span></p>`
+                    + `<p class="fr-pd-n">${esc('Motivo provável: peso ou medidas da embalagem. ' + a.medidaTxt)}</p>`
+                    + `<div class="fr-pd-a"><button class="lnk" data-abrir-anuncio="${esc(a.itemId)}">Ver o anúncio no ML</button><button class="lnk" data-frete-det="${esc(a.itemId)}">Detalhe do anúncio</button></div></div>`;
+            }).join('')).join('')
+            + (gs.length > 5 ? `<p class="rs">${esc(`e mais ${SHC.qtd(gs.length - 5, 'SKU', 'SKUs')}`)}</p>` : '')
+            + '<p class="det">O ML cobra o frete pelo peso e pelas medidas da embalagem e pela faixa de preço; Clássico ou Premium não muda o frete. O Copiloto não altera nada: confira a medida no anúncio e, se ela estiver certa, peça a revisão ao ML.</p></div>';
+    }
     function desenhaFrete() {
         const alvo = $('#listaFrete'), topo = $('#freteTopo');
         if (!itens.length) {
@@ -2381,19 +2936,23 @@
         const ae = document.activeElement, foco = ae && ae.id === 'buscaFrete' ? (ae.selectionStart || 0) : null;
         const cob = P.temFreteCob(freteHist), ct = cob ? freteHist.conta : null, cc = P.concDe(freteHist), conc = P.concFrete(cc), semLer = P.freteSemLeitura(freteHist);
         const linhas = linhasFrete().sort((a, b) => (b.subiu - a.subiu) || (varDe(b) - varDe(a)));
-        const subiram = linhas.filter(l => l.subiu).length, pa = (cc && cc.pagoAMais) || [], idsAMais = new Set(pa.map(p => p.itemId));
-        const paSeguro = pa.filter(p => !p.talvezUnidades).length, paTalvez = pa.length - paSeguro;   // v3.1: * = pode ter 2+ unidades (fora do total)
+        const subiram = linhas.filter(l => l.subiu).length, pa = (cc && cc.pagoAMais) || [];
+        // v3.3: o cartão "Frete cobrado a mais" (P.freteCobrado): total = dá para contestar + confira antes, nos mesmos 30 dias.
+        const fc = conc ? P.freteCobrado(cc, SHC.hoje()) : null, idsAMais = new Set(fc ? fc.todos.map(y => y.id) : pa.map(p => p.itemId));
+        const paSeguro = fc ? fc.contestar.n : 0;
         const temVendas = itens.some(it => Object.keys(vendas[it.itemId] || {}).length);
         const rk = temVendas ? P.rankingFrete(itens, vendas) : null;
         freteN = linhas.length;
         // Subidas em números (as mesmas do chamado) e o lucro de hoje de cada anúncio.
         const hojeD = SHC.hoje(), subs = linhas.filter(l => l.subiu).map(l => ({ l, s: P.subidaFrete(l, vendas[l.it.itemId], hojeD), so: sobraDe(l.it) })).filter(x => x.s);
         const prej = x => !!(x.so && x.so.sobra !== null && x.so.sobra < 0), dd = d => P.dataBr(d).slice(0, 5);
+        const de30 = fc ? fc.de : new Date(Date.parse(hojeD + 'T12:00:00Z') - 29 * 864e5).toISOString().slice(0, 10);
+        const sj = P.freteSubidaJanela(subs, vendas, P.idsCobradoAMais(cc), de30, new Set((cc && cc.foraJanela) || []));   // v3.3: mesma janela, sem repetir pedido
         // Manchete: 1 frase, a pior situação primeiro.
         const x0 = subs[0];
         const [ptM, fato, acao] = subiram ? [subs.some(prej) ? 'pr' : 'at', SHC.qtd(subiram, 'frete subiu', 'fretes subiram') + ':',
                 x0 ? `${nomeCurto(x0.l.it.titulo, 22)} ${mais(x0.s.dif)} por envio${x0.s.desde ? ' desde ' + dd(x0.s.desde) : ''}${x0.s.porMes > 0 ? ` (${rs0(x0.s.porMes)} a mais por mês)` : ''}.` : 'Veja os anúncios em “Frete por anúncio”.']
-            : paSeguro ? ['at', SHC.qtd(paSeguro, 'pedido cobrado', 'pedidos cobrados') + ' acima do frete do anúncio.', `Confira e peça revisão (${SHC.moeda(cc.totalAMais || 0)}).`]
+            : paSeguro ? ['at', SHC.qtd(paSeguro, 'pedido cobrado', 'pedidos cobrados') + ' acima do frete do anúncio.', `Dá para contestar ${SHC.moeda(fc.contestar.v)}.`]
             : cob ? ['ok', 'Nenhum frete subiu.', `Últimos 30 dias: ${rs0(ct.ult30.total)} em ${SHC.qtd(ct.ult30.pedidos, 'pedido', 'pedidos')}.`]
             : ['', 'Nenhum frete subiu na lista do ML.', 'O frete de cada pedido chega com o Faturamento.'];
         // KPIs (#freteTopo): cada um filtra a lista "Frete por anúncio" (tocar de novo tira o filtro).
@@ -2405,7 +2964,8 @@
         if (cob) {
             const u = ct.ult30, vp = P.varPct(ct.variacaoPct);
             kp = kB('', '', 'Últimos 30 dias', rs0(u.total), esc(SHC.qtd(u.pedidos, 'pedido', 'pedidos') + (vp && !semLer ? ' · ' + vp + ' por pedido' : ''))) + kSub
-                + (conc ? kB('amais', paSeguro ? 'pr' : '', 'Pago a mais', SHC.moeda(cc.totalAMais || 0), esc('em ' + SHC.qtd(paSeguro, 'pedido', 'pedidos'))) : kGra('gratis'));
+                // v3.3: mesmo nome e mesmo número do cartão ("Cobrado a mais" = contestar + conferir, 30 dias).
+                + (fc ? kB('amais', paSeguro ? 'pr' : fc.n ? 'at' : '', 'Cobrado a mais', SHC.moeda(fc.total), esc('em ' + SHC.qtd(fc.n, 'pedido', 'pedidos') + (fc.conferir.n === fc.n && fc.n ? ' para conferir' : fc.conferir.n ? ` · ${fc.conferir.n} para conferir` : ''))) : kGra('gratis'));
         } else kp = '<div class="kpi kn"><span class="l">Últimos 30 dias</span><span class="v">—</span><span class="s">ainda não lido</span></div>' + kSub + kGra('gratis');
         topo.innerHTML = `<p class="manchete"><span class="pt ${ptM}"></span><b>${esc(fato)}</b> ${esc(acao)}</p><div class="kpis k3">${kp}</div>`
             + (cob ? '' : `<p class="nota"><span class="auto"></span><span>${esc(P.freteSemDado(freteHist, status, Date.now()))}</span></p>`);
@@ -2423,47 +2983,38 @@
         else if (paSeguro) A += `<p class="est"><span><b>Nenhum frete subiu.</b> Confira os pedidos cobrados a mais, logo abaixo.</span></p>`;
         else A += `<p class="est vazio"><span><b>Nenhum frete subiu.</b> Nada para contestar agora.</span></p>`;
         A += '</div>';
-        // [A] Cobrado a mais (conciliação por pedido), em barras por anúncio; os pedidos com * (talvez 2+ unidades) ficam fora do total.
-        if (conc && pa.length) {
-            const g = {}; pa.filter(p => !p.talvezUnidades).forEach(p => { const y = g[p.itemId] = g[p.itemId] || { id: p.itemId, n: 0, v: 0 }; y.n++; y.v = SHC.r2(y.v + (p.diferenca || 0)); });
-            const gs = Object.keys(g).map(k => g[k]).sort((a, b) => b.v - a.v), mx = gs.length ? gs[0].v : 0;
-            A += `<div class="card" id="freteAMais"><div class="ch"><h3>Cobrado a mais</h3><button class="ajuda" type="button" title="Pedido em que o ML cobrou de frete mais do que o frete do anúncio. Toque no número do pedido para ver a conta linha a linha, igual ao detalhe da venda no ML." aria-label="Ajuda: Cobrado a mais">?</button></div>`
-                + (paSeguro ? `<p class="fr-tot"><b class="vm">${SHC.moeda(cc.totalAMais || 0)}</b> em ${esc(SHC.qtd(paSeguro, 'pedido cobrado', 'pedidos cobrados'))} acima do frete do anúncio</p>` : '')
-                + gs.slice(0, 5).map(y => `<button class="hb fr-hb" data-frete-det="${esc(y.id)}"><span class="l"><b title="${esc(tituloDe(y.id))}">${esc(tituloDe(y.id))}</b><span class="v">${SHC.moeda(y.v)} <small>· ${esc(SHC.qtd(y.n, 'pedido', 'pedidos'))}</small></span></span><span class="medidor"><i class="pr" style="width:${mx > 0 ? Math.max(4, Math.round(y.v / mx * 100)) : 0}%"></i></span></button>`).join('')
-                + (paTalvez ? `<p class="det">${esc(SHC.qtd(paTalvez, 'pedido', 'pedidos'))} com * (${SHC.moeda((cc.talvez && cc.talvez.total) || 0)}): frete bem maior, pode ter mais de 1 unidade. Confira antes de reclamar.</p>` : '')
-                + `<p class="rs">${btVer('frete:amais', 'Ver os pedidos', 'Esconder')}</p>`;
-            if (aberto('frete:amais')) A += `<table class="tabf"><thead><tr><th>Pedido</th><th>Data</th><th>Cobrado</th><th>Anúncio</th><th>A mais</th></tr></thead><tbody>
-                    ${pa.slice(0, 20).map(p => `<tr><td><button class="lnk" data-ver="fped:${esc(p.pedido)}" aria-expanded="${aberto('fped:' + p.pedido)}" title="Ver a conta deste frete">${esc(p.pedido)}${p.talvezUnidades ? '*' : ''}</button></td><td>${esc(P.dataBr(p.data).slice(0, 5))}</td><td>${SHC.moeda(p.cobrado)}</td><td>${SHC.moeda(p.esperado)}</td><td class="mais">+${SHC.moeda(p.diferenca)}</td></tr>`
-                        + (aberto('fped:' + p.pedido) ? `<tr class="conta-ped"><td colspan="5">${P.contaFretePedido(p).map(l => `<div class="cl ${l.cls}"><span>${esc(l.rot)}</span><b>${esc(l.val)}</b></div>`).join('')}</td></tr>` : '')).join('')}
-                  </tbody>${pa.length > 20 ? `<tfoot><tr><td colspan="5">e mais ${SHC.qtd(pa.length - 20, 'pedido', 'pedidos')}: toque em “Pago a mais” para ver os anúncios</td></tr></tfoot>` : ''}</table>
-                  <p class="det">Toque no número do pedido para ver a conta linha a linha, igual ao detalhe da venda no ML.</p>`
-                    + (paTalvez ? '<p class="det">* Frete bem maior que o do anúncio: o pedido pode ter mais de 1 unidade. Confira antes de reclamar.</p>' : '');
-            A += '</div>';
-        }
-        // [V] Pedidos afetados: os cobrados acima do frete de antes, desde a subida (os mesmos do chamado).
-        const af = subs.filter(x => x.s.desde).map(x => ({ x, p: P.pedidosAMais(vendas[x.l.it.itemId], x.s.de, x.s.desde).peds })).filter(y => y.p.length);
-        const nAf = af.reduce((t, y) => t + y.p.length, 0), vAf = SHC.r2(af.reduce((t, y) => t + y.p.reduce((s, p) => s + p.dif, 0), 0));
-        const dAf = af.map(y => y.x.s.desde).sort()[0];
-        const bAf = af.length ? blocoFr('frete:afet', 'Pedidos afetados', esc(`${SHC.qtd(nAf, 'pedido', 'pedidos')} desde ${dd(dAf)} · ${SHC.moeda(vAf)} a mais`),
-            '<table class="tb">' + af.map(y => `<tr><td><button class="lnk" data-frete-det="${esc(y.x.l.it.itemId)}">${esc(y.x.l.it.titulo)}</button><span class="sm">desde ${esc(dd(y.x.s.desde))} · acima de ${SHC.moeda(y.x.s.de)}</span></td><td>${esc(SHC.qtd(y.p.length, 'pedido', 'pedidos'))} · ${SHC.moeda(SHC.r2(y.p.reduce((s, p) => s + p.dif, 0)))}</td></tr>`).join('') + '</table>'
-            + '<p class="det">Toque no anúncio para ver cada pedido e o texto pronto do chamado.</p>') : '';
+        // [A] v3.3 Frete cobrado a mais (pedido da dona 30/09, print 71: "ajustar melhor essa tela"): UMA lista, UM período, cada pedido uma vez.
+        // Total = dá para contestar + confira antes (fecha sempre). Cada anúncio: 1 linha com as 2 partes e 1 barra = a parte dele NO TOTAL.
+        // O antigo "Pedidos afetados" (outra conta: frete de antes da subida) vira a última parte do mesmo cartão, na mesma janela e sem repetir pedido.
+        A += cartaoFreteAMais(fc, sj, dd);
+        A += cartaoFreteMesmoSku();   // v3.2: só aparece quando um anúncio do mesmo SKU paga mais frete na mesma faixa de preço
+        const bAf = '';
         // [V] Frete de devoluções (tarifa de devolução = frete de VOLTA): separado do frete das vendas e do "pago a mais".
         const dv = cob && freteHist.devolucoes, du = dv && dv.ult30;
         let bDev = '';
         if (du && du.pedidos) {
-            const da = dv.ant30 || {}, lista = dv.lista || [];
-            bDev = blocoFr('frete:dev', 'Frete de devoluções', esc(`${SHC.moeda(du.total)} em ${SHC.qtd(du.pedidos, 'pedido', 'pedidos')} · 30 dias`) + (da.pedidos ? ` <span class="fr-ant">· antes ${SHC.moeda(da.total)}</span>` : ''),
+            const da = dv.ant30 || {};
+            // v3.2 (pedido da dona: "temos como questionar essa tarifa?"): cada tarifa × pós-venda → 🟢 dá para questionar / 🟡 vale conferir / ⚪ foi sua.
+            const dq = P.devContestar(), its = dq ? dq.itens : (dv.lista || []), CLS = { verde: 'ok', amarelo: 'at', cinza: '' };
+            const ROT_DEV = { verde: 'Dá para questionar', amarelo: 'Vale conferir', cinza: 'Foi sua responsabilidade' };
+            const qv = dq && dq.verde.n ? ` · <b class="vv">${esc(SHC.qtd(dq.verde.n, 'dá', 'dão'))} para questionar</b>` : '';
+            bDev = blocoFr('frete:dev', 'Frete de devoluções', esc(`${SHC.moeda(du.total)} em ${SHC.qtd(du.pedidos, 'pedido', 'pedidos')} · 30 dias`) + qv + (da.pedidos ? ` <span class="fr-ant">· antes ${SHC.moeda(da.total)}</span>` : ''),
                 '<p class="det">É o frete de volta do produto devolvido. Fica fora do frete das vendas e do “pago a mais”; no Fechamento entra como custo do mês. Para gastar menos, veja no Pós-venda por que os produtos voltam.</p>'
                 + (da.pedidos ? `<p class="det">30 dias anteriores: ${SHC.moeda(da.total)} em ${esc(SHC.qtd(da.pedidos, 'pedido', 'pedidos'))}.</p>` : '')
-                + (lista.length ? `<table class="tabf"><thead><tr><th>Pedido</th><th>Data</th><th>Anúncio</th><th>Devolução</th></tr></thead><tbody>
-                ${lista.slice(0, 20).map(p => `<tr><td>${esc(p.pedido)}</td><td>${esc(P.dataBr(p.data).slice(0, 5))}</td><td>${esc(tituloDe(p.itemId) || p.itemId || '—')}</td><td>${SHC.moeda(p.valor)}</td></tr>`).join('')}
-              </tbody></table>` : '') + '<p class="det">Fonte: Faturamento do ML (Tarifa de devolução).</p>');
+                + (dq && its.length ? `<p class="rs" id="devContestar"><span class="pt ok"></span>Dá para questionar: <b>${SHC.moeda(dq.verde.valor)}</b> (${dq.verde.n}) · <span class="pt at"></span>Vale conferir: <b>${SHC.moeda(dq.amarelo.valor)}</b> (${dq.amarelo.n}) · <span class="pt"></span>Foi sua: ${dq.cinza.n}</p>` : '')
+                + (its.length ? `<table class="tabf"><thead><tr><th>Pedido</th><th>Data</th><th>Anúncio</th><th>Devolução</th></tr></thead><tbody>
+                ${vmLista('frete:devtab', its, 10)[0].map(p => `<tr><td>${p.cor ? `<span class="pt ${CLS[p.cor]}" title="${esc(ROT_DEV[p.cor])}"></span>` : ''}${esc(p.pedido)}</td><td>${esc(P.dataBr(p.data).slice(0, 5))}</td><td>${esc(tituloDe(p.itemId) || p.itemId || '—')}</td><td>${SHC.moeda(p.valor)}</td></tr>`
+                    + (p.cor ? `<tr class="conta-ped"><td colspan="4"><small><b>${esc(ROT_DEV[p.cor])}:</b> ${esc(p.motivo)}</small>`
+                        + (p.texto ? `<div class="acoes" style="justify-content:flex-start;margin-top:4px"><button class="bt leve pq" data-dev-copiar="${esc(p.pedido)}">${devCopiado === p.pedido ? '✓ Copiado' : 'Copiar texto do chamado'}</button>${SHC.fech ? `<a class="lnk" href="${esc(SHC.fech.URL.cobranca(p.pedido))}" target="_blank" rel="noopener">Abrir a cobrança</a>` : ''}</div>` : '') + '</td></tr>' : '')).join('')}
+              </tbody></table>` + (its.length > 10 ? `<p class="rs">${vmLista('frete:devtab', its, 10)[1]}</p>` : '') : '')
+                + (dq ? '<p class="det">Cruzei cada tarifa com o pós-venda (motivo e de quem foi a responsabilidade). O Copiloto não abre chamado: copie o texto e abra no ML. Quem decide se devolve é o ML.</p>' : '')
+                + '<p class="det">Fonte: Faturamento do ML (Tarifa de devolução)' + (dq ? ' e Pós-venda do ML' : '') + '.</p>');
         }
         // [V] Conciliação: frete cobrado em cada pedido × frete do anúncio.
         const bConc = conc ? blocoFr('frete:conc', 'Conciliação do frete', esc(cc.vendas ? `${P.milhar(cc.conciliados || 0)} de ${P.milhar(cc.vendas)} pedidos conferidos · faltam ${P.milhar(cc.faltam || 0)}` : 'nenhum pedido nos últimos 30 dias'),
             `<p class="fr-tot"><b>${esc(conc.titulo)}</b></p>${cc.vendas ? `<div class="barra-g" role="progressbar" aria-label="Pedidos conciliados" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${conc.pct}"><i style="width:${conc.pct}%"></i></div>` : ''}
               <p class="det">Conciliar = comparar o frete cobrado em cada pedido com o frete do anúncio.</p>${conc.motivos.map(m => `<p class="det">${esc(m)}</p>`).join('')}
-              <p class="det">Fonte: Faturamento do ML (frete cobrado) e lista de Anúncios (frete do anúncio hoje).</p>`) : '';
+              <p class="det">Fonte: Faturamento do ML (frete cobrado) e lista de Anúncios (frete do anúncio no dia da venda; sem o dia guardado, o de hoje).</p>`) : '';
         // [V] Formatos de frete dos últimos 30 dias (só os que existem nos dados).
         const fm = cob ? P.formatosFrete(ct.porFormato) : [];
         let bFmt = '';
@@ -2481,25 +3032,26 @@
         }
         // [V] Frete a mais por SKU em 12 meses (lucro perdido).
         const bRk = rk && rk.grupos.length ? blocoFr('frete:rank', 'Frete a mais por SKU', esc(SHC.moeda(rk.total12) + ' em 12 meses · ' + SHC.qtd(rk.grupos.length, 'SKU', 'SKUs')),
-            `<div class="rank">${rk.grupos.slice(0, 5).map(g => `<button data-frete-det="${esc(g.itemIds[0])}"><b>${esc(g.titulo)}</b><b class="v">${SHC.moeda(g.total12)}</b><small>${esc(g.sku || g.itemIds[0])}${g.itemIds.length > 1 ? ' · ' + g.itemIds.length + ' anúncios' : ''} · ${esc(P.nomeMes(rk.mes))}: ${g.aMais > 0 ? '+' + SHC.moeda(g.aMais) + ' (+' + SHC.moeda(g.porVenda) + '/venda)' : 'sem aumento'}</small></button>`).join('')}</div>
+            `<div class="rank">${vmLista('frete:rankall', rk.grupos, 5)[0].map(g => `<button data-frete-det="${esc(g.itemIds[0])}"><b>${esc(g.titulo)}</b><b class="v">${SHC.moeda(g.total12)}</b><small>${esc(g.sku || g.itemIds[0])}${g.itemIds.length > 1 ? ' · ' + g.itemIds.length + ' anúncios' : ''} · ${esc(P.nomeMes(rk.mes))}: ${g.aMais > 0 ? '+' + SHC.moeda(g.aMais) + ' (+' + SHC.moeda(g.porVenda) + '/venda)' : 'sem aumento'}</small></button>`).join('')}</div>${rk.grupos.length > 5 ? `<p class="rs">${vmLista('frete:rankall', rk.grupos, 5)[1]}</p>` : ''}
               <p class="det">${SHC.qtd(rk.grupos.length, 'SKU pagou', 'SKUs pagaram')} frete maior de ${esc(P.nomeMes(rk.desde))} a ${esc(P.nomeMes(rk.mes))} (${esc(P.nomeMes(rk.mes))}: ${SHC.moeda(rk.total)}). ${CONTA_FRETE} Fonte: Faturamento do Mercado Livre.</p>`) : '';
         // [V] Frete por anúncio: selo de variação em cada um; um filtro (KPI) ou a busca abrem.
         const b = freteBusca.trim().toLowerCase(), abL = aberto('frete:lista') || !!b;
         const vis = linhas.filter(l => (!freteFiltro || (freteFiltro === 'subiu' ? l.subiu : freteFiltro === 'gratis' ? !l.comprador : idsAMais.has(l.it.itemId)))
-            && (!b || String(l.it.titulo).toLowerCase().indexOf(b) >= 0 || l.it.itemId.toLowerCase().indexOf(b) >= 0 || String(l.it.sku).toLowerCase().indexOf(b) >= 0));
-        const rotF = freteFiltro === 'subiu' ? ' · filtro: frete subiu' : freteFiltro === 'amais' ? ' · filtro: pago a mais' : freteFiltro === 'gratis' ? ' · filtro: frete grátis' : '';
+            && (!b || String(l.it.titulo).toLowerCase().indexOf(b) >= 0 || l.it.itemId.toLowerCase().indexOf(b) >= 0 || [l.it.sku].concat(l.it.skus || []).join(' ').toLowerCase().indexOf(b) >= 0));   // F25: todas as variações
+        const rotF = freteFiltro === 'subiu' ? ' · filtro: frete subiu' : freteFiltro === 'amais' ? ' · filtro: cobrado a mais' : freteFiltro === 'gratis' ? ' · filtro: frete grátis' : '';
         let lst = `<div class="card fr-bl" id="freteAnuncios"><div class="fr-cab"><div class="fr-t"><h3>Frete por anúncio</h3><span>${esc(SHC.qtd(linhas.length, 'anúncio', 'anúncios') + (subiram ? ' · ' + subiram + ' subiu' : '') + (nComp ? ' · ' + nComp + ' pelo comprador' : '') + rotF)}</span></div>`
-            + (b ? '' : btVer('frete:lista', 'Ver todos (' + P.milhar(vis.length) + ')', 'Ver menos')) + '</div>';
+            + (b ? '' : btVer('frete:lista', 'Ver mais (' + P.milhar(vis.length) + ')')) + '</div>';
         if (abL) {
             lst += `<div class="fr-in"><input class="busca" id="buscaFrete" placeholder="Buscar anúncio, MLB ou SKU" value="${esc(freteBusca)}" aria-label="Buscar anúncio">`
                 + '<p class="legenda"><span class="sit-ruim">Frete subiu ou dá prejuízo</span><span class="sit-atencao">Subiu pouco ou sem custo</span><span class="sit-ok">Estável e com lucro</span></p>';
+            const ddLog = logDados();   // v3.2: etiqueta da forma de entrega em cada anúncio
             lst += vis.length ? vis.slice(0, limite.frete).map(l => {
                 const so = sobraDe(l.it), sit = P.situacaoFrete(l, so);
                 const lucro = so && so.sobra !== null ? `<span class="var ${so.sobra < 0 ? 'sobe' : 'desce'}">${so.sobra < 0 ? 'Prejuízo ' + SHC.moeda(-so.sobra) : 'Lucro ' + SHC.moeda(so.sobra)}</span>` : '<span class="var igual">sem custo</span>';
-                return `<button class="card linha-fr sit-${sit}" data-frete-det="${esc(l.it.itemId)}"><div class="tit">${esc(l.it.titulo)} ${seloFrete(l, sit)}</div><div class="sub">${esc(l.it.itemId)}${l.it.sku ? ' · SKU ' + esc(l.it.sku) : ''}</div>
-                  <div class="l2p">${chipFrete(l, cob)}${lucro}<span style="margin-left:auto;font-weight:700">${l.comprador || l.hoje === null ? '' : SHC.moeda(l.hoje)}</span><span class="seta">›</span></div></button>`;
+                return `<button class="card linha-fr sit-${sit}" data-frete-det="${esc(l.it.itemId)}"><div class="tit">${esc(l.it.titulo)} ${seloFrete(l, sit)}${seloLog(logDe(l.it, ddLog))}</div><div class="sub">${esc(l.it.itemId)}${l.it.sku ? ' · SKU ' + esc(l.it.sku) : ''}</div>
+                  <div class="l2p">${chipFrete(l, cob)}${lucro}<span style="margin-left:auto;font-weight:700;white-space:nowrap;flex-shrink:0">${l.comprador || l.hoje === null ? '' : SHC.moeda(l.hoje) + ' '}<span class="seta">›</span></span></div></button>`;
             }).join('') + botaoMais('frete', vis.length - limite.frete) : '<div class="vazio">Nenhum anúncio neste filtro.</div>';
-            lst += '<p class="det">Médio = frete cobrado por pedido nos últimos 30 dias × 30 anteriores (Faturamento do ML). À direita, o frete do anúncio hoje (lista do ML).</p></div>';
+            lst += '<p class="det">Compara os últimos 30 dias com os 30 anteriores (Faturamento do ML). À direita: o frete de hoje.</p>' + (b ? '' : vmFim('frete:lista')) + '</div>';
         }
         lst += '</div>';
         // [V] Ferramentas: prova de medida, chamado pronto e simulador ficam dentro de cada anúncio; os botões abrem o que mais pede atenção.
@@ -2511,19 +3063,35 @@
         let rod = '';
         if (cob) {
             const u = ct.ult30, a = ct.ant30;
-            rod = `<p class="det fr-rod">${semLer ? esc(semLer) + ': a comparação com os 30 dias anteriores fica para depois' : '30 dias anteriores: ' + (a.pedidos ? SHC.moeda(a.total) + ' em ' + esc(SHC.qtd(a.pedidos, 'pedido', 'pedidos')) : 'nenhum pedido com frete')}.`
-                + (!semLer && u.medio !== null && a.medio !== null ? ` Frete médio por pedido: ${SHC.moeda(a.medio)} → ${SHC.moeda(u.medio)}.` : '')
-                + (u.descontoML > 0 ? ` Desconto do ML no frete dos últimos 30 dias: ${SHC.moeda(u.descontoML)}.` : '')
-                + ` Dados do Faturamento do ML desde ${esc(P.dataBr(freteHist.desde).slice(0, 5))}.</p>`
+            // Rodapé curto; os números da base ficam no "Ver mais" (a dona achou a frase longa demais).
+            rod = `<details class="det fr-rod vm-d"><summary>Dados do Faturamento do ML desde ${esc(P.dataBr(freteHist.desde).slice(0, 5))} · <span class="vm-f">Ver mais</span></summary>`
+                + `${semLer ? esc(semLer) + ': a comparação com os 30 dias anteriores fica para depois' : '30 dias anteriores: ' + (a.pedidos ? SHC.moeda(a.total) + ' em ' + esc(SHC.qtd(a.pedidos, 'pedido', 'pedidos')) : 'nenhum pedido com frete')}.`
+                + (!semLer && u.medio !== null && a.medio !== null ? ` Frete médio por pedido: antes ${SHC.moeda(a.medio)}, agora ${SHC.moeda(u.medio)}.` : '')
+                + (u.descontoML > 0 ? ` Desconto do ML no frete dos últimos 30 dias: ${SHC.moeda(u.descontoML)}.` : '') + '</details>'
                 + (!conc && freteHist.vendasLidas === false ? '<p class="nota"><span class="auto"></span><span>A conciliação aparece quando as vendas forem lidas (próxima sincronização).</span></p>' : '');
         }
-        alvo.innerHTML = `<div class="fr-grade"><div class="fr-a">${A}</div><div class="fr-b">${bAf}${lst}${bDev}${bConc}${bFmt}${bRk}${bFer}</div></div>${rod}<p class="andam">${esc(andamFrete())}</p>`;
+        alvo.innerHTML = `<div class="fr-grade"><div class="fr-a">${A}</div><div class="fr-b">${bAf}${lst}${blocoLogistica()}${bDev}${bConc}${bFmt}${bRk}${bFer}</div></div>${rod}<p class="andam">${esc(andamFrete())}</p>`;
         if (foco !== null) { const i = $('#buscaFrete'); if (i && i.focus) { i.focus(); try { i.setSelectionRange(foco, foco); } catch (e) { /* campo sem cursor */ } } }
     }
     const mais = v => (v > 0 ? '+' : v < 0 ? '−' : '') + SHC.moeda(Math.abs(v));
     const maisPct = v => (v > 0 ? '+' : '') + SHC.pctTxt(v);
+    // Anúncio sem SKU no retrato: "(sem SKU)" só quando a lista do ML mostra o anúncio sem SKU; com variações o SKU existe e só não foi lido.
+    const semSkuTxt = it => (it && it.skuForaDaLinha ? (it.variacoes ? ' (SKU nas variações, ainda não lido)' : ' (SKU ainda não lido)') : ' (sem SKU)');
     const CONTA_FRETE = 'Conta: (frete típico do mês − frete de antes) × vendas do mês, nos meses em que passou mais de R$ 1 e 2% acima; mês que voltou ao normal não conta. Frete típico = o valor do meio dos pedidos do mês.';
 
+    // v3.2 Preço de atacado no detalhe do anúncio (atacado:<conta>): lucro por unidade em cada degrau — a mesma conta da etiqueta na tela do ML.
+    function cardAtacado(it) {
+        const a = atacadoDe[it.itemId], dg = a && Array.isArray(a.degraus) ? a.degraus : null;
+        if (!it.atacado && !(dg && dg.length)) return '';
+        const c = custoDoItem(it), m = SHC.moeda;
+        const xs = dg && dg.length ? P.atacadoDegraus(it, dg, c ? c.dados : null, cfg, itens) : [], red = xs.find(x => x.sa && x.sa.taxaReduzida);
+        const corpo = !dg ?'<p class="det">O ML marca este anúncio “Com preço de atacado”. Os degraus aparecem depois da próxima sincronização ou quando você abrir a lista de Anúncios no ML.</p>'
+            : !dg.length ? '<p class="det">O ML não mostrou degrau de atacado neste anúncio na última leitura.</p>'
+            : '<table class="tb"><tr><th>A partir de</th><th>Preço/un.</th><th>Lucro/un.</th></tr>' + xs.map(x =>
+                `<tr><td>${x.g.qtd} un.</td><td>${esc(m(x.g.preco))}</td><td>${x.sa ? `<b${x.sa.sobra < 0 ? ' style="color:#B91C1C"' : ''}>${esc((x.sa.sobra < 0 ? '−' : '') + m(Math.abs(x.sa.sobra)))}</b> · ${esc(SHC.pctTxt(x.sa.pct))}` : '—'}</td></tr>`
+                + (x.av ? `<tr><td colspan="3"><span class="det">${esc(x.av.txt)}</span></td></tr>` : '')).join('') + '</table>';
+        return `<div class="card" id="frAtacado"><b style="font-size:13px">Preço de atacado</b>${corpo}<p class="det">Estimativa: ${red ? `tarifa de ${esc(SHC.pctTxt(red.sa.taxaPct))} (a de hoje, ${esc(SHC.pctTxt(red.sa.taxaHojePct))}, vem reduzida pela promoção; o atacado não é promoção)` : 'mesma % de tarifa do preço de hoje'} e 1 frete por peça (o ML calcula o frete do atacado sobre o pedido inteiro; costuma sair menos). Só compradores com CNPJ validado pelo ML veem esse preço.${a && a.ts ? ' Lido em ' + esc(P.dataBr(new Date(a.ts).toISOString().slice(0, 10)).slice(0, 5)) + '.' : ''}</p></div>`;
+    }
     function desenhaFreteDetalhe(it) {
         const alvo = $('#listaFrete');
         const vd = vendas[it.itemId] || {};
@@ -2532,7 +3100,7 @@
             alvo.innerHTML = `<button class="lnk" data-voltar-frete>‹ Todos os anúncios</button>
               <div class="card"><div class="tit">${esc(it.titulo)}</div><div class="sub">${esc(it.itemId)}${it.sku ? ' · SKU ' + esc(it.sku) : ''}</div>
                 <p style="margin:8px 0 0;font-size:12.5px"><b>Frete por conta do comprador.</b> O Mercado Livre não cobra frete de você neste anúncio.</p>
-                ${tx > 0 ? `<p class="det">O ML mostra ${SHC.moeda(tx)} “A pagar” por venda: é uma taxa operacional, não frete. Ela entra na conta do lucro, fora do histórico de frete.</p>` : ''}</div>` + cardSim(it);   // v2.8: aba Frete mostra só o que é de frete — Ads e Afiliados saíram daqui (pedido da dona: "cada função aparecer na sua respectiva tela")
+                ${tx > 0 ? `<p class="det">O ML mostra ${SHC.moeda(tx)} “A pagar” por venda: é uma taxa operacional, não frete. Ela entra na conta do lucro, fora do histórico de frete.</p>` : ''}</div>` + cardLogistica(it) + cardSim(it);   // v2.8: aba Frete mostra só o que é de frete — Ads e Afiliados saíram daqui (pedido da dona: "cada função aparecer na sua respectiva tela")
             alvo._item = it; alvo._hist = null; alvo._fa = null;
             return;
         }
@@ -2564,23 +3132,27 @@
             ${it.freteDeduzido ? '<p class="det">Frete calculado com os números do ML: preço − tarifa − você recebe.</p>' : ''}
             <button class="lnk explique" data-explique-frete>${expl}</button><div class="ia-resp" id="respFreteDet"${freteExpl ? '' : ' hidden'}>${freteExpl ? respCorpo(P.explicaFrete(it, h, fa)) : ''}</div>
           </div>`;
+        html += cardLogistica(it);   // v3.2: forma de entrega, status e se o modelo combina com a medida
+        html += cardAtacado(it);     // v3.2: lucro por degrau do preço de atacado (só quando o anúncio tem atacado)
         // Frete por mês: TODOS os meses com venda (e os do histórico diário), do primeiro ao último, com a tabela.
         const meses = P.mesesFrete(h, porMes), pt = P.pagoAMaisPorMes(vd), espera = temVd ? '' : P.esperaVendas(status, Date.now());
-        html += `<div class="card"><b style="font-size:13px">Frete por mês</b>${meses.length ? P.svgFrete(meses) + '<p class="det">' + (meses.some(m => m.fonte === 'vendas') ? 'Frete típico cobrado por pedido em cada mês (Faturamento do ML)' + (meses.some(m => m.fonte === 'lista') ? '; mês sem venda: o valor que a lista do ML mostrava no fim do mês' : '') : 'Valor que a lista do ML mostrava no fim de cada mês') + '. Mês sem dado não aparece.</p>' : ''}`
+        const resMes = temVd && pt.linhas.length ? (pt.total > 0 ? `${SHC.moeda(pt.total)} a mais em ${SHC.qtd(pt.linhas.length, 'mês', 'meses')}` : `${SHC.qtd(pt.linhas.length, 'mês', 'meses')} · sem frete a mais`) : '';
+        html += dobra(`<div class="card"><b style="font-size:13px">Frete por mês</b>${meses.length ? P.svgFrete(meses) + '<p class="det">' + (meses.some(m => m.fonte === 'vendas') ? 'Frete típico cobrado por pedido em cada mês (Faturamento do ML)' + (meses.some(m => m.fonte === 'lista') ? '; mês sem venda: o valor que a lista do ML mostrava no fim do mês' : '') : 'Valor que a lista do ML mostrava no fim de cada mês') + '. Mês sem dado não aparece.</p>' : ''}`
             + (temVd ? `<table class="tabf"><thead><tr><th>Mês</th><th>Frete típico</th><th>Vendas</th><th>A mais que ${SHC.moeda(pt.base)}</th></tr></thead><tbody>
                 ${pt.linhas.map(l => `<tr><td>${esc(P.nomeMes(l.mes))}</td><td>${SHC.moeda(l.tipico)}</td><td>${l.n}</td><td class="${l.aMais > 0 ? 'mais' : ''}">${l.aMais > 0 ? '+' + SHC.moeda(l.aMais) : '—'}</td></tr>`).join('')}
                </tbody><tfoot><tr><td colspan="3">Total a mais (${esc(P.nomeMes(pt.linhas[0].mes))} a ${esc(P.nomeMes(pt.linhas[pt.linhas.length - 1].mes))})</td><td class="${pt.total > 0 ? 'mais' : ''}">${SHC.moeda(pt.total)}</td></tr></tfoot></table>
                <p class="det">Base: ${SHC.moeda(pt.base)}, frete típico de ${esc(P.nomeMes(pt.mesBase))}. ${CONTA_FRETE} Vendas com frete pago pelo comprador ficam fora.${pt.fora.length ? ' ' + SHC.qtd(pt.fora.length, 'pedido', 'pedidos') + ' com frete 1,8× ou mais acima do típico do mês ficaram fora: podem ter mais de 1 unidade.' : ''} Fonte: Faturamento do ML.</p>`
-            : `<p class="det">${meses.length ? '' : 'Ainda sem dado guardado. '}${esc(espera || 'Nenhuma venda deste anúncio no Faturamento lido.')}</p>`) + '</div>';
+            : `<p class="det">${meses.length ? '' : 'Ainda sem dado guardado. '}${esc(espera || 'Nenhuma venda deste anúncio no Faturamento lido.')}</p>`) + '</div>', 'frete:detmes', esc(resMes));
         // Vendas × frete cobrado: pedido a pedido, os mais recentes primeiro (20 e "ver todos").
-        const pf = P.pedidosFrete(vd), mostra = pedTodos ? pf.lista : pf.lista.slice(0, 20);
-        html += `<div class="card"><b style="font-size:13px">Vendas × frete cobrado</b>` + (pf.lista.length
+        const pf = P.pedidosFrete(vd), pedTodos = aberto('frete:peds'), mostra = pedTodos ? pf.lista : pf.lista.slice(0, 20);
+        html += dobra(`<div class="card"><b style="font-size:13px">Vendas × frete cobrado</b>` + (pf.lista.length
             ? `<p class="det">${SHC.qtd(pf.lista.length, 'venda lida', 'vendas lidas')}. Normal deste anúncio: ${SHC.moeda(pf.normal)} por pedido.${pf.acima ? ` <b class="vm">${pf.acima} acima do normal</b> (em vermelho).` : ''}</p>
                <table class="tabf"><thead><tr><th>Data</th><th>Pedido</th><th>Frete cobrado</th></tr></thead><tbody>
                 ${mostra.map(p => `<tr${p.acima ? ' class="acima"' : ''}><td>${esc(P.dataBr(p.d))}</td><td>${esc(p.orderId)}</td><td class="${p.acima ? 'mais' : ''}">${p.comprador ? 'pago pelo comprador' : SHC.moeda(p.f)}</td></tr>`).join('')}
-               </tbody></table>${pf.lista.length > 20 ? `<button class="mais" data-ped-todos>${pedTodos ? 'Mostrar só os 20 mais recentes' : 'Ver todos (' + pf.lista.length + ')'}</button>` : ''}
+               </tbody></table>${pf.lista.length > 20 ? `<button class="mais" data-ped-todos aria-expanded="${pedTodos}">${pedTodos ? 'Ver menos' : 'Ver mais (' + (pf.lista.length - 20) + ')'}</button>` : ''}
                <p class="det">O Faturamento não mostra quantas unidades cada pedido teve: pedido com mais de 1 unidade tem frete maior.</p>`
-            : `<p class="det">${esc(espera || 'Nenhuma venda deste anúncio no Faturamento lido.')}</p>`) + '</div>';
+            : `<p class="det">${esc(espera || 'Nenhuma venda deste anúncio no Faturamento lido.')}</p>`) + '</div>', 'frete:detpeds',
+            pf.lista.length ? esc(SHC.qtd(pf.lista.length, 'venda', 'vendas') + (pf.acima ? ` · ${pf.acima} acima do normal` : '')) : '');
         html += cardSim(it);   // v2.8: aba Frete mostra só o que é de frete — Ads e Afiliados saíram daqui
         const med = medidasDe(it), ma = ((((medidas && medidas.porItem) || {})[it.itemId]) || {}).atual;
         const cad = it.sku ? cadSku[SHC.chaveSku(it.sku)] || {} : {}, erp = SHC.medidaDe([cad.larguraCm, cad.alturaCm, cad.comprimentoCm], cad.pesoKg);
@@ -2611,13 +3183,13 @@
     const medidasDe = it => it.sku ? P.medidasTxt(cadSku[SHC.chaveSku(it.sku)]) : '';
     // Ads deste anúncio no período do Mercado Ads (ads:<conta>) e o equilíbrio (V8). Estimativa: sobra no preço de hoje.
     const ACOS_TXT = 'ACOS = quanto do valor vendido pelo Ads foi gasto em Ads.';
-    const sobraDe = it => { const c = custoGrupo[it.sku ? 'sku:' + it.sku : 'mlb:' + it.itemId]; return SHC.sobraAnuncio(it, c ? c.dados : null, cfg); };
+    const sobraDe = it => { const c = custoDoItem(it); return SHC.sobraAnuncio(it, c ? c.dados : null, cfg); };
     const periodoAds = () => { const p = adsSnap && adsSnap.periodo; const de = p && (p.de || p.dateFrom), ate = p && (p.ate || p.dateTo); return de && ate ? P.dataBr(de).slice(0, 5) + ' a ' + P.dataBr(ate).slice(0, 5) : 'últimos 30 dias'; };
     // Cartão de Ads DO anúncio: está no Ads? campanha, KPIs e o veredito (compensa / não compensa / informe o custo).
     const intTxt = v => v === null || v === undefined ? '—' : Math.round(v).toLocaleString('pt-BR');
     const pctOu = v => v === null || v === undefined || !isFinite(v) ? '—' : SHC.pctTxt(v);
     const xTxt = v => v === null || v === undefined || !isFinite(v) ? '—' : (Math.round(v * 100) / 100).toLocaleString('pt-BR') + 'x';
-    const custoDe = it => { const c = custoGrupo[it.sku ? 'sku:' + it.sku : 'mlb:' + it.itemId]; return c ? c.dados : null; };
+    const custoDe = it => { const c = custoDoItem(it); return c ? c.dados : null; };
     const campoCusto = it => { const k = it.sku ? 'sku:' + it.sku : 'mlb:' + it.itemId; return grupos.some(g => g.chave === k)
         ? `<div class="custo"><label>Custo${it.sku ? ' do SKU ' + esc(curtoTxt(it.sku, 20)) : ''}</label><input class="inp" data-csku="${esc(k)}" inputmode="decimal" placeholder="R$ 0,00"><button class="bt" data-csalvar="${esc(k)}">Salvar</button></div>` : ''; };
     // v3.1 (pedido da dona: "quando eu clico no produto [no Ads] ele vai para a tela do frete; tinha que abrir a tela do Ads do anúncio"):
@@ -2639,6 +3211,8 @@
         if (adsSnap.temAds === false) return `<div class="card">${cab}<p class="det">No Ads: não. Esta conta não usa o Mercado Ads.</p></div>`;
         const x = P.adsDoItem(adsSnap, it.itemId);
         if (!x.noAds && x.temCatalogo && (it.catalogo || it.competicao)) return `<div class="card">${cab}<p class="det">Anúncio de catálogo: o Mercado Ads não diz qual anúncio seu é.</p>${abrir}</div>`;
+        // F9: lista do Ads lida só em parte → não afirma "não está no Ads".
+        if (!x.noAds && adsSnap.completo === false) return `<div class="card">${cab}<p style="margin:6px 0 0;font-size:12.5px">${esc(P.adsNaoAchei(adsSnap))}</p>${abrir}</div>`;
         if (!x.noAds) return `<div class="card">${cab}<p style="margin:6px 0 0;font-size:12.5px"><b>No Ads: não.</b> Este anúncio não está em nenhuma campanha do Mercado Ads (${esc(periodoAds())}).</p>${abrir}</div>`;
         const m = x.m, c = x.campanha, eq = it._soAds ? null : SHC.adsEquilibrio(it, custoDe(it), cfg), v = P.adsVeredito(m, eq);
         const cor = { compensa: 'ok', nao: 'ruim', semCusto: 'neutra', semGasto: 'neutra' }[v.tipo], kc = { compensa: 'ok', nao: 'pr' }[v.tipo] || '';
@@ -2718,7 +3292,7 @@
         const com = cu.comTodos, total = cu.deTodos || resumos.length, pct = total ? Math.round(com / total * 100) : 0;
         const sem = P.semCustoTop(resumos, vm, { desde: cu.desde, temCusto: g => g.itens.some(it => SHC.custoDeAnuncio(custosAll, it)) });
         const desdeTxt = new Date(cu.desde + '-15T12:00:00Z').toLocaleString('pt-BR', { month: 'long', timeZone: 'UTC' });
-        const linhaSem = ({ g, vendas: nv }) => `<div class="linha-sem"><span><b>${esc(g.titulo)}</b><small>${esc(g.sku || g.itens[0].itemId + ' (sem SKU)')}${nv > 0 ? ' · ' + SHC.qtd(nv, 'vendida', 'vendidas') + ' desde ' + desdeTxt : ''}</small></span>
+        const linhaSem = ({ g, vendas: nv }) => `<div class="linha-sem"><span><b>${esc(g.titulo)}</b><small>${esc(g.sku || g.itens[0].itemId + semSkuTxt(g.itens[0]))}${nv > 0 ? ' · ' + SHC.qtd(nv, 'vendida', 'vendidas') + ' desde ' + desdeTxt : ''}</small></span>
             <span class="cst-ed"><input class="inp" data-csku="${esc(g.chave)}" inputmode="decimal" placeholder="＋ custo"><button class="bt" data-csalvar="${esc(g.chave)}">OK</button></span></div>`;
         $('#catTopo').innerHTML = `<div class="card" id="cardCustosCat"><b style="font-size:13px">Custo preenchido em ${com} de ${total} produtos</b>
           <div class="barra-g" role="progressbar" aria-label="SKUs com custo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
@@ -2728,11 +3302,11 @@
           ${status.custosProgresso && status.custosProgresso.erp ? `<p class="det">${esc(P.textoImportando(status.custosProgresso))}</p>` : `<button class="bt leve" data-sync-custos style="margin-top:2px">Sincronizar custos</button>`}${custosMsg ? `<p class="det">${esc(custosMsg)}</p>` : ''}
           ${sem.length ? `<p style="margin:8px 0 2px;font-weight:650;font-size:12.5px">${esc(SHC.qtd(sem.length, 'SKU sem custo', 'SKUs sem custo'))} ${btVer('cat:semcusto', sem.length > 10 ? 'Ver os 10 que mais vendem' : 'Ver quais')}</p>`
             + (aberto('cat:semcusto') ? `${sem.slice(0, 10).map(linhaSem).join('')}
-            ${sem.length > 10 ? `<button class="bt leve" data-sem-todos style="margin-top:8px">${catFiltro === 'sem_custo' ? 'Esconder a lista completa' : 'Ver todos os ' + sem.length + ' sem custo'}</button>` : ''}` : '') : ''}
+            ${sem.length > 10 ? `<p class="vm-fim"><button class="lnk ver" data-sem-todos aria-expanded="${catFiltro === 'sem_custo'}">${catFiltro === 'sem_custo' ? 'Ver menos' : `Ver mais (${P.milhar(sem.length - 10)})`}</button></p>` : ''}` : '') : ''}
           <div class="canais" style="margin-top:8px">${[['prejuizo', 'p', ' prejuízo'], ['apertado', 'a', ' abaixo da meta']].map(([c, k, t]) => `<button class="${k}${catFiltro === c ? ' on' : ''}" data-cfiltro="${c}">${n(c)}${t}</button>`).join('')}</div></div>` + cardCompeticao();
         // Lista dos SKUs recolhida: abre com "Ver mais", com um filtro ou com a busca (vinda da etiqueta do ML).
         const abL = aberto('cat:lista') || !!catFiltro || !!catBusca.trim(), cv = $('#catVer');
-        cv.hidden = false; cv.textContent = abL ? 'Ver menos' : 'Ver a lista de SKUs (' + resumos.length + ')';
+        cv.hidden = false; cv.textContent = abL ? 'Ver menos' : `Ver mais (${P.milhar(resumos.length)})`; cv.setAttribute('aria-expanded', String(abL));
         $('#catMais').hidden = !abL;
         if (!abL) { alvo.innerHTML = ''; return; }
         const b = catBusca.trim().toLowerCase();
@@ -2755,10 +3329,10 @@
             // v3.1: catálogo perdido (catcomp:) → quem ganha em destaque, já na lista.
             const kv = g.itens.map(it => compCat[it.itemId]).find(k => k && k.vencedor && k.estado && !k.souVencedor && k.estado !== 'ganhando'), vv = kv && kv.vencedor;
             const quem = vv ? `<div class="cc-quem">Perdendo para <b>${esc(curtoTxt(vv.loja || 'outra loja', 40))}</b>${vv.preco ? ' · ' + SHC.moeda(vv.preco) : ''}</div>` : '';
-            return `<div class="linha-sku"><b>${esc(g.titulo)}</b>${cst}<small>${esc(g.sku || g.itens[0].itemId + ' (sem SKU)')} · ${g.itens.length} anúncio${g.itens.length > 1 ? 's' : ''}</small>
+            return `<div class="linha-sku"><b>${esc(g.titulo)}</b>${cst}<small>${esc(g.sku || g.itens[0].itemId + semSkuTxt(g.itens[0]))} · ${g.itens.length} anúncio${g.itens.length > 1 ? 's' : ''}</small>
               <div class="canais">${ml}</div>${quem}${alerta ? `<div class="alerta">${esc(alerta)}</div>` : ''}</div>`;
         }).join('') + botaoMais('catalogo', vis.length - limite.catalogo) : '<div class="vazio">Nenhum SKU neste filtro.</div>')
-            + '<p class="det" style="margin-top:8px">O custo é do SKU. Em cada canal mudam só a comissão e a conta final.</p>';
+            + '<p class="det" style="margin-top:8px">O custo é do SKU. Em cada canal mudam só a comissão e a conta final.</p>' + vmFim('cat:lista');
     }
 
     // Competição: filtros por estado (P.GRUPOS_COMP), dias perdendo (comp:<conta>), "Ver quem está ganhando" (conc:<conta>:<MLB>)
@@ -2776,9 +3350,10 @@
             const v = cmp.v, lado = cmp.dif === null ? '' : (cmp.dif > 0.004 ? `o seu está ${SHC.moeda(cmp.dif)} (${SHC.pctTxt(cmp.difPct)}) mais caro` : (cmp.dif < -0.004 ? `o seu está ${SHC.moeda(-cmp.dif)} (${SHC.pctTxt(-cmp.difPct)}) mais barato` : 'mesmo preço que o seu'));
             det = `<div class="conc"><p><b>${esc(cmp.rotulo)}:</b> ${esc(curtoTxt(v.vendedor || 'vendedor não identificado', 40))} · ${SHC.moeda(v.preco)} × seu ${SHC.moeda(it.preco)}${lado ? ' · ' + lado : ''}</p>
               ${concDe[it.itemId].variacaoIncerta ? '<p class="alerta">Compare na mesma variação (cor/voltagem).</p>' : ''}
-              <table class="tabf"><thead><tr><th>Vendedor</th><th>Preço</th><th>Parcelas</th><th>Entrega</th></tr></thead><tbody>
+              <p class="rs">${esc(SHC.qtd(cmp.ofertas.length, 'oferta', 'ofertas'))}${cmp.ofertas.length ? ' · menor preço ' + SHC.moeda(Math.min(...cmp.ofertas.map(o => o.preco))) : ''} ${cmp.ofertas.length ? btVer('cat:ofertas:' + it.itemId) : ''}</p>
+              ${aberto('cat:ofertas:' + it.itemId) ? `<table class="tabf"><thead><tr><th>Vendedor</th><th>Preço</th><th>Parcelas</th><th>Entrega</th></tr></thead><tbody>
               ${cmp.ofertas.map(o => `<tr><td>${esc(curtoTxt(o.vendedor || '—', 26))}</td><td>${SHC.moeda(o.preco)}</td><td>${o.parcelas ? o.parcelas.n + 'x ' + SHC.moeda(o.parcelas.valor) + (o.semJuros ? ' sem juros' : '') : '—'}</td><td>${esc(curtoTxt(o.entrega || '—', 30))}</td></tr>`).join('')}
-              </tbody></table><small>Lido ${esc(tempo(concDe[it.itemId].ts))} na página pública do produto no ML.</small></div>`;
+              </tbody></table>` : ''}<small>Lido ${esc(tempo(concDe[it.itemId].ts))} na página pública do produto no ML.</small></div>`;
         }
         const mud = res && res.mudancas && res.mudancas.length > 1 ? `<div class="linha-tempo">${res.mudancas.slice(-6).reverse().map(x => `<small>${esc(P.dataBr(x.d).slice(0, 5))} · ${esc((COMP[x.e] || ['', x.e || 'sem competição'])[1])}${x.p ? ' · ' + SHC.moeda(x.p) : ''}</small>`).join('')}</div>` : '';
         const kc = compCat[it.itemId], km = catMsg[it.itemId];
@@ -2792,7 +3367,7 @@
     }
     // v3.1 (pedido da dona): quem ganha, preço para ganhar (e se ainda dá lucro nele), "O que fazer para ganhar" e a linha do tempo.
     // Sobra no preço para ganhar = SHC.sobraAtacado num degrau de 1 un.: mesma tarifa (%) e mesmo frete de hoje (estimativa).
-    const sobraNoPreco = (it, preco) => { const c = custoGrupo[it.sku ? 'sku:' + it.sku : 'mlb:' + it.itemId]; return SHC.sobraAtacado(it, { qtd: 1, preco }, c ? c.dados : null, cfg); };
+    const sobraNoPreco = (it, preco) => { const c = custoDoItem(it); return SHC.sobraAtacado(it, { qtd: 1, preco }, c ? c.dados : null, cfg, itens); };
     const COR_ACAO = { l: 'ok', a: 'at', p: 'pr', n: '' };
     // v3.1 (pedido da dona 29/09): vantagens do vencedor (colunas da tabela do ML) × as suas: ✓ você tem / ✗ você não tem / sem o seu dado → não dá para saber.
     // [nome, campo, o vencedor tem, você também tem (coleta: Full ou Flex contam como tendo)]
@@ -2885,7 +3460,7 @@
             // Sem filtro escolhido: os que estão perdendo (preço, entrega, outros).
             const gs = compGrupo ? [compGrupo] : ['preco', 'entrega', 'outros'], lista = [].concat(...gs.map(k => rc.grupos[k].map(it => [it, k])));
             const rot = compGrupo ? (P.GRUPOS_COMP.find(x => x[0] === compGrupo) || [])[1] : 'Perdendo';
-            html += lista.length ? `<p class="det" style="margin-top:8px">${esc(rot)} (${lista.length}):</p>` + lista.slice(0, 8).map(([it, k]) => linhaCompeticao(it, k)).join('') + (lista.length > 8 ? `<p class="det">e mais ${lista.length - 8}.</p>` : '')
+            html += lista.length ? `<p class="det" style="margin-top:8px">${esc(rot)} (${lista.length}):</p>` + vmLista('cat:comp', lista, 5)[0].map(([it, k]) => linhaCompeticao(it, k)).join('') + (lista.length > 5 ? `<p class="rs">${vmLista('cat:comp', lista, 5)[1]}</p>` : '')
                 : `<p class="det" style="margin-top:8px">Nenhum anúncio em “${esc(rot)}”.</p>`;
         }
         html += `<button class="bt leve" data-abrir-competindo style="margin-top:8px">Abrir “Competindo” no ML</button>`;
@@ -2893,8 +3468,8 @@
         if (nContas < 2) html += '<p class="det">Só 1 conta do Mercado Livre conectada neste Chrome. Entre na outra conta do ML neste Chrome e sincronize para comparar.</p>';
         else {
             if (semRetrato.length) html += `<p class="det">Ainda sem anúncios lidos de: ${esc(semRetrato.map(id => SHC.nomeConta(id, cfg, contas)).join(', '))}. Entre nessa conta do ML neste Chrome e sincronize.</p>`;
-            html += entre.length ? entre.slice(0, 8).map(g => `<div class="linha-comp"><b>${esc(g.titulo)}</b><small>Suas contas competem entre si neste produto (${g.tipo === 'titulo' ? 'mesmo título' : ({ catalogo: 'catálogo #', sku: 'SKU ', ean: 'EAN ' }[g.tipo] || '') + esc(g.valor)}):</small>
-                ${g.itens.map(x => `<small>• ${esc(curtoTxt(x.nomeConta, 24))}: ${esc(x.it.itemId)} · ${SHC.moeda(x.it.preco)}${COMP[x.it.competicao] ? ' · ' + COMP[x.it.competicao][1] : ''}</small>`).join('')}</div>`).join('') + (entre.length > 8 ? `<p class="det">e mais ${SHC.qtd(entre.length - 8, 'produto', 'produtos')}.</p>` : '')
+            html += entre.length ? vmLista('cat:entre', entre, 5)[0].map(g => `<div class="linha-comp"><b>${esc(g.titulo)}</b><small>Suas contas competem entre si neste produto (${g.tipo === 'titulo' ? 'mesmo título' : ({ catalogo: 'catálogo #', sku: 'SKU ', ean: 'EAN ' }[g.tipo] || '') + esc(g.valor)}):</small>
+                ${g.itens.map(x => `<small>• ${esc(curtoTxt(x.nomeConta, 24))}: ${esc(x.it.itemId)} · ${SHC.moeda(x.it.preco)}${COMP[x.it.competicao] ? ' · ' + COMP[x.it.competicao][1] : ''}</small>`).join('')}</div>`).join('') + (entre.length > 5 ? `<p class="rs">${vmLista('cat:entre', entre, 5)[1]}</p>` : '')
                 : '<p class="det">Nenhum produto igual (mesmo SKU, EAN ou título) em contas diferentes.</p>';
         }
         return html + '<p class="det">Fonte: lista de Anúncios do Mercado Livre de cada conta, lida neste Chrome.</p></div>';
@@ -2949,7 +3524,8 @@
         const camps = P.adsCampanhasLista(adsSnap, lista), ver = P.adsVereditoDe(lista, m.gasto), per = periodoAds(), nAc = fs.acima.length;
         const tit = x => esc(x.a.titulo || (x.it && x.it.titulo) || x.a.itemId);
         // Manchete (1 frase) e KPIs
-        const fato = ver.tipo === 'compensa' ? `O Ads dá lucro (ACOS ${pctOu(m.acos)}).` : ver.tipo === 'nao' ? `O Ads leva mais do que sobra (ACOS ${pctOu(m.acos)}).` : `Ads: ${SHC.moeda(m.gasto)} em 30 dias.`;
+        const fato = P.adsFatoCatalogo(ver.tipo === 'compensa' ? `O Ads dá lucro (ACOS ${pctOu(m.acos)}).` : ver.tipo === 'nao' ? `O Ads leva mais do que sobra (ACOS ${pctOu(m.acos)}).` : `Ads: ${SHC.moeda(m.gasto)} em 30 dias.`,
+            ver.tipo, m.gasto, adsSnap && adsSnap.catalogoSemLigacao);   // F8
         const acao = nAc ? (nAc === 1 ? `${fs.acima[0].a.titulo || fs.acima[0].a.itemId} gasta mais do que aguenta.` : `${ver.tipo === 'compensa' ? 'Só ' : ''}${nAc} produtos gastam mais do que aguentam.`)
             : fs.escalar.length ? `${SHC.qtd(fs.escalar.length, 'produto aguenta', 'produtos aguentam')} investir mais.` : 'Nada pede sua atenção agora.';
         const ptM = ver.tipo === 'nao' ? 'pr' : nAc ? 'at' : ver.tipo === 'compensa' ? 'ok' : '';
@@ -2963,9 +3539,10 @@
         // Tirar / Ajustar / Ver só ABREM o Ads do anúncio (detalhe na própria aba): mudar a campanha é com você, no Mercado Ads.
         const btV = (x, rot) => `<button class="bt leve pq" title="Abre o Ads deste anúncio. Mudar a campanha é com você, no Mercado Ads." data-ads-det="${esc(x.a.itemId)}">${rot}</button>`;
         const acimaOrd = fs.acima.slice().sort((x, y) => (x.margem > 0) - (y.margem > 0));
-        const pv = acimaOrd.slice(0, 3).map(x => `<li class="acao ${x.margem !== null && x.margem <= 0 ? 'pr' : 'at'}"><div class="tx"><b>${tit(x)}</b><span>${x.acos !== null ? 'ACOS ' + esc(SHC.pctTxt(x.acos)) : 'gastou ' + SHC.moeda(x.a.gasto) + ' sem venda'} · ${x.margem > 0 ? 'aguenta até ' + esc(SHC.pctTxt(x.margem)) : 'já dá prejuízo antes do Ads'}</span></div>${btV(x, x.margem > 0 ? 'Ajustar' : 'Tirar')}</li>`)
-            .concat(fs.escalar.slice(0, 2).map(x => `<li class="acao ok"><div class="tx"><b>${tit(x)}</b><span>ACOS ${esc(SHC.pctTxt(x.acos))} · dá para investir mais</span></div>${btV(x, 'Ver')}</li>`));
-        if (pv.length) h += `<div class="card"><div class="ch"><h3>Precisa de você</h3></div><ul class="acoes">${pv.join('')}</ul>${nAc > 3 ? `<p class="rs">Mais ${esc(SHC.qtd(nAc - 3, 'produto acima do equilíbrio', 'produtos acima do equilíbrio'))} em “Por produto”.</p>` : ''}</div>`;
+        const abP = aberto('ads:prec'), restoP = Math.max(0, acimaOrd.length - 3) + Math.max(0, fs.escalar.length - 2);
+        const pv = (abP ? acimaOrd : acimaOrd.slice(0, 3)).map(x => `<li class="acao ${x.margem !== null && x.margem <= 0 ? 'pr' : 'at'}"><div class="tx"><b>${tit(x)}</b><span>${x.acos !== null ? 'ACOS ' + esc(SHC.pctTxt(x.acos)) : 'gastou ' + SHC.moeda(x.a.gasto) + ' sem venda'} · ${x.margem > 0 ? 'aguenta até ' + esc(SHC.pctTxt(x.margem)) : 'já dá prejuízo antes do Ads'}</span></div>${btV(x, x.margem > 0 ? 'Ajustar' : 'Tirar')}</li>`)
+            .concat((abP ? fs.escalar : fs.escalar.slice(0, 2)).map(x => `<li class="acao ok"><div class="tx"><b>${tit(x)}</b><span>ACOS ${esc(SHC.pctTxt(x.acos))} · dá para investir mais</span></div>${btV(x, 'Ver')}</li>`));
+        if (pv.length) h += `<div class="card"><div class="ch"><h3>Precisa de você</h3></div><ul class="acoes">${pv.join('')}</ul>${restoP ? `<p class="rs">${btVer('ads:prec', `Ver mais (${restoP})`)}</p>` : ''}</div>`;
         else if (lista.some(x => !x.semCusto)) h += `<div class="card"><div class="ch"><h3>Precisa de você</h3></div><p class="est vazio"><span><b>Nenhum produto passa do equilíbrio.</b> ${esc(per)}</span></p></div>`;   // ESPEC §4: vazio com ✓ (sem custo → não dá para afirmar)
         // [Ver mais] Campanhas criadas
         const nAt = camps.filter(c => c.status === 'ativo').length;
@@ -3007,7 +3584,7 @@
         // v3.1 (imagem aprovada + pedido da dona): barra em R$ do que o Ads custou (âmbar) e do que sobrou de lucro (verde) ou virou
         // prejuízo (vermelho) depois dele, na mesma escala em todas as linhas. Sem custo → só o Ads, sem lucro inventado.
         const nCat = (adsSnap.anuncios || []).filter(a => a && (a.catalogoProduto || a.type === 'catalog')).length, vis = fs[adsFiltro] || [];
-        const maxP = escalaRet(vis.slice(0, 8), y => [y.a.gasto + (y.depois === null ? 0 : Math.abs(y.depois))]);
+        const maxP = escalaRet(vmLista('ads:prodtodos', vis, 8)[0],y => [y.a.gasto + (y.depois === null ? 0 : Math.abs(y.depois))]);
         const barraLuc = x => { const wg = larguraRet(x.a.gasto, maxP), d = x.depois;
             return `<span class="rb rbl2" aria-hidden="true"><i class="c" style="width:${wg}%"></i>${d ? `<i class="${d > 0 ? 'l' : 'p'}" style="left:${wg}%;width:${larguraRet(Math.abs(d), maxP)}%"></i>` : ''}</span>`; };
         const comCusto = lista.filter(x => x.depois !== null), depTot = SHC.r2(comCusto.reduce((t, x) => t + x.depois, 0));
@@ -3016,11 +3593,11 @@
         h += blocoAd('ads:prod', 'Por produto', esc(resProd),
             `<p class="det" style="margin-top:6px">${SHC.qtd(lista.length, 'anúncio', 'anúncios')} com gasto · ${SHC.moeda(SHC.r2(lista.reduce((t, x) => t + x.a.gasto, 0)))} (${esc(per)})${nCat ? ` · ${nCat} de catálogo fora da lista (o Mercado Ads não diz qual anúncio seu é)` : ''}</p>
               <div class="canais">${FILTROS_ADS.map(([k, rot, cor]) => `<button class="${cor}${adsFiltro === k ? ' on' : ''}" data-adsf="${k}">${fs[k].length} ${esc(rot.toLowerCase())}</button>`).join('')}</div>`
-            + (vis.length ? '<p class="rleg"><i class="c"></i>Ads <i class="l"></i>lucro <i class="p"></i>prejuízo · mesma escala em todas as linhas</p>' + vis.slice(0, 8).map(x => { const cor = P.saudeRetorno(x.a.receita, x.a.gasto, x.antes, cfg.margem_alvo_pct);
+            + (vis.length ? '<p class="rleg"><i class="c"></i>Ads <i class="l"></i>lucro <i class="p"></i>prejuízo · mesma escala em todas as linhas</p>' + vmLista('ads:prodtodos', vis, 8)[0].map(x => { const cor = P.saudeRetorno(x.a.receita, x.a.gasto, x.antes, cfg.margem_alvo_pct);
                 const res = x.depois === null ? 'lucro sem cálculo (sem custo)' : x.depois < 0 ? `<b class="rv pr">Prejuízo ${SHC.moeda(-x.depois)}</b>` : `<b class="rv ok">Lucro ${SHC.moeda(x.depois)}</b>`;
                 return `<button class="linha-comp linha-ads" data-ads-det="${esc(x.a.itemId)}"><span class="rlt"><b>${esc(x.a.titulo || (x.it && x.it.titulo) || x.a.itemId)}</b><span class="rv ${cor}">${x.acos !== null ? 'ACOS ' + SHC.pctTxt(x.acos) : 'sem venda'}</span></span>
                   <small>${x.it && x.it.sku ? 'SKU ' + esc(x.it.sku) : esc(x.a.itemId)} · ${SHC.qtd(x.a.vendas, 'venda', 'vendas')}${x.a.receita > 0 ? ' (' + SHC.moeda(x.a.receita) + ')' : ''}${x.margem !== null ? ' · equilíbrio ' + SHC.pctTxt(x.margem) : ''} ›</small>`
-                  + `${barraLuc(x)}<small>Ads ${SHC.moeda(x.a.gasto)} · ${res} · ${saudeTxt(cor)}</small></button>`; }).join('') + (vis.length > 8 ? `<p class="det">e mais ${vis.length - 8}.</p>` : '')
+                  + `${barraLuc(x)}<small>Ads ${SHC.moeda(x.a.gasto)} · ${res} · ${saudeTxt(cor)}</small></button>`; }).join('') + (vis.length > 8 ? `<p class="rs">${vmLista('ads:prodtodos', vis, 8)[1]}</p>` : '')
               : '<p class="det">Nenhum anúncio neste filtro.</p>')
             + '<p class="det">Acima do equilíbrio = o Ads custou mais que a sobra das vendas que ele trouxe. Dá para escalar = ACOS bem abaixo do equilíbrio, mesmo com a sua meta.</p>');
         return h + '<p class="det">Fonte: Mercado Ads. Criar, pausar ou mudar o orçamento é com você, no Mercado Ads.</p>';
@@ -3032,13 +3609,24 @@
     }
     // ── Aba Afiliados ──
     function desenhaAfil() { $('#listaAfil').innerHTML = cardAfiliados(); }
+    // ── Aba TikTok (v3.2): SHC.tt (tiktok.js + nucleo) lê o que a captura passiva gravou (tt:<loja>:*) e faz a conta;
+    // SHC.ttAba (tiktok-aba.js) desenha. Nenhuma chamada ao TikTok. ──
+    let ttGer = 0;
+    async function desenhaTikTok() {
+        const eu = ++ttGer, el = $('#listaTT');
+        if (!el || !SHC.ttAba || !SHC.tt) return;
+        const d = await SHC.tt.ler();
+        if (eu !== ttGer) return;
+        const abertos = new Set(Array.from(el.querySelectorAll('details[open][data-k]')).map(x => x.dataset.k));
+        el.innerHTML = SHC.ttAba.html(SHC.tt.resumo(d), { abertos });
+    }
     // ── Afiliados (afil:<conta>, últimos 30 dias). Só mostra: entrar ou sair da campanha é com você, no ML.
     // v2.9 (perfumaria): manchete → KPIs → "Precisa de você" → blocos com "Ver mais" (o que mais vendeu, campanha, pedidos, fora, clique sem venda). ──
     const moedaOu = v => (v === null || v === undefined ? '—' : SHC.moeda(v));
     const menosMoeda = v => (v < 0 ? '−' + SHC.moeda(-v) : SHC.moeda(v));
     const kpiN = (cls, rot, v, sub, tit) => `<div class="kpi kn ${cls || ''}"${tit ? ` title="${esc(tit)}"` : ''}><div class="l">${esc(rot)}</div><div class="v">${v}</div><div class="s">${sub || '&nbsp;'}</div></div>`;
     // Bloco recolhido: título + resumo de 1 linha com "Ver mais"; o conteúdo só quando aberto.
-    const blocoAf = (k, titulo, resumo, dentro) => `<div class="card"><div class="ch"><h3>${esc(titulo)}</h3></div><p class="rs">${resumo}${dentro ? ' ' + btVer(k) : ''}</p>${dentro && aberto(k) ? dentro : ''}</div>`;
+    const blocoAf = blocoAd;   // mesmo cartão que recolhe do Ads (título + resumo, "Ver mais" à direita)
     const dataAf = d => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4) : '');
     const quandoMl = d => (d && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(d) ? d.slice(8, 10) + '/' + d.slice(5, 7) + ' às ' + d.slice(11, 16) : '');
     const statusAfil = s => (/^active$/i.test(s || '') ? '<span class="selo ok">Ativa</span>' : /^paused$/i.test(s || '') ? '<span class="selo at">Pausada</span>' : s ? `<span class="selo">${esc(String(s).toLowerCase())}</span>` : '');
@@ -3051,7 +3639,7 @@
                 com ? 'comissão extra ' + com : '', per].filter(Boolean).join(' · ');
             return `<div class="rl"><span class="rlt"><b>${esc(c.titulo || 'Sem título')}</b><span class="selo ${s.cls}">${esc(s.txt)}</span></span><span class="sm">${esc(sub)}</span></div>`; };
         return `<div class="card"><div class="ch"><h3>Campanhas exclusivas</h3></div><p class="rs">${esc(SHC.afilExclusivasResumo(ex))}</p>${l.slice(0, 3).map(linha).join('')}`
-            + (aberto('afil:excl') ? l.slice(3).map(linha).join('') : '') + (l.length > 3 ? `<p class="rs">${esc(SHC.qtd(l.length - 3, 'outra campanha', 'outras campanhas'))} ${btVer('afil:excl')}</p>` : '')
+            + (aberto('afil:excl') ? l.slice(3).map(linha).join('') : '') + (l.length > 3 ? `<p class="rs">${btVer('afil:excl', `Ver mais (${l.length - 3})`)}</p>` : '')
             + '<div class="acoes" style="justify-content:flex-start"><button class="bt leve" data-abrir-afil="exclusivas">Ver no ML</button></div></div>';
     }
     function cardAfiliados() {
@@ -3072,7 +3660,7 @@
         // Precisa de você: comissão que come o lucro
         if (nCome) h += `<div class="card"><div class="ch"><h3>Precisa de você</h3></div><ul class="acoes">`
             + x.comeLucro.slice(0, aberto('afil:come') ? 50 : 3).map(l => `<li class="acao at"><div class="tx"><b>${esc(l.titulo)}</b><span>com a comissão (${esc(SHC.pctTxt(l.pct))}): ${esc(menosMoeda(l.depois))} por venda</span></div><button class="bt leve pq" data-abrir-afil="campanha">Tirar no ML</button></li>`).join('')
-            + '</ul>' + (nCome > 3 ? `<p class="rs">${esc(SHC.qtd(nCome - 3, 'outro produto', 'outros produtos'))} ${btVer('afil:come')}</p>` : '') + '</div>';
+            + '</ul>' + (nCome > 3 ? `<p class="rs">${btVer('afil:come', `Ver mais (${nCome - 3})`)}</p>` : '') + '</div>';
         // O que mais vendeu (top 3 aberto; o resto no Ver mais)
         // v3.1 (pedido da dona, 27/09): SKU abaixo do título e a barra vendas × comissão, na mesma escala de todas as linhas (abertas ou não).
         const maxTop = escalaRet(x.top, p => [p.vendas, p.custoEstimado]);
@@ -3084,7 +3672,7 @@
         };
         h += x.top.length ? `<div class="card"><div class="ch"><h3>O que mais vendeu</h3><span class="d det">30 dias</span></div>${legRet('comissão')}${x.top.slice(0, 3).map(linhaTop).join('')}`
             + (aberto('afil:top') ? x.top.slice(3).map(linhaTop).join('') : '')
-            + (x.top.length > 3 ? `<p class="rs">Mais ${esc(SHC.qtd(x.top.length - 3, 'produto que vendeu', 'produtos que venderam'))} ${btVer('afil:top')}</p>` : '') + '</div>'
+            + (x.top.length > 3 ? `<p class="rs">${btVer('afil:top', `Ver mais (${x.top.length - 3})`)}</p>` : '') + '</div>'
             : '<div class="card"><div class="ch"><h3>O que mais vendeu</h3></div><p class="det">Nenhuma venda por afiliados nos últimos 30 dias.</p></div>';
         // Sua campanha
         const faixa = x.faixa && x.faixa.min !== null && x.faixa.max !== null ? ` <span class="det">(o ML permite ${esc(SHC.pctTxt(x.faixa.min))} a ${esc(SHC.pctTxt(x.faixa.max))})</span>` : '';
@@ -3094,9 +3682,11 @@
           + (x.entradaAutomatica !== null ? `<tr><td>Anúncios novos entram sozinhos</td><td><b>${x.entradaAutomatica ? 'Sim' : 'Não'}</b></td></tr>` : '')
           + (x.inicio ? `<tr><td>Desde</td><td>${esc(dataAf(x.inicio))}</td></tr>` : '') + '</table>';
         const extra = x.comExtra.length ? `<p class="rs" style="margin-top:6px">${esc(SHC.qtd(x.comExtra.length, 'produto com comissão maior que a geral', 'produtos com comissão maior que a geral'))} ${btVer('afil:extra')}</p>`
-            + (aberto('afil:extra') ? '<table class="tb">' + x.comExtra.slice(0, 30).map(p => `<tr><td>${esc(p.titulo || p.itemId)}</td><td><b>${esc(SHC.pctTxt(p.comissao))}</b></td></tr>`).join('') + '</table>' : '') : '';
+            + (aberto('afil:extra') ? '<table class="tb">' + vmLista('afil:extratodos', x.comExtra, 10)[0].map(p => `<tr><td>${esc(p.titulo || p.itemId)}</td><td><b>${esc(SHC.pctTxt(p.comissao))}</b></td></tr>`).join('') + '</table>'
+                + (x.comExtra.length > 10 ? `<p class="rs">${vmLista('afil:extratodos', x.comExtra, 10)[1]}</p>` : '') : '') : '';
         const parados = (x.pausados || x.encerrados) ? `<p class="rs" style="margin-top:6px">${esc(naoVenda)} na campanha: o anúncio não está à venda ${btVer('afil:parados')}</p>`
-            + (aberto('afil:parados') ? '<table class="tb">' + P.anunciosAfilParados(afil).slice(0, 30).map(p => `<tr><td>${esc(p.titulo || p.itemId)}</td><td>${/^PAUSED$/i.test(p.publicacao) ? 'pausado' : 'encerrado'}</td></tr>`).join('') + '</table>' : '') : '';
+            + (aberto('afil:parados') ? '<table class="tb">' + vmLista('afil:paradostodos', P.anunciosAfilParados(afil), 10)[0].map(p => `<tr><td>${esc(p.titulo || p.itemId)}</td><td>${/^PAUSED$/i.test(p.publicacao) ? 'pausado' : 'encerrado'}</td></tr>`).join('') + '</table>'
+                + `<p class="rs">${vmLista('afil:paradostodos', P.anunciosAfilParados(afil), 10)[1]}</p>` : '') : '';
         h += `<div class="card"><div class="ch"><h3>Sua campanha de afiliados</h3><span class="d">${statusAfil(x.status)}</span></div>${camp}${extra}${parados}
           <div class="acoes" style="justify-content:flex-start;flex-wrap:wrap"><button class="bt leve" data-abrir-afil="campanha">Abrir Venda com afiliados</button></div></div>`;
         h += cardExclusivas(afil.exclusivas);
@@ -3105,18 +3695,19 @@
             const cab = [ped.confirmados.pedidos ? SHC.qtd(ped.confirmados.pedidos, 'confirmado', 'confirmados') : '', ped.aVerificar.pedidos ? ped.aVerificar.pedidos + ' a verificar' : '',
                 ped.outros.pedidos ? SHC.qtd(ped.outros.pedidos, 'outro', 'outros') : ''].filter(Boolean).join(' · ') || 'nenhum pedido';
             const tab = `<table class="tb"><thead><tr><th>SKU</th><th>A verificar</th><th>Confirmado</th><th>Comissão</th></tr></thead><tbody>`
-                + ped.porSku.slice(0, 40).map(g => `<tr><td><b>${esc(g.sku || g.itemId)}</b><span class="sm">${esc(g.titulo)} · ${SHC.moeda(g.valor)}</span></td><td>${g.aVerificar}</td><td>${g.confirmados}</td><td>${SHC.moeda(g.comissao)}</td></tr>`).join('')
-                + `</tbody></table><p class="det">A verificar: ${SHC.moeda(ped.aVerificar.valor)} em vendas, ${SHC.moeda(ped.aVerificar.comissao)} de comissão. Confirmado: ${SHC.moeda(ped.confirmados.valor)}, ${SHC.moeda(ped.confirmados.comissao)} de comissão.${ped.completo === false ? ' Lidos só em parte.' : ''} O Copiloto não guarda nome de afiliado nem de comprador.</p>`;
+                + vmLista('afil:pedsku', ped.porSku, 10)[0].map(g => `<tr><td><b>${esc(g.sku || g.itemId)}</b><span class="sm">${esc(g.titulo)} · ${SHC.moeda(g.valor)}</span></td><td>${g.aVerificar}</td><td>${g.confirmados}</td><td>${SHC.moeda(g.comissao)}</td></tr>`).join('')
+                + `</tbody></table>${ped.porSku.length > 10 ? `<p class="rs">${vmLista('afil:pedsku', ped.porSku, 10)[1]}</p>` : ''}<p class="det">A verificar: ${SHC.moeda(ped.aVerificar.valor)} em vendas, ${SHC.moeda(ped.aVerificar.comissao)} de comissão. Confirmado: ${SHC.moeda(ped.confirmados.valor)}, ${SHC.moeda(ped.confirmados.comissao)} de comissão.${ped.completo === false ? ' Lidos só em parte.' : ''} O Copiloto não guarda nome de afiliado nem de comprador.</p>`;
             h += blocoAf('afil:pedidos', 'Pedidos por afiliados', esc(cab + (ped.pedidos ? ' · por SKU' : ' em 30 dias')), ped.pedidos ? tab : '');
         } else h += `<div class="card"><div class="ch"><h3>Pedidos por afiliados</h3></div><p class="det">${afil.pedidos === null ? 'Não consegui ler os pedidos agora. Aparecem na próxima sincronização.' : 'Aparecem depois da próxima sincronização.'}</p></div>`;
         // Fora da campanha (recolhido)
         if (x.fora && x.fora.length) h += blocoAf('afil:fora', 'Fora da campanha', esc(SHC.qtd(x.fora.length, 'anúncio ativo que os afiliados não divulgam', 'anúncios ativos que os afiliados não divulgam')),
-            '<table class="tb">' + x.fora.slice(0, 40).map(it => `<tr><td>${esc(it.titulo || it.itemId)}</td><td>${it.preco > 0 ? SHC.moeda(it.preco) : ''}</td></tr>`).join('') + '</table>'
-            + (x.fora.length > 40 ? `<p class="det">e mais ${esc(String(x.fora.length - 40))}.</p>` : ''));
+            '<table class="tb">' + vmLista('afil:foratodos', x.fora, 10)[0].map(it => `<tr><td>${esc(it.titulo || it.itemId)}</td><td>${it.preco > 0 ? SHC.moeda(it.preco) : ''}</td></tr>`).join('') + '</table>'
+            + (x.fora.length > 10 ? `<p class="rs">${vmLista('afil:foratodos', x.fora, 10)[1]}</p>` : ''));
         else if (!x.listaInteira) h += `<div class="card"><div class="ch"><h3>Fora da campanha</h3></div><p class="det">Aparece quando a lista inteira da campanha for lida (${esc(SHC.qtd(x.lidos, 'produto lido', 'produtos lidos'))}${x.naCampanha > x.lidos ? ' de ' + esc(x.naCampanha.toLocaleString('pt-BR')) : ''}).</p></div>`;
         // Clique sem venda (recolhido)
         if (x.semVenda.length) h += blocoAf('afil:clique', 'Clique sem venda', esc(SHC.qtd(x.semVenda.length, 'produto', 'produtos') + ' · ' + SHC.qtd(x.semVenda.reduce((t, p) => t + p.cliques, 0), 'clique', 'cliques')),
-            '<p class="det" style="margin-top:6px">' + x.semVenda.slice(0, 10).map(p => esc(p.titulo || p.itemId) + ' (' + p.cliques + ')').join(' · ') + '</p>');
+            '<p class="det" style="margin-top:6px">' + vmLista('afil:cliquetodos', x.semVenda, 10)[0].map(p => esc(p.titulo || p.itemId) + ' (' + p.cliques + ')').join(' · ') + '</p>'
+            + (x.semVenda.length > 10 ? `<p class="rs">${vmLista('afil:cliquetodos', x.semVenda, 10)[1]}</p>` : ''));
         return h + '<p class="det">Fonte: Venda com afiliados (Mercado Livre). Entrar ou sair da campanha é com você, no ML.</p>';
     }
 
@@ -3159,13 +3750,13 @@
         h += `<div class="card" id="posMotivos"><div class="ch"><h3>Motivos das reclamações</h3><span class="d det">${esc(SHC.qtd(a.total, 'caso', 'casos'))}</span></div>`
             + a.motivos.slice(0, nMot).map((x, i) => `<div class="hb"><div class="l"><b>${esc(curtoTxt(x.motivo, 40))}</b><span class="v">${x.casos}${x.valor > 0 ? ' · <small>' + SHC.moeda(x.valor) + '</small>' : ''}</span></div>`
                 + `<div class="medidor"><i class="${i === 0 ? 'pr' : x.casos > 1 ? 'at' : ''}" style="width:${Math.max(4, Math.round(x.casos / max * 100))}%"></i></div></div>`).join('')
-            + (a.motivos.length > 5 ? `<p class="rs">${esc(SHC.qtd(a.motivos.length - 5, 'outro motivo', 'outros motivos'))} ${btVer('pos:motivos')}</p>` : '')
+            + (a.motivos.length > 5 ? `<p class="rs">${btVer('pos:motivos', `Ver mais (${a.motivos.length - 5})`)}</p>` : '')
             + `<p class="rs">${esc(a.naReputacao + ' de ' + a.total)} contaram na sua reputação.</p></div>`;
         // Produtos que mais dão problema (SKU pelo anúncio achado pelo título; sem anúncio, o título). v3.1 (imagem tela-posvenda): % das vendas
         // em vermelho acima de 5% (ESPEC §6), barra = casos ÷ o maior na cor da situação, e a dica em 1 linha.
         const maxP = a.produtos[0].casos, hj = SHC.hoje();
         const linhaP = (p, i) => {
-            const ms = Object.keys(p.motivos).sort((x, y) => p.motivos[y] - p.motivos[x]), dica = P.dicaMotivo(ms[0]), pc = P.posPctVendas(p.casos, p.itemId, vm, hj);
+            const ms = Object.keys(p.motivos).sort((x, y) => p.motivos[y] - p.motivos[x]), dica = P.dicaMotivo(ms[0]), pc = P.posPctVendas(p.casos, p.itemIds && p.itemIds.length ? p.itemIds : p.itemId, vm, hj);
             const cor = pc === null ? (i === 0 ? 'pr' : p.casos > 1 ? 'at' : '') : pc > 5 ? 'pr' : pc >= 2 ? 'at' : 'ok';
             return `<tr><td title="${esc(p.titulo)}"><b>${esc(p.sku || p.titulo)}</b><span class="sm">${esc(ms.map(x => x + ' (' + p.motivos[x] + ')').join(' · '))}</span>`
                 + `<span class="medidor"><i class="${cor}" style="width:${Math.max(4, Math.round(p.casos / maxP * 100))}%"></i></span>`
@@ -3173,13 +3764,14 @@
         };
         const ajP = 'SKU pelo anúncio achado pelo título da reclamação. % vendas = casos ÷ unidades vendidas do anúncio neste mês e no anterior; acima de 5% fica em vermelho. "—" = sem venda lida.';
         h += `<div class="card" id="posProdutos"><div class="ch"><h3>Produtos que mais dão problema</h3><button class="ajuda" type="button" title="${esc(ajP)}" aria-label="Ajuda: produtos que mais dão problema">?</button></div><table class="tb"><thead><tr><th>SKU</th><th>Casos</th><th>% vendas</th></tr></thead><tbody>`
-            + a.produtos.slice(0, aberto('pos:prod') ? 50 : 3).map(linhaP).join('') + '</tbody></table>'
-            + (a.produtos.length > 3 ? `<p class="rs">${esc(SHC.qtd(a.produtos.length - 3, 'outro produto', 'outros produtos'))} ${btVer('pos:prod')}</p>` : '') + '</div>';
+            + vmLista('pos:prod', a.produtos, 3)[0].map(linhaP).join('') + '</tbody></table>'
+            + (a.produtos.length > 3 ? `<p class="rs">${vmLista('pos:prod', a.produtos, 3)[1]}</p>` : '') + '</div>';
         // Todas as reclamações lidas (recolhido): produto, motivo, situação, valor e se contou na reputação. Sem pedido, sem comprador.
         const cs = posvenda.casos;
         h += blocoAf('pos:casos', 'Todas as reclamações lidas', esc(SHC.qtd(cs.length, 'reclamação', 'reclamações') + ' · sem nome do comprador'),
-            '<table class="tb">' + cs.slice(0, 60).map(c => `<tr><td><b>${esc(c.titulo || '—')}</b><span class="sm">${esc([c.motivo, c.situacao].filter(Boolean).map(x => curtoTxt(x, 60)).join(' · '))}</span></td>`
-                + `<td>${c.valor > 0 ? SHC.moeda(c.valor) : '—'}<span class="sm">${c.afetouReputacao === true ? 'contou na reputação' : c.afetouReputacao === false ? 'não contou' : ''}</span></td></tr>`).join('') + '</table>');
+            '<table class="tb">' + vmLista('pos:casostodos', cs, 20)[0].map(c => `<tr><td><b>${esc(c.titulo || '—')}</b><span class="sm">${esc([c.motivo, c.situacao].filter(Boolean).map(x => curtoTxt(x, 60)).join(' · '))}</span></td>`
+                + `<td>${c.valor > 0 ? SHC.moeda(c.valor) : '—'}<span class="sm">${c.afetouReputacao === true ? 'contou na reputação' : c.afetouReputacao === false ? 'não contou' : ''}</span></td></tr>`).join('') + '</table>'
+            + (cs.length > 20 ? `<p class="rs">${vmLista('pos:casostodos', cs, 20)[1]}</p>` : ''));
         return h + `<p class="det">${cs.length === 1 ? 'A reclamação mais recente' : 'As ' + esc(SHC.qtd(cs.length, '', 'reclamações mais recentes'))} que o Mercado Livre mostra${posvenda.paginas > 1 ? '; as outras ficam no pós-venda do ML' : ''}`
             + `${posvenda.casosTs ? ' · lidas em ' + esc(ddmmHora(posvenda.casosTs)) : ''}.</p>`;
     }
@@ -3195,7 +3787,7 @@
     // Plano de envio + saúde do estoque de cada produto (mínimo em unidades do SKU, c|sku|<SKU>.fullMinUn).
     function planoAtual() {
         const pl = planoBase();
-        pl.linhas.forEach(l => { l.saude = P.saudeFull(l.p, l.prev.qtd, l.p.sku ? cadSku[SHC.chaveSku(l.p.sku)] : null); });
+        pl.linhas.forEach(l => { l.saude = P.saudeFull(l.p, l.prev.qtd, l.p.sku ? cadSku[SHC.chaveSku(l.p.sku)] : null, conta); });
         return pl;
     }
     function planoBase() {
@@ -3207,7 +3799,8 @@
             lucroDe: p => {
                 const its = doFull(p);
                 if (!its.length) return { lucro: null, motivo: 'sem_anuncio' };
-                const r = P.resumoSku({ itens: its }, (custoGrupo[its[0].sku ? 'sku:' + its[0].sku : 'mlb:' + its[0].itemId] || {}).dados || null, cfg);
+                // F13a: a variação do Full usa o custo do SKU DELA; sem SKU, o do anúncio (o maior das variações).
+                const r = P.resumoSku({ itens: its }, ((p.sku && custoGrupo['sku:' + SHC.normalizaSku(p.sku)]) || custoDoItem(its[0]) || {}).dados || null, cfg);
                 if (!(r.custo > 0)) return { lucro: null, motivo: 'sem_custo' };
                 return r.pior ? { lucro: r.pior.s.sobra, motivo: '' } : { lucro: null, motivo: 'sem_preco' };
             },
@@ -3227,7 +3820,7 @@
             return t.length ? t.join(' · ') : (r.semDetalhe ? 'unidades: o detalhe ainda não foi lido' : 'unidades: o ML ainda não informou');
         };
         const resumo = P.remessasResumoTxt(rr) + (rr.custoPorUnidade !== null ? ' · ' + SHC.moeda(rr.custoPorUnidade) + ' por unidade' : '');
-        let h = `<div class="card" id="cardRemessas"><div class="fu-cab"><div class="fu-t"><h3>Todas as remessas</h3><span>${esc(resumo)}${rr.multasMes ? ` · <span class="vm">multas ${SHC.moeda(rr.multasMes)}</span>` : ''}</span></div>${btVer(k, 'Ver mais', 'Ver menos')}</div>`;
+        let h = `<div class="card" id="cardRemessas"><div class="fu-cab"><div class="fu-t"><h3>Todas as remessas</h3><span>${esc(resumo)}${rr.multasMes ? ` · <span class="vm">multas ${SHC.moeda(rr.multasMes)}</span>` : ''}</span></div>${btVer(k)}</div>`;
         if (aberto(k)) {
             const incs = incRemessas();   // a mesma regra do cartão de cima: reclamação já aberta → "Ver a reclamação"; prazo vencido → "Abrir no ML"
             const rotulo = r => { const x = incs.find(i => String(i.id) === String(r.id)); return x ? (x.reclamacaoAberta ? 'Ver a reclamação' : SHC.remessaPendente(x) ? 'Reclamar no ML' : 'Abrir no ML') : r.inconforme ? 'Reclamar no ML' : 'Abrir no ML'; };
@@ -3336,8 +3929,8 @@
         const cabe = esp.filter(e => P.un(e.livre) !== null).map(e => fmtUn(e.livre) + ' un. em ' + (semTags(e.titulo).replace(/:.*$/, '') || e.id).toLowerCase());
         const ajuda = `Quantidade para ${fullDias} dias de venda (estimativa do Copiloto). Previsão = o maior entre as vendas dos últimos 30 dias e as do mesmo mês do ano passado. Quem acaba antes vem no topo. Espaço, pontuação e estoque vêm do Estoque Full do Mercado Livre.`;
         let h = `<div class="card" id="cardEnviar"><div class="ch"><h3>O que enviar primeiro</h3><button class="ajuda" title="${esc(ajuda)}" aria-label="${esc(ajuda)}">?</button></div><div class="chips">${chips}</div>`;
-        h += env.length ? '<ul class="acoes">' + env.slice(0, 3).map(l => `<li class="acao${cor(l)}"><div class="tx"><b>${esc(l.p.titulo || l.p.sku || 'Produto do Full')}</b><span>${esc(sub(l))}</span></div><div class="val">${fmtUn(l.qtd)} un.</div></li>`).join('') + '</ul>'
-            + (env.length > 3 ? `<p class="rs">e mais ${esc(SHC.qtd(env.length - 3, 'produto', 'produtos'))} em “Todos os produtos”</p>` : '')
+        h += env.length ? '<ul class="acoes">' + vmLista('full:env', env, 3)[0].map(l => `<li class="acao${cor(l)}"><div class="tx"><b>${esc(l.p.titulo || l.p.sku || 'Produto do Full')}</b><span>${esc(sub(l))}</span></div><div class="val">${fmtUn(l.qtd)} un.</div></li>`).join('') + '</ul>'
+            + (env.length > 3 ? `<p class="rs">${vmLista('full:env', env, 3)[1]}</p>` : '')
             : `<p class="est vazio">Nada a enviar para cobrir ${fullDias} dias.</p>`;
         if (cabe.length) h += `<p class="rs">Ainda cabe: ${esc(cabe.join(' · '))}</p>`;
         h += cardProxRemessa();   // ESPEC §6 Full 4: a Próxima remessa é o rodapé deste cartão (um cartão só)
@@ -3373,8 +3966,9 @@
             return;
         }
         // Leitura que falhou agora: o retrato de antes continua, com a data dele (não é "agora").
-        const quando = full.ts ? 'Leitura do Full ' + tempo(full.ts) + '.' : '';
-        const velho = status.erroFull ? `<div class="recnota aviso" style="margin:0 0 8px">Não consegui ler o Full agora. Mostrando a última leitura${full.ts ? ' (' + esc(tempo(full.ts)) + ')' : ''}.</div>` : '';
+        const quando = (full.ts ? 'Leitura do Full ' + tempo(full.ts) + '.' : '') + (full.parcial ? ' ' + P.fullParcialTxt(full) : '');
+        const velho = (status.erroFull ? `<div class="recnota aviso" style="margin:0 0 8px">Não consegui ler o Full agora. Mostrando a última leitura${full.ts ? ' (' + esc(tempo(full.ts)) + ')' : ''}.</div>` : '')
+            + (full.parcial ? `<div class="recnota aviso" style="margin:0 0 8px">${esc(P.fullParcialTxt(full))}</div>` : '');   // F22
         if (!full.temFull) {
             // Só afirma "não usa o Full" com a frase do próprio ML; sem ela, a tela pode ter mudado.
             alvo.innerHTML = velho + cardInconformes() + (txtML(full.vazio)
@@ -3424,11 +4018,11 @@
             + (nc.semDado ? `<p class="rs">${esc(SHC.qtd(nc.semDado, 'produto', 'produtos'))} sem dado para classificar</p>` : '');
         if (par.length) {
             const mx = P.un(par[0].p.aptas);
-            h += '<p class="rs fu-sub">Parado ou sobrando no Full</p>' + par.slice(0, 3).map(l => {
+            h += '<p class="rs fu-sub">Parado ou sobrando no Full</p>' + vmLista('full:par', par, 3)[0].map(l => {
                 const a = P.un(l.p.aptas), v = P.un(l.p.vendas30), vt = v === null ? '' : v > 0 ? ' · ' + SHC.qtd(v, 'venda', 'vendas') + ' em 30 dias' : ' · nenhuma venda em 30 dias';
                 return `<div class="hb"><div class="l"><b>${esc(l.p.titulo || l.p.sku || 'Produto do Full')}</b><span class="v">${fmtUn(a)} un.</span></div><div class="medidor"><i class="${l.saude.classe === 'parado' ? 'at' : ''}" style="width:${Math.max(3, Math.round(a / mx * 100))}%"></i></div>`
                     + `<small class="det">${esc(P.CLASSES_FULL[l.saude.classe].toLowerCase() + vt)}</small></div>`;
-            }).join('') + (par.length > 3 ? `<p class="rs">e mais ${esc(SHC.qtd(par.length - 3, 'produto', 'produtos'))}: toque em parado ou excedente</p>` : '');
+            }).join('') + (par.length > 3 ? `<p class="rs">${vmLista('full:par', par, 3)[1]}</p>` : '');
         }
         return h + '</div>';
     }
@@ -3439,7 +4033,7 @@
         const vis = pl.linhas.filter(l => !fullClasse || (l.saude && l.saude.classe === fullClasse)), n = pl.linhas.length;
         const resumo = fullClasse ? `só ${P.CLASSES_FULL[fullClasse].toLowerCase()}: ${SHC.qtd(vis.length, 'produto', 'produtos')}` : 'Estoque mínimo, vendas e sugestão por produto';
         let html = `<div class="card" id="fuProdutos"><div class="fu-cab"><div class="fu-t"><h3>${n === 1 ? 'O produto no Full' : 'Todos os ' + n + ' produtos'}</h3><span>${esc(resumo)}</span></div>`
-            + (fullClasse ? `<button class="lnk ver" data-fclasse="${esc(fullClasse)}">Ver todos</button>` : btVer('full:produtos')) + '</div>';
+            + (fullClasse ? `<button class="lnk ver" data-fclasse="${esc(fullClasse)}" aria-expanded="true">Ver menos</button>` : btVer('full:produtos', `Ver mais (${n})`)) + '</div>';
         if (!fullClasse && !aberto('full:produtos')) return html + '</div>';
         html += `<div class="fu-in"><div class="sim" style="margin-top:0"><label for="fullDias">Cobrir</label><input class="inp" id="fullDias" inputmode="numeric" value="${fullDias}"><span>dias</span><button class="bt leve" data-full-dias>Ver</button></div>
           <p style="margin:8px 0 0;font-size:12.5px">${nEnv ? `Enviar <b>${total} un.</b> de ${SHC.qtd(nEnv, 'produto', 'produtos')}, na ordem abaixo.` : 'Nenhum produto precisa de envio para essa cobertura.'}</p>
@@ -3457,7 +4051,7 @@
               ${saudeHtml(l)}
               <div class="recnota ${l.qtd > 0 ? 'ok' : 'neutra'}">Copiloto: ${sug} <span class="det">(estimativa)</span></div>
               <button class="lnk explique" data-full-expl="${esc(k)}">${fullExpl.has(k) ? 'Fechar explicação' : 'Explique: por que esta quantidade?'}</button>${fullExpl.has(k) ? respHtml(P.explicaFull(l, pl.dias)) : ''}</div>`;
-        }).join('') + botaoMais('full', vis.length - limite.full);
+        }).join('') + botaoMais('full', vis.length - limite.full) + (fullClasse ? '' : vmFim('full:produtos'));
         return html;
     }
     // Classe do produto, aviso de estoque mínimo e o campo do mínimo em unidades (por SKU; sem SKU não há onde guardar).
@@ -3475,10 +4069,26 @@
     }
 
     // ── Ajustes ──
+    // Despesas fixas do mês: despEdit = linhas em edição ainda não salvas (null = as salvas em cfg.despesas_fixas).
+    let despEdit = null, despErros = [];
+    const despDoForm = () => Array.from(document.querySelectorAll('#listaDespesas .aj-desp')).map(d => ({ nome: d.querySelector('[data-desp-nome]').value, valor: d.querySelector('[data-desp-valor]').value }));
+    function desenhaDespesas() {
+        const salvas = SHC.despesasFixas(cfg);
+        $('#listaDespesas').innerHTML = P.despLinhasHtml(despEdit || salvas.map(d => ({ nome: d.nome, valor: P.txtReais(d.valor) })), despErros);
+        $('#totalDespesas').textContent = P.despTotalTxt(salvas, SHC.hoje());
+        $('#maisDespesa').disabled = document.querySelectorAll('#listaDespesas .aj-desp').length >= P.DESP_MAX_LINHAS;
+    }
     function desenhaAjustes() {
         if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#ajustes')) return;
+        desenhaDespesas();
         $('#imposto_pct').value = P.txtImposto(cfg);
         $('#margem_alvo_pct').value = String(cfg.margem_alvo_pct).replace('.', ',');
+        const pad = $('#promo_aviso_dias');   // v3.2.0: avisar N dias antes do fim da promoção (padrão 2)
+        if (pad) pad.value = String(SHC.num(cfg.promo_aviso_dias) !== null ? SHC.num(cfg.promo_aviso_dias) : SHC.PROMO_AVISO_DIAS);
+        // v3.2: resumo para a equipe (frequência e hora; o fundo confere de 30 em 30 min)
+        const rh = $('#resumo_hora');
+        if (rh && !rh.innerHTML) rh.innerHTML = Array.from({ length: 24 }, (_, x) => `<option value="${x}">${x}h</option>`).join('');
+        if (rh) { $('#resumo_freq').value = ['dia', 'semana'].indexOf(cfg.resumo_freq) >= 0 ? cfg.resumo_freq : 'ambos'; rh.value = String(SHC.num(cfg.resumo_hora) !== null ? SHC.num(cfg.resumo_hora) : 8); }
         // v3.1 (imagem tela-ajustes): "40.000" (centavos só quando há); sem meta = vazio.
         $('#meta_mes').value = SHC.num(cfg.meta_mes) > 0 ? SHC.num(cfg.meta_mes).toLocaleString('pt-BR', { minimumFractionDigits: SHC.num(cfg.meta_mes) % 1 ? 2 : 0, maximumFractionDigits: 2 }) : '';
         // Mesma conta do guia (SHC.guiaCustos): todos os SKUs e os 10 que mais vendem.
@@ -3487,6 +4097,7 @@
         $('#custosBarra').setAttribute('aria-valuenow', String(pct));
         $('#infoCustos').innerHTML = cu.deTodos ? `<b>${pct}%</b> · ${cu.comTodos} de ${cu.deTodos} SKUs com custo` : 'Primeiro o Copiloto precisa ler a sua conta.';
         $('#infoPrincipais').textContent = cu.de ? `Principais: ${cu.com} de ${cu.de} que mais vendem` : '';
+        $('#erpxAj').innerHTML = erpx && SHC.erpxAjustesHtml ? SHC.erpxAjustesHtml(erpx) : '';   // v3.2: cruzamento ERP × ML
         $('#custosRes').textContent = cu.deTodos ? `${cu.comTodos} de ${cu.deTodos} com custo · planilha ou ERP` : 'Lido na próxima sincronização';   // resumo do bloco recolhido
         if (!tinyRodando) $('#abrirTiny').textContent = tinyToken ? 'Tiny · Puxar custos agora' : 'Tiny · Conectar em 1 minuto';
         const ult = status.ultimaOk ? new Date(status.ultimaOk) : null;
@@ -3514,6 +4125,12 @@
     const focoEm = sel => document.activeElement && document.activeElement.matches && document.activeElement.matches(sel);
     // Só a aba visível é redesenhada; as outras, quando forem abertas.
     function desenhaAba() {
+        // O redesenho apaga o botão "Ver mais"/"Ver menos" que estava com o foco: no fim, o foco vai ao botão novo de mesma data-ver.
+        const fa = document.activeElement, fv = fa && fa.dataset ? fa.dataset.ver : null;
+        desenhaAbaJa();
+        if (fv && fa.isConnected === false) { const n = document.querySelector(`[data-ver="${fv.replace(/["\\]/g, '\\$&')}"]`); if (n && n.focus) try { n.focus({ preventScroll: true }); } catch (e) { /* sem foco */ } }
+    }
+    function desenhaAbaJa() {
         if (aba === 'geral') desenhaGeral();
         if (aba === 'promo' && !focoEm('[data-custo],[data-sim-meta],#margemRobo')) desenhaPromo();
         if (aba === 'frete' && !focoEm('#confMedidas,[data-csku]')) desenhaFrete();
@@ -3524,6 +4141,7 @@
         if (aba === 'conciliacao') desenhaConc();
         if (aba === 'canal') desenhaCanal();
         if (aba === 'afiliados') desenhaAfil();
+        if (aba === 'tiktok' && !focoEm('[data-tt-custo]')) desenhaTikTok().catch(() => {});
         if (aba === 'posvenda') desenhaPos();
         if (aba === 'ajustes') desenhaAjustes();
     }
@@ -3602,10 +4220,11 @@
         ? `<a class="rec ${REC_COR[r.cor] || 'ne'} fk-bt" href="${esc(ACAO_URL[r.acao](id))}" target="_blank" rel="noopener" title="${esc(r.motivo)}">${esc(r.rotulo)} ›</a>`
         : `<span class="rec ${REC_COR[r.cor] || 'ne'}" title="${esc(r.motivo)}">${esc(r.rotulo)}</span>`);
     const capP = t => String(t || '').charAt(0).toUpperCase() + String(t || '').slice(1);
-    function metaHtml() {
+    // semTexto: a frase (e o "Defina uma meta") já foi dita junto com a das setas ("Outubro começou hoje: setas e projeção aparecem amanhã.").
+    function metaHtml(semTexto) {
         const m = P.metaTxt(SHC.metaMes(vb, SHC.hoje(), cfg.meta_mes));
-        if (!m.texto) return '';
-        return `<div class="meta-l"><p class="det" style="margin:0;color:#344054">${esc(m.texto)}${m.semMeta ? ' <button class="lnk" data-ir-aba="ajustes">Defina uma meta em Ajustes</button>' : ''}</p>`
+        if (!m.texto || (semTexto && m.pct === null)) return '';
+        return `<div class="meta-l">${semTexto ? '' : `<p class="det" style="margin:0;color:#344054">${esc(m.texto)}${m.semMeta ? ' <button class="lnk" data-ir-aba="ajustes">Defina uma meta em Ajustes</button>' : ''}</p>`}`
             + (m.pct !== null ? `<div class="prog" role="progressbar" aria-label="Quanto já vendeu da meta do mês" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${m.pct}"><i style="width:${m.pct}%;background:${m.cor === 'ok' ? 'var(--verde)' : '#D97706'}"></i></div>`
                 + `<p class="det" style="margin:-4px 0 0">${m.pct}% da meta já vendido.</p>` : '') + '</div>';
     }
@@ -3623,8 +4242,8 @@
             .map(c => `<span class="gt ${c.nivel}${c === pr ? ' pri' : ''}" role="listitem" title="${esc(c.nome + ': ' + NIVEL_G[c.nivel][1] + ' — ' + c.texto)}">${esc(P.GARGALO_NOME[c.id])}</span>`).join('')}</div>`
             + `<p class="fk-m ${pr ? pr.nivel : 'sem'}">${esc(g.resumo)}</p>` : '';
         return `<div class="fam-sku${g ? ' fk-caiu' : ''}"><div class="fk-top"><div class="fk-t"><b>${abc ? `<span class="abc ${abc}" title="Curva ABC: ${abc}">${abc}</span>` : ''}${esc(tit)}</b>`
-            + `${s.sku ? `<small>SKU ${esc(s.sku)}</small>` : ''}</div>${P.miniSku(s, fams.mes)}</div>${varHtml}${gar}${lucro}`
-            + `<div class="acoes fk-ac">${acaoSku(rec, id)}${g ? `<button class="lnk" data-fam-causa="${esc(k)}" aria-expanded="${aberta}">${aberta ? 'Esconder' : 'Por que caiu?'}</button>` : ''}`
+            + `${s.sku ? `<small>SKU ${esc(s.sku)}</small>` : s.rotulo ? `<small>${esc(s.rotulo)}</small>` : ''}</div>${P.miniSku(s, fams.mes)}</div>${varHtml}${gar}${lucro}`
+            + `<div class="acoes fk-ac">${acaoSku(rec, id)}${g ? `<button class="lnk" data-fam-causa="${esc(k)}" aria-expanded="${aberta}">${aberta ? 'Ver menos' : 'Por que caiu?'}</button>` : ''}`
             + (/^MLB\d{6,14}$/.test(id) ? `<button class="lnk" data-abrir-anuncio="${esc(id)}">Ver anúncio</button>` : '') + `</div>${aberta ? gargaloHtml(g, s, fams) : ''}</div>`;
     }
     let famFiltro = '';   // v3.1: filtro da lista de SKUs por causa do gargalo ('' = todos; 'sem' = sem causa clara)
@@ -3648,17 +4267,21 @@
         const aviso = acoes.texto ? `<p class="fam-aviso"><b>Precisa de você:</b> ${esc(acoes.texto)}</p>` : '';
         const comVenda = fams.filter(f => f.bruto > 0), barra = `<div class="fam-barra" aria-hidden="true">${comVenda.map(f => `<i style="width:${f.pct}%;background:${esc(f.cor)}" title="${esc(f.familia)}: ${SHC.moeda(f.bruto)} (${P.pctFam(f.pct)})"></i>`).join('')}</div>`;
         const ritmo = [fams.mesParcial ? (fams.mesAtual ? `${nome} lido até o dia ${fams.dias}` : `${nome} lido só até o dia ${fams.dias}`) : '', fams.antParcial ? `${ant} lido só até o dia ${fams.diasAnt}` : ''].filter(Boolean).join(' e ');
-        const comp = fams.motivoComp || (fams.totalAnt === null ? `Sem ${ant} lido: as setas aparecem quando ele for lido.`
+        let comp = fams.motivoComp || (fams.totalAnt === null ? `Sem ${ant} lido: as setas aparecem quando ele for lido.`
             : 'Setas: contra ' + ant + (fams.comparacao === 'ritmo' ? `, pelo ritmo por dia (${ritmo})` : '') + '.');
+        // 1º dia do mês: setas e projeção esperam o mesmo amanhã → 1 frase só (antes: 2 linhas seguidas dizendo o mesmo).
+        const umaSo = / acabou de começar: as setas aparecem amanhã\.$/.test(comp) && /^O mês começou hoje/.test(P.metaTxt(SHC.metaMes(vb, SHC.hoje(), cfg.meta_mes)).texto || '');
+        if (umaSo) comp = comp.replace(/ acabou de começar: as setas aparecem amanhã\.$/, ' começou hoje: setas e projeção aparecem amanhã.');
         const topo = `<p class="det" style="margin:6px 0 0;color:#344054">Total: <b>${SHC.moeda(fams.total)}</b>${famSetaHtml({ bruto: fams.total, brutoAnt: fams.totalAnt, variacaoPct: fams.totalAnt > 0 ? (fams.total - fams.totalAnt * fams.fator) / (fams.totalAnt * fams.fator) * 100 : null })}</p>${barra}`;
         if (!ab) {
             // v3.1: cada família com a barra do tamanho dela, ▲▼ contra o mês anterior e contra o ano passado, e o mini-histórico de 13 meses
             const maxB = Math.max(1, ...comVenda.map(f => f.bruto));
             // v3.1 (pedido da dona 29/09): tocar numa família já abre o detalhe com os SKUs DELA (antes só o "Ver 13 meses e os SKUs" abria).
-            const cinco = comVenda.slice(0, 5).map(f => `<div class="fam-v" role="button" tabindex="0" data-fam-sel="${esc(f.familia)}" data-fam-abrir="${k}" title="Ver os SKUs de ${esc(f.familia)}"><div class="fam-l">${famSw(f.cor)}<span class="nm">${esc(f.familia)}</span><span class="vl">${SHC.moeda(f.bruto)}</span><span class="pc">${P.pctFam(f.pct)}</span></div>`
+            const [famVis, famBt] = vmLista('geral:famtodas', comVenda, 5);
+            const cinco = famVis.map(f => `<div class="fam-v" role="button" tabindex="0" data-fam-sel="${esc(f.familia)}" data-fam-abrir="${k}" title="Ver os SKUs de ${esc(f.familia)}"><div class="fam-l">${famSw(f.cor)}<span class="nm">${esc(f.familia)}</span><span class="vl">${SHC.moeda(f.bruto)}</span><span class="pc">${P.pctFam(f.pct)}</span></div>`
                 + `<div class="fam-vb"><i style="width:${Math.max(2, Math.round(f.bruto / maxB * 100))}%;background:${esc(f.cor)}"></i></div><div class="fam-vs">${famSetaHtml(f).replace('">', `" title="Contra ${esc(ant)}">mês `)}${famSetaAnoHtml(f)}${P.sparkFam(f)}</div></div>`).join('');
-            const resto = comVenda.length > 5 ? `<p class="det" style="margin:2px 0 0">E mais ${esc(SHC.qtd(comVenda.length - 5, 'família', 'famílias'))}.</p>` : '';
-            return `<div class="card gb" id="g-familia">${cab}${naoLidoTxt}${aviso}${topo}${cinco}${resto}<p class="det" style="margin:4px 0 0">${esc(comp)}</p>${semCat()}${metaHtml()}`
+            const resto = famBt ? `<p class="rs" style="margin:2px 0 0">${famBt}</p>` : '';
+            return `<div class="card gb" id="g-familia">${cab}${naoLidoTxt}${aviso}${topo}${cinco}${resto}<p class="det" style="margin:4px 0 0">${esc(comp)}${umaSo && P.metaTxt(SHC.metaMes(vb, SHC.hoje(), cfg.meta_mes)).semMeta ? ' <button class="lnk" data-ir-aba="ajustes">Defina uma meta em Ajustes</button>' : ''}</p>${semCat()}${metaHtml(umaSo)}`
                 + `<button class="lnk ver" data-ver="${k}" aria-expanded="false" style="margin-top:6px">Ver 13 meses e os SKUs</button></div>`;
         }
         // Aberto
@@ -3686,12 +4309,13 @@
                 : f.familia !== SHC.FAMILIA_OUTRAS && f.familia !== SHC.FAMILIA_SEM && /histórico/.test(sc.motivo) ? `<p class="det" style="margin:4px 0 0">${esc(sc.motivo)}</p>` : '';
         }
         // v3.1: anúncios ativos da família com estoque e nenhuma venda nos 3 últimos meses → liquidar ou descartar (botão que abre as promoções do ML)
-        const parados = (f.parados || []).slice(0, 5).map(p => `<div class="fam-sku"><div class="fk-t"><b>${esc(p.titulo || p.itemId)}</b><small>${p.sku ? 'SKU ' + esc(p.sku) + ' · ' : ''}${esc(P.milhar(p.estoque))} un. paradas</small></div>`
+        const [parV, parBt] = vmLista('geral:famparados', f.parados || [], 5);
+        const parados = parV.map(p => `<div class="fam-sku"><div class="fk-t"><b>${esc(p.titulo || p.itemId)}</b><small>${p.sku ? 'SKU ' + esc(p.sku) + ' · ' : ''}${esc(P.milhar(p.estoque))} un. paradas</small></div>`
             + `<div class="acoes fk-ac">${acaoSku(SHC.recomendaParado(p), p.itemId)}<button class="lnk" data-abrir-anuncio="${esc(p.itemId)}">Ver anúncio</button></div></div>`).join('');
-        const paradosHtml = parados ? `<p style="margin:10px 0 2px;font-size:12.5px"><b>Parados há 3 meses</b> <span class="det">· ${esc(SHC.qtd((f.parados || []).length, 'anúncio', 'anúncios'))} com estoque</span></p>${parados}` : '';
+        const paradosHtml = parados ? `<p style="margin:10px 0 2px;font-size:12.5px"><b>Parados há 3 meses</b> <span class="det">· ${esc(SHC.qtd((f.parados || []).length, 'anúncio', 'anúncios'))} com estoque</span></p>${parados}${parBt ? `<p class="rs">${parBt}</p>` : ''}` : '';
         // Curva ABC da conta (recolhida): uma barra A/B/C com as contagens; "Ver os A" abre a lista.
         const abc = P.abcConta(fams), kA = 'geral:famabc', abA = aberto(kA), oQue = abc.criterio === 'lucro' ? 'do lucro' : 'do faturamento', nAbc = P.abcContagem(abc);
-        const abcHtml = abc.nA ? `<div class="fam-abc"><p style="margin:0;font-size:12px"><b>Curva ABC</b> <span class="det">${oQue} de ${esc(nome)}</span> ${btVer(kA, 'Ver os A', 'Esconder')}</p>`
+        const abcHtml = abc.nA ? `<div class="fam-abc"><p style="margin:0;font-size:12px"><b>Curva ABC</b> <span class="det">${oQue} de ${esc(nome)}</span> ${btVer(kA, `Ver os A (${abc.nA})`)}</p>`
             + `<div class="abc-bar" role="img" aria-label="${esc(['A', 'B', 'C'].map(x => x + ': ' + SHC.qtd(nAbc[x], 'SKU', 'SKUs')).join(', ') + (nAbc.sem ? ', sem custo: ' + SHC.qtd(nAbc.sem, 'SKU', 'SKUs') : ''))}">`
             + `${['A', 'B', 'C'].filter(x => nAbc[x]).map(x => `<i class="abc ${x}" style="flex:${nAbc[x]}">${x} ${nAbc[x]}</i>`).join('')}${nAbc.sem ? `<i class="abc sem" style="flex:${nAbc.sem}" title="Sem custo: fora da curva do lucro (informe no Catálogo)">sem custo ${nAbc.sem}</i>` : ''}</div>`
             + `<p class="det" style="margin:0">A = 80% ${oQue} · B até 95% · C o resto${abc.criterio === 'bruto' ? ' · informe os custos no Catálogo para ver pelo lucro' : ''}</p>`
@@ -3709,10 +4333,11 @@
         const famBar = P.famBarraMes(f, fams.mes, fams);
         const skuHtml = `<p style="margin:10px 0 2px;font-size:12.5px"><b>SKUs de ${esc(f.familia)}</b> <span class="det">· ${f.skus.some(s => s['variacaoR$'] !== null) ? 'maior queda em R$ primeiro' : 'maior faturamento primeiro'}</span></p>${famBar}${chips}`
             + (skus.map(s => linhaSkuFam(s, abc.porChave[P.chaveSkuFam(s)], fams, gar.get(P.chaveSkuFam(s)) || null)).join('') || '<p class="det">Nenhum SKU com venda.</p>')
-            + (resto > 0 ? `<button class="mais" data-fam-mais>Mostrar mais ${Math.min(resto, 10)} de ${resto}</button>` : '') + paradosHtml;
+            + (resto > 0 ? `<button class="mais" data-fam-mais>Mostrar mais ${Math.min(resto, 10)} de ${resto}</button>` : '')
+            + (famLim > 10 && skus.length > 10 ? `<p class="vm-fim"><button class="lnk ver" data-fam-menos aria-expanded="true">Ver menos</button></p>` : '') + paradosHtml;
         return `<div class="card gb" id="g-familia">${cab}${naoLidoTxt}${aviso}${topo}<div class="acoes" style="justify-content:flex-start;margin:0 0 4px">${modo}</div>${lista}${nota}<p class="det" style="margin:4px 0 0">${esc(comp)}</p>${semCat()}${metaHtml()}`
             + `<div class="fam-duas"><div>${P.svgFamilias(fams, famSel)}${pico}${outras}${subs}${prep}${abcHtml}</div><div>${skuHtml}</div></div>`
-            + `<button class="lnk ver" data-ver="${k}" aria-expanded="true" style="margin-top:6px">Esconder os detalhes</button></div>`;
+            + `<button class="lnk ver" data-ver="${k}" aria-expanded="true" style="margin-top:6px">Ver menos</button></div>`;
     }
     // v2.9 (pedido da dona): reputação e perguntas saem da Geral e vão para a aba Saúde. Reputação por cores: o termômetro do ML (5 faixas,
     // marcando a da conta) e cada variável como barra contra o limite. Só o que o ML dá: nada de prazo nem número inventado.
@@ -3748,34 +4373,49 @@
                 : `<p class="rs" style="margin:0 0 8px">${n ? 'Responder em até 1 hora ajuda a vender.' : n === 0 ? '✓ Nenhuma pergunta esperando.' : 'O Mercado Livre não mostrou quantas perguntas estão sem resposta.'}</p>`)
             + (linkML(q.link) ? `<a class="bt pq ml" href="${esc(q.link)}" target="_blank" rel="noopener">Responder no ML</a>` : '') + '</div>';
     }
+    // v3.2 (pedido da dona 30/09): "Resumo para a equipe" com as abas Do dia / Da semana (resumo:<conta>:dia | :semanal, SHC.resumoExecutivo).
+    const resumoPer = () => resumoAba || (cfg && cfg.resumo_freq === 'semana' ? 'semana' : 'dia');
+    const resumoAtual = () => (resumoPer() === 'dia' ? resumoDia : semanal);
+    const NOME_SECAO = { preco: 'Preço', visitas: 'Visitas', sazonal: 'Sazonalidade', crescendo: 'Crescendo', reputacao: 'Reputação', lucro: 'Lucro', cobrancas: 'Cobranças', posvenda: 'Pós-venda', full: 'Full', caindo: 'Caindo', prejuizo_lista: 'parte da lista de vendas no prejuízo' };
     function cardSemanal() {
-        const k = 'geral:semanal', novo = !!(semanal && semanal.novo), s = semanal;
-        let h = `<div class="card gb" id="g-semanal"><div class="gb-l"><i class="dot ${novo ? 'atencao' : (s ? 'ok' : '')}"></i><b>Resumo da semana</b><span class="gb-v">${novo ? '<b style="color:var(--ambar)">novo resumo disponível</b>' : (s && s.semana ? esc(P.dataBr(s.semana.de) + ' a ' + P.dataBr(s.semana.ate)) : 'texto pronto para o WhatsApp')}</span>${btVer(k, 'Ver resumo', 'Esconder')}</div>`;
+        const k = 'geral:semanal', s = resumoAtual(), per = resumoPer(), novo = !!((semanal && semanal.novo) || (resumoDia && resumoDia.novo));
+        let h = `<div class="card gb" id="g-semanal"><div class="gb-l"><i class="dot ${novo ? 'atencao' : (s ? 'ok' : '')}"></i><b>Resumo para a equipe</b><span class="gb-v">${novo ? '<b style="color:var(--ambar)">novo resumo disponível</b>' : 'texto pronto para o WhatsApp'}</span>${btVer(k, 'Ver resumo')}</div>`;
         if (aberto(k)) {
-            h += '<div class="gb-c">' + (!s ? `<p class="det">${esc(semanalMsg || 'Montando o resumo com o que já foi lido…')}</p>`
-                : `<textarea id="txtSemanal" readonly aria-label="Resumo da semana">${esc(s.texto)}</textarea>
-                  <div class="acoes" style="justify-content:flex-start;flex-wrap:wrap"><button class="bt verde" data-semanal-zap${P.waLinkOk(s.waLink) ? '' : ' disabled'}>Enviar pelo WhatsApp</button><button class="bt leve" data-semanal-copiar>Copiar</button><button class="lnk" data-semanal-novo>Gerar de novo</button></div>
-                  <p class="det">O WhatsApp abre para você escolher para quem mandar; o Copiloto não envia nada sozinho. Toda segunda de manhã um resumo novo fica pronto aqui.${semanalMsg ? ' ' + esc(semanalMsg) : ''}</p>`) + '</div>';
+            if (!s && !semanalMsg && !semanalPedido) setTimeout(() => pedirSemanal(false), 0);   // aba sem o texto ainda: pede o guardado
+            const zapOk = !!s && P.waLinkOk(s.waLink), curto = s && (s.encurtado || []).length ? s.encurtado.map(x => NOME_SECAO[x] || x).join(', ') : '';
+            h += `<div class="gb-c"><span class="seg" role="group" aria-label="Período" style="margin-bottom:8px"><button data-resumo-aba="dia" aria-pressed="${per === 'dia'}">Do dia</button><button data-resumo-aba="semana" aria-pressed="${per === 'semana'}">Da semana</button></span>`
+                + (!s ? `<p class="det">${esc(semanalMsg || 'Montando o resumo com o que já foi lido…')}</p>`
+                : `<textarea id="txtSemanal" readonly aria-label="Resumo ${per === 'dia' ? 'do dia' : 'da semana'}" style="min-height:260px">${esc(s.texto)}</textarea>
+                  <div class="acoes" style="justify-content:flex-start;flex-wrap:wrap"><button class="bt verde" data-semanal-zap${zapOk ? '' : ' disabled title="O texto passou do limite do link do WhatsApp: use Copiar e cole na conversa."'}>${zapOk ? 'Enviar pelo WhatsApp' : 'Texto grande: use Copiar'}</button><button class="bt leve" data-semanal-copiar>Copiar</button><button class="lnk" data-semanal-novo>Gerar de novo</button></div>
+                  ${zapOk && curto ? `<p class="det">Pelo WhatsApp vai a versão curta (sem ${esc(curto)}). O Copiar leva o texto completo.</p>` : ''}
+                  <p class="det">O WhatsApp abre para você escolher para quem mandar; o Copiloto não envia nada sozinho. ${per === 'dia' ? 'Todo dia de manhã' : 'Toda segunda de manhã'} um resumo novo fica pronto aqui (horário em Ajustes).${semanalMsg ? ' ' + esc(semanalMsg) : ''}</p>`) + '</div>';
         }
         return h + '</div>';
     }
-    // Pede o resumo ao fundo ({acao:'resumo_semanal'}; agora = gera de novo com o que está guardado, nenhum GET) e tira o "novo" do ícone.
+    // Pede o resumo da aba aberta ao fundo ({acao:'resumo_semanal', periodo}; agora = gera de novo com o que está guardado, nenhum GET) e tira o "novo" do ícone.
     async function pedirSemanal(agora) {
         if (semanalPedido) return;
         semanalPedido = true;
+        const per = resumoPer();
         let r = null;
-        try { r = await chrome.runtime.sendMessage({ acao: 'resumo_semanal', agora: !!agora }); } catch (e) { r = null; }
+        try { r = await chrome.runtime.sendMessage({ acao: 'resumo_semanal', agora: !!agora, periodo: per }); } catch (e) { r = null; }
         semanalPedido = false;
         if (r && r.ok && r.resumo) {
-            semanal = r.resumo; semanalMsg = '';
-            if (semanal.novo) { semanal = Object.assign({}, semanal, { novo: false }); try { Promise.resolve(chrome.runtime.sendMessage({ acao: 'resumo_semanal_visto' })).catch(() => {}); } catch (e) { /* fundo reiniciando */ } }
+            if (per === 'dia') resumoDia = r.resumo; else semanal = r.resumo;
+            semanalMsg = '';
+            if ((semanal && semanal.novo) || (resumoDia && resumoDia.novo)) {   // o "visto" tira o novo do dia e da semana
+                if (semanal) semanal = Object.assign({}, semanal, { novo: false });
+                if (resumoDia) resumoDia = Object.assign({}, resumoDia, { novo: false });
+                try { Promise.resolve(chrome.runtime.sendMessage({ acao: 'resumo_semanal_visto' })).catch(() => {}); } catch (e) { /* fundo reiniciando */ }
+            }
         } else semanalMsg = r && r.motivo === 'sem_conta' ? 'Clique em Sincronizar agora: o Copiloto ainda não sabe qual é a sua conta.' : 'Não consegui montar o resumo agora. Tente de novo.';
-        if (aba === 'geral') desenhaGeral();
+        if (aba === 'geral') desenhaAba();   // desenhaAba: mantém o foco no "Ver menos" do resumo
     }
     function desenhaGeral() {
         $('#geralFam').innerHTML = cardFamilia();
         $('#geralContas').innerHTML = cardContasJuntas();
         $('#geralSemanal').innerHTML = cardSemanal();
+        $('#geralErpx').innerHTML = erpx && SHC.erpxCartaoHtml ? SHC.erpxCartaoHtml(erpx) : '';   // v3.2: Bling/Tiny/Omie × ML
         const ci = P.certInfo(cert, Date.now());
         const b = [];   // v2.9: perguntas e reputação foram para a aba Saúde (entram na linha da Saúde)
         // Promoções
@@ -3790,7 +4430,8 @@
         const fc = P.freteConta(freteHist);
         if (!fc && P.temFreteCob(freteHist)) b.push(blocoGeral('frete', 'Frete', 'neutra', esc(`últimos 30 dias: ${SHC.moeda(freteHist.conta.ult30.total)} · ${SHC.qtd(freteHist.conta.ult30.pedidos, 'pedido', 'pedidos')}`)));
         else if (!fc) b.push(blocoGeral('frete', 'Frete', 'neutra', 'aparece quando o Faturamento for lido'));
-        else b.push(blocoGeral('frete', 'Frete', fc.cor, esc(fc.resumo), somaRs((fc.conc.pagoAMais || []).filter(p => !p.talvezUnidades), p => p.diferenca)));   // v3.1: o * (pode ter 2+ unidades) fica fora
+        // v3.3: o mesmo total do cartão "Frete cobrado a mais" da aba Frete (confirmado + para conferir, sem o corte de 200 da lista).
+        else b.push(blocoGeral('frete', 'Frete', fc.cor, esc(fc.resumo), fc.total));
         // Catálogo
         if (!grupos.length) b.push(blocoGeral('catalogo', 'Catálogo', 'neutra', 'lista de anúncios ainda não lida'));
         else {
@@ -3862,9 +4503,10 @@
         const lista = at ? (anom.itens || []).filter(i => i && vis.indexOf(i.aba) >= 0).map(i => {
             const t = String(i.texto || ''), k = t.indexOf(': '), corta = k > 0 && k < 60, rem = i.remessaId ? incRemessas().find(r => String(r.id) === String(i.remessaId)) : null;
             const pend = !!(rem && SHC.remessaPendente(rem));
-            const tit = (corta ? t.slice(0, k) : t).replace(/\.$/, '');
+            const pj = i.tipo === 'prejuizo' && i.titulo;   // v3.2: "Venda no prejuízo: <produto> · −R$ X" inteiro no título; o motivo embaixo
+            const tit = pj ? String(i.titulo) : (corta ? t.slice(0, k) : t).replace(/\.$/, '');
             const abaI = i.tipo === 'familia' && vis.indexOf('conciliacao') >= 0 ? 'conciliacao' : i.aba;   // o Faturamento por família fica na Conciliação
-            return { c: urg(i) ? 'pr' : 'at', aba: abaI, tit: esc(tit), curto: tit.length <= 48 ? esc(tit) : '', sub: esc(corta ? t.slice(k + 2) : ''), prazo: pend && rem.prazo ? P.dataBr(rem.prazo).slice(0, 5) : '',
+            return { c: urg(i) ? 'pr' : 'at', aba: abaI, tit: esc(tit), curto: tit.length <= 48 ? esc(tit) : '', sub: esc(pj ? i.motivo || '' : corta ? t.slice(k + 2) : ''), prazo: pend && rem.prazo ? P.dataBr(rem.prazo).slice(0, 5) : '',
                 link: linkML(i.link) ? i.link : '', bt: pend ? 'Reclamar' : i.tipo === 'perguntas' ? 'Responder' : 'Abrir' };
         }).sort((p, q) => (p.c === 'pr' ? 0 : 1) - (q.c === 'pr' ? 0 : 1))
             : ls.filter(l => l.cor === 'ruim' || l.cor === 'atencao').map(l => {
@@ -3890,17 +4532,21 @@
             + `<div class="s">${mm.projecao === null ? esc(mm.motivo || 'sem dado') : [pctM !== null ? pctM + '% da meta' : '', mm.ateAgora !== null ? 'vendido até hoje ' + P.rs0(mm.ateAgora) : '', brAnt ? 'contra ' + P.mesLongo(x.mes) : ''].filter(Boolean).map(esc).join(' · ')}</div></div>`;
         // KPI 2: lucro do mês passado (sem o custo dos produtos: o líquido do ML), com a seta contra o mês anterior a ele
         const temL = typeof x.casc.lucro === 'number', v2 = temL ? x.casc.lucro : x.casc.liquido, a2 = x.b && x.b.casc ? (temL ? x.b.casc.lucro : x.b.casc.liquido) : null;
-        const kLuc = `<div class="kpi kn${typeof v2 !== 'number' ? '' : v2 < 0 ? ' pr' : ' ok'}"><div class="l">${temL ? 'Lucro' : 'Líquido do ML'} de ${esc(P.mesLongo(x.mes))}</div>`
-            + `<div class="v">${typeof v2 === 'number' ? esc(P.rs0(v2)) : '—'}</div><div class="s">${typeof v2 !== 'number' ? 'ainda não lido por inteiro' : (typeof a2 === 'number' ? setaAds(v2, a2, 'sobe') + ' contra ' + esc(P.mesLongo(P.mesMenos(x.mes, 1))) : temL ? 'depois de custos e imposto' : 'falta o custo dos produtos')}</div></div>`;
-        // KPI 3: alertas (os do sino)
-        const kAl = `<div class="kpi kn${nUrg ? ' pr' : lista.length ? ' at' : at ? ' ok' : ''}"><div class="l">${at ? 'Alertas' : 'Abas com alerta'}</div>`
-            + `<div class="v">${at ? at.total : lista.length || '—'}${nUrg ? ` <small>${esc(SHC.qtd(nUrg, 'urgente', 'urgentes'))}</small>` : ''}</div>`
-            + `<div class="s">${at ? (at.total ? esc(at.partes) : 'tudo em dia') : lista.length ? 'veja cada aba abaixo' : 'depois da sincronização'}</div></div>`;
-        const precisa = !lista.length ? '' : `<div class="card" id="geralPrecisa"><div class="ch"><h3>Precisa de você hoje</h3>${nUrg ? `<span class="selo pr">${esc(SHC.qtd(nUrg, 'urgente', 'urgentes'))}</span>` : ''}</div>`
+        // v3.2: com despesas fixas (Ajustes), a cor segue a sobra do mês e ela aparece embaixo (lucro verde com sobra negativa enganava)
+        const sob = temL && typeof x.casc.sobra === 'number' ? x.casc.sobra : null, corL = sob !== null ? sob : v2;
+        const kLuc = `<div class="kpi kn${typeof corL !== 'number' ? '' : corL < 0 ? ' pr' : ' ok'}"><div class="l">${temL ? 'Lucro' : 'Líquido do ML'} de ${esc(P.mesLongo(x.mes))}</div>`
+            // F10: lucro sem o custo de alguma venda (cobrança sem anúncio) leva * e o motivo no title
+            + `<div class="v">${typeof v2 === 'number' ? esc(P.rs0(v2)) + (temL && x.a && x.a.produtos && x.a.produtos.faltam > 0 ? `<abbr title="${esc(P.concNotaProdutos(x.a.produtos))}">*</abbr>` : '') : '—'}</div><div class="s">${typeof v2 !== 'number' ? 'ainda não lido por inteiro' : (typeof a2 === 'number' ? setaAds(v2, a2, 'sobe') + ' contra ' + esc(P.mesLongo(P.mesMenos(x.mes, 1))) : temL ? 'depois de custos e imposto' : 'falta o custo dos produtos')}</div>`
+            + (sob !== null ? `<div class="s"><b class="rv${sob < 0 ? ' pr' : ''}">sobra ${esc(sob < 0 ? '−' + P.rs0(-sob) : P.rs0(sob))}</b> depois das despesas fixas</div>` : '') + '</div>';
+        // v3.2.0: o KPI "Alertas/Abas com alerta" saiu: repetia a contagem da manchete e do "Precisa de você hoje" (3 vezes no 1º olhar).
+        // A contagem por tipo (at.partes) foi para baixo do título do "Precisa de você hoje".
+        // v3.2.0: sem os alertas do sino (!at) a lista sairia das mesmas linhas do "Cada aba em 1 linha", logo abaixo (informação duplicada): não desenha.
+        const precisa = !lista.length || !at ? '' : `<div class="card" id="geralPrecisa"><div class="ch"><h3>Precisa de você hoje</h3>${nUrg ? `<span class="selo pr">${esc(SHC.qtd(nUrg, 'urgente', 'urgentes'))}</span>` : ''}</div>`
+            + (at && at.total && at.partes ? `<p class="det" style="margin:0 0 6px">${esc(at.partes)}</p>` : '')
             + `<ul class="acoes">${lista.slice(0, aberto(kM) ? lista.length : 3).map(li).join('')}</ul>`
-            + (lista.length > 3 ? `<p class="rs">${aberto(kM) ? '' : esc('Mais ' + SHC.qtd(lista.length - 3, 'alerta', 'alertas') + '.') + ' '}${btVer(kM)}</p>` : '') + '</div>';
+            + (lista.length > 3 ? `<p class="rs">${btVer(kM, `Ver mais (${lista.length - 3})`)}</p>` : '') + '</div>';
         const zap = aberto('geral:semanal') ? '' : '<button class="lnk zap" data-ver="geral:semanal">Resumo p/ WhatsApp</button>';
-        return `<p class="manchete">${zap}${man}</p>` + (ci && ci.vermelho ? certHtml(ci) : '') + `<div class="kpis gk">${kMeta}${kLuc}${kAl}</div>` + precisa;
+        return `<p class="manchete">${zap}${man}</p>` + (ci && ci.vermelho ? certHtml(ci) : '') + `<div class="kpis gk">${kMeta}${kLuc}</div>` + precisa;
     }
     // Certificado digital (cert:<conta>): alerta na Geral e na Conciliação, com o Faturador.
     const certHtml = ci => `<div class="recnota ${ci.vermelho ? 'ruim' : 'neutra'}" style="margin:0 0 8px"><b>Certificado digital:</b> ${esc(ci.texto)}`
@@ -3915,8 +4561,9 @@
         // ponytail: custo cadastrado só na família (F…) não entra aqui (o fechamento completo acha): o custo dos produtos fica "falta o custo".
         const custos = Object.assign({}, cadSku, custosMl), imp = cfg.configurado ? SHC.num(cfg.imposto_pct) : null, af = afil && afil.temAfiliados ? afil.metricas : null;
         const um = (m, fech) => {
-            const v = F.vendasBrutas(fech, vb, m, hoje), produtos = F.custoProdutos(itens, vm, custos, m, fech ? fech.qtdVendas : null);
-            return { m, fech, vb: v, produtos, impostoPct: imp, casc: F.cascata({ fech, vb: v, produtos, impostoPct: imp, afil: af, mes: m }) };
+            const v = F.vendasBrutas(fech, vb, m, hoje), produtos = F.custoProdutos(itens, vm, custos, m, fech ? fech.qtdVendas : null, vbA);   // F1: unidades da tabela de vendas por anúncio
+            const despesas = SHC.despesasFixasDoMes(SHC.despesasFixas(cfg), m, hoje);   // Ajustes › Despesas fixas do mês (vazio = sem a linha)
+            return { m, fech, vb: v, produtos, impostoPct: imp, casc: F.cascata({ fech, vb: v, produtos, impostoPct: imp, afil: af, mes: m, despesas }) };
         };
         const a = um(mes, fechAnt), b = um(P.mesMenos(mes, 1), fechAnt2);
         return { mes, nome: F.nomeMes(mes), vb: a.vb, casc: a.casc, a, b, custos: F.custosTopicos(a, b, F.motivosMes(a)) };
@@ -3947,9 +4594,9 @@
                 + (r && r.aviso ? `<small>${esc(r.aviso)}</small>` : '')
                 + (x && x.soTotais ? '<small>Mais de 2.000 notas no mês: aqui ficam só os totais. A lista completa está no Mercado Livre.</small>' : '')
                 + `<div class="acoes" style="justify-content:flex-start;margin-top:4px"><a class="bt leve" href="${esc(SHC.nfeLink(m))}" target="_blank" rel="noopener">Abrir no ML (baixar Excel, PDF ou XML)</a>`
-                + (ns.length ? btVer(k, 'Ver as notas', 'Esconder as notas') : '') + '</div>'
-                + (aberto(k) ? ns.slice(0, aberto(kt) ? ns.length : NFE_VISTAS).map(linhaNfe).join('')
-                    + (ns.length > NFE_VISTAS ? btVer(kt, 'Ver todas as ' + P.milhar(ns.length), 'Ver só as ' + NFE_VISTAS + ' mais recentes') : '') : '')
+                + (ns.length ? btVer(k, `Ver as notas (${P.milhar(ns.length)})`) : '') + '</div>'
+                + (aberto(k) ? vmLista(kt, ns, NFE_VISTAS)[0].map(linhaNfe).join('')
+                    + (ns.length > NFE_VISTAS ? `<p class="rs">${vmLista(kt, ns, NFE_VISTAS)[1]}</p>` : '') + (ns.length > 5 ? vmFim(k) : '') : '')
                 + '</div>';
         };
         return meses.map((m, i) => bloco(nfeV[i], m)).join('')
@@ -3963,6 +4610,7 @@
     // v3.1 (pedido da dona 26/09): custo novo na fatura (tipo de tarifa que não aparecia, ou que subiu > 50% e > R$ 50): o quê, quanto, desde quando,
     // por que costuma aparecer e como evitar (SHC.CUSTO_EXPLICA) e o link da fatura para contestar. Sem 2 faturas lidas não compara: não mostra nada.
     const CN_VISTOS = 3;
+    const minF = s => String(s || '').charAt(0).toLowerCase() + String(s || '').slice(1);   // "fatura de setembro" (mês minúsculo no meio da frase, como no resto da aba)
     function custoNovoHtml() {
         const cn = SHC.custosNovos(fat), its = cn.itens;
         if (!cn.base) return '';
@@ -3971,16 +4619,17 @@
         const fl = (cn.faltaLer || []).length ? ` A fatura de ${cn.faltaLer.map(m => P.nomeMes(m)).join(' e ')} não foi lida: sem comparação com ela.` : '';
         if (!its.length) return `<p class="recnota ok" id="concCustoNovo" style="margin:0 0 8px">✓ Nenhum custo novo nas faturas (comparei ${cn.lidas} faturas).${esc(fl)}</p>`;
         const li = x => `<li class="acao sug ${x.novo ? 'pr' : 'at'}"><div class="tx"><b title="${esc(x.tipo)}">${esc(x.tipo)}</b>`
-            + `<span>${SHC.moeda(x.valor)} na fatura ${esc(x.aberta ? 'em andamento' : 'de ' + x.nomeFatura)} · ${x.novo ? '<b class="vm" style="display:inline">novo</b>' + esc(x.desde && x.desde !== x.nomeFatura ? ' desde a fatura de ' + x.desde : ', não aparecia antes') : `<span class="var sobe">▲ ${x.pct}%</span> (era ${SHC.moeda(x.antes)})`}</span>`
-            + (x.porque ? `<span>Por quê: ${esc(x.porque)}</span><span>Como evitar: ${esc(x.evitar)}</span>` : '<span>Custo novo sem explicação conhecida: confira no detalhe da fatura. Não reconhece este custo? Conteste no ML.</span>')
+            + `<span>${SHC.moeda(x.valor)} na fatura ${esc(x.aberta ? 'em andamento' : 'de ' + minF(x.nomeFatura))} · ${x.novo ? '<b class="vm" style="display:inline">novo</b>' + esc(x.desde && x.desde !== x.nomeFatura ? ' desde a fatura de ' + minF(x.desde) : '') : `<span class="var sobe">▲ ${x.pct}%</span> (era ${SHC.moeda(x.antes)})`}</span>`
+            // v3.2.0: "Por quê"/"Como evitar" recolhidos (a aba Conciliação era a mais longa: 2 parágrafos por custo novo).
+            + (x.porque ? `<details class="pq-ev"><summary>Por quê e como evitar</summary><span>Por quê: ${esc(x.porque)}</span><span>Como evitar: ${esc(x.evitar)}</span></details>` :'<span>Custo novo sem explicação conhecida: confira no detalhe da fatura. Não reconhece este custo? Conteste no ML.</span>')
             + '</div>'
             + (!umLink && linkML(x.link) ? `<a class="bt ml pq" href="${esc(x.link)}" target="_blank" rel="noopener">Abrir a fatura</a>` : '') + '</li>';
         const k = 'conc:custonovo', n = its.filter(x => x.novo).length;
         return `<div class="card" id="concCustoNovo"><div class="ch"><h3>${n ? 'Custo novo na fatura' : 'Custo que subiu na fatura'}</h3><span class="selo ${n ? 'pr' : 'at'}">${esc(SHC.qtd(its.length, 'custo', 'custos'))}</span></div>`
             + `<ul class="acoes">${its.slice(0, aberto(k) ? its.length : CN_VISTOS).map(li).join('')}</ul>`
-            + (its.length > CN_VISTOS ? btVer(k, 'Ver mais ' + (its.length - CN_VISTOS), 'Ver menos') : '')
+            + (its.length > CN_VISTOS ? btVer(k, `Ver mais (${its.length - CN_VISTOS})`) : '')
             + (fl ? `<p class="det">${esc(fl.trim())}</p>` : '')
-            + (umLink ? `<div class="acoes" style="justify-content:flex-start;margin-top:6px"><span class="det" style="margin:0">Não reconhece algum? Conteste no ML.</span><a class="bt ml pq" href="${esc(umLink.link)}" target="_blank" rel="noopener">Abrir a fatura${umLink.aberta ? '' : ' de ' + esc(umLink.nomeFatura)}</a></div><p class="det">Sai do seu lucro. Quem decide se devolve é o ML.</p></div>`
+            + (umLink ? `<div class="acoes" style="justify-content:flex-start;margin-top:6px"><span class="det" style="margin:0">Não reconhece algum? Conteste no ML.</span><a class="bt ml pq" href="${esc(umLink.link)}" target="_blank" rel="noopener">Abrir a fatura${umLink.aberta ? '' : ' de ' + esc(minF(umLink.nomeFatura))}</a></div></div>`
                 : '<p class="det">Sai do seu lucro. Não reconhece algum? Conteste no ML pela fatura; quem decide se devolve é o ML.</p></div>');
     }
     // v3.1 (pedido da dona 26/09): manchete com o custo que mais subiu → KPIs → "Dá para recuperar" (estimativa, com a origem) → custos × mês anterior.
@@ -3988,63 +4637,74 @@
         const F = SHC.fech, t = x.custos, cf = (conferir && conferir.itens) || [];
         concNoRec = new Set();
         if (!F || !t) return '';
-        const rec = F.recuperar({ conc: P.concDe(freteHist), conferir: cf, inconformes: incRemessas() }), recLido = !!(P.concDe(freteHist) || conferir || remessas);
+        const rec = F.recuperar({ conc: P.concDe(freteHist), conferir: cf, inconformes: incRemessas(), devolucoes: devContestar() }), recLido = !!(P.concDe(freteHist) || conferir || remessas || (freteHist && freteHist.devolucoes));   // v3.2: + tarifa de devolução 🟢 (igual ao Fechamento)
+        const devConf = !!(rec.devConferir && rec.devConferir.valor > 0);   // 🟡 aparece mesmo sem nada a recuperar (igual ao Fechamento)
         const c = x.casc, lucro = c.lucro, bruto = c.bruto, Nome = x.nome.charAt(0).toUpperCase() + x.nome.slice(1).replace(/ de \d{4}$/, '');
         // Com as vendas dos 2 meses, a cor segue o peso nas vendas (como os tópicos logo abaixo): subir junto com as vendas = cinza.
         const bAnt = x.b.casc.bruto, cAnt = x.b.casc.custosML;
         const m = t.maior, cmp = Object.assign(F.compara(c.custosML, cAnt), { pp: c.custosML !== null && cAnt !== null && bruto > 0 && bAnt > 0 ? (c.custosML / bruto - cAnt / bAnt) * 100 : null }), sML = F.setaCusto(cmp);
         const fato = m ? F.fraseMaior(m, x.b.m, true) : lucro !== null ? `${Nome} fechou com ${SHC.moeda(lucro)} de lucro${bruto > 0 ? ' (' + SHC.pctTxt(lucro / bruto * 100) + ')' : ''}.`
             : c.liquido !== null ? `${Nome}: líquido do ML de ${SHC.moeda(c.liquido)}.` : `${Nome}: cobranças ainda não lidas por inteiro.`;
-        const acao = rec.total > 0 ? `Dá para recuperar cerca de ${SHC.moeda(rec.total)}.` : m ? F.ACAO_CURTA[m.id] : t.comparou ? 'Nenhum custo subiu.' : '';
+        // v3.2: venda nova no prejuízo é urgente: a manchete avisa (o detalhe fica em "Alertas desta aba", no fim)
+        const nPrej = (anom && String(anom.conta) === String(conta || '') ? anom.itens || [] : []).filter(i => i && i.tipo === 'prejuizo').reduce((s, i) => s + P.nAlerta(i), 0);
+        const acao = (nPrej ? SHC.qtd(nPrej, 'venda nova', 'vendas novas') + ' no prejuízo (veja no fim da aba). ' : '')
+            + (rec.total > 0 ? `Peça de volta cerca de ${SHC.moeda(rec.total)}.` : m ? F.ACAO_CURTA[m.id] : t.comparou ? 'Nenhum custo subiu.' : '');
         const cor = m ? (m.dir === 'novo' || (m.pp !== null ? m.pp >= 1 : m.difPct >= 20) ? 'pr' : 'at') : lucro !== null ? (lucro < 0 ? 'pr' : 'ok') : '';
         const lp = t.linhas.find(l => l.id === 'produtos');
         let h = `<p class="manchete"><span class="pt ${cor}"></span><b>${esc(fato)}</b> ${esc(acao)}</p><div class="kpis k3">`
             + kpiN(lucro === null ? '' : lucro < 0 ? 'pr' : 'ok', 'Lucro de ' + P.mesLongo(x.mes), lucro === null ? '—' : SHC.moeda(lucro), esc(lucro !== null ? (bruto > 0 ? SHC.pctTxt(lucro / bruto * 100) + ' das vendas' : '') : (lp && lp.valor === null ? lp.motivo : 'ainda não lido')))
             + kpiN(sML.cls === 'sobe' ? 'pr' : sML.cls === 'desce' ? 'ok' : '', 'Custos do ML', c.custosML === null ? '—' : SHC.moeda(c.custosML),
                 esc([c.custosML !== null && bruto > 0 ? SHC.pctTxt(c.custosML / bruto * 100) + (sML.txt ? '' : ' das vendas') : '', sML.txt].filter(Boolean).join(' · ')), 'Custos do ML em % das vendas e a mudança contra ' + P.mesLongo(x.b.m))
-            + kpiN(rec.total > 0 ? 'at' : recLido ? 'ok' : '', 'Dá para recuperar', rec.total > 0 ? SHC.moeda(rec.total) : recLido ? 'nada' : '—', rec.total > 0 ? 'estimativa' : recLido ? 'nas cobranças lidas' : 'ainda não lido') + '</div>';
-        h += custoNovoHtml();   // v3.1: logo depois dos números: custo novo na fatura
+            + kpiN(rec.total > 0 || devConf ? 'at' : recLido ? 'ok' : '', 'Dá para recuperar', rec.total > 0 ? SHC.moeda(rec.total) : recLido ? 'nada' : '—', rec.total > 0 ? 'estimativa' : devConf ? SHC.moeda(rec.devConferir.valor) + ' vale conferir' : recLido ? 'nas cobranças lidas' : 'ainda não lido') + '</div>';
+        h += '<!--faixa-->' + custoNovoHtml();   // v3.1: logo depois dos números: custo novo na fatura (a faixa dos cartões de 1 linha entra no marcador)
         // Dá para recuperar: até 3 itens por parcela, cada um com o botão certo (chamado do frete, texto copiado, reclamar a remessa).
-        if (rec.parcelas.length) {
+        if (rec.parcelas.length || devConf) {
             const it = (p, y) => {
-                if (p.id === 'frete') return `<li class="acao at"><div class="tx"><b title="${esc(tituloDe(y.itemId) || y.itemId)}">${esc(tituloDe(y.itemId) || y.itemId)}</b><span>pedido ${esc(y.pedido)} · ${SHC.moeda(y.valor)} a mais</span></div><button class="bt leve pq" data-frete-det="${esc(y.itemId)}">Chamado</button></li>`;
+                if (p.id === 'frete') return `<li class="acao at"><div class="tx"><b title="${esc(tituloDe(y.itemId) || y.itemId)}">${esc(tituloDe(y.itemId) || y.itemId)}</b><span>pedido ${esc(y.pedido)} · ${SHC.moeda(y.valor)} a mais</span></div><button class="bt leve pq" data-recfr-copiar="${esc(y.pedido)}">${recFrCopiado === String(y.pedido) ? '✓ Copiado' : 'Copiar chamado'}</button></li>`;
                 if (p.id === 'full') return `<li class="acao ${y.prazo ? 'pr' : 'at'}"><div class="tx"><b>Remessa ${esc(y.id)}</b><span>${esc(y.motivos[0] || '')} · ${SHC.moeda(y.valor)}${y.prazo ? ' · até ' + esc(P.dataBr(y.prazo).slice(0, 5)) : ''}</span></div><a class="bt ml pq" href="${esc(y.link)}" target="_blank" rel="noopener">Reclamar no ML</a></li>`;
+                if (p.id === 'devolucao') return `<li class="acao ok"><div class="tx"><b>Pedido ${esc(y.pedido)}</b><span>${esc(y.motivo)} · ${SHC.moeda(y.valor)}</span></div><button class="bt leve pq" data-dev-copiar="${esc(y.pedido)}">${devCopiado === y.pedido ? '✓ Copiado' : 'Copiar chamado'}</button></li>`;
                 const n = cf.indexOf(cf.find(z => z.pedido === y.pedido && z.regra === y.regra && z.cobranca === y.cobranca));
                 if (n >= 0) concNoRec.add(n);
                 return `<li class="acao at"><div class="tx"><b>Pedido ${esc(y.pedido)}</b><span>${esc(curtoTxt(y.cobranca, 34))} · ${SHC.moeda(y.valor)} a mais</span></div><button class="bt leve pq" data-conc-copiar="${n}">${concCopiado === n ? '✓ Copiado' : 'Copiar chamado'}</button></li>`;
             };
-            h += `<div class="card" id="concRec"><div class="ch"><h3>Dá para recuperar</h3><span class="selo at">estimativa</span></div>`
-                + rec.parcelas.map(p => `<p class="rs" style="margin:8px 0 2px"><b>${esc(p.rotulo)}</b> · ${SHC.moeda(p.valor)} · <span title="${esc('Origem: ' + p.origem)}">${esc(p.curta)}</span></p><ul class="acoes">${p.itens.slice(0, 3).map(y => it(p, y)).join('')}</ul>`
-                    + (p.itens.length > 3 ? `<p class="rs">e mais ${p.itens.length - 3}${p.id === 'frete' ? ' na aba Frete' : p.id === 'full' ? ' na aba Full' : ' em “Cobranças para conferir”'}</p>` : '')).join('')
-                + '<p class="det">Quem decide o que devolve é o ML; o chamado só pede a revisão. Devoluções do pós-venda ficam fora: o ML não informa se o dinheiro voltou.</p></div>';
+            // v3.2.0: "Dá para recuperar" aparece 1 vez só (no KPI); o cartão diz o que fazer.
+            h += `<div class="card" id="concRec"><div class="ch"><h3>Como pedir de volta</h3><span class="selo at">${rec.parcelas.length ? 'estimativa' : 'vale conferir'}</span></div>`
+                + rec.parcelas.map(p => `<p class="rs" style="margin:8px 0 2px"><b>${esc(p.rotulo)}</b> · ${SHC.moeda(p.valor)}${p.curta ? ` · <span title="${esc('Origem: ' + p.origem)}">${esc(p.curta)}</span>` : ''}</p><ul class="acoes">${vmLista('conc:rec:' + p.id, p.itens, 3)[0].map(y => it(p, y)).join('')}</ul>`
+                    + (p.itens.length > 3 ? `<p class="rs">${vmLista('conc:rec:' + p.id, p.itens, 3)[1]}</p>` : '')).join('')
+                + (devConf ? `<p class="det"><span class="pt at"></span>Fora do total: ${SHC.moeda(rec.devConferir.valor)} em tarifas de devolução que valem conferir (aba Frete).</p>` : '')
+                + '<p class="det">Quem decide o que devolve é o ML; o chamado só pede a revisão. O valor devolvido ao comprador fica fora: o ML não informa se o dinheiro voltou.</p></div>';
         }
         // Custos × mês anterior: uma linha por custo, ▲ vermelho quando sobe, ▼ verde quando cai, e o peso em % das vendas.
-        const { vis, zerados } = F.custosVisiveis(t);
-        h += `<div class="card" id="concCustos"><div class="ch"><h3>Custos de ${esc(P.mesLongo(x.mes))} × ${esc(P.mesLongo(x.b.m))}</h3></div><table class="tb">${vis.map(l => {
+        // Ajuste final 3.2.0: à vista só o que mudou; os "= igual" viram 1 linha ("8 custos iguais a agosto · Ver").
+        const { vis, zerados } = F.custosVisiveis(t), iguais = vis.filter(l => l.dir === 'igual'), kIg = 'conc:iguais';
+        const mostra = aberto(kIg) ? vis : vis.filter(l => l.dir !== 'igual');
+        h += `<div class="card" id="concCustos"><div class="ch"><h3>Custos de ${esc(P.mesLongo(x.mes))} × ${esc(P.mesLongo(x.b.m))}</h3></div><table class="tb">${mostra.map(l => {
             // v3.1 (29/09): o R$ da mudança escrito ("subiu R$ 120"), além da seta em %; custo que era 0 = "custo novo este mês".
             const s = F.setaCusto(l), sub = l.valor === null ? l.motivo : [l.dir === 'novo' ? 'custo novo este mês' : (l.dir === 'sobe' || l.dir === 'desce') && l.dif !== null ? (l.dif > 0 ? 'subiu ' : 'caiu ') + SHC.moeda(Math.abs(l.dif)) : '',
                 l.pct !== null ? SHC.pctTxt(l.pct) + ' das vendas' : '', l.pp !== null ? 'era ' + SHC.pctTxt(l.pctAntes) : '', l.estimativa ? '30 dias, fora da conta' : '', l.semSep ? 'sem comparação' : '', l.parcialSem ? 'mês em andamento: sem comparação' : ''].filter(Boolean).join(' · ');
             return `<tr><td>${esc(l.rotulo)}${sub ? `<span class="sm">${esc(sub)}</span>` : ''}</td><td>${l.valor === null ? '—' : SHC.moeda(l.valor)}</td><td>${s.txt ? `<span class="var ${s.cls}">${esc(s.txt)}</span>` : ''}</td></tr>`;
-        }).join('')}</table>${zerados.length ? `<p class="det">Sem cobrança nos 2 meses: ${esc(zerados.map(l => l.rotulo).join(', '))}.</p>` : ''}`
+        }).join('')}</table>${iguais.length ? `<p class="rs">${esc(SHC.qtd(iguais.length, 'custo igual', 'custos iguais') + ' a ' + P.mesLongo(x.b.m))} · ${btVer(kIg, 'Ver')}</p>` : ''}${zerados.length ? `<p class="det">Sem cobrança nos 2 meses: ${esc(zerados.map(l => l.rotulo).join(', '))}.</p>` : ''}`
             + '<p class="det">▲ vermelho = o custo subiu · ▼ verde = caiu · ▲ cinza = mudou junto com as vendas (o peso nas vendas ficou igual). “—” = ainda não lido (não é zero).</p></div>';
         return h;
     }
     function desenhaConc() {
         $('#geralFam').innerHTML = cardFamilia();   // v3.1 (ESPEC §6): "Faturamento por família" saiu da Geral e fica aqui, com o mesmo id
-        const F = SHC.fech, x = concMes(), ci = P.certInfo(cert, Date.now()), h = [];
+        // fx = a faixa de largura total logo abaixo dos KPIs com os 5 cartões de 1 linha (Fechamento, Fatura × anterior, Cobranças, Faturas, Notas):
+        // a 1366 eles ficavam ao lado de cartões de 500 px e deixavam um buraco branco na coluna da direita.
+        const F = SHC.fech, x = concMes(), ci = P.certInfo(cert, Date.now()), h = [], fx = [];
         h.push(concTopo(x) || custoNovoHtml());   // sem o fechamento: o custo novo aparece mesmo assim
         if (ci && ci.vermelho) h.push(certHtml(ci));
         // Fechamento resumido
-        const linhas = P.concResumo(x.casc), liq = x.casc.liquido;
+        const linhas = P.concResumo(x.casc).concat(P.concDespesas(x.casc)), liq = x.casc.liquido;   // + Despesas fixas (Ajustes) e a sobra
         const vbTxt = !x.vb ? `As vendas brutas de ${x.nome} ainda não foram lidas.` : (!x.vb.completo ? `As vendas brutas de ${x.nome} foram lidas só em parte${typeof x.vb.dias === 'number' ? ' (' + x.vb.dias + ' de ' + x.vb.diasMes + ' dias)' : ''}.` : '');
         const rp = F ? F.comparaRepasse(rep, x.mes, liq) : null;
-        h.push(dobra(`<div class="card" id="concFech"><b style="font-size:13px">Fechamento de ${esc(x.nome)}</b>
-          <table class="tabf"><tbody>${linhas.map(l => `<tr${l.id === 'liquido' ? ' style="font-weight:800"' : ''}><td>${esc(l.rotulo)}</td><td>${l.valor === null ? '—' : (l.tipo === 'menos' ? '− ' : (l.tipo === 'mais' ? '+ ' : (l.tipo === 'info' ? '(' : ''))) + SHC.moeda(l.valor) + (l.tipo === 'info' ? ')' : '')}</td></tr>`).join('')}</tbody></table>
-          ${vbTxt ? `<p class="det">${esc(vbTxt)} Sem o mês inteiro, o líquido fica “—”.</p>` : ''}${!fechAnt ? `<p class="det">As cobranças de ${esc(x.nome)} ainda não foram lidas do Faturamento.</p>` : ''}
+        fx.push(dobra(`<div class="card" id="concFech"><b style="font-size:13px">Fechamento de ${esc(x.nome)}</b>
+          <table class="tabf"><tbody>${linhas.map(l => `<tr${l.id === 'liquido' || l.id === 'sobra' ? ' style="font-weight:800"' : ''}><td>${esc(l.rotulo)}${l.ajuda ? ` <small class="det">(${esc(l.ajuda)})</small>` : ''}</td><td>${l.valor === null ? '—' : (l.tipo === 'menos' ? '− ' : (l.tipo === 'mais' ? '+ ' : (l.tipo === 'info' ? '(' : ''))) + SHC.moeda(l.valor) + (l.tipo === 'info' ? ')' : '')}</td></tr>`).join('')}</tbody></table>
+          ${vbTxt ? `<p class="det">${esc(vbTxt)} Sem o mês inteiro, o líquido fica “—”.</p>` : ''}${P.concNotaProdutos(x.a && x.a.produtos) ? `<p class="det">${esc(P.concNotaProdutos(x.a.produtos))}</p>` : ''}${!fechAnt ? `<p class="det">As cobranças de ${esc(x.nome)} ainda não foram lidas do Faturamento.</p>` : ''}
           <p class="det"><b>Mercado Pago:</b> ${esc(rp ? rp.frase : (rep ? 'o Mercado Pago de ' + x.nome + ' ainda não foi lido.' : 'conecte o Mercado Pago no fechamento completo para comparar o que entrou com o líquido.'))}</p>
           ${F && F.MP_LE ? `<p class="det">${esc(F.MP_LE)}</p>` : ''}
           <p class="det">“—” = ainda não lido (não é zero). Estornos entre parênteses já estão descontados nas linhas de cima. Líquido = estimativa.</p></div>`,
-          'conc:fech', liq === null ? 'líquido ainda não lido por inteiro' : 'líquido ' + SHC.moeda(liq)));
+          'conc:fech', (liq === null ? 'líquido ainda não lido por inteiro' : 'líquido ' + SHC.moeda(liq)) + (typeof x.casc.sobra === 'number' ? ' · sobra ' + SHC.moeda(x.casc.sobra) : '')));
         // v3.1 (29/09, pergunta da dona "está puxando igual ao ML?"): a última fatura fechada × o Copiloto, categoria por categoria (SHC.fech.dadosConf),
         // e a fatura × a anterior (por que subiu ou caiu). O desenho e o CSS são os do fechamento completo.
         if (F && F.dadosConf) {
@@ -4052,22 +4712,22 @@
             const fechs = {}; fechs[P.mesMenos(x.mes, 1)] = fechAnt2; fechs[x.mes] = fechAnt; fechs[SHC.hoje().slice(0, 7)] = fechAtual;
             const dc = F.dadosConf(fat, fechs, vb, SHC.hoje());
             if (dc.conf) h.push(`<div class="card" id="concConfere"><b style="font-size:13px">Confere com a fatura do ML</b>${F.htmlConfere(dc.conf)}</div>`);
-            if (dc.vs) h.push(dobra(`<div class="card" id="concFaturaVs"><b style="font-size:13px">Fatura de ${esc(P.mesLongo(dc.vs.mesFat))} × ${esc(P.mesLongo(dc.vs.mAnt))}</b>${F.htmlFaturaVs(dc.vs)}</div>`,
+            if (dc.vs) fx.push(dobra(`<div class="card" id="concFaturaVs"><b style="font-size:13px">Fatura de ${esc(P.mesLongo(dc.vs.mesFat))} × ${esc(P.mesLongo(dc.vs.mAnt))}</b>${F.htmlFaturaVs(dc.vs)}</div>`,
                 'conc:faturavs', esc(dc.vs.manchete || '')));
         }
         // Pagamento excedente (cobranças para conferir: a mesma regra do fechamento completo, gravada pelo fundo)
         const cf = conferir, its = (cf && cf.itens) || [], resto = its.map((i, n) => [i, n]).filter(([, n]) => !concNoRec.has(n));
-        h.push(dobra(`<div class="card" id="concConferir"><b style="font-size:13px">Cobranças para conferir</b>
+        fx.push(dobra(`<div class="card" id="concConferir"><b style="font-size:13px">Cobranças para conferir</b>
           <p class="det">Cobranças acima do esperado, estornos que não vieram e faturas que não batem. O Copiloto só aponta: o chamado é você que abre, com o texto pronto.</p>
-          ${concNoRec.size ? `<p class="det">${esc(SHC.qtd(concNoRec.size, 'pedido já está', 'pedidos já estão'))} em “Dá para recuperar”, acima, com o texto do chamado.</p>` : ''}
-          ${resto.slice(0, 3).map(([i, n]) => `<div class="linha-comp"><b>Pedido ${esc(i.pedido)} · ${esc(curtoTxt(i.cobranca, 50))}</b><small>Cobrado ${SHC.moeda(i.valor)} × esperado ${SHC.moeda(i.esperado)}: <b class="vm">${SHC.moeda(i.diferenca)} a mais</b></small><small>${esc(i.motivo)}</small>
+          ${concNoRec.size ? `<p class="det">${esc(SHC.qtd(concNoRec.size, 'pedido já está', 'pedidos já estão'))} em “Como pedir de volta”, acima, com o texto do chamado.</p>` : ''}
+          ${resto.slice(0, 3).map(([i, n]) => `<div class="linha-comp"><b>Pedido ${esc(i.pedido)} · ${esc(curtoTxt(i.cobranca, 50))}</b><small>${i.duvida ? `Cobrado ${SHC.moeda(i.valor)} · <b>pode estar certo, confira</b>` : `Cobrado ${SHC.moeda(i.valor)} × esperado ${SHC.moeda(i.esperado)}: <b class="vm">${SHC.moeda(i.diferenca)} a mais</b>`}</small><small>${esc(i.motivo)}</small>
             <div class="acoes" style="justify-content:flex-start;margin-top:4px"><button class="bt leve" data-conc-copiar="${n}">${concCopiado === n ? '✓ Copiado' : 'Copiar texto do chamado'}</button>${F ? `<a class="lnk" href="${esc(F.URL.cobranca(i.pedido))}" target="_blank" rel="noopener">Abrir a cobrança</a>` : ''}</div></div>`).join('')}
-          ${resto.length > 3 ? `<p class="det">E mais ${resto.length - 3} no fechamento completo.</p>` : ''}
+          ${P.concMaisN(cf, resto.length, concNoRec.size) > 0 ? `<p class="det">E mais ${P.concMaisN(cf, resto.length, concNoRec.size)} no fechamento completo.</p>` : ''}
           ${((rateio && rateio.faturas) || []).filter(f => f && f.conferido === false && !f.incompleto && Math.abs(SHC.num(f.diferenca) || 0) >= 1).map(f => `<div class="linha-comp"><b>Fatura ${esc(f.nome || f.fatura)}</b><small>A soma das cobranças não bate com o total da fatura: diferença de ${SHC.moeda(Math.abs(f.diferenca))}. Pode ser estorno de fatura anterior; confira na fatura.</small></div>`).join('')}</div>`,
           'conc:conferir', !cf ? 'aparece depois da próxima leitura do Faturamento' : (cf.qtd ? '<b class="vm">' + esc(SHC.qtd(cf.qtd, 'cobrança', 'cobranças') + ' · ' + SHC.moeda(cf.valor || 0) + ' a conferir') + '</b>' : '✓ nenhuma cobrança fora do normal')));
         // Faturas do ML e o rateio por ciclo
         const fs = ((fat && fat.faturas) || []).slice(0, 3), rat = (rateio && rateio.faturas) || [];
-        h.push(dobra(`<div class="card" id="concFaturas"><b style="font-size:13px">Faturas do ML</b>
+        fx.push(dobra(`<div class="card" id="concFaturas"><b style="font-size:13px">Faturas do ML</b>
           ${fs.map(f => { const r = rat.find(x => x && (x.fatura === f.mes || x.nome === f.nome)); return `<div class="linha-comp"><b>${esc(f.nome || f.mes)}${f.status ? ' · ' + esc(P.situacaoFatura(f.status)) : ''}</b><small>Total ${SHC.num(f.total) === null ? '—' : SHC.moeda(f.total)} · pago ${SHC.num(f.quitado) === null ? '—' : SHC.moeda(f.quitado)} · a pagar ${SHC.num(f.aPagar) === null ? '—' : SHC.moeda(f.aPagar)}${f.vencimento ? ' · vence ' + esc(P.dataBr(f.vencimento)) : ''}</small>`
             + (r ? `<small>${Object.keys(r.porMes || {}).sort().map(m => esc(P.nomeMes(m)) + ': ' + SHC.moeda(r.porMes[m])).join(' · ')}${r.incompleto ? ' · parte do ciclo ainda não lida' : r.conferido ? ' · ✓ bate com o total da fatura' : ''}</small>` : '')
             + (linkML(f.linkDetalhe) ? `<a class="lnk" href="${esc(f.linkDetalhe)}" target="_blank" rel="noopener" style="font-size:11.5px">Abrir a fatura</a>` : '') + '</div>'; }).join('') || '<p class="det">As faturas aparecem depois da próxima sincronização.</p>'}
@@ -4077,7 +4737,9 @@
         const notas = (fat && fat.notas) || {}, meses = Object.keys(notas).filter(m => Array.isArray(notas[m]) && notas[m].length).sort().reverse().slice(0, 6);
         const linkNf = m => { const u = ((fat && fat.linkNotas) || {})[m] || ((((fat && fat.faturas) || []).find(f => f.mes === m) || {}).notas || {}).url; return linkML(u) ? u : 'https://vendedores.mercadolivre.com.br/billing/resume'; };
         const linhaNf = m => `<div class="linha-sem"><span><b>${esc(P.nomeMes(m))}</b><small>${esc(SHC.qtd(notas[m].length, 'nota', 'notas'))} · ${SHC.moeda(SHC.r2(notas[m].reduce((s, n) => s + (SHC.num(n.amount) || 0), 0)))}</small></span><a class="bt leve" href="${esc(linkNf(m))}" target="_blank" rel="noopener">Baixar</a></div>`;
-        h.push(`<div class="card" id="concNotas"><b style="font-size:13px">Notas fiscais</b>
+        // v3.2.0: o bloco (notas do ML, das suas vendas e os atalhos) fica recolhido com "Ver mais"; o resumo diz o mês mais recente.
+        const somaNf = m => SHC.moeda(SHC.r2(notas[m].reduce((s, n) => s + (SHC.num(n.amount) || 0), 0)));
+        fx.push(dobra(`<div class="card" id="concNotas"><b style="font-size:13px">Notas fiscais</b>
           <p style="margin:8px 0 2px;font-weight:650;font-size:12.5px">Notas fiscais do Mercado Livre (tarifas)</p>
           ${meses.length ? linhaNf(meses[0]) + (meses.length > 1 ? ' ' + btVer('conc:notas', 'Ver os meses anteriores') + (aberto('conc:notas') ? meses.slice(1).map(linhaNf).join('') : '') : '')
             : '<p class="det">As notas das tarifas aparecem depois da próxima leitura das faturas do ML.</p>'}
@@ -4086,8 +4748,10 @@
           ${nfeHtml()}
           <p class="det" style="margin-top:8px">Outros atalhos do Mercado Livre:</p>
           <div class="atalho-nf">${NF_VENDAS.map(([u, t, d]) => `<a href="${esc(u)}" target="_blank" rel="noopener"><b>${esc(t)}</b><small>${esc(d)}</small></a>`).join('')}</div>
-          ${ci && !ci.vermelho ? `<p class="det">Certificado digital: ${esc(ci.texto)}${ci.velho ? ` <a class="lnk" href="${esc(SHC.FATURADOR_URL)}" target="_blank" rel="noopener">Confira a validade no Faturador</a>` : ''}</p>` :(!ci ? '<p class="det">Validade do certificado digital: abra o Faturador uma vez e o Copiloto lê o aviso da própria tela do ML.</p>' : '')}</div>`);
-        $('#listaConc').innerHTML = h.join('');
+          ${ci && !ci.vermelho ? `<p class="det">Certificado digital: ${esc(ci.texto)}${ci.velho ? ` <a class="lnk" href="${esc(SHC.FATURADOR_URL)}" target="_blank" rel="noopener">Confira a validade no Faturador</a>` : ''}</p>` :(!ci ? '<p class="det">Validade do certificado digital: abra o Faturador uma vez e o Copiloto lê o aviso da própria tela do ML.</p>' : '')}</div>`,
+          'conc:nf', meses.length ? esc('tarifas de ' + P.nomeMes(meses[0]) + ': ' + SHC.qtd(notas[meses[0]].length, 'nota', 'notas') + ' · ' + somaNf(meses[0])) : 'notas das tarifas e das suas vendas, com os atalhos do ML'));
+        const faixa = `<div class="conc-faixa">${fx.join('')}</div>`, tudo = h.join('');
+        $('#listaConc').innerHTML = tudo.indexOf('<!--faixa-->') >= 0 ? tudo.replace('<!--faixa-->', faixa) : faixa + tudo;
     }
     async function copiarConc(n) {
         const x = ((conferir && conferir.itens) || [])[n];
@@ -4101,9 +4765,16 @@
     function desenhaCanal() {
         const pl = canalPlano && canalPlano.plano, px = P.proximasCanal(pl, Date.now()), h = [];
         const feitas = (pl || []).filter(s => s.itemId && s.feito).length, comProd = (pl || []).filter(s => s.itemId).length;
+        // Canal 4b: "criada" = clique da dona em Criar; o status real vem da lista do canal no ML (conferida pela Agenda).
+        const cfd = P.canalConferido(canalPlano), sem = cfd.semana;
+        if (sem) h.push(`<div class="card" id="canalConf"><b style="font-size:13px;color:${sem.cor === 'ok' ? 'var(--verde)' : sem.cor === 'pr' ? '#B42318' : 'inherit'}">${esc(sem.titulo)}</b>
+          ${sem.alerta ? `<p class="det" style="color:#B42318;font-weight:700">✗ ${esc(sem.alerta)} — confira na agenda.</p>` : ''}<p class="det">${esc(sem.detalhe)}.</p><button class="bt leve" data-abrir-agenda>Conferir na agenda</button></div>`);
+        // Quem faz o quê: sempre à vista (com ou sem conferência), numa linha curta abaixo de "Abrir a agenda".
+        const qf = $('#canalQuem'); if (qf) qf.textContent = SHC.CANAL_QUEM_FAZ || '';
         h.push(dobra(`<div class="card" id="canalProx"><b style="font-size:13px">Próximas transmissões</b>
-          ${px.slice(0, 10).map(s => `<div class="linha-comp"><b>${esc(P.quandoCanal(s.dia, s.hora))}${(SHC.CANAL_TIPOS || {})[s.tipo] ? ` · <span class="tipo-canal t-${esc(s.tipo)}">${esc(SHC.CANAL_TIPOS[s.tipo])}</span>` : ''}</b><small>${esc(s.titulo || tituloDe(s.itemId))} · ${s.feito ? '✓ criada no ML' : 'falta criar no ML'}</small></div>`).join('')
+          ${vmLista('canal:proxtodas', px, 10)[0].map(s => `<div class="linha-comp"><b>${esc(P.quandoCanal(s.dia, s.hora))}${(SHC.CANAL_TIPOS || {})[s.tipo] ? ` · <span class="tipo-canal t-${esc(s.tipo)}">${esc(SHC.CANAL_TIPOS[s.tipo])}</span>` : ''}</b><small>${esc(s.titulo || tituloDe(s.itemId))} · ${s.feito ? esc(cfd.rotulo(s)) : 'falta criar no ML'}</small></div>`).join('')
             || `<p class="det">${pl ? 'Nenhuma transmissão daqui para frente na agenda.' : 'A agenda ainda não foi montada.'} Clique em “Abrir a agenda”.</p>`}
+          ${px.length > 10 ? `<p class="rs">${vmLista('canal:proxtodas', px, 10)[1]}</p>` : ''}
           ${comProd ? `<p class="det">${feitas} de ${comProd} comunicações da agenda já criadas no ML.</p>` : ''}</div>`,
           'canal:prox', px.length ? esc('próxima: ' + P.quandoCanal(px[0].dia, px[0].hora)) : (pl ? 'nenhuma daqui para frente' : 'agenda ainda não montada')));
         // v3.1: "para programar" = a MESMA regra da Agenda (registro shc:canal:plano:<canal>.prontos). Proposta da Central que daria lucro
@@ -4115,10 +4786,12 @@
         const aviso = SHC.canalAvisoRobo && canalPlano ? SHC.canalAvisoRobo(canalPlano, new Date()) : null;
         if (aviso) h.unshift(`<div class="card" id="canalRobo"><b style="font-size:13px">✓ ${esc(aviso)}</b><p class="det">O robô montou; quem cria cada transmissão no ML é você.</p><button class="bt" data-abrir-agenda>Abrir a agenda</button></div>`);
         h.push(dobra(`<div class="card" id="canalProd"><b style="font-size:13px">Produtos que dão lucro para programar</b>
-          ${pr.slice(0, 5).map(x => `<div class="linha-comp"><b>${esc(x.titulo || tituloDe(x.itemId))}</b><small>Lucro de ${esc(SHC.moeda(x.lucro))} · ${x.semVaga ? 'sem horário livre em ' + esc(P.quandoCanal(x.dia, 0).replace(/ às .*/, '')) : x.feito ? 'criada no ML' : 'na agenda em ' + esc(P.quandoCanal(x.dia, 0).replace(/ às .*/, ''))}</small></div>`).join('')
+          ${vmLista('canal:prodtodos', pr, 5)[0].map(x => `<div class="linha-comp"><b>${esc(x.titulo || tituloDe(x.itemId))}</b><small>Lucro de ${esc(SHC.moeda(x.lucro))} · ${x.semVaga ? 'sem horário livre em ' + esc(P.quandoCanal(x.dia, 0).replace(/ às .*/, '')) : x.feito ? 'criada no ML' : 'na agenda em ' + esc(P.quandoCanal(x.dia, 0).replace(/ às .*/, ''))}</small></div>`).join('')
             || `<p class="det">${pp.prontos ? 'Nenhum produto pode entrar na agenda agora.' : 'Abra a agenda para conferir quais produtos podem entrar.'}</p>`}
+          ${pr.length > 5 ? `<p class="rs">${vmLista('canal:prodtodos', pr, 5)[1]}</p>` : ''}
           ${canalPlano && canalPlano.fora && canalPlano.fora.resumo ? `<p class="det">${esc(canalPlano.fora.resumo)} — veja o porquê na agenda.</p>` : ''}
-          ${pp.propostas.slice(0, 3).map(x => `<div class="linha-comp"><b>${esc(x.titulo)}</b><small>proposta: aceite no ML para entrar · lucro de ${esc(SHC.moeda(x.lucro))} em “${esc(x.promo)}”</small></div>`).join('')}
+          ${vmLista('canal:propostas', pp.propostas, 3)[0].map(x => `<div class="linha-comp"><b>${esc(x.titulo)}</b><small>proposta: aceite no ML para entrar · lucro de ${esc(SHC.moeda(x.lucro))} em “${esc(x.promo)}”</small></div>`).join('')}
+          ${pp.propostas.length > 3 ? `<p class="rs">${vmLista('canal:propostas', pp.propostas, 3)[1]}</p>` : ''}
           <p class="det">A agenda só põe produto conferido no dia. Quem cria cada transmissão no ML é você.</p></div>`,
           'canal:prod', pp.prontos ? esc(SHC.qtd(pr.length, 'produto pode entrar', 'produtos podem entrar') + (pp.propostas.length ? ' · ' + SHC.qtd(pp.propostas.length, 'proposta', 'propostas') + ' para aceitar' : '')) : pl ? 'abra a agenda para conferir' : 'agenda ainda não montada'));
         $('#listaCanal').innerHTML = h.join('');
@@ -4139,10 +4812,13 @@
         $('#listaSaude').innerHTML = `<p class="manchete"><span class="pt ${mc.cor}"></span><b>${esc(mc.fato)}</b> ${esc(mc.acao)}</p>` + cardReputacao() + cardPerguntas()
             + (andandoSaude() ? `<p class="andam">Conferindo fotos, medidas e visitas: ${p.feito || 0} de ${p.de} anúncios nesta rodada…</p>` : '')
             + (saudeMsg ? `<p class="recnota neutra" role="status" style="margin:0 0 8px">${esc(saudeMsg)}</p>` : '')
-            + blocoS(cardResumoML(), 'saude:resumo', resumoML ? (csRes.length ? esc(SHC.qtd(csRes.length, 'pendência', 'pendências')) : '✓ nada pendente') : 'aparece depois da próxima sincronização',
-                !resumoML ? '' : csRes.some(c => c.cor === 'red') ? 'pr' : csRes.length ? 'at' : 'ok')
+            // Sem leitura do Resumo não há o que abrir: só o título e o resumo, sem "Ver mais".
+            + (resumoML ? blocoS(cardResumoML(), 'saude:resumo', csRes.length ? esc(SHC.qtd(csRes.length, 'pendência', 'pendências')) : '✓ nada pendente',
+                csRes.some(c => c.cor === 'red') ? 'pr' : csRes.length ? 'at' : 'ok')
+                : '<div class="card sb" id="cardResumoML"><span class="pt "></span><b class="sb-t">Do Resumo do Mercado Livre</b> <span class="res">aparece depois da próxima sincronização</span></div>')
             + blocoS(cardFiscal(), 'saude:fiscal', f.n === null ? (fiscalLendo ? 'Lendo os dados fiscais…' : esc(fiscalMsg || 'ainda não lidos') + ' <button class="lnk" data-fiscal-agora>Ler agora</button>') : (f.n ? '<b class="vm">' + esc(SHC.qtd(f.n, 'anúncio sem dados fiscais', 'anúncios sem dados fiscais')) + '</b>' : '✓ todos com dados fiscais'),
                 f.n === null ? '' : f.n ? 'pr' : 'ok')
+            + blocoS(cardPendencias(), 'saude:pend', resumoPend(), !editor ? '' : SHC.editorPendencias(editor).length ? 'at' : 'ok')
             // ESPEC §6 "Fotos e medidas (um bloco só)": sem a permissão, 1 cartão com "Permitir" e o porquê no "?"; Fotos e Medidas só com permissão ou leitura.
             + (permWww ? '' : `<div class="card sb" id="cardPerm"><span class="pt at"></span><b class="sb-t">Fotos e medidas</b>${btPerm()}</div>`)
             + (permWww || rf.lidos ? blocoS(cardFotos(), 'saude:fotos', rf.lidos ? esc(P.milhar(rf.lidos) + ' de ' + P.milhar(rf.de) + ' conferidos · ' + rf.faixas.f1.length + ' com 1 foto') : 'lendo aos poucos',
@@ -4152,7 +4828,10 @@
             + (rm.lidos ? blocoS(cardMudMed(rm), 'saude:mudmed', rm.mud.length ? esc(SHC.qtd(rm.mud.length, 'mudança', 'mudanças') + ' nos últimos ' + P.MED_DIAS + ' dias') : 'nenhuma mudança', rm.mud.length ? 'pr' : 'ok') : '')
             // Radar recolhido: manchete e os 3 números por cor ficam à vista; "Ver mais" abre o detalhe por SKU.
             + blocoS(cardRadar(hoje), 'saude:radar', '', !rl.lidos ? '' : rl.caindo.length ? 'pr' : 'ok', RADAR_FIM)
-            + blocoS(cardRobo(hoje), 'saude:robo', esc([cfg.robo_ligado && !(SHC.ROBO_ESCRITA_CONFERIDA === true && cfg.robo_modo === 'automatico') ? 'só sugere' : '', nSug ? SHC.qtd(nSug, 'sugestão', 'sugestões') : ''].filter(Boolean).join(' · ')),
+            // v3.2.0: todo cartão recolhido tem 1 linha de resumo (o robô ficava sem nada quando ainda não sugeriu).
+            + blocoS(cardRobo(hoje), 'saude:robo', esc([nSug ? SHC.qtd(nSug, 'sugestão', 'sugestões') : '', P.registroResumo(registroAgora(hoje))].filter(Boolean).join(' · ')
+                    || (cfg.robo_ligado ? 'nenhuma sugestão agora' : 'sugere uma nova ordem das fotos quando as visitas caem'))
+                    + (cfg.robo_ligado ? '' : '<br>' + botaoRobo('margin-top:6px')),
                 cfg.robo_ligado ? (nSug ? 'at' : 'ok') : '', '</div>');
     }
     // v3.1 (imagem tela-saude, ESPEC §2 "Ver mais"): cada bloco da Saúde com a bolinha de estado (pr/at/ok; cinza = ainda não lido), o título,
@@ -4202,16 +4881,37 @@
           <p class="det">Sem os dados fiscais (NCM, origem, regra tributária…), o Mercado Livre não emite a NF-e dessas vendas.</p>${erro}
           ${vis.map(l => `<div class="linha-sem"><span><b>${esc(l.titulo || l.itemId)}</b><small>${esc(l.itemId)}</small></span></div>`).join('')}
           ${saudeVer.fiscal ? botaoMais('saude', f.lista.length - vis.length) : ''}
-          ${f.lista.length > 5 ? `<button class="mais" data-saude-ver="fiscal">${saudeVer.fiscal ? 'Ver menos' : 'Ver todos (' + P.milhar(f.lista.length) + ')'}</button>` : ''}
+          ${f.lista.length > 5 ? `<button class="mais" data-saude-ver="fiscal" aria-expanded="${saudeVer.fiscal}">${saudeVer.fiscal ? 'Ver menos' : 'Ver mais (' + P.milhar(f.lista.length - 5) + ')'}</button>` : ''}
           ${f.familias ? `<p class="det">E ${esc(SHC.qtd(f.familias, 'produto com variações', 'produtos com variações'))} (cada um aparece como 1 linha no Mercado Livre).</p>` : ''}
           ${f.completo ? '' : '<p class="det">A lista ainda não está completa: o resto aparece na próxima sincronização.</p>'}
           <div class="acoes" style="justify-content:flex-start"><button class="bt" data-abrir-fiscal>Corrigir no Editor em massa</button></div></div>`;
+    }
+    // v3.2 "Pendências dos anúncios": o que o Editor em massa do ML mostra (dica de Qualidade, garantia), lido quando a seller abre a tela (só leitura).
+    // Por tipo: quantos anúncios, o que isso custa (SHC.EDITOR_IMPACTO) e, ao tocar, a lista com o atalho para o anúncio no ML.
+    function resumoPend() {
+        if (!editor || !editor.porItem) return '<a class="lnk" href="' + esc(SHC.ERPX_URL_EDITOR) + '" target="_blank" rel="noopener">Abrir o Editor em massa →</a>';
+        const ps = SHC.editorPendencias(editor), ids = new Set();
+        ps.forEach(p => p.itens.forEach(x => ids.add(x.itemId)));
+        return ps.length ? esc(SHC.qtd(ps.length, 'tipo', 'tipos') + ' em ' + SHC.qtd(ids.size, 'anúncio', 'anúncios')) : '✓ nada pendente';
+    }
+    function cardPendencias() {
+        const cab = '<b style="font-size:13px">Pendências dos anúncios</b>';
+        // Informação encosta em ação: o pedido "abra o Editor" vem com o botão que abre (o mesmo endereço do cruzamento ERP × ML).
+        const btEd = `<div class="acoes" style="justify-content:flex-start"><a class="bt sec mini" href="${esc(SHC.ERPX_URL_EDITOR)}" target="_blank" rel="noopener">Abrir o Editor em massa →</a></div>`;
+        if (!editor || !editor.porItem) return `<div class="card" id="cardPend">${cab}<p class="det">Abra o Editor em massa no Mercado Livre uma vez. O Copiloto lê dali a qualidade, a garantia e a forma de entrega de cada anúncio, sem mudar nada.</p>${btEd}</div>`;
+        const ps = SHC.editorPendencias(editor);
+        const h = ps.length ? ps.map(p => {
+            const ab = pendAberta === p.tipo;
+            return `<div class="linha-comp"><button class="lnk" data-pend="${esc(p.tipo)}" aria-expanded="${ab}"><b>${esc(P.milhar(p.n))} · ${esc(p.tipo)}</b></button>${p.impacto ? `<small>${esc(p.impacto)}</small>` : ''}</div>`
+                + (ab ? listaVer('pend', p.itens, 5, x => `<div class="linha-sem"><span><b>${esc(x.titulo || tituloDe(x.itemId))}</b><small>${esc(x.itemId)}</small></span>${btFotos(x.itemId)}</div>`) : '');
+        }).join('') : '<p class="recnota ok">✓ Nenhuma pendência no Editor em massa.</p>';
+        return `<div class="card" id="cardPend">${cab}${h}<p class="det">Lido do Editor em massa do ML ${esc(tempo(editor.ts))}${editor.completo ? '' : ' (leitura parcial: abra o Editor de novo para completar)'}. Anúncios finalizados ficam de fora. O impacto é orientação do Copiloto.</p>${editor.completo ? '' : btEd}</div>`;
     }
     // Lista da aba Saúde minimizada: n linhas + "Ver todos (N)"; aberta, 100 por vez com "Mostrar mais" (como o cartão Dados fiscais).
     function listaVer(k, l, n, linha) {
         const vis = l.slice(0, saudeVer[k] ? limite.saude : n);
         return vis.map(linha).join('') + (saudeVer[k] ? botaoMais('saude', l.length - vis.length) : '')
-            + (l.length > n ? `<button class="mais" data-saude-ver="${k}">${saudeVer[k] ? 'Ver menos' : 'Ver todos (' + P.milhar(l.length) + ')'}</button>` : '');
+            + (l.length > n ? `<button class="mais" data-saude-ver="${k}" aria-expanded="${saudeVer[k]}">${saudeVer[k] ? 'Ver menos' : 'Ver mais (' + P.milhar(l.length - n) + ')'}</button>` : '');
     }
     function cardFotos() {
         const r = P.resumoFotos(fotos, itens);
@@ -4323,10 +5023,19 @@
         desenhaSaude();
     }
     // Ações de um anúncio que perdeu visitas (só nele): Abrir no ML · Ver no Ads · robô de fotos. multi = o SKU tem mais de 1 anúncio.
+    // v3.1 (30/09/2026): a caixinha diz o que acontece HOJE (o robô só sugere; quem troca no ML é você) e a linha mostra o último registro do anúncio.
+    let regRadar = null;   // P.registroRobo da última vez que o Radar foi desenhado (a última entrada de cada anúncio vai na linha)
+    const roboEscreve = () => SHC.ROBO_ESCRITA_CONFERIDA === true && cfg.robo_modo === 'automatico';
+    function registroMini(id) {
+        const g = regRadar && regRadar.itens.find(x => x.itemId === id), e = g && g.entradas[0];
+        if (!e) return '';
+        const sl = P.registroSelo(e), o = e.tipo === 'sugestao' ? 'sugeriu mover a 2ª foto para o fim' : e.tipo === 'mudanca' ? 'você mudou as fotos' : 'robô';
+        return `<small class="rg-mini">Registro: ${esc(P.dataCurta(e.ts))} · ${esc(o)} · <span class="selo ${sl[0]}">${esc(sl[1])}</span>${e.efeito ? ` · <span class="rg-ef ${e.efeito.cls}">${esc(e.efeito.estado === 'medindo' ? 'ainda medindo' : e.efeito.estado === 'pouco' ? 'pouco dado' : e.efeito.estado === 'bom' ? 'ajudou' : e.efeito.estado === 'ruim' ? 'piorou' : 'sem mudança clara')}</span>` : ''} · <button class="lnk" data-robo-reg="${esc(id)}">Ver registro</button></small>`;
+    }
     function acoesRadar(x, multi) {
         const on = !!(cfg.robo_itens || {})[x.itemId];
         return `<small>${multi ? esc(x.itemId) + (x.r.variacaoPct !== null ? ` · <span class="vm">${P.varPct(x.r.variacaoPct)}</span>` : '') + ' · ' : ''}${btFotos(x.itemId, 'Abrir no ML')}${SHC.moduloLigado(cfg, 'ads') ? ` · <button class="lnk" data-ads-det="${esc(x.itemId)}">Ver no Ads</button>` : ''}</small>
-          <label class="conf" style="margin:4px 0 0"><input type="checkbox" data-robo-item="${esc(x.itemId)}"${on ? ' checked' : ''}> Robô de fotos neste anúncio${cfg.robo_ligado ? '' : ' (ligue o robô abaixo)'}</label>`;
+          <label class="conf" style="margin:4px 0 0"><input type="checkbox" data-robo-item="${esc(x.itemId)}"${on ? ' checked' : ''}> <span>${roboEscreve() ? 'Robô de fotos neste anúncio' : 'Sugestões de fotos do robô neste anúncio <span class="res">(ele só sugere; quem troca no ML é você)</span>'}${cfg.robo_ligado ? '' : ' (ligue o robô abaixo)'}</span></label>${registroMini(x.itemId)}`;
     }
     // Linha do radar por SKU: 7 dias antes → agora, variação com seta e cor (vermelho caindo, verde subindo). caindo = os anúncios deste SKU
     // que perderam visitas: as ações ficam aqui mesmo (antes havia uma 2ª lista "Perdendo visitas" repetindo os mesmos anúncios).
@@ -4348,46 +5057,98 @@
           <div class="kpi kn${rl.subindo.length ? ' ok' : ''}"><div class="l">Subindo</div><div class="v">${rl.subindo.length}</div><div class="s">${rl.subindo.length ? '▲ ' + esc(varDe(rl.subindo)) + ' juntos' : '&nbsp;'}</div></div></div>${RADAR_FIM}`;
         // Uma lista só, por SKU (do que mais caiu ao que mais subiu); os anúncios que perderam visitas trazem as ações na própria linha.
         const porSku = P.radarPorSku(rl, cfg.radar_queda_pct), caiPor = {};
+        regRadar = P.registroRobo(robo, fotos, visitas, vendas, hoje, cfg.radar_queda_pct, Date.now());
         rl.caindo.forEach(x => { (caiPor[x.sku || x.itemId] || (caiPor[x.sku || x.itemId] = [])).push(x); });
         if (porSku.length) h += `<p style="margin:8px 0 2px;font-weight:650;font-size:12.5px">Por SKU (${porSku.length})</p>`
             + (porSku.length > 3 ? `<input class="busca" data-radar-busca placeholder="Buscar SKU ou título" aria-label="Buscar SKU" value="${esc(radarBusca)}" style="margin-bottom:0">` : '')
-            + porSku.slice(0, limite.saude).map(s => linhaRadarSku(s, caiPor[s.sku || s.itemId])).join('') + botaoMais('saude', porSku.length - limite.saude);
+            + porSku.slice(0, aberto('saude:radarsku') ? limite.saude : 10).map(s => linhaRadarSku(s, caiPor[s.sku || s.itemId])).join('')
+            + (aberto('saude:radarsku') ? botaoMais('saude', porSku.length - limite.saude) : '') + (porSku.length > 10 ? `<p class="rs">${vmLista('saude:radarsku', porSku, 10)[1]}</p>` : '');
         if (!rl.caindo.length) h += `<p class="det">Nenhum anúncio perdeu ${cfg.radar_queda_pct || 20}% ou mais das visitas na última semana.</p>`;
         if (rl.poucos.length) h += `<p class="det">${esc(SHC.qtd(rl.poucos.length, 'anúncio', 'anúncios'))} com poucas visitas para comparar (menos de 30 em 2 semanas).</p>`;
         return h + '<p class="det">Compara as visitas dos últimos 7 dias com as dos 7 anteriores. Fonte: métricas de cada anúncio no Mercado Livre, relidas uma vez por dia, alguns anúncios por hora, com o Chrome aberto. O Mercado Livre não publica que mexer no anúncio melhora a posição. O Copiloto mede antes e depois para você ver se funciona na sua conta.</p></div>';
+    }
+    // ── v3.1 "Registro do robô" (30/09/2026): por anúncio, cada sugestão com a data, o que sugeriu (miniaturas), se você aplicou e o efeito
+    // (visitas e vendas 7 dias antes × 7 depois; cor verde ajudou / âmbar medindo, pouco dado ou sem mudança clara / vermelho piorou) + "Copiar registro".
+    let regFoco = '', regTexto = '';   // anúncio aberto pelo "Ver registro" do Radar; texto do registro quando o Chrome não deixou copiar
+    const registroAgora = hoje => P.registroRobo(robo, fotos, visitas, vendas, hoje || SHC.hoje(), cfg.radar_queda_pct, Date.now());
+    // 7 dias antes × 7 dias depois em barras (mesma escala; depois verde se subiu, vermelho se caiu). Sem os 14 dias lidos: nada (o texto diz "Ainda medindo").
+    function barrasEfeito(ef) {
+        const mx = Math.max(ef.antes7, ef.depois7);
+        if (!ef.pronto || !mx) return '';
+        const w = n => Math.max(2, Math.round(n / mx * 100)), c = ef.depois7 > ef.antes7 ? 'ok' : ef.depois7 < ef.antes7 ? 'pr' : '';
+        return `<div class="ef" role="img" aria-label="${esc('Visitas: ' + P.milhar(ef.antes7) + ' nos 7 dias antes e ' + P.milhar(ef.depois7) + ' nos 7 dias depois da mudança')}">`
+            + `<div class="ef-l"><span>7 dias antes</span><div class="medidor"><i style="width:${w(ef.antes7)}%"></i></div><b>${P.milhar(ef.antes7)}</b></div>`
+            + `<div class="ef-l"><span>7 dias depois</span><div class="medidor"><i class="${c}" style="width:${w(ef.depois7)}%"></i></div><b class="${c}">${P.milhar(ef.depois7)}</b></div></div>`;
+    }
+    function miniFotos(s) {
+        const f = P.sugestaoFotos(s), fig = (id, leg) => (P.fotoUrl(id) ? `<figure><img src="${esc(P.fotoUrl(id))}" alt="${esc(leg)}" loading="lazy" referrerpolicy="no-referrer"><figcaption>${esc(leg)}</figcaption></figure>` : '');
+        const h = f.fim ? fig(f.capa, 'capa (fica)') + fig(f.sobe, 'vira a 2ª') + fig(f.fim, 'vai para o fim') : '';
+        return h ? `<div class="rg-fotos">${h}</div>` : '';
+    }
+    function linhaRegistro(e, hist) {
+        const sl = P.registroSelo(e), cls = e.efeito ? e.efeito.cls : 'cz';
+        return `<div class="rg-e ${cls}"><small class="rg-d">${esc(P.dataCurta(e.ts))} · ${e.tipo === 'sugestao' ? 'Sugestão do robô' : e.tipo === 'mudanca' ? 'Mudança sua' : 'Robô'}</small>`
+            + (e.tipo === 'sugestao' ? `<p class="rg-s">${esc(P.sugestaoFotos(e.s).txt)}</p>${miniFotos(e.s)}${e.motivo ? `<small>Por quê: ${esc(e.motivo)}</small>` : ''}` : '')
+            + `<p class="rg-st"><span class="selo ${sl[0]}">${esc(sl[1])}</span> ${esc(P.registroEstadoTxt(e))}</p>`
+            + (e.efeito ? barrasEfeito(e.efeito) + `<p class="rg-ef ${cls}">${esc(e.efeito.txt)}</p>` : '')
+            + (e.tipo === 'robo' && P.podeDesfazer(hist, e.h) ? `<button class="lnk" data-robo-desfazer="${esc(e.itemId)}">Desfazer</button>` : '') + '</div>';
+    }
+    function blocoRegistro(hoje) {
+        const reg = registroAgora(hoje), hist = (robo && robo.historico) || [];
+        let h = `<div class="rg" id="registroRobo"><div class="rg-h"><p class="rb-t">Registro do robô</p>${reg.total ? '<button class="bt pq leve" data-robo-copiar>Copiar registro</button>' : ''}</div>`;
+        if (!reg.total) return h + '<p class="det">Nada anotado ainda. Cada sugestão do robô fica aqui: a data, o que ele sugeriu, se você aplicou no Mercado Livre e o efeito nas visitas.</p></div>';
+        h += `<p class="det">${esc([SHC.qtd(reg.sugestoes, 'sugestão', 'sugestões'), SHC.qtd(reg.aplicadas, 'aplicada', 'aplicadas'), reg.pendentes + ' ainda não ' + (reg.pendentes === 1 ? 'aplicada' : 'aplicadas'), SHC.qtd(reg.ignoradas, 'ignorada', 'ignoradas')].join(' · '))}. O robô só sugere: quem troca as fotos no Mercado Livre é você.</p>`;
+        if (regTexto) h += `<textarea readonly aria-label="Registro do robô">${esc(regTexto)}</textarea>`;
+        // Anúncio aberto pelo "Ver registro" do Radar vem primeiro.
+        const its = reg.itens.slice().sort((a, b) => (b.itemId === regFoco) - (a.itemId === regFoco)), vis = its.slice(0, saudeVer.registro ? limite.saude : 3);
+        h += vis.map(g => `<div class="rg-an${g.itemId === regFoco ? ' foco' : ''}" id="rg-${esc(g.itemId)}"><b>${esc(P.tituloCurto(tituloDe(g.itemId)))}</b><small>${esc(g.itemId)} · ${btFotos(g.itemId)}</small>`
+            + g.entradas.slice(0, 6).map(e => linhaRegistro(e, hist)).join('') + (g.entradas.length > 6 ? `<small>E mais ${g.entradas.length - 6} no “Copiar registro”.</small>` : '') + '</div>').join('');
+        if (saudeVer.registro) h += botaoMais('saude', its.length - vis.length);
+        if (its.length > 3) h += `<button class="mais" data-saude-ver="registro" aria-expanded="${saudeVer.registro}">${saudeVer.registro ? 'Ver menos' : 'Ver mais (' + P.milhar(its.length - 3) + ')'}</button>`;
+        return h + `<p class="det">Aplicada = a leitura das fotos mostrou a ordem sugerida (ou você marcou “Já troquei”). Ignorada = ${SHC.ROBO_IGNORADA_DIAS} dias sem mudar as fotos. Efeito: visitas 7 dias antes × 7 depois da mudança (ajudou ou piorou = ${esc(String(cfg.radar_queda_pct || 20))}% ou mais); vendas = pedidos lidos no Faturamento do ML (venda sem frete cobrado pode não entrar).</p></div>`;
+    }
+    async function copiarRegistroRobo() {
+        const reg = registroAgora(), txt = P.registroTxt(reg, tituloDe, SHC.hoje());
+        regTexto = '';
+        try { await navigator.clipboard.writeText(txt); roboMsg = '✓ Registro copiado (' + SHC.qtd(reg.itens.length, 'anúncio', 'anúncios') + '). Cole onde quiser.'; }
+        catch (e) { regTexto = txt; roboMsg = 'Não consegui copiar sozinho: selecione o texto do registro abaixo e copie.'; }
+        desenhaSaude();
+    }
+    function verRegistro(id) {
+        regFoco = id;
+        if (!aberto('saude:robo')) alterna('saude:robo');
+        desenhaSaude();
+        try { const el = document.getElementById('rg-' + id) || document.getElementById('registroRobo'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* sem rolagem: o registro está no cartão do robô */ }
+    }
+    // v3.2.0: o botão do robô fica embaixo do texto, alinhado à esquerda (antes ficava solto no cabeçalho, ao lado do "Ver mais").
+    // Recolhido e desligado, ele vai na linha de resumo (a ação continua a 1 clique).
+    function botaoRobo(estilo) {
+        const ligado = !!cfg.robo_ligado, escreve = SHC.ROBO_ESCRITA_CONFERIDA === true && cfg.robo_modo === 'automatico';
+        return `<button class="bt pq${ligado ? ' leve' : ''}" data-robo-geral${estilo ? ' style="' + estilo + '"' : ''}>${ligado ? 'Desligar' : escreve ? 'Ligar o robô' : 'Ligar sugestões'}</button>`;
     }
     function cardRobo(hoje) {
         const ligado = !!cfg.robo_ligado, auto = SHC.ROBO_ESCRITA_CONFERIDA === true;
         const escreve = auto && cfg.robo_modo === 'automatico';   // só true quando a escrita no ML for conferida e o modo Automático estiver ligado
         const nItens = Object.keys(cfg.robo_itens || {}).filter(k => cfg.robo_itens[k]).length;
         const val = k => esc(String(SHC.num(cfg[k]) !== null ? cfg[k] : SHC.PADRAO[k]));
-        // v3.1 (imagem tela-radar): ícone + selo "Ligado · só sugere"; a sugestão em caixa azul com "Trocar no ML" e "Já troquei";
+        // v3.1 (imagem tela-radar): ícone + selo "Ligado · só sugere" / "Desligado · só sugere" (enquanto a escrita não for conferida, até
+        // recolhido o cartão diz que ele não troca foto); a sugestão em caixa azul com "Trocar no ML" e "Já troquei";
         // o resultado de cada troca em 2 barras (7 dias antes × 7 depois); as travas do robô ficam dentro de "Regras do robô".
-        let h = `<div class="card" id="cardRobo"><div class="sb-h"><svg class="ir" aria-hidden="true"><use href="#ip-robo"/></svg><b class="sb-t">Robô de fotos</b><span class="selo ${ligado ? 'ok' : 'cz'} d">${ligado ? 'Ligado' : 'Desligado'}</span>
-            <button class="bt pq${ligado ? ' leve' : ''}" data-robo-geral>${ligado ? 'Desligar' : 'Ligar o robô'}</button></div>
-          <p class="det">${escreve ? 'Quando as visitas de um anúncio caem, troca a ordem das fotos para ver se ajuda.' : 'Quando as visitas de um anúncio caem, sugere uma nova ordem das fotos. Quem troca no Mercado Livre é você.'}</p>`;
+        const soSugere = escreve ? '' : ' · só sugere';
+        let h = `<div class="card" id="cardRobo"><div class="sb-h"><svg class="ir" aria-hidden="true"><use href="#ip-robo"/></svg><b class="sb-t">Robô de fotos</b><span class="selo ${ligado ? 'ok' : 'cz'} d">${ligado ? 'Ligado' : 'Desligado'}${soSugere}</span></div>
+          <p class="det">${escreve ? 'Quando as visitas de um anúncio caem, troca a ordem das fotos para ver se ajuda.' : 'Quando as visitas de um anúncio caem, sugere uma nova ordem das fotos. Quem troca no Mercado Livre é você.'}</p>
+          ${botaoRobo()}`;
         if (ligado && !permWww) h += '<p class="aviso-custo">Para o robô funcionar, o Copiloto precisa ler as fotos dos anúncios. Permita em “Fotos e medidas”, acima.</p>';
         if (ligado && !nItens) h += '<p class="aviso-custo">Agora ligue o robô nos anúncios que quiser, nos SKUs que estão caindo, no Radar.</p>';
         if (auto) h += `<div class="acoes" style="justify-content:flex-start;flex-wrap:wrap">${[['sugerir', 'Só sugerir'], ['automatico', 'Automático']].map(([m, t]) => `<button class="bt${cfg.robo_modo === m ? '' : ' leve'}" data-robo-modo="${m}">${t}</button>`).join('')}</div>`;
         const sug = (robo && robo.sugestoes) || [];
-        if (sug.length) h += `<p class="rb-t">Sugestões (${sug.length})</p>` + sug.slice(0, 20).map(s => `<div class="sug"><b>${esc(tituloDe(s.itemId))}</b><p>${esc(s.motivo)}</p>
-            <div class="linha-bts"><button class="bt pq ml" data-abrir-fotos="${esc(s.itemId)}">Trocar no ML</button><button class="bt pq leve" data-ja-troquei="${esc(s.itemId)}">Já troquei</button></div></div>`).join('');
+        if (sug.length) h += `<p class="rb-t">Sugestões (${sug.length})</p>` + vmLista('saude:robosug', sug, 5)[0].map(s => `<div class="sug"><b>${esc(tituloDe(s.itemId))}</b><p>${esc(s.motivo)}</p>
+            <div class="linha-bts"><button class="bt pq ml" data-abrir-fotos="${esc(s.itemId)}">Trocar no ML</button><button class="bt pq leve" data-ja-troquei="${esc(s.itemId)}">Já troquei</button></div></div>`).join('')
+            + (sug.length > 5 ? `<p class="rs">${vmLista('saude:robosug', sug, 5)[1]}</p>` : '');
         if (ligado) h += '<button class="bt leve" data-robo-rodar style="margin-top:8px">Procurar sugestões agora</button>';
         h += `<p class="det" id="roboMsg" role="status">${esc(roboMsg)}</p>`;
-        const hist = (robo && robo.historico) || [], ult = hist.slice(-10).reverse(), porId = (visitas && visitas.porItem) || {};
-        // 7 dias antes × 7 depois em barras (mesma escala; depois verde se subiu, vermelho se caiu). Sem os 14 dias lidos: só o texto "Medindo…".
-        const barras = x => {
-            const e = SHC.efeitoMudanca(x.ts, (porId[x.itemId] || {}).dias, hoje), mx = Math.max(e.antes7, e.depois7);
-            if (!e.pronto || !mx) return '';
-            const w = n => Math.max(2, Math.round(n / mx * 100)), c = e.depois7 > e.antes7 ? 'ok' : e.depois7 < e.antes7 ? 'pr' : '';
-            return `<div class="ef" role="img" aria-label="${esc('Visitas: ' + P.milhar(e.antes7) + ' nos 7 dias antes e ' + P.milhar(e.depois7) + ' nos 7 dias depois da troca')}">`
-                + `<div class="ef-l"><span>7 dias antes</span><div class="medidor"><i style="width:${w(e.antes7)}%"></i></div><b>${P.milhar(e.antes7)}</b></div>`
-                + `<div class="ef-l"><span>7 dias depois</span><div class="medidor"><i class="${c}" style="width:${w(e.depois7)}%"></i></div><b class="${c}">${P.milhar(e.depois7)}</b></div></div>`;
-        };
-        if (ult.length) h += '<p class="rb-t">Mudanças e resultado</p>' + ult.map(x => `<div class="linha-comp"><b>${esc(tituloDe(x.itemId))}</b>
-            <small>${esc(new Date(x.ts).toLocaleDateString('pt-BR'))} · ${esc(P.historicoTxt(x))}</small>${SHC.roboGravou(x) || x.resultado === 'manual' ? barras(x) + `<small>${esc(P.efeitoTxt(x, (porId[x.itemId] || {}).dias, hoje))}</small>` : ''}
-            ${P.podeDesfazer(hist, x) ? `<button class="lnk" data-robo-desfazer="${esc(x.itemId)}">Desfazer</button>` : ''}</div>`).join('');
-        h += `<details id="regrasRobo" style="margin-top:8px"${regrasAbertas ? ' open' : ''}><summary style="cursor:pointer;font-weight:650;font-size:12px">Regras do robô</summary>
+        h += blocoRegistro(hoje);
+        h += `<details id="regrasRobo" class="vm-d" style="margin-top:8px"${regrasAbertas ? ' open' : ''}><summary style="cursor:pointer;font-weight:650;font-size:12px">Regras do robô · <span class="vm-f">Ver mais</span></summary>
             <ul class="vant"><li>A foto de capa nunca sai do lugar.</li><li>Não mexe se o Mercado Livre marcou alguma foto do anúncio.</li>
             <li>No máximo 1 ${escreve ? 'mudança' : 'sugestão'} a cada ${val('robo_intervalo_dias')} dias por anúncio.</li><li>No máximo ${val('robo_max_dia')} ${escreve ? 'mudanças' : 'sugestões'} por dia na conta.</li>
             <li>Só ${escreve ? 'age nos' : 'olha os'} anúncios que você ligar, quando as visitas caem ${val('radar_queda_pct')}% ou mais e o anúncio tem 3 fotos ou mais.</li></ul>
@@ -4427,7 +5188,7 @@
             // ponytail: ler-mudar-gravar fora da fila do fundo; a janela é de milissegundos (o fundo só grava robo: na passada e no desfazer).
             await SHC.gravarChave(k, P.jaTroquei(await SHC.lerChave(k), id, antes, lidas || (s && s.novaOrdem) || antes, radar.ult7, Date.now()));
         } catch (e) { return falhaGravar(e); }
-        roboMsg = '✓ Troca registrada. O resultado aparece em “Mudanças e resultado” 7 dias depois.';
+        roboMsg = '✓ Troca registrada. O efeito aparece no “Registro do robô” 7 dias depois.';
         desenhaSaude();
     }
     async function roboAcao(msg) {
@@ -4526,7 +5287,7 @@
     function skusComPromo() {
         const s = new Set();
         const noRetrato = new Set(itens.map(x => x.itemId));
-        if (snap) snap.propostas.forEach(p => { if (skuDe[p.itemId]) s.add('sku:' + skuDe[p.itemId]); else if (noRetrato.has(p.itemId)) s.add('mlb:' + p.itemId); });
+        if (snap) snap.propostas.forEach(p => { if (skuDe[p.itemId]) [].concat(skuDe[p.itemId]).forEach(k => s.add('sku:' + k)); else if (noRetrato.has(p.itemId)) s.add('mlb:' + p.itemId); });
         return s;
     }
     function montaPerguntas() {
@@ -4612,7 +5373,8 @@
             if (b.setAttribute) b.setAttribute('aria-label', x ? `${rot}: ${SHC.qtd(x.n, 'alerta', 'alertas')}${x.cor === 'pr' ? ', com urgente' : ''}` : rot);
         });
         const sn = $('#sinoN'), sb = $('#sino'), t = contAbas ? contAbas.total : 0;
-        if (sn) { sn.hidden = !t; sn.className = 'n' + (contAbas && contAbas.urgentes ? ' pr' : ''); sn.textContent = t > 99 ? '99+' : t ? String(t) : ''; }
+        // O número já aparece no ícone do Copiloto na barra do Chrome (badge, posto pelo fundo): no sino fica só a bolinha (sem repetir o número).
+        if (sn) { sn.hidden = !t; sn.className = 'n ponto' + (contAbas && contAbas.urgentes ? ' pr' : ''); sn.textContent = ''; }
         if (sb) {
             const txt = !contAbas || !contAbas.lido ? 'Alertas: ainda não lidos' : t ? SHC.qtd(t, 'alerta', 'alertas') + (contAbas.urgentes ? ' (' + SHC.qtd(contAbas.urgentes, 'urgente', 'urgentes') + ')' : '') + ' · ver todos' : 'Nenhum alerta agora';
             sb.title = txt; if (sb.setAttribute) sb.setAttribute('aria-label', txt);
@@ -4775,6 +5537,9 @@
     function largura() {
         const larga = TELA || (typeof innerWidth === 'number' && innerWidth >= 900);
         if (document.body && document.body.classList) document.body.classList.toggle('larga', larga);
+        // A .corpo reserva a barra de rolagem (scrollbar-gutter): o topo desconta a mesma largura (--sb) para o miolo alinhar à direita.
+        const c = document.querySelector('.corpo'), sb = larga && c ? c.offsetWidth - c.clientWidth : 0;
+        if (document.body && document.body.style && document.body.style.setProperty) document.body.style.setProperty('--sb', (sb > 0 ? sb : 0) + 'px');
     }
     largura();
     try { addEventListener('resize', largura); } catch (e) { /* sem janela */ }
@@ -4858,30 +5623,44 @@
         const sku = inp.dataset.minSku, txt = String(inp.value || '').trim(), d = SHC.num(txt);
         if (txt && !(d >= 1 && d <= 100000)) { inp.style.borderColor = '#DC2626'; inp.focus(); return; }
         inp.blur();
-        try { await P.gravarMinSku(sku, txt ? d : 0); } catch (e) { return falhaGravar(e); }
+        try { await P.gravarMinSku(sku, txt ? d : 0, minPorConta()); } catch (e) { return falhaGravar(e); }
     }
+    const minPorConta = () => (conta && Object.keys(contas || {}).filter(id => /^\d{6,15}$/.test(id)).length > 1 ? String(conta) : '');   // F23
 
     document.body.addEventListener('click', async e => {
         const t = e.target;
+        // v3.2 cruzamento ERP × ML: "Ver" abre a lista na página de custos (painel.html#erpx-<grupo>); "Depois" fecha a janela.
+        const erpxBt = t.closest('[data-erpx], [data-erpx-fechar]');
+        if (erpxBt) { const k = erpxBt.dataset.erpx; fechaJanelaErpx(); if (k !== undefined) abrePagina('painel.html#erpx' + (/^[a-e]$/.test(k) ? '-' + k : '')); return; }
         // Recolher/abrir (lembrado na sessão) e ir para a aba de um módulo (Geral)
         const vr = t.closest('[data-ver]');
         if (vr) {
             const k = vr.dataset.ver;
             if (k === 'cat:lista' && (catFiltro || catBusca.trim())) { catFiltro = ''; catBusca = ''; $('#buscaCat').value = ''; if (aberto(k)) alterna(k); }
             else alterna(k);
+            if (!aberto(k) && LIM_DE[k]) limite[LIM_DE[k]] = LIM;   // fechou a lista: volta aos 100 primeiros
             if (/^al:/.test(k)) desenhaTopoAba(); else desenhaAba();
-            if (k === 'geral:semanal' && aberto(k) && (!semanal || semanal.novo)) pedirSemanal(false);   // abriu "Ver resumo": pede ao fundo (e tira o "novo")
+            {   // O redesenho apaga o botão clicado: o foco volta ao botão novo (teclado não cai no topo). "Ver menos" (o do fim também)
+                // rola de volta até o cabeçalho/botão que ficou; o do fim que continua aberto devolve o foco ao do fim.
+                const bs = document.querySelectorAll(`[data-ver="${k.replace(/["\\]/g, '\\$&')}"]`), b = vr.hasAttribute && vr.hasAttribute('data-fim') ? bs[bs.length - 1] : bs[0];
+                if (b && !aberto(k) && b.scrollIntoView) b.scrollIntoView({ block: 'nearest' });
+                if (b && b.focus) try { b.focus({ preventScroll: true }); } catch (e) { /* sem foco */ }
+            }
+            if (k === 'geral:semanal' && aberto(k) && (!resumoAtual() || (semanal && semanal.novo) || (resumoDia && resumoDia.novo))) pedirSemanal(false);   // abriu "Ver resumo": pede ao fundo (e tira o "novo")
             if (k === 'geral:semanal' && aberto(k) && vr.closest('.manchete')) { const s = $('#g-semanal'); if (s && s.scrollIntoView) s.scrollIntoView({ block: 'nearest' }); }   // v3.1: "Resumo p/ WhatsApp" da manchete
             return;
         }
         // v2.7: resumo da semana (copiar / WhatsApp / gerar de novo), contas juntas e próxima remessa
-        if (t.closest('[data-semanal-novo]')) { semanal = null; desenhaGeral(); pedirSemanal(true); return; }
+        const ra = t.closest('[data-resumo-aba]');   // v3.2: abas Do dia / Da semana do "Resumo para a equipe"
+        if (ra) { resumoAba = ra.dataset.resumoAba === 'semana' ? 'semana' : 'dia'; semanalMsg = ''; desenhaGeral(); return; }
+        if (t.closest('[data-semanal-novo]')) { if (resumoPer() === 'dia') resumoDia = null; else semanal = null; semanalMsg = ''; desenhaGeral(); pedirSemanal(true); return; }
         if (t.closest('[data-semanal-copiar]')) {
-            if (!semanal) return;
-            try { await navigator.clipboard.writeText(semanal.texto); semanalMsg = '✓ Texto copiado.'; } catch (e) { semanalMsg = 'Não consegui copiar sozinho: selecione o texto e copie.'; }
+            const s = resumoAtual();
+            if (!s) return;
+            try { await navigator.clipboard.writeText(s.texto); semanalMsg = '✓ Texto copiado.'; } catch (e) { semanalMsg = 'Não consegui copiar sozinho: selecione o texto e copie.'; }
             desenhaGeral(); return;
         }
-        if (t.closest('[data-semanal-zap]')) { if (semanal && P.waLinkOk(semanal.waLink)) chrome.tabs.create({ url: semanal.waLink }); return; }
+        if (t.closest('[data-semanal-zap]')) { const s = resumoAtual(); if (s && P.waLinkOk(s.waLink)) chrome.tabs.create({ url: s.waLink }); return; }
         if (t.closest('[data-trocar-conta]')) { chrome.tabs.create({ url: P.URL_TROCAR_CONTA }); return; }
         if (t.closest('[data-sim-ver]')) { document.querySelectorAll('[data-sim-sku]').forEach(i => { simQtd[i.dataset.simSku] = i.value; }); desenhaFull(); return; }
         // Faturamento por família (Geral): mês, Faturamento | Lucro, família escolhida, "Por que caiu?", mais SKUs e o anúncio no ML
@@ -4903,6 +5682,7 @@
         const fca = t.closest('[data-fam-causa]');
         if (fca) { const k = fca.dataset.famCausa; if (famCausas.has(k)) famCausas.delete(k); else famCausas.add(k); desenhaGeral(); return; }
         if (t.closest('[data-fam-mais]')) { famLim += 10; desenhaGeral(); return; }
+        if (t.closest('[data-fam-menos]')) { famLim = 10; desenhaGeral(); const g = $('#g-familia'); if (g && g.scrollIntoView) g.scrollIntoView({ block: 'nearest' }); return; }
         const aan = t.closest('[data-abrir-anuncio]');
         if (aan && /^MLB\d{6,14}$/.test(aan.dataset.abrirAnuncio)) { chrome.tabs.create({ url: 'https://produto.mercadolivre.com.br/MLB-' + aan.dataset.abrirAnuncio.slice(3) }); return; }
         const ia = t.closest('[data-ir-aba]');
@@ -4910,6 +5690,18 @@
         if (t.closest('[data-abrir-posvenda]')) { chrome.tabs.create({ url: SHC.POSVENDA_URL }); return; }
         const ccp = t.closest('[data-conc-copiar]');
         if (ccp) { await copiarConc(+ccp.dataset.concCopiar); return; }
+        const fcp = t.closest('[data-fr-copiar]');   // v3.3: chamado do frete cobrado a mais (todos ou de 1 anúncio; só os que dá para contestar)
+        if (fcp) { const k = String(fcp.dataset.frCopiar || ''); if (k === '*' || /^MLB\d{6,14}$/.test(k)) await copiarFrete(k); return; }
+        const rfc = t.closest('[data-recfr-copiar]');   // Conciliação "Como pedir de volta": chamado do frete de 1 pedido (como os outros "Copiar chamado")
+        if (rfc) {
+            const ped = String(rfc.dataset.recfrCopiar || ''), cc = P.concDe(freteHist), txt = P.chamadoFreteLote(((cc && cc.pagoAMais) || []).filter(p => String(p.pedido) === ped), tituloDe);
+            if (!txt) return;
+            try { await navigator.clipboard.writeText(txt); recFrCopiado = ped; }
+            catch (e) { recFrCopiado = ''; avisa('Não consegui copiar sozinho. Abra a aba Frete e copie o chamado de lá.', 8000); }
+            desenhaAba(); return;
+        }
+        const dcp = t.closest('[data-dev-copiar]');   // v3.2: texto do chamado da tarifa de devolução
+        if (dcp) { await copiarDev(String(dcp.dataset.devCopiar || '')); return; }
         const ncp = t.closest('[data-nfe-copiar]');
         if (ncp && /^\d{44}$/.test(ncp.dataset.nfeCopiar)) { await copiarNfe(ncp.dataset.nfeCopiar); return; }
         if (t.closest('[data-fiscal-agora]')) { talvezFiscal(true); desenhaSaude(); return; }
@@ -4918,7 +5710,7 @@
         if (ga && ACAO_GUIA[ga.dataset.guiaAcao]) { ACAO_GUIA[ga.dataset.guiaAcao](); return; }
         const gp = t.closest('[data-guia-pular]');
         if (gp) { await pularGuia(gp.dataset.guiaPular); return; }
-        if (t.closest('[data-guia-lista]')) { guiaLista = !guiaLista; desenhaGuia(); return; }
+        if (t.closest('[data-guia-lista]')) { alterna('guia:lista'); desenhaGuia(); return; }
         if (t.closest('[data-sync-lista]')) { syncAberta = /fechada/.test($('#syncLista').className); desenhaStatus(); return; }
         if (t.closest('[data-sync]')) { sincronizar(); return; }
         const kpi = t.closest('[data-filtro]');
@@ -4956,6 +5748,8 @@
         if (mcp) { await copiarChamadoMed(+mcp.dataset.medCopiar); return; }
         const sve = t.closest('[data-saude-ver]');
         if (sve && sve.dataset.saudeVer in saudeVer) { saudeVer[sve.dataset.saudeVer] = !saudeVer[sve.dataset.saudeVer]; limite.saude = LIM; desenhaSaude(); return; }
+        const pnd = t.closest('[data-pend]');   // v3.2: tipo de pendência (Editor em massa) aberto/fechado
+        if (pnd) { pendAberta = pendAberta === pnd.dataset.pend ? '' : pnd.dataset.pend; saudeVer.pend = false; limite.saude = LIM; desenhaSaude(); return; }
         const ffx = t.closest('[data-foto-faixa]');
         if (ffx) { fotoFaixa = fotoFaixa === ffx.dataset.fotoFaixa ? '' : ffx.dataset.fotoFaixa; saudeVer.fotos = false; limite.saude = LIM; desenhaSaude(); return; }
         const rit = t.closest('[data-robo-item]');
@@ -4973,6 +5767,9 @@
         const jtr = t.closest('[data-ja-troquei]');
         if (jtr && mlb(jtr.dataset.jaTroquei)) { await jaTroquei(jtr.dataset.jaTroquei); return; }
         if (t.closest('[data-robo-rodar]')) { await roboAcao({ acao: 'robo_rodar_agora' }); return; }
+        if (t.closest('[data-robo-copiar]')) { await copiarRegistroRobo(); return; }
+        const rrg = t.closest('[data-robo-reg]');
+        if (rrg && mlb(rrg.dataset.roboReg)) { verRegistro(rrg.dataset.roboReg); return; }
         const rds = t.closest('[data-robo-desfazer]');
         if (rds && mlb(rds.dataset.roboDesfazer)) { await roboAcao({ acao: 'robo_desfazer', itemId: rds.dataset.roboDesfazer }); return; }
         const fc = t.closest('[data-fclasse]');
@@ -4982,7 +5779,7 @@
             return;
         }
         const mu = t.closest('[data-min-usar]');   // "Usar" a sugestão de mínimo (15 dias de venda)
-        if (mu) { try { await P.gravarMinSku(mu.dataset.minUsar, SHC.num(mu.dataset.minN)); } catch (err) { falhaGravar(err); } return; }
+        if (mu) { try { await P.gravarMinSku(mu.dataset.minUsar, SHC.num(mu.dataset.minN), minPorConta()); } catch (err) { falhaGravar(err); } return; }
         const ms = t.closest('[data-min-salvar]');
         if (ms) { await salvarMinSku(ms.parentElement.querySelector('[data-min-sku]')); return; }
         const af = t.closest('[data-abrir-full]');
@@ -4995,8 +5792,6 @@
         const ml = t.closest('[data-mais-linhas]');
         if (ml) { limite[ml.dataset.maisLinhas] += LIM; desenhaAba(); return; }
         if (t.closest('[data-ir-cat]')) { catFiltro = ''; abreAba('catalogo'); return; }
-        const ab = t.closest('[data-abrir]');
-        if (ab) { abertos.add(ab.dataset.abrir); desenhaPromo(); return; }
         const ed = t.closest('[data-editar]');
         if (ed) { editando = ed.dataset.editar; desenhaPromo(); const i = document.querySelector(`[data-custo="${CSS.escape(editando)}"]`); if (i) i.focus(); return; }
         const sv = t.closest('[data-salvar]');
@@ -5051,12 +5846,12 @@
         if (adt) { adsDet = adt.dataset.adsDet; if (aba !== 'ads') abreAba('ads'); else desenhaAds(); $('.corpo').scrollTop = 0; return; }
         if (t.closest('[data-voltar-ads]')) { adsDet = null; desenhaAds(); return; }
         // Frete
-        if (t.closest('[data-ped-todos]')) { pedTodos = !pedTodos; desenhaFrete(); return; }
+        if (t.closest('[data-ped-todos]')) { alterna('frete:peds'); desenhaFrete(); return; }
         const ff = t.closest('[data-ffiltro]');
         if (ff) { freteFiltro = freteFiltro === ff.dataset.ffiltro ? '' : ff.dataset.ffiltro; if (freteFiltro && !aberto('frete:lista')) alterna('frete:lista'); desenhaFrete(); return; }
         const fd = t.closest('[data-frete-det]');
         if (fd) {
-            freteDet = fd.dataset.freteDet; confirmouMedidas = false; freteExpl = false; pedTodos = false; if (aba !== 'frete') abreAba('frete'); else desenhaFrete(); $('.corpo').scrollTop = 0;
+            freteDet = fd.dataset.freteDet; confirmouMedidas = false; freteExpl = false; if (aba !== 'frete') abreAba('frete'); else desenhaFrete(); $('.corpo').scrollTop = 0;
             // v3.1: "Pedir revisão ao ML" / Ferramentas → rola até o chamado pronto, a prova de medida ou o simulador do anúncio.
             const ir = fd.dataset.freteIr && $('#' + fd.dataset.freteIr);
             if (ir && ir.scrollIntoView) ir.scrollIntoView({ block: 'start' });
@@ -5076,6 +5871,12 @@
     // "Regras do robô" aberto/fechado pelo seller (toggle não sobe: escuta na captura).
     document.body.addEventListener('toggle', e => { if (e.target && e.target.id === 'regrasRobo') regrasAbertas = !!e.target.open; }, true);
     document.body.addEventListener('change', e => {
+        if (e.target.id === 'resumo_freq' || e.target.id === 'resumo_hora') {   // v3.2: salva na hora (sem marcar "configurado")
+            const patch = { resumo_freq: $('#resumo_freq').value, resumo_hora: +$('#resumo_hora').value };
+            cfg = Object.assign({}, cfg, patch);
+            salvarCfgRobo(patch).then(() => { $('#okResumoAj').textContent = '✓ Salvo'; setTimeout(() => { $('#okResumoAj').textContent = ''; }, 2500); }, falhaGravar);
+            return;
+        }
         if (e.target.id === 'confMedidas') { confirmouMedidas = e.target.checked; const a = $('#listaFrete'); $('#txtChamado').value = P.textoChamado(a._item, a._hist, vendas[a._item.itemId] || {}, confirmouMedidas, medidasDe(a._item)); }
     });
     document.body.addEventListener('keydown', e => {
@@ -5095,12 +5896,48 @@
         const r = P.lerAjustes(txt), errs = Object.keys(r.erros), meta = P.lerMeta($('#meta_mes').value);
         $('#meta_mes').style.borderColor = '';
         if (meta.erro) { r.erros.meta_mes = meta.erro; errs.push('meta_mes'); }
+        // v3.2.0: dias de aviso antes do fim da promoção (vazio = padrão 2)
+        const pad = $('#promo_aviso_dias');
+        if (pad) {
+            pad.style.borderColor = '';
+            const pa = P.lerAvisoPromo(pad.value);
+            if (pa.erro) { r.erros.promo_aviso_dias = pa.erro; errs.push('promo_aviso_dias'); } else r.patch.promo_aviso_dias = pa.valor;
+        }
         if (errs.length) { errs.forEach(k => { $('#' + k).style.borderColor = '#DC2626'; }); $('#okCfg').textContent = ''; $('#erroCfg').textContent = errs.map(k => r.erros[k]).join(' '); return; }
         $('#erroCfg').textContent = '';
         try { await SHC.salvarCfg(Object.assign(r.patch, { meta_mes: meta.valor })); } catch (e) { return falhaGravar(e); }
         $('#okCfg').textContent = '✓ Salvo';
         setTimeout(() => { $('#okCfg').textContent = ''; }, 2500);
     });
+    // Despesas fixas do mês (aluguel, salários…): + Adicionar, × Tirar e Salvar (cfg.despesas_fixas; não marca cfg.configurado).
+    $('#maisDespesa').addEventListener('click', () => {
+        despEdit = despDoForm(); despErros = [];
+        if (despEdit.length >= P.DESP_MAX_LINHAS) return;
+        despEdit.push({ nome: '', valor: '' });
+        desenhaDespesas();
+        const ns = document.querySelectorAll('#listaDespesas [data-desp-nome]'); if (ns.length) ns[ns.length - 1].focus();
+    });
+    $('#listaDespesas').addEventListener('click', e => {
+        const b = e.target && e.target.closest && e.target.closest('[data-desp-tirar]');
+        if (!b) return;
+        despEdit = despDoForm(); despErros = [];
+        despEdit.splice(+b.dataset.despTirar, 1);
+        desenhaDespesas();
+        $('#okDespesas').textContent = ''; $('#erroDespesas').textContent = despEdit.length || SHC.despesasFixas(cfg).length ? 'Clique em Salvar despesas para valer.' : '';
+    });
+    async function salvarDespesas() {
+        const linhas = despDoForm(), r = SHC.lerDespesasFixas(linhas);
+        if (r.erros.length) { despEdit = linhas; despErros = r.erros; desenhaDespesas(); $('#okDespesas').textContent = ''; $('#erroDespesas').textContent = r.erros.map(x => x.texto).join(' '); return; }
+        try { cfg = await SHC.salvarDespesasFixas(r.lista); } catch (e) { return falhaGravar(e); }
+        despEdit = null; despErros = [];
+        desenhaDespesas();
+        $('#erroDespesas').textContent = '';
+        $('#okDespesas').textContent = '✓ Salvo';
+        setTimeout(() => { $('#okDespesas').textContent = ''; }, 2500);
+    }
+    $('#salvarDespesas').addEventListener('click', salvarDespesas);
+    $('#listaDespesas').addEventListener('input', () => { despEdit = despDoForm(); });   // o redesenho não apaga o que foi digitado e ainda não salvo
+    $('#listaDespesas').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('[data-desp-nome],[data-desp-valor]')) salvarDespesas(); });
     $('#abrirPainel').addEventListener('click', () => abrePagina('painel.html#custos'));
     // v2.7: apelidos das contas (objeto NOVO em cfg.apelidos; vazio tira o apelido)
     $('#salvarApelidos').addEventListener('click', async () => {
@@ -5127,9 +5964,41 @@
             return atualizaFundo();
         }).catch(() => {});
     });
+    // v3.2: ligar o TikTok pede, no MESMO clique, as 2 permissões opcionais: 'scripting' (registrar a leitura) + o site do Seller Center.
+    // A leitura só liga depois do "Salvar" (o fundo confere cfg.modulos.tiktok). Desligar: o fundo tira a leitura PRIMEIRO (sem 'scripting'
+    // ele não consegue mais), depois as 2 permissões são devolvidas e ela escolhe se apaga os dados do TikTok guardados neste computador.
+    const PERM_TIKTOK = { permissions: ['scripting'], origins: ['https://seller-br.tiktok.com/*'] };
+    $('#listaModulos').addEventListener('change', e => {
+        const cx = e.target;
+        if (!cx || cx.id !== 'mod-tiktok') return;
+        const ligar = cx.checked;
+        let pedido;   // request dentro do clique, antes de qualquer await (senão o Chrome recusa)
+        try {
+            pedido = ligar ? chrome.permissions.request(PERM_TIKTOK)
+                : Promise.resolve(chrome.runtime.sendMessage({ acao: 'tiktok_desligar' })).catch(() => {}).then(() => chrome.permissions.remove(PERM_TIKTOK));
+        } catch (x) { pedido = Promise.resolve(false); }
+        Promise.resolve(pedido).catch(() => false).then(ok => {
+            if (ligar && !ok) { cx.checked = false; avisa('O Chrome não deixou ler o TikTok Shop. Tente de novo.', 8000); return; }
+            if (ligar) { Promise.resolve(chrome.runtime.sendMessage({ acao: 'tiktok_ligar' })).catch(() => {}); avisa('Agora toque em Salvar para ligar o TikTok.', 6000); return; }
+            let apagar = false;
+            try { apagar = window.confirm('TikTok desligado. Apagar também os dados do TikTok guardados neste computador (pedidos, repasses e custos)?'); } catch (x) { apagar = false; }
+            if (apagar && SHC.tt && SHC.tt.apagarDados) SHC.tt.apagarDados().then(n => avisa(n ? '✓ Dados do TikTok apagados.' : 'Não havia dados do TikTok guardados.', 4000), falhaGravar);
+        }).catch(() => {});
+    });
+    // Aba TikTok: o link só abre quando ela toca; custo digitado vale para aquele produto do TikTok (c|tiktok|<sku_id>).
+    $('#listaTT').addEventListener('click', async e => {
+        if (e.target.closest('[data-tt-abrir]')) { chrome.tabs.create({ url: SHC.ttAba.URL_FINANCEIRO }); return; }
+        const b = e.target.closest('[data-tt-salvar]');
+        if (!b) return;
+        const id = b.dataset.ttSalvar, inp = Array.from(document.querySelectorAll('[data-tt-custo]')).find(i => i.dataset.ttCusto === id), v = SHC.num(inp && inp.value);
+        if (!(v > 0)) { avisa('Digite o custo por unidade, por exemplo 250,00.', 5000); return; }
+        try { await SHC.salvarCusto('tiktok', id, { custo: v, origem: 'manual' }); } catch (x) { return falhaGravar(x); }
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        desenhaTikTok().catch(() => {});
+    });
     $('#salvarModulos').addEventListener('click', async () => {
         const modulos = {};
-        P.MODULOS.forEach(m => { if (!$('#mod-' + m).checked) modulos[m] = false; });
+        P.MODULOS.forEach(m => { const on = $('#mod-' + m).checked; if (!on) modulos[m] = false; else if (SHC.MODULOS_OPCIONAIS.indexOf(m) >= 0) modulos[m] = true; });   // v3.2: opcional só liga com true
         try { cfg = await SHC.salvarCfg({ modulos }); } catch (e) { return falhaGravar(e); }
         atualizaAbasVisiveis();
         $('#okModulos').textContent = '✓ Salvo';
@@ -5165,7 +6034,9 @@
             const produtos = await SHC.tinyPuxar(token, { fetch: (u, i) => fetch(u, i), espera: ms => new Promise(r => setTimeout(r, ms)),
                 progresso: (pg, n) => { const pc = n ? Math.round(pg / n * 100) : 0; $('#tinyBarra').style.width = pc + '%'; $('#tinyPct').textContent = pc + '% · ' + pg + ' de ' + n + (n === 1 ? ' página' : ' páginas'); } });
             const r = await SHC.tinyGravar(produtos, 'tiny');
+            const antes = await SHC.lerChave(SHC.TINY_CHAVE);
             await SHC.gravarChave(SHC.TINY_CHAVE, { token, ultima: Object.assign({ ts: Date.now() }, r) });
+            if (SHC.erpRetratoDaTela) await SHC.erpRetratoDaTela('tiny', produtos, !(antes && antes.ultima));   // v3.2: cruzamento ERP × ML
             tinyToken = token; tinyRecusado = false; $('#tinyToken').value = ''; $('#tinyBox').hidden = true;
             tinyMsg('✓ ' + SHC.tinyResumo(r) + '.');
         } catch (e) {
@@ -5227,7 +6098,7 @@
         { sel: '#selConta', titulo: 'Suas contas', texto: 'Você usa mais de uma conta neste Chrome. Escolha uma ou Todas as contas para ver vendas, líquido e alertas lado a lado.' },
         { sel: '#abas', titulo: 'Abas', texto: 'Cada assunto na sua aba. A Geral resume tudo. Vamos passar por todas.' },
         { sel: '#geralTopo', antes: aba$('geral'), titulo: 'Geral', texto: 'O mais urgente primeiro, a meta do mês e 1 linha de cada aba. Toque numa linha para abrir a aba.' },
-        { sel: '#g-semanal', antes: aba$('geral'), titulo: 'Resumo da semana', texto: 'Toda segunda um texto pronto com as vendas, o lucro e o que pede atenção. Copie ou mande pelo WhatsApp para quem você quiser.' },
+        { sel: '#g-semanal', antes: aba$('geral'), titulo: 'Resumo para a equipe', texto: 'Todo dia de manhã (e toda segunda, o da semana) um texto pronto com vendas, lucro, o que subiu e caiu, Full, pós-venda e o que fazer. Copie ou mande pelo WhatsApp para quem você quiser.' },
         { sel: '#listaFull', antes: aba$('full'), titulo: 'Full', texto: 'No topo, a remessa que chegou com diferença e o botão para reclamar no ML; depois o que enviar primeiro, a pontuação do Full no medidor e a saúde do estoque.' },
         { sel: '#cardRemessas', antes: aba$('full'), titulo: 'Remessas', texto: 'Cada remessa ao Full: o que chegou, o que faltou, multas e quanto você gasta por mês para repor. Abrir no ML leva ao detalhe.' },
         { sel: '#cardProxRemessa', antes: aba$('full'), titulo: 'Próxima remessa', texto: 'Volume, peso, veículo e custo estimado da próxima remessa, com as quantidades que o Copiloto sugere. Edite e recalcule.' },
@@ -5269,13 +6140,14 @@
 
     montaPerguntas();
     marcaAba();
-    let pedeAlertas = null;
+    let pedeAlertas = null, ttEspera = null;
     chrome.storage.onChanged.addListener((mud, area) => {
         if (area !== 'local') return;
-        const ks = Object.keys(mud).filter(k => !/^cores:/.test(k));   // cores: é gravada pela própria tela (já está na memória)
+        const ks = Object.keys(mud).filter(k => !/^cores:/.test(k) && k !== 'ui:abertos');   // cores: e ui:abertos ("Ver mais") são gravadas pela própria tela (já estão na memória)
         if (!ks.length) return;
         if (ks.length === 1 && ks[0] === 'shc:status') soStatus();
-        else if (ks.every(k => /^(fiscal|fotos|visitas|robo|medidas|cat|catcomp):/.test(k))) soSaude(ks);   // rodada lenta: 1 gravação por anúncio (cat: = família, v2.6)
+        else if (ks.every(k => /^(fiscal|fotos|visitas|robo|medidas|cat|catcomp|editor):/.test(k))) soSaude(ks);   // rodada lenta: 1 gravação por anúncio (cat: = família, v2.6)
+        else if (ks.every(k => /^tt:/.test(k))) { clearTimeout(ttEspera); if (aba === 'tiktok') ttEspera = setTimeout(desenhaAba, 400); }   // v3.2: TikTok lido — só a aba dele (1 gravação por pedido)
         else recarregar();
         // Custo, mínimo do Full ou ajustes mudaram aqui: o fundo refaz as anomalias (número do ícone) sem esperar a próxima sincronização.
         if (ks.some(k => k === 'cfg' || k.indexOf('c|') === 0)) { clearTimeout(pedeAlertas); pedeAlertas = setTimeout(() => { try { Promise.resolve(chrome.runtime.sendMessage({ acao: 'recalcular_alertas' })).catch(() => {}); } catch (e) { /* fundo reiniciando */ } }, 3000); }

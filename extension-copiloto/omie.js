@@ -44,10 +44,12 @@
             return { ok: false, erro: 'outro', msg: 'O Omie respondeu com erro' + (txt ? ': ' + txt.slice(0, 120) : '') + '.' };
         }
         if (!Array.isArray(j.produtos)) return { ok: false, erro: 'outro', msg: 'O Omie respondeu num formato que o Copiloto não conhece.' };
+        // v3.2 (cruzamento ERP × ML): o saldo (nSaldo) vem de graça na mesma resposta.
         const produtos = j.produtos.map(p => p || {}).map(p => ({
             sku: SHC.normalizaSku(p.cCodigo),
             custo: dec(p.nCMC),
             titulo: String(p.cDescricao || '').replace(/\s+/g, ' ').trim().slice(0, 120),
+            estoque: typeof p.nSaldo === 'number' && isFinite(p.nSaldo) ? p.nSaldo : null,
         })).filter(p => p.sku);
         const pagina = Number(j.nPagina) || 1;
         return { ok: true, pagina, paginas: Math.max(pagina, Number(j.nTotPaginas) || 1), produtos };
@@ -73,7 +75,34 @@
             o.progresso(pagina, paginas);
             if (++pagina <= paginas) await o.espera(o.pausa);
         }
+        // v3.2 (cruzamento ERP × ML): quem está INATIVO no Omie vem do cadastro (ListarProdutos, campo inativo S/N), 1 chamada por página.
+        // Só consulta. Falhou (rede, limite, formato): os produtos ficam sem situacao (o cruzamento trata como ativos) e os custos seguem iguais.
+        try {
+            const inativos = new Set();
+            for (let pg = 1, pgs = 1; pg <= pgs && pg <= 200; pg++) {
+                if (pg > 1) await o.espera(o.pausa);
+                const p = SHC.omiePedidoCadastro(cred, pg), res = await o.fetch(p.url, p.init), j = await res.json();
+                const l = SHC.omieLerCadastro(j);
+                if (!l) throw new Error('formato');
+                l.inativos.forEach(s => inativos.add(s));
+                pgs = l.paginas;
+            }
+            todos.forEach(p => { p.situacao = inativos.has(p.sku) ? 'I' : 'A'; });
+        } catch (e) { /* sem a situação: segue só com os custos e o saldo */ }
         return todos;
+    };
+    const URL_CADASTRO = 'https://app.omie.com.br/api/v1/geral/produtos/';
+    /** Página do cadastro de produtos (ListarProdutos, só consulta). */
+    SHC.omiePedidoCadastro = (cred, pagina) => ({
+        url: URL_CADASTRO,
+        init: { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ call: 'ListarProdutos', app_key: String((cred && cred.appKey) || '').trim(), app_secret: String((cred && cred.appSecret) || '').trim(),
+            param: [{ pagina: pagina || 1, registros_por_pagina: POR_PAGINA, apenas_importado_api: 'N', filtrar_apenas_omiepdv: 'N' }] }) },
+    });
+    /** Resposta do ListarProdutos → { paginas, inativos:[SKU] } | null (erro/formato desconhecido). */
+    SHC.omieLerCadastro = function (j) {
+        if (!j || !Array.isArray(j.produto_servico_cadastro)) return null;
+        return { paginas: Math.max(1, Number(j.total_de_paginas) || 1),
+            inativos: j.produto_servico_cadastro.filter(p => p && String(p.inativo || '').toUpperCase() === 'S').map(p => SHC.normalizaSku(p.codigo)).filter(Boolean) };
     };
 
     /** "12 custos atualizados (…), 3 SKUs sem custo no Omie, 2 mantidos porque você digitou" (mesma regra do Tiny). */

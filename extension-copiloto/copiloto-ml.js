@@ -20,6 +20,12 @@
         try { chrome.runtime.sendMessage({ acao: 'promos_pagina', dados, conta: SHC.mlContaDoEstado(estado) }); } catch (e) { /* extensão recarregada */ }
     }
 
+    const espera = ms => new Promise(ok => setTimeout(ok, ms));
+    // JSON de uma rota de leitura do painel (só GET, com a sessão desta aba) → objeto | null.
+    const getJson = url => fetch(url, Object.assign({ method: 'GET', credentials: 'include', cache: 'no-store', headers: { accept: 'application/json' } },
+        typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(30000) } : {}))
+        .then(r => (r.ok ? r.json() : null)).catch(() => null);
+
     // Plano B: o fundo pede uma página do painel e esta aba busca com a sessão dela (só GET, só estas rotas).
     const LEITORES = {
         ler_pagina_promos: { rota: /^\/anuncios\/lista\/promos$/, ler: e => SHC.mlPromosDoEstado(e) },
@@ -44,6 +50,12 @@
                 .then(responder, err => responder({ ok: false, erro: String(err && err.name || err) }));
             return true;
         }
+        // v3.2: família fechada / "Ver mais" (o GET do botão "Expandir anúncios"), quando o fundo não leva a sessão. Só esta rota, só GET.
+        if (msg && msg.acao === 'ler_json_ml') {
+            if (!u || u.origin !== 'https://vendedores.mercadolivre.com.br' || u.pathname !== '/anuncios/api/listing/row/expanded') return false;
+            getJson(u.href).then(j => responder(j ? { ok: true, dados: j } : { ok: false }));
+            return true;
+        }
         if (!leitor || !u || u.origin !== 'https://vendedores.mercadolivre.com.br' || !leitor.rota.test(u.pathname)) return false;
         SHC.buscarVendo(u.href, Object.assign({ credentials: 'include', cache: 'no-store' }, typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(25000) } : {}))
             .then(r => /login|registration|\/lgz\//i.test(r.url) ? { login: true } : { html: r.ok ? r.text() : '' })
@@ -55,5 +67,31 @@
         return true;
     });
 
+    // ── v3.2 Editor em massa: leitura PASSIVA. Só quando a seller abre /anuncios/editor-massivo/<sessão>?viewId=listings: lê a grade com os
+    // MESMOS GETs que a página usa (lista plana + variações), uma chamada de cada vez, e manda ao fundo (editor:<conta>). Nunca PUT /response,
+    // save-* nem .../cells (gravam no ML); não troca aba de colunas (grava preferência). 1 leitura completa a cada 6 h por conta.
+    async function lerEditor() {
+        const s = SHC.editorSessao && SHC.editorSessao(location.href);
+        if (!s || !s.conta) return;
+        // Auditoria 01/10/2026: leitura parcial também espera (1 h desde a última TENTATIVA), e uma 2ª aba do Editor não lê junto.
+        const kt = 'editor:tentativa:' + s.conta;
+        try {
+            const ant = await SHC.lerChave('editor:' + s.conta); if (ant && ant.completo && Date.now() - (ant.ts || 0) < 6 * 3600e3) return;
+            const t = (await chrome.storage.local.get(kt))[kt]; if (t && Date.now() - t < 3600e3) return;
+        } catch (e) { return; }
+        await espera(8000);   // a página carrega primeiro (ela é pesada)
+        const a0 = SHC.editorSessao(location.href);
+        if (!a0 || a0.sessao !== s.sessao) return;
+        try {   // confere de novo depois da espera: outra aba pode ter começado nesse meio tempo
+            const t = (await chrome.storage.local.get(kt))[kt]; if (t && Date.now() - t < 3600e3) return;
+            await chrome.storage.local.set({ [kt]: Date.now() });
+        } catch (e) { return; }
+        const d = await SHC.editorLeitura(s.sessao, { get: getJson, pausa: () => espera(1500),
+            segue: () => { const a = SHC.editorSessao(location.href); return !!(a && a.sessao === s.sessao); } });
+        if (!d || !Object.keys(d.porItem).length) return;
+        try { chrome.runtime.sendMessage({ acao: 'editor_anuncios', conta: { sellerId: s.conta }, dados: d }); } catch (e) { /* extensão recarregada */ }
+    }
+
     enviaPaginaAtual();
+    lerEditor().catch(() => {});
 })();

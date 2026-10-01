@@ -509,10 +509,10 @@
         return ordem.map(gr => {
             const l = prop.filter(p => p.grupo === gr);
             if (!l.length) return '';
-            return `<div class="grp"><h3>${esc(A.NOME_GRUPO[gr])} <small>(${l.length})</small></h3><p class="sub">${esc(DESC[gr])}</p>`
+            return `<div class="grp" data-vm-box><h3>${esc(A.NOME_GRUPO[gr])} <small>(${l.length})</small></h3><p class="sub">${esc(DESC[gr])}</p>`
                 + '<div class="rola"><table class="tabela"><thead><tr><th>Produto</th><th>Campanha hoje</th><th>Sugerida</th><th>ROAS objetivo</th><th>Por quê</th></tr></thead><tbody>'
-                + l.slice(0, 30).map(p => `<tr><td class="tit"><b title="${esc(p.titulo)}">${esc(p.titulo)}</b><span>${esc(p.sku || 'sem SKU')}</span></td><td>${esc(p.atual)}</td><td>${esc(A.NOME_GRUPO[p.grupo])}</td><td>${p.roas ? 'pelo menos ' + A.xTxt(p.roas) : '—'}</td><td class="mot">${esc(p.motivo)}</td></tr>`).join('')
-                + '</tbody></table></div>' + (l.length > 30 ? `<p class="sub">e mais ${l.length - 30}.</p>` : '') + '</div>';
+                + l.map((p, i) => (i === 10 ? '</tbody><tbody class="vm-x">' : '') + `<tr><td class="tit"><b title="${esc(p.titulo)}">${esc(p.titulo)}</b><span>${esc(p.sku || 'sem SKU')}</span></td><td>${esc(p.atual)}</td><td>${esc(A.NOME_GRUPO[p.grupo])}</td><td>${p.roas ? 'pelo menos ' + A.xTxt(p.roas) : '—'}</td><td class="mot">${esc(p.motivo)}</td></tr>`).join('')
+                + '</tbody></table></div>' + (l.length > 10 ? `<p class="vm-pe"><button class="lnk" type="button" data-vm-lista="Ver mais (${l.length - 10})" aria-expanded="false">Ver mais (${l.length - 10})</button></p>` : '') + '</div>';
         }).join('');
     };
 
@@ -615,6 +615,12 @@
         app.addEventListener('click', ev => {
             const b = ev.target.closest('button');
             if (!b) return;
+            if (b.hasAttribute('data-vm-lista')) {   // lista longa: "Ver mais (N)" ↔ "Ver menos" (o resto já está no HTML, escondido)
+                const box = b.closest('[data-vm-box]'), ab = !!box && box.classList.toggle('vm-aberta');
+                b.textContent = ab ? 'Ver menos' : b.getAttribute('data-vm-lista'); b.setAttribute('aria-expanded', String(ab));
+                if (!ab && box && box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
+                return;
+            }
             if (b.hasAttribute('data-filtro')) { filtro = b.getAttribute('data-filtro'); if (ultimo) pinta(); else desenha(); }
             else if (b.hasAttribute('data-custos')) chrome.runtime.openOptionsPage();
             else if (b.hasAttribute('data-sync')) {

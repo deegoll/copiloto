@@ -118,8 +118,8 @@
         return {
             id: String(c.id || ''), tipo, campanha: String(c.campaign_type || ''),
             conteudo: texto(tit.header).slice(0, 60), nome: texto(tit.title).slice(0, 80),
-            dia: quando.dia, hora: quando.hora, status: statusTxt.slice(0, 30),
-            enviada: /enviad/i.test(statusTxt) || st.status === 'success',
+            dia: quando.dia, hora: quando.hora, status: statusTxt.slice(0, 30), statusCod: String(st.status || '').slice(0, 20),
+            enviada: (/enviad/i.test(statusTxt) && !/n[aã]o\s+enviad/i.test(statusTxt)) || st.status === 'success',
             itemId: mlb ? 'MLB' + mlb[1] : '',
             envios: n('sent'), vistas: n('views'), cliques: n('clicks'), ctr: n('ctr'),
             vendas: n('sales-units'), valor: n('sales-amount'),
@@ -709,12 +709,176 @@
         return { total: it.length, feitos: it.filter(i => i.estado === 'feito').length, pulados: it.filter(i => i.estado === 'pulado').length };
     };
 
+    // ── 4b. Conferência no ML: a transmissão que a fila marcou "criada" existe mesmo no ML? ─────────────
+    // O "criada" da fila é só o clique da seller em "Criar" (ml-canal.js). Aqui ela é conferida na lista do próprio canal
+    // (histórico: properties.campaigns / API campaigns), com o status e os números que o ML mostra. Só leitura.
+    // Visto ao vivo (24/09/2026): status "Enviada" (status:'success'). Os textos de programada/cancelada: a confirmar ao vivo.
+    SHC.CANAL_QUEM_FAZ = 'O Copiloto monta a agenda e pré-preenche o formulário. Quem cria cada transmissão é você, no ML. Quem envia aos seguidores é o próprio ML — o Copiloto não impulsiona nem paga divulgação.';
+    SHC.CANAL_CONF_ROTULO = { enviada: '✓ enviada', programada: '✓ programada no ML', cancelada: '✗ cancelada no ML', outro: 'no ML: ', nao_achei: '✗ não achei no ML', nao_lido: 'não conferido' };
+    SHC.CANAL_CRIADAS_DIAS = 14;   // quanto tempo a lista de "criadas" fica guardada para conferir
+
+    /** Status de uma campanha lida (SHC.canalCampanhas) → 'enviada' | 'programada' | 'cancelada' | 'outro'. */
+    SHC.canalStatusML = function (c) {
+        if (!c) return 'outro';
+        const t = String(c.status || '').toLowerCase(), cod = String(c.statusCod || '').toLowerCase();
+        if (/cancel|exclu|removid|rejeit|recusad|reprovad|falh|erro|n[aã]o\s+enviad|expirad|pausad/.test(t) || /error|fail|cancel|reject|danger|negative/.test(cod)) return 'cancelada';
+        if (c.enviada) return 'enviada';
+        // Só "programada" o que diz programada/agendada. Revisão, análise, pendente, aguardando e os códigos info/warning/accent nunca foram
+        // vistos ao vivo: vão para 'outro' (a tela mostra o texto cru do ML) e não somam em "confirmadas".
+        if (/program|agend/.test(t) || /schedul|program/.test(cod)) return 'programada';
+        return 'outro';
+    };
+
+    /**
+     * Lista de transmissões "criadas" (guardada no registro do canal, reg.criadas): junta as já guardadas, os cartões do plano com
+     * feito e os itens da fila com estado 'feito' do MESMO canal. Sem repetir (id + produto); some depois de CANAL_CRIADAS_DIAS dias.
+     * → [{ id, itemId, tipo, dia, hora, nome, titulo, ts }] em ordem de dia e hora
+     */
+    SHC.canalGuardaCriadas = function (criadas, plano, fila, storefrontId, agoraMs) {
+        const agora = agoraMs || Date.now(), limite = iso(new Date(agora - SHC.CANAL_CRIADAS_DIAS * 864e5)), out = new Map();
+        const poe = (x, ts) => {
+            if (!x || !x.itemId || !/^\d{4}-\d{2}-\d{2}$/.test(x.dia || '') || x.dia < limite) return;
+            const k = x.id + '|' + x.itemId;
+            if (out.has(k)) return;
+            out.set(k, { id: String(x.id || ''), itemId: x.itemId, tipo: x.tipo, dia: x.dia, hora: +x.hora, nome: String(x.nome || SHC.canalNome(x)).slice(0, 60),
+                titulo: String(x.titulo || '').slice(0, 120), ts: ts || agora });
+        };
+        (criadas || []).forEach(x => poe(x, x && x.ts));
+        (plano || []).forEach(s => { if (s && s.feito) poe(s); });
+        if (fila && fila.storefrontId === storefrontId && Array.isArray(fila.itens)) fila.itens.forEach(i => { if (i && i.estado === 'feito') poe(i, i.clicou); });
+        return [...out.values()].sort((a, b) => (a.dia < b.dia ? -1 : a.dia > b.dia ? 1 : a.hora - b.hora));
+    };
+
+    // Segunda a domingo da semana de `agora` → ['AAAA-MM-DD', 'AAAA-MM-DD']
+    const semanaDe = agora => { const d = new Date(agora), seg = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)); return [iso(seg), iso(new Date(seg.getFullYear(), seg.getMonth(), seg.getDate() + 6))]; };
+    const nomeNorm = t => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const mesmoNome = (a, b) => { a = nomeNorm(a); b = nomeNorm(b); return !!a && !!b && (a === b || (Math.min(a.length, b.length) >= 20 && (a.indexOf(b) === 0 || b.indexOf(a) === 0))); };
+
+    /**
+     * Confere cada "criada" na lista do ML. Casa pelo nome que o Copiloto pôs no formulário ("25/09 19h · …") e, se a seller mudou o nome,
+     * pelo mesmo dia, hora e tipo (e produto, quando o ML mostra). Cada campanha do ML casa com uma criada só.
+     * campanhas = null → ainda não lido ('nao_lido'). Lista cheia (60 por tipo) e criada mais velha que a mais velha lida → 'nao_lido'.
+     * → { ts, lido, itens:[criada + {estado, status, envios, vistas, cliques, ctr, vendas, valor}], semana:{ini, fim, criadas, confirmadas,
+     *     enviadas, programadas, canceladas, naoAchadas, naoLidas, vistas, cliques} }
+     */
+    SHC.canalConfere = function (criadas, campanhas, agoraMs) {
+        const agora = agoraMs || Date.now(), lido = Array.isArray(campanhas), cs = lido ? campanhas.filter(Boolean) : [], usadas = new Set();
+        const maisVelho = {}, porTipo = {};
+        cs.forEach(c => { porTipo[c.tipo] = (porTipo[c.tipo] || 0) + 1; if (c.dia && (!maisVelho[c.tipo] || c.dia < maisVelho[c.tipo])) maisVelho[c.tipo] = c.dia; });
+        const tipos = x => x.tipo === 'ambos' ? ['channel', 'story'] : [x.tipo];
+        const itens = (criadas || []).filter(x => x && x.itemId).map(x => {
+            const livres = cs.filter(c => !usadas.has(c) && tipos(x).indexOf(c.tipo) >= 0);
+            const c = livres.find(k => mesmoNome(k.nome, x.nome))
+                || livres.find(k => k.dia === x.dia && k.hora === +x.hora && (!k.itemId || k.itemId === x.itemId));
+            const base = Object.assign({}, x, { estado: 'nao_lido', status: '', envios: null, vistas: null, cliques: null, ctr: null, vendas: null, valor: null });
+            if (c) {
+                usadas.add(c);
+                return Object.assign(base, { estado: SHC.canalStatusML(c), status: c.status || '', envios: c.envios, vistas: c.vistas, cliques: c.cliques, ctr: c.ctr, vendas: c.vendas, valor: c.valor });
+            }
+            if (!lido) return base;
+            const foraDaLista = tipos(x).every(t => (porTipo[t] || 0) >= 60 && maisVelho[t] && x.dia < maisVelho[t]);
+            base.estado = foraDaLista ? 'nao_lido' : 'nao_achei';
+            return base;
+        });
+        const [ini, fim] = semanaDe(agora), sem = itens.filter(i => i.dia >= ini && i.dia <= fim);
+        const conta = e => sem.filter(i => i.estado === e).length;
+        const soma = k => { const v = sem.filter(i => i.estado === 'enviada' && i[k] !== null && i[k] !== undefined); return v.length ? v.reduce((s, i) => s + i[k], 0) : null; };
+        return { ts: agora, lido, itens, semana: { ini, fim, criadas: sem.length, confirmadas: conta('enviada') + conta('programada'), enviadas: conta('enviada'), programadas: conta('programada'),
+            canceladas: conta('cancelada'), naoAchadas: conta('nao_achei'), naoLidas: conta('nao_lido'), vistas: soma('vistas'), cliques: soma('cliques') } };
+    };
+
+    /**
+     * "Voltar para a fila": a criada que o ML não tem (não achada/cancelada) deixa de ser "criada" no plano, na lista de criadas e na fila
+     * (item da fila volta a 'pendente'; sem isso o canalMarcaFeitos marcaria de novo). Muda plano no lugar. → { plano, criadas, fila, filaMudou }
+     */
+    SHC.canalDesfazCriada = function (plano, criadas, fila, id, itemId) {
+        const s = (plano || []).find(x => x.id === id && x.itemId === itemId);
+        if (s) s.feito = false;
+        const cr = (criadas || []).filter(x => !(x.id === id && x.itemId === itemId));
+        let filaMudou = false;
+        ((fila && fila.itens) || []).forEach(i => { if (i.id === id && i.itemId === itemId && i.estado === 'feito') { i.estado = 'pendente'; i.clicou = 0; filaMudou = true; } });
+        return { plano, criadas: cr, fila, filaMudou };
+    };
+
+    /** Rótulo curto do status conferido ("✓ programada no ML", "no ML: Em revisão"). */
+    SHC.canalConfRotulo = i => !i ? '' : i.estado === 'outro' ? SHC.CANAL_CONF_ROTULO.outro + (i.status || 'status desconhecido') : (SHC.CANAL_CONF_ROTULO[i.estado] || '');
+    const milhar = v => Math.round(v).toLocaleString('pt-BR');
+    /** Alcance que o ML mostra: "1.815 enviadas · 300 vistas · 40 cliques · CTR 4% · 1 venda" (só o que veio). '' sem números. */
+    SHC.canalAlcanceTxt = function (i) {
+        if (!i) return '';
+        const p = [];
+        if (i.envios !== null && i.envios !== undefined) p.push(milhar(i.envios) + ' enviadas');
+        if (i.vistas !== null && i.vistas !== undefined) p.push(milhar(i.vistas) + (i.vistas === 1 ? ' vista' : ' vistas'));
+        if (i.cliques !== null && i.cliques !== undefined) p.push(milhar(i.cliques) + (i.cliques === 1 ? ' clique' : ' cliques'));
+        if (i.ctr !== null && i.ctr !== undefined) p.push('CTR ' + String(i.ctr).replace('.', ',') + '%');
+        if (i.vendas !== null && i.vendas !== undefined) p.push(milhar(i.vendas) + (i.vendas === 1 ? ' venda' : ' vendas'));
+        return p.join(' · ');
+    };
+    /**
+     * Frase do painel: "3 transmissões confirmadas no ML esta semana (2 enviadas · 1 programada)" + o que não bateu.
+     * → { titulo, detalhe, cor:'ok'|'at'|'pr'|'ne' } | null (nunca conferido)
+     */
+    SHC.canalSemanaTxt = function (conf, agoraMs) {
+        if (!conf || !conf.semana) return null;
+        const s = conf.semana, qt = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
+        const partes = [];
+        if (s.enviadas) partes.push(qt(s.enviadas, 'enviada', 'enviadas'));
+        if (s.programadas) partes.push(qt(s.programadas, 'programada', 'programadas'));
+        const titulo = s.confirmadas ? qt(s.confirmadas, 'transmissão confirmada', 'transmissões confirmadas') + ' no ML esta semana' + (partes.length ? ' (' + partes.join(' · ') + ')' : '')
+            : !conf.lido ? 'Transmissões desta semana ainda não conferidas no ML' : 'Nenhuma transmissão confirmada no ML esta semana';
+        const det = [], al = [];
+        if (s.naoAchadas) al.push(qt(s.naoAchadas, 'marcada como criada que não achei no ML', 'marcadas como criadas que não achei no ML'));
+        if (s.canceladas) al.push(qt(s.canceladas, 'cancelada no ML', 'canceladas no ML'));
+        if (s.vistas !== null || s.cliques !== null) det.push('alcance das enviadas: ' + [s.vistas !== null ? milhar(s.vistas) + ' vistas' : '', s.cliques !== null ? milhar(s.cliques) + ' cliques' : ''].filter(Boolean).join(' · '));
+        const h = new Date(conf.ts || agoraMs || Date.now());
+        det.push('conferido no ML em ' + String(h.getDate()).padStart(2, '0') + '/' + String(h.getMonth() + 1).padStart(2, '0') + ' às ' + String(h.getHours()).padStart(2, '0') + ':' + String(h.getMinutes()).padStart(2, '0'));
+        // cor = a do título (verde quando há confirmadas); o que não bateu vai à parte em "alerta" (vermelho), para não pintar o que deu certo.
+        return { titulo, detalhe: det.join(' · '), alerta: al.join(' · '), cor: s.confirmadas ? 'ok' : !conf.lido || !s.criadas ? 'ne' : al.length ? 'pr' : 'at' };
+    };
+
     // ── 5. Leitura do ML e robô do canal (sem tela: a agenda e o service worker usam as mesmas) ─────────────
     // buscar(caminho, json) → Promise<texto | JSON>, lança erro se o ML não responde (a tela e o fundo põem tempo limite). Só GET.
     const espera = ms => new Promise(r => setTimeout(r, ms));
 
     /** Histórico e produtos que podem ser comunicados de um canal. aviso(texto) = andamento. → { campanhas, produtos, precos:{} } */
     SHC.canalLer = async function (buscar, id, aviso) {
+        const q = encodeURIComponent(id), diz = aviso || (() => {});
+        const campanhas = await SHC.canalLerHistorico(buscar, id, diz);
+        // Produtos elegíveis. Mapeado ao vivo em 01/10/2026: &page=N e &offset=N na página são IGNORADOS (voltam os mesmos 10); a página
+        // traz pagination {total, limit:10, offset:0} e o "Vá para a página 2" da tela pede GET /marketing/canal/api/broadcast/promotions
+        // ?storefrontId=…&offset=10&input= (JSON {pagination, items:[{properties:{itemId, title, promotions, availableUnits, cardInfo…}}]}).
+        // A ordem dos itens muda entre pedidos: junta sem repetir pelo MLB.
+        // F14: página que NÃO respondeu (2 tentativas) ≠ fim da lista: marca incompleto e a tela pede "Ler de novo".
+        const produtos = [], vistos = new Set(), junta = l => l.forEach(x => { if (!vistos.has(x.itemId)) { vistos.add(x.itemId); produtos.push(x); } });
+        const duas = async (c, j) => { let r = await buscar(c, j).catch(() => null); if (r === null || r === undefined) { await espera(1500); r = await buscar(c, j).catch(() => null); } return r === undefined ? null : r; };
+        let falhou = 0;
+        diz('Lendo os produtos em promoção… página 1');
+        const html = await duas('/marketing/canal-de-transmissao/lista-produtos-promocao?storefrontId=' + q, false);
+        if (html === null) falhou = 1;
+        const est = html === null ? null : SHC.mlExtraiEstado(html), pg = est ? SHC.canalPaginacao(est) : null;
+        if (est) junta(SHC.canalProdutos(est));
+        const lim = pg && pg.limit > 0 ? pg.limit : 10, total = pg ? pg.total : null;
+        for (let off = lim, p = 2; !falhou && total !== null && off < total && p <= 200; off += lim, p++) {
+            await espera(350);
+            diz('Lendo os produtos em promoção… página ' + p + ' de ' + Math.ceil(total / lim));
+            const j = await duas('/marketing/canal/api/broadcast/promotions?storefrontId=' + q + '&offset=' + off + '&input=', true);
+            if (j === null) { falhou = p; break; }
+            junta(SHC.canalProdutos(j));
+        }
+        return Object.assign({ campanhas, produtos, precos: {}, total }, falhou ? { incompleto: true, paginaFalhou: falhou } : {});
+    };
+    /** pagination {total, limit, offset} da lista de produtos do canal (página ou JSON) → {total, limit} | null. */
+    SHC.canalPaginacao = function (r) {
+        let out = null;
+        anda(r, o => { const p = o.pagination; if (!out && p && typeof p === 'object' && SHC.num(p.total) !== null) { out = { total: SHC.num(p.total), limit: SHC.num(p.limit) || 0 }; return false; } });
+        return out;
+    };
+    /** F14: aviso da leitura cortada ('' quando a lista foi lida até o fim). */
+    SHC.canalAvisoIncompleto = d => d && d.incompleto ? 'Li ' + d.produtos.length + (typeof d.total === 'number' ? ' de ' + d.total : '') + ' produto' + (d.produtos.length === 1 && typeof d.total !== 'number' ? '' : 's') + '; o Mercado Livre não respondeu a página '
+        + d.paginaFalhou + '. Clique em "Ler de novo do ML" para ver a lista toda.' : '';
+
+    /** Só o histórico do canal (mensagens e stories já criados, com status e números do ML) → campanhas (SHC.canalCampanhas). */
+    SHC.canalLerHistorico = async function (buscar, id, aviso) {
         const q = encodeURIComponent(id), diz = aviso || (() => {});
         diz('Lendo o histórico do canal…');
         const campanhas = SHC.canalCampanhas(SHC.mlExtraiEstado(await buscar('/marketing/canal-de-transmissao?storefront_id=' + q, false)));
@@ -729,17 +893,7 @@
                 await espera(300);
             }
         }
-        // Produtos elegíveis: paginação por &page=N (a confirmar ao vivo) — para quando não vem item novo.
-        const produtos = [], vistos = new Set();
-        for (let p = 1; p <= 80; p++) {
-            diz('Lendo os produtos em promoção… página ' + p);
-            const html = await buscar('/marketing/canal-de-transmissao/lista-produtos-promocao?storefrontId=' + q + (p > 1 ? '&page=' + p : ''), false).catch(() => null);
-            const novos = html ? SHC.canalProdutos(SHC.mlExtraiEstado(html)).filter(x => !vistos.has(x.itemId)) : [];
-            if (!novos.length) break;
-            novos.forEach(x => { vistos.add(x.itemId); produtos.push(x); });
-            await espera(350);
-        }
-        return { campanhas, produtos, precos: {} };
+        return campanhas;
     };
 
     /** Preço da promoção de um produto num dia (promotions-info): > 0 = preço; 0 = sem promoção naquele dia; -1 = a consulta falhou. */
@@ -758,7 +912,8 @@
         const o = opc || {}, cfg = await SHC.lerCfg(), snap = await SHC.lerAnuncios(), anuncios = {};
         ((snap && snap.itens) || []).forEach(i => { if (i && i.itemId) anuncios[i.itemId] = i; });
         const alvo = dados.produtos.map(p => anuncios[p.itemId] || anuncios[SHC.canalAlvoCatalogo(p.motivo)]).filter(Boolean);
-        const mapa = await SHC.custosDe(alvo.map(i => ({ sku: i.sku, familia: i.familia, itemId: i.itemId })));
+        // F3: todos os SKUs do anúncio (variação usa o maior custo), não só o 1º.
+        const mapa = await SHC.custosDe(alvo.map(i => ({ sku: i.sku, skus: i.skus || [], skuFonte: i.skuFonte || '', familia: i.familia, itemId: i.itemId })));
         const custos = {};
         mapa.forEach((v, info) => { if (v) custos[info.itemId] = v.dados; });
         const meta = SHC.num(o.meta);
@@ -804,6 +959,11 @@
         const reg = SHC.canalRegistro(plano, SHC.canalForaLista(plano, dados.produtos, ctx, dias), Object.assign({}, op, { horas, tipos }), agora.getTime());
         const hoje = iso(agora), proximo = plano.filter(s => s.itemId && !s.feito && s.dia > hoje).map(s => s.dia).sort()[0] || '';
         reg.robo = { ts: agora.getTime(), dia: hoje, proximo, n: plano.filter(s => s.dia === proximo && s.itemId && !s.feito).length };
+        // Conferência no ML das "criadas" (com as do plano velho, antes de os horários passados saírem), com o histórico que já foi lido.
+        let fila = null;
+        try { fila = SHC.lerChave ? await SHC.lerChave('shc:canal:fila') : null; } catch (e) { /* sem fila */ }
+        reg.criadas = SHC.canalGuardaCriadas(salvo && salvo.criadas, (salvo && salvo.plano || []).concat(plano), fila, sf, agora.getTime());
+        reg.conferencia = SHC.canalConfere(reg.criadas, dados.campanhas, agora.getTime());
         return reg;
     };
 
@@ -818,6 +978,7 @@
     const TEMPO_MS = 20000;   // (h) nenhuma leitura fica pendurada: 20 s por página
     const comLimite = (p, ms) => Promise.race([p, espera(ms).then(() => null)]);
     let canais = [], dados = null, plano = [], rctx = null, janela = [], horarios = null, fora = [], roboReg = null, esperaSync = false;
+    let criadas = [], conf = null;   // 4b: o que a fila marcou "criada" e a conferência na lista do canal no ML
     const tentados = new Set();   // anúncios que a agenda já tentou ler sozinha nesta abertura
 
     // (h) "Lendo…" nunca fica parado: se nada muda em 60 s, a tela diz o que fazer.
@@ -997,7 +1158,8 @@
         fora = SHC.canalForaLista(plano, dados.produtos, rctx, [...new Set(janela.map(j => j.dia).concat(plano.map(s => s.dia)))]);
         await salvar();
         await desenha();
-        status('');
+        const inc = SHC.canalAvisoIncompleto(dados);   // F14: página que falhou não vira "fim da lista" calado
+        status(inc, !!inc);
     }
     // Custo salvo, anúncios lidos: refaz o ranking e preenche os horários vazios (sem agenda nenhuma, monta de novo).
     async function recalcular() {
@@ -1009,9 +1171,17 @@
         await fechar();
     }
 
+    // 4b: junta as "criadas" (plano + fila) e confere com o histórico lido do ML (dados.campanhas). O painel lê reg.conferencia.
+    function confere(fila) {
+        criadas = SHC.canalGuardaCriadas(criadas, plano, fila, $('canal').value);
+        conf = SHC.canalConfere(criadas, dados ? dados.campanhas : null);
+    }
     async function salvar() {
         const sf = $('canal').value, reg = SHC.canalRegistro(plano, fora, opcoes());
         if (roboReg && roboReg.robo) reg.robo = roboReg.robo;
+        confere(await Promise.resolve(SHC.lerChave('shc:canal:fila')).catch(() => null));
+        reg.criadas = criadas;
+        reg.conferencia = conf;
         try { await SHC.gravarChave('shc:canal:plano:' + sf, reg); await SHC.gravarChave('shc:canal:sel', sf); } catch (e) { /* ok */ }
     }
 
@@ -1037,12 +1207,23 @@
     const CHECKLIST = 'Conferido: promoção confirmada no dia · lucro ≥ meta · custo · estoque · anúncio ativo · o ML deixa divulgar · não repetido';
     const curto = (t, max) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > max ? t.slice(0, max - 1) + '…' : t; };
 
+    // 4b: status REAL lido na lista do canal no ML (não só "a dona clicou em Criar").
+    const confDe = s => conf && conf.itens.find(i => i.id === s.id && i.itemId === s.itemId);
+    const corConf = i => !i || i.estado === 'nao_lido' || i.estado === 'outro' ? 'ne' : i.estado === 'enviada' || i.estado === 'programada' ? 'ok' : 'pr';
+    function etqFeito(s) {
+        const i = confDe(s);
+        if (!i || i.estado === 'nao_lido') return '<p class="st-ml cf-ne" title="Você clicou em Criar no ML. Ainda não conferi na lista do canal: clique em &quot;Conferir no ML&quot;.">✓ criada · a conferir no ML</p>';
+        return '<p class="st-ml cf-' + corConf(i) + '" title="' + esc(i.status ? 'Status no ML: ' + i.status : '') + '">' + esc(SHC.canalConfRotulo(i)) + '</p>';
+    }
     function cartao(s) {
         const d = document.createElement('div');
         d.className = 'cartao' + (s.itemId ? '' : ' vazio') + (s.feito ? ' feito' : '');
         d.dataset.id = s.id;
+        const cf = s.feito ? confDe(s) : null, alc = SHC.canalAlcanceTxt(cf);
         const cab = '<div class="cab"><span class="tag t-' + esc(s.tipo) + '">' + esc(SHC.CANAL_TIPOS[s.tipo]) + '</span><b>' + hh(s.hora) + '</b>'
-            + (s.feito ? '<span class="feito">✓ criada</span>' : '') + '</div>';
+            + '</div>' + (s.feito ? etqFeito(s) : '')   // status do ML numa linha própria (no cabeçalho quebrava em 3 linhas)
+            + (alc ? '<p class="alc">' + esc(alc) + '</p>' : '')
+            + (cf && (cf.estado === 'nao_achei' || cf.estado === 'cancelada') ? '<p class="mot">Não está criada no ML. <button class="lnk" data-a="desfazer">Voltar para a fila</button></p>' : '');
         if (!s.itemId) { d.innerHTML = cab + '<p class="mot">' + esc(s.motivo) + '</p><div class="ac"><button class="lnk" data-a="remover">Remover</button></div>'; return d; }
         d.innerHTML = cab
             + '<div class="prod">' + (s.foto ? '<img alt="" src="' + esc(s.foto) + '">' : '') + '<span title="' + esc(s.titulo) + '">' + esc(s.titulo) + '</span></div>'
@@ -1073,6 +1254,15 @@
         return d;
     }
 
+    // "Ver mais (N)" ↔ "Ver menos" das listas longas: o resto já está no HTML (classe vm-x) dentro do bloco data-vm-box.
+    const vmBotao = n => '<p class="vm-pe"><button class="lnk" type="button" data-vm-lista="Ver mais (' + n + ')" aria-expanded="false">Ver mais (' + n + ')</button></p>';
+    if (document.addEventListener) document.addEventListener('click', e => {
+        const bt = e.target && e.target.closest && e.target.closest('[data-vm-lista]');
+        if (!bt) return;
+        const box = bt.closest('[data-vm-box]'), ab = !!box && box.classList.toggle('vm-aberta');
+        bt.textContent = ab ? 'Ver menos' : bt.getAttribute('data-vm-lista'); bt.setAttribute('aria-expanded', String(ab));
+        if (!ab && box && box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
+    });
     // Uma linha do "Fora da agenda": título curto + MLB + etiqueta do motivo (+ campo de custo no grupo "Sem custo").
     function linhaFora(x) {
         const id = esc(x.itemId);
@@ -1086,6 +1276,7 @@
     async function desenha() {
         const fila = await SHC.lerChave('shc:canal:fila');
         if (SHC.canalMarcaFeitos(plano, fila, $('canal').value)) await salvar();   // "criada" fica no plano do canal
+        confere(fila);
         $('resumo').textContent = SHC.canalResumo(plano);
         const grade = $('grade');
         grade.textContent = '';
@@ -1129,15 +1320,57 @@
         // O custo digitado e ainda não salvo sobrevive ao redesenho (ex.: a leitura do grupo terminou enquanto a dona digitava)
         const fg = $('fora-grupos'), digitado = {};
         (fg.querySelectorAll ? [...fg.querySelectorAll('[data-custo]')] : []).forEach(i => { if (i.value) digitado[i.dataset.custo] = i.value; });
-        fg.innerHTML = gs.map(x => '<section class="grupo c-' + x.cor + '" id="g-' + x.tipo + '">'
+        fg.innerHTML = gs.map(x => '<section class="grupo c-' + x.cor + '" id="g-' + x.tipo + '" data-vm-box>'
             + '<header>' + ic(x.icone) + '<b>' + esc(x.titulo) + '</b><span class="n">' + x.n + '</span></header>'
             + '<div class="acao"><span>' + esc(x.acao) + '</span>' + (x.botao ? '<button class="bt sec pq" type="button" data-grupo="' + x.tipo + '" data-botao="' + esc(x.botao) + '">' + esc(x.botao) + '</button>' : '') + '</div>'
             + (x.botao || !x.n ? '<p class="res" role="status" aria-live="polite"></p>' : '')
-            + '<ul class="itens">' + x.itens.map(linhaFora).join('') + '</ul></section>').join('');
+            + '<ul class="itens">' + x.itens.slice(0, 5).map(linhaFora).join('') + '</ul>'
+            + (x.itens.length > 5 ? '<ul class="itens vm-x">' + x.itens.slice(5).map(linhaFora).join('') + '</ul>' + vmBotao(x.itens.length - 5) : '') + '</section>').join('');
         (fg.querySelectorAll ? [...fg.querySelectorAll('[data-custo]')] : []).forEach(i => { if (digitado[i.dataset.custo]) i.value = digitado[i.dataset.custo]; });
         pintaLeitura();
         if (!podem && g.total) $('fora-box').open = true;   // nada pode entrar: o porquê já vem aberto
         desenhaRobo();
+        desenhaConf();
+    }
+
+    // 4b: "Conferência no ML" — cada transmissão marcada como criada, com o status e o alcance lidos na lista do canal.
+    function desenhaConf() {
+        const box = $('conf-card');
+        if (!box) return;
+        const t = SHC.canalSemanaTxt(conf), itens = conf ? conf.itens.slice().reverse() : [];
+        box.hidden = !itens.length;
+        if (!itens.length) return;
+        $('conf-titulo').textContent = t ? t.titulo : '';
+        $('conf-titulo').className = 'resumo cf-' + (t ? t.cor : 'ne');
+        $('conf-det').textContent = t ? t.detalhe + '.' : '';
+        // O que não bateu fica à parte, em vermelho, com o que fazer (o título verde continua dizendo o que deu certo).
+        const naoAchou = itens.some(i => i.estado === 'nao_achei'), al = $('conf-alerta');
+        if (al) {
+            al.textContent = (t && t.alerta ? t.alerta + '. ' : naoAchou ? 'Há transmissão marcada como criada que não achei no ML. ' : '')
+                + (naoAchou ? 'Talvez o formulário tenha sido fechado sem criar: confira no ML e, se faltar, use "Voltar para a fila" no cartão.' : '');
+            al.hidden = !al.textContent;
+        }
+        $('conf-lista').innerHTML = itens.map((i, n) => {
+            const alc = SHC.canalAlcanceTxt(i);
+            return '<li' + (n >= 10 ? ' class="vm-x"' : '') + '><span class="t" title="' + esc(i.titulo || i.nome) + '">' + esc(SHC.canalQuando(i.dia, i.hora)) + ' · ' + esc(curto(i.titulo || i.nome, 40)) + '</span>'
+                + '<span class="tag t-' + esc(i.tipo) + '">' + esc(SHC.CANAL_TIPOS[i.tipo] || i.tipo) + '</span>'
+                + '<span class="etq cf-' + corConf(i) + '" title="' + esc(i.status ? 'Status no ML: ' + i.status : '') + '">' + esc(SHC.canalConfRotulo(i)) + '</span>'
+                + (alc ? '<span class="alc">' + esc(alc) + '</span>' : '') + '</li>';
+        }).join('') + (itens.length > 10 ? '<li class="vm-li">' + vmBotao(itens.length - 10) + '</li>' : '');
+    }
+    // Só a lista do canal (rápido): não relê os produtos nem refaz a agenda.
+    async function conferirNoML() {
+        if (!dados || ocupado) return;
+        const b = $('conferir'), st = $('conf-status');
+        b.disabled = true; st.textContent = 'Lendo a lista do canal no ML…'; st.className = 'msg';
+        try {
+            dados.campanhas = await SHC.canalLerHistorico((c, j) => buscar(c, j), $('canal').value);
+            await salvar();
+            await desenha();
+            st.textContent = '';
+        } catch (e) {
+            st.textContent = 'Não consegui ler o canal no ML agora. Tente de novo em alguns minutos.'; st.className = 'msg erro';
+        } finally { b.disabled = false; }
     }
 
     function desenhaRobo() {
@@ -1154,6 +1387,13 @@
         const cands = dia => SHC.canalRanking(dados.produtos, Object.assign({}, rctx, { dia })).candidatos;
         ocupado = true;
         try {
+            if (a === 'desfazer') {   // 4b: não achei no ML (ou cancelada) → o cartão volta a "falta criar" e a fila oferece de novo
+                const s = plano.find(x => x.id === id), r = SHC.canalDesfazCriada(plano, criadas, await SHC.lerChave('shc:canal:fila'), id, s && s.itemId);
+                criadas = r.criadas;
+                if (r.filaMudou) await SHC.gravarChave('shc:canal:fila', r.fila);
+                await fechar();
+                return;
+            }
             if (a === 'trocar') plano = SHC.canalTrocarProduto(plano, id, cands, n());
             else if (a === 'remover') plano = SHC.canalRemover(plano, id);
             else if (a === 'remover-vazios') plano = plano.filter(s => !(s.dia === card.dataset.dia && !s.itemId && !s.feito));
@@ -1198,6 +1438,7 @@
     });
 
     $('montar').addEventListener('click', () => montar().catch(erro));
+    if ($('conferir')) $('conferir').addEventListener('click', () => conferirNoML());
     $('atualizar').addEventListener('click', () => carregar(true).catch(erro));
     $('canal').addEventListener('change', () => { try { SHC.gravarChave('shc:canal:sel', $('canal').value); } catch (e) { /* ok */ } carregar(false).catch(erro); });
     $('programar').addEventListener('click', async () => {
@@ -1212,7 +1453,7 @@
         fila.itens[0].estado = 'aberto';
         await SHC.gravarChave('shc:canal:fila', fila);
         chrome.tabs.create({ url: fila.itens[0].url });
-        status('Abrimos o formulário do Mercado Livre. Confira e clique em "Criar" lá; o Copiloto abre o próximo.');
+        status('Abrimos o formulário do Mercado Livre. Confira e clique em "Criar" lá; o Copiloto abre o próximo. Depois, "Conferir no ML" mostra se cada uma ficou programada.');
     });
     chrome.storage.onChanged.addListener((m, area) => {
         if (area !== 'local') return;
@@ -1240,18 +1481,21 @@
     }
 
     // Conta sem canal (sem "Minha página"): aviso com link, no lugar da agenda — não é erro.
+    // Em largura cheia no topo do cartão da agenda, com o link em botão; os contadores "0" somem e o motivo fica ao lado do botão desabilitado.
     function semCanal() {
         status('');
         plano = [];
-        const p = document.createElement('p'), a = document.createElement('a');
-        p.className = 'vazio';
-        a.href = SHC.CANAL_URL_MINHA_PAGINA; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Abrir a Minha página no Mercado Livre';
-        p.append(SHC.CANAL_SEM_CANAL + ' ', a);
-        $('grade').replaceChildren(p);
-        $('resumo').textContent = '';
+        $('sem-canal-txt').textContent = SHC.CANAL_SEM_CANAL;
+        $('sem-canal-link').href = SHC.CANAL_URL_MINHA_PAGINA;
+        $('sem-canal').hidden = false;
+        $('kpis').hidden = true;
+        $('grade').replaceChildren();
+        $('resumo').textContent = 'Sem canal nesta conta: nada para programar.';
         $('programar').disabled = true;
         $('montar').disabled = true;
+        $('montar').title = SHC.CANAL_SEM_CANAL;
     }
+    const comCanal = () => { $('sem-canal').hidden = true; $('kpis').hidden = false; $('montar').title = ''; };
 
     // lerCanais: lê de novo a lista de canais. A agenda salva do canal é reaproveitada; "Montar agenda" refaz.
     async function carregar(lerCanais) {
@@ -1276,13 +1520,17 @@
             $('canal-campo').hidden = canais.length < 2;
         }
         if (!canais.length) return semCanal();
+        comCanal();
         $('montar').disabled = false;
         $('cupom').href = BASE + '/marketing/canal-de-transmissao?storefront_id=' + encodeURIComponent($('canal').value);
-        plano = []; fora = []; leitura = null;   // a agenda (e os "criada") de outro canal não passa para este
+        plano = []; fora = []; leitura = null; criadas = []; conf = null;   // a agenda (e os "criada") de outro canal não passa para este
         dados = await SHC.canalLer((c, j) => buscar(c, j), $('canal').value, status);
         horarios = SHC.canalMelhoresHorarios(dados.campanhas, 2);
         const salvo = await SHC.lerChave('shc:canal:plano:' + $('canal').value);
         roboReg = salvo && salvo.robo ? salvo : null;
+        // 4b: as "criadas" guardadas + as do plano salvo (antes de os horários passados saírem da agenda) → conferidas com o histórico lido agora
+        criadas = SHC.canalGuardaCriadas(salvo && salvo.criadas, salvo && salvo.plano, null, $('canal').value);
+        conf = SHC.canalConfere(criadas, dados.campanhas);
         const op = (salvo && salvo.opcoes) || {};   // as escolhas da última montagem (o robô usa as mesmas)
         if (Array.isArray(op.horas) && op.horas.length) horarios = Object.assign({}, horarios, { horas: op.horas });
         desenhaHorarios();

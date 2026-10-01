@@ -1,6 +1,7 @@
 // SellerHub Copiloto — motor da "sobra" (quanto fica no bolso depois de tudo).
 // Mesmas regras do SellerHub: core/MLCustoVenda.php (comissão por tipo de anúncio, taxa fixa por
-// faixa de preço, regra do frete grátis a partir de R$ 79) e CustoLookup::taxaCanal (Shopee 20%).
+// faixa de preço, regra do frete grátis a partir de R$ 79). Shopee (30/09/2026): tabela única do núcleo (nucleo/tarifas.js =
+// core/TarifasCanal.php): 20% + R$ 4 (R$ 4,50 desde 01/10/2026) abaixo de R$ 80; 14% + R$ 16/20/26 de R$ 80 para cima.
 // Roda 100% no navegador: nenhum dado sai daqui.
 (function (root) {
     'use strict';
@@ -28,11 +29,23 @@
         modulos: {},
         // v2.9: robô de promoções (SHC.roboPromoSugestoes). {ligado, margem_pct (null = meta acima), modo:'sugerir'}. Grave sempre um objeto NOVO.
         robopromo: {},
+        // v3.2.0: avisar quando faltar N dias (ou menos) para a promoção acabar (SHC.promoTermina; Ajustes › Seus números, 0 a 15).
+        promo_aviso_dias: 2,
+        // v3.2: resumo para a equipe (background.js resumosDevidos): 'dia' | 'semana' | 'ambos'; hora da manhã em que fica pronto (0–23).
+        resumo_freq: 'ambos', resumo_hora: 8,
     };
     // Módulos que o seller pode desligar (cada um = 1 aba do painel); Geral e Ajustes nunca somem.
     SHC.MODULOS = ['full', 'posvenda', 'promo', 'ads', 'frete', 'catalogo', 'afiliados', 'saude', 'conciliacao', 'canal'];   // v2.9: + posvenda, na ordem das abas
-    /** true a não ser que o seller tenha desligado esse módulo em Ajustes (cfg.modulos[id] === false). */
-    SHC.moduloLigado = (cfg, id) => !cfg || !cfg.modulos || cfg.modulos[id] !== false;
+    // v3.2: módulos opcionais começam DESLIGADOS (TikTok pede permissão de outro site): só cfg.modulos[id] === true liga.
+    SHC.MODULOS_OPCIONAIS = ['tiktok'];
+    // v3.2.0: TRAVADOS = desligados mesmo com cfg.modulos[id] === true, sem interruptor em Ajustes e sem aba. O TikTok fica fora da 3.2.0
+    // (a política e a ficha da loja não citam o TikTok). Para liberar: tirar daqui, pôr de volta em MODULOS, chamar SHC.tt.instalarFundo()
+    // no background.js e devolver 'scripting' + seller-br.tiktok.com às permissões opcionais do manifest.
+    SHC.MODULOS_TRAVADOS = ['tiktok'];
+    /** true a não ser que o seller tenha desligado esse módulo em Ajustes (cfg.modulos[id] === false); opcional só com === true; travado nunca. */
+    SHC.moduloLigado = (cfg, id) => (SHC.MODULOS_TRAVADOS.indexOf(id) >= 0 ? false
+        : SHC.MODULOS_OPCIONAIS.indexOf(id) >= 0 ? !!(cfg && cfg.modulos && cfg.modulos[id] === true)
+        : !cfg || !cfg.modulos || cfg.modulos[id] !== false);
 
     const r2 = v => Math.round((v + (v >= 0 ? Number.EPSILON : -Number.EPSILON)) * 100) / 100;
     SHC.r2 = r2;
@@ -132,6 +145,28 @@
         return num(cfg.sp_comissao_pct) || 0;
     }
 
+    // Shopee pela tabela única (CN.tarifas), resolvida na HORA do cálculo: o background importa calc.js antes do núcleo.
+    // sp_comissao_pct/sp_taxa_fixa escolhidos pela seller continuam mandando (igual ao % gravado no SellerHub). O par 20 / 0
+    // é o padrão antigo que o salvarCfg grava junto com tudo (ninguém escolheu): esse vai para a tabela.
+    // Sem o núcleo carregado: o cálculo de antes (% único, sem fixo), com aviso. Devolve null quando não é o caso da tabela.
+    const AVISO_SP_SEM_TABELA = 'Shopee sem a tabela de tarifas: % único, sem o fixo por item';
+    function spEscolhido(cfg) {
+        const c = num(cfg.sp_comissao_pct), f = num(cfg.sp_taxa_fixa);
+        return c !== null && !(c === SHC.PADRAO.sp_comissao_pct && !(f > 0));
+    }
+    function tarifaSpTabela(preco, item, cfg) {
+        if (spEscolhido(cfg)) return null;
+        const CN = root.CopilotoNucleo, propria = num(item.comissao_pct);
+        if (!CN || !CN.tarifas) return { aviso: AVISO_SP_SEM_TABELA };
+        const ls = CN.tarifas.tarifasDoItem('shopee', preco, propria !== null && propria >= 0 ? { comissao_pct: propria } : {});
+        if (!ls) return { aviso: AVISO_SP_SEM_TABELA };
+        const com = ls.filter(l => l.tipo === 'comissao');
+        return {
+            comPct: com.reduce((a, l) => a + l.pct, 0), comRs: r2(com.reduce((a, l) => a + l.valor, 0)),
+            fixo: r2(ls.filter(l => l.tipo === 'taxa_fixa').reduce((a, l) => a + l.valor, 0)), aviso: null,
+        };
+    }
+
     // Frete que o SELLER paga. ML: abaixo de R$ 79 (fora do Full) quem paga é o comprador.
     function freteSeller(canal, preco, item, cfg) {
         const informado = num(item.frete);
@@ -160,11 +195,13 @@
         const outros = num(item.outros) || 0;
         const temCusto = custo !== null && custo > 0;
         const impPct = num(cfg.imposto_pct) || 0;
-        const comPct = comissaoPct(canal, item, cfg);
-        const taxaFixa = canal === 'ml' ? taxaFixaML(preco) : (num(cfg.sp_taxa_fixa) || 0);
+        const tab = canal === 'sp' ? tarifaSpTabela(preco, item, cfg) : null;
+        const usaTab = !!(tab && tab.comRs !== undefined);
+        const comPct = usaTab ? tab.comPct : comissaoPct(canal, item, cfg);
+        const taxaFixa = canal === 'ml' ? taxaFixaML(preco) : (usaTab ? tab.fixo : (num(cfg.sp_taxa_fixa) || 0));
         const fr = freteSeller(canal, preco, item, cfg);
 
-        const comissaoRs = r2(preco * comPct / 100);
+        const comissaoRs = usaTab ? tab.comRs : r2(preco * comPct / 100);
         const impostoRs = r2(preco * impPct / 100);
         const recebeRs = r2(preco - comissaoRs - taxaFixa - fr.rs);          // o que o canal repassa
         const sobraRs = temCusto ? r2(recebeRs - custo - outros - impostoRs) : null;
@@ -182,6 +219,7 @@
             imposto_pct: impPct, imposto_rs: impostoRs,
             custo_rs: temCusto ? r2(custo) : null, outros_rs: r2(outros),
             recebe_rs: recebeRs, sobra_rs: sobraRs, sobra_pct: sobraPct, classe,
+            tarifa_regra: usaTab ? 'tabela da Shopee (estimado)' : null, tarifa_aviso: tab ? tab.aviso : null,
         };
     };
 
@@ -195,6 +233,15 @@
         item = item || {};
         const custo = num(item.custo);
         if (!(custo > 0)) return null;
+        // Shopee pela tabela: o núcleo resolve faixa a faixa (o fixo muda de degrau) com a MESMA conta do calcular().
+        if (canal === 'sp') {
+            const tab = tarifaSpTabela(100, item, cfg);
+            if (tab && tab.comRs !== undefined) {
+                const pc = num(item.comissao_pct);
+                return root.CopilotoNucleo.tarifas.precoMinimo('shopee', { custo, outros: num(item.outros) || 0, frete: num(item.frete),
+                    imposto_pct: num(cfg.imposto_pct) || 0, comissao_pct: pc !== null && pc >= 0 ? pc : undefined }, alvoPct);
+            }
+        }
         const outros = num(item.outros) || 0;
         const alvo = (num(alvoPct) || 0) / 100;
         const imp = (num(cfg.imposto_pct) || 0) / 100;

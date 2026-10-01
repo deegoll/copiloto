@@ -65,21 +65,43 @@
      * → { valor, unidades, semCusto:[{itemId, titulo, unidades}], faltam (vendas do Faturamento a mais que as achadas), faltamDemais, completo }
      * qtdVendas tira o cancelamento no mês DO CANCELAMENTO e vm|ml no mês DA VENDA: venda cancelada na virada do mês desencontra as contagens.
      */
-    F.custoProdutos = function (itens, vm, custos, mes, qtdVendas) {
-        let valor = 0, unidades = 0;
-        const semCusto = [];
-        (itens || []).forEach(it => {
-            const n = SHC.num(((vm || {})[it.itemId] || {})[mes]) || 0;
+    // F1 (auditoria 30/09): va = vbAnuncio:<conta> (tabela "vendas por anúncio" das Métricas). Com o mês lido INTEIRO, n = UNIDADES do
+    // anúncio (vm|ml conta 1 por pedido: pedido de 3 peças entrava como 1) e cada variação vendida usa o custo do SKU DELA (porVariacao).
+    // A conferência com qtdVendas (pedidos do Faturamento) usa os PEDIDOS da mesma tabela. Sem va do mês: vm|ml de reserva, com aviso.
+    F.custoProdutos = function (itens, vm, custos, mes, qtdVendas, va) {
+        let valor = 0, unidades = 0, pedidos = 0;
+        const semCusto = [], mVa = va && va.meses && va.meses[mes], usaVa = !!(mVa && mVa.completo && mVa.porAnuncio), cs = custos || {};
+        const lista = (itens || []).slice();
+        if (usaVa) {   // anúncio que vendeu no mês e já saiu da lista de Anúncios também tem custo
+            const ja = new Set(lista.map(it => it.itemId));
+            Object.keys(mVa.porAnuncio).forEach(id => { if (!ja.has(id)) lista.push(Object.assign({ itemId: id }, (va.itens || {})[id] || {})); });
+        }
+        const un = c => SHC.num(c.dados.custo) + (SHC.num(c.dados.outros) || 0);
+        lista.forEach(it => {
+            const pa = usaVa ? mVa.porAnuncio[it.itemId] : null;
+            const n = usaVa ? (SHC.num(pa && pa.unidades) || 0) : (SHC.num(((vm || {})[it.itemId] || {})[mes]) || 0);
+            if (usaVa) pedidos += SHC.num(pa && pa.vendas) || 0;
             if (!(n > 0)) return;
             unidades += n;
-            const c = SHC.custoDeAnuncio(custos || {}, { sku: it.sku, itemId: it.itemId, familia: it.familia });
-            if (!c) { semCusto.push({ itemId: it.itemId, titulo: it.titulo || '', unidades: n }); return; }
-            valor += n * (SHC.num(c.dados.custo) + (SHC.num(c.dados.outros) || 0));
+            const c = SHC.custoDeAnuncio(cs, { sku: it.sku, skus: it.skus, skuFonte: it.skuFonte, itemId: it.itemId, familia: it.familia });
+            // Variações: cada uma com o custo do SKU dela; sem custo próprio, a do anúncio (o maior).
+            let resto = n, v = 0, falta = false;
+            Object.keys((pa && pa.porVariacao) || {}).forEach(s => {
+                const q = SHC.num(pa.porVariacao[s].unidades) || 0, cv = q > 0 ? SHC.custoDeAnuncio(cs, { sku: s, itemId: it.itemId, familia: it.familia }) || c : null;
+                if (!(q > 0)) return;
+                resto -= q;
+                if (cv) v += q * un(cv); else falta = true;
+            });
+            if (resto > 0) { if (c) v += resto * un(c); else falta = true; }
+            if (falta) { semCusto.push({ itemId: it.itemId, titulo: it.titulo || '', unidades: n }); return; }
+            valor += v;
         });
-        const faltam = typeof qtdVendas === 'number' ? Math.max(0, qtdVendas - unidades) : 0;
+        const contado = usaVa ? pedidos : unidades;
+        const faltam = typeof qtdVendas === 'number' ? Math.max(0, qtdVendas - contado) : 0;
         // ponytail: folga fixa (2 ou 10%) para os cancelamentos da virada do mês; exato quando o fech gravar a contagem pela regra do vm.
         const faltamDemais = faltam > Math.max(2, Math.ceil(qtdVendas * 0.1));
-        return { valor: r2(valor), unidades, semCusto, faltam, faltamDemais, completo: !semCusto.length && !faltamDemais && (unidades > 0 || qtdVendas === 0) };
+        return { valor: r2(valor), unidades, semCusto, faltam, faltamDemais, completo: !semCusto.length && !faltamDemais && (unidades > 0 || qtdVendas === 0),
+            porUnidade: usaVa, aviso: usaVa || !unidades ? '' : 'Contado por pedido: pode faltar peça de pedido com mais de 1 unidade.' };
     };
 
     const TIPOS = [
@@ -139,7 +161,15 @@
         add('imposto', 'Imposto', 'Seu imposto (Ajustes) sobre as vendas que ficaram', 'menos', imp);
         const lucro = liquido !== null && prod !== null && imp !== null ? r2(liquido - prod - imp) : null;
         add('lucro', 'Lucro do mês', 'O que ficou no bolso', 'total', lucro);
-        return { linhas, bruto, liquido, lucro, custosML };
+        // Despesas fixas (Ajustes; d.despesas = SHC.despesasFixasDoMes): aluguel, salários… Sem lista = sem as 2 linhas (nunca 0 inventado).
+        const df = d.despesas && SHC.num(d.despesas.valor) !== null ? d.despesas : null;
+        let sobra = null;
+        if (df) {
+            add('despesas', 'Despesas fixas', 'Aluguel, salários, sistemas… (Ajustes)' + (df.proporcional ? '. Proporcional até hoje (' + df.dias + ' de ' + df.diasMes + ' dias) de ' + SHC.moeda(df.mensal) + ' por mês' : ''), 'menos', df.valor);
+            sobra = lucro !== null ? r2(lucro - df.valor) : null;
+            add('sobra', 'Sobra no fim do mês', 'O lucro do mês menos as despesas fixas', 'total', sobra);
+        }
+        return { linhas, bruto, liquido, lucro, custosML, despesas: df ? df.valor : null, sobra };
     };
 
     const ACOES = {
@@ -261,7 +291,7 @@
      * Devoluções do pós-venda ficam fora: o ML não diz se o dinheiro voltou (sem base = não entra).
      * d = { conc (hist.conciliacao), conferir (lista de itens), inconformes (lista) } → { total, parcelas:[{id, rotulo, origem, valor, itens:[…]}] }
      */
-    const ORIGEM_CURTA = { frete: 'Faturamento × anúncio · 30 dias', cobrancas: 'cobranças para conferir', estorno: 'venda cancelada', full: 'remessa com diferença' };
+    const ORIGEM_CURTA = { frete: 'Faturamento × anúncio · 30 dias', cobrancas: '',estorno: 'venda cancelada', full: 'remessa com diferença', devolucao: 'devolução × pós-venda · 30 dias' };
     F.recuperar = function (d) {
         d = d || {};
         const parcelas = [], add = (id, rotulo, origem, itens) => {
@@ -274,18 +304,29 @@
         const pedFrete = new Set(), chFrete = new Set();
         fr.forEach(p => { pedFrete.add(String(p.pedido)); if (p.pedidoFrete) pedFrete.add(String(p.pedidoFrete)); chFrete.add(p.itemId + '|' + p.data + '|' + r2(p.cobrado)); });
         const doFrete = x => x.regra === 'frete' && (pedFrete.has(String(x.pedido)) || chFrete.has(x.itemId + '|' + x.data + '|' + r2(x.valor)));
-        add('frete', 'Frete cobrado a mais', 'Faturamento × frete do anúncio · últimos 30 dias',
+        // "(confirmado)": aqui só entra o confirmado; o cartão da aba Frete soma também o "para conferir" (mesmo nome, outro total).
+        add('frete', 'Frete cobrado a mais (confirmado)', 'Faturamento × frete do anúncio · últimos 30 dias',
             fr.map(p => Object.assign({ pedido: p.pedido, itemId: p.itemId, data: p.data, valor: p.diferenca, cobrado: p.cobrado, esperado: p.esperado }, p.dev > 0 ? { dev: p.dev } : {})));
         // v3.1: "para conferir" gravado pela versão anterior pode ter a tarifa de devolução: ela nunca entra no que dá para recuperar.
-        const cf = (d.conferir || []).filter(x => x && x.diferenca > 0 && SHC.tipoCustoFechamento(x.cobranca) !== 'devolucao');
+        // v3.3: dúvida (pode ser legítima: 1 cobrança por pagamento/envio, frete de venda cancelada já despachada) fica só no "para conferir".
+        const cf = (d.conferir || []).filter(x => x && !x.duvida && x.diferenca > 0 && SHC.tipoCustoFechamento(x.cobranca) !== 'devolucao');
         add('cobrancas', 'Cobranças acima do esperado', 'Cobranças para conferir (tarifa acima, repetida, frete fora da curva)',
             cf.filter(x => x.regra !== 'sem_estorno' && !doFrete(x)).map(x => Object.assign({}, x, { valor: x.diferenca })));
         add('estorno', 'Cancelada ou devolvida sem estorno', 'Venda cancelada: a tarifa voltou, outra cobrança do pedido não',
             cf.filter(x => x.regra === 'sem_estorno').map(x => Object.assign({}, x, { valor: x.diferenca })));
         add('full', 'Remessas do Full com diferença', 'Custo cobrado da remessa com inconformidade (ainda dá para reclamar)',
             (d.inconformes || []).filter(r => r && r.custo > 0 && SHC.remessaPendente(r)).map(r => ({ id: r.id, quando: r.quando, prazo: r.prazo, motivos: r.motivos, link: r.link, valor: r.custo })));
-        return { total: r2(parcelas.reduce((s, p) => s + p.valor, 0)), parcelas };
+        // v3.2 (pedido da dona: "temos como questionar essa tarifa?"): tarifa de devolução × pós-venda (SHC.devolucoesContestar).
+        // 🟢 entra no total; 🟡 fica à parte (devConferir), fora do total; ⚪ não aparece aqui.
+        const dv = d.devolucoes && Array.isArray(d.devolucoes.itens) ? d.devolucoes.itens : [];
+        const dvIt = x => ({ pedido: x.pedido, itemId: x.itemId, data: x.data, valor: x.recuperar, cobrado: x.valor, cor: x.cor, regra: x.regra, motivo: x.motivo, texto: x.texto, cobranca: 'Tarifa de devolução' });
+        add('devolucao', 'Tarifa de devolução para questionar', 'Tarifa de devolução × pós-venda · últimos 30 dias', dv.filter(x => x.cor === 'verde' && x.recuperar > 0).map(dvIt));
+        const am = dv.filter(x => x.cor === 'amarelo' && x.recuperar > 0).map(dvIt);
+        return { total: r2(parcelas.reduce((s, p) => s + p.valor, 0)), parcelas, devConferir: { valor: r2(am.reduce((s, x) => s + x.valor, 0)), itens: am } };
     };
+    /** v3.2: frete:<conta>:hist × posvenda:<conta> → SHC.devolucoesContestar (tarifas de devolução dos últimos 30 dias) | null (frete de devoluções não lido). */
+    F.devolucoesDe = (fh, pv) => (fh && fh.devolucoes && Array.isArray(fh.devolucoes.lista) && SHC.devolucoesContestar
+        ? SHC.devolucoesContestar(fh.devolucoes.lista, SHC.posvendaPorPedido(pv), !!(pv && pv.paginas > 1)) : null);   // F12: só a 1ª página lida
     /** Texto do chamado de um frete cobrado a mais (mesmo formato de F.textoChamado; só pede a revisão). */
     // v3.1: é só o frete de ENVIO da venda; a tarifa de devolução do mesmo pedido (dev) fica fora e o texto diz isso (nunca pede revisão dela).
     F.chamadoFrete = (p, titulo) => F.textoChamado({ pedido: p.pedido, data: p.data, itemId: p.itemId, titulo: titulo || '', cobranca: 'Frete de envio da venda (Mercado Envios)',
@@ -331,45 +372,80 @@
      */
     // Valor ≈ 2×, 3×… o de 1 unidade (±8%): pedido com várias unidades, não é alerta. ponytail: pedido de 2+ unidades com preço diferente escapa.
     const variasUnidades = razao => { const k = Math.round(razao); return k >= 2 && Math.abs(razao - k) <= 0.08 * k; };
+    // v3.3 (relato 01/10, ROSSI BIKE): o 2º campo do id da cobrança (entityId|conceptId|type, SHC.mlCobrancasDaResposta) diz SOBRE O QUÊ ela foi:
+    // na taxa de parcelamento é o pagamento do Mercado Pago, no frete é o envio, na tarifa de venda é o pedido. Pedido pago em 2 partes =
+    // 2 parcelamentos legítimos com conceptId diferente. '' = cobrança guardada sem o id (não dá para saber).
+    const operacaoDe = c => String((c && c.id) || '').split('|')[1] || '';
+    // Cobrança que o ML faz 1 vez por pagamento / por envio (não por pedido): sem o conceptId, repetir pode ser legítimo.
+    const POR_OPERACAO = { parcelamento: 'pagamento', recebimento: 'pagamento', frete: 'envio' };
+    // Venda cancelada: o ML devolve junto com a tarifa de venda as cobranças da própria venda e do pagamento (visto no Faturamento:
+    // "Cancelamento do Custo por cobrar", "Cancelamento da taxa de recebimento"). O frete (e o resto) depende de o pacote ter saído: só conferir.
+    const VOLTA_NO_CANCELAMENTO = { cobranca_mp: 1, recebimento: 1, parcelamento: 1 };
     F.conferir = function (cobs, itensPorId) {
         itensPorId = itensPorId || {};
         const ped = {};
         // v3.1: a tarifa de devolução (frete de VOLTA do produto devolvido) nunca vira pedido de revisão: fica só no custo do mês.
-        (cobs || []).forEach(c => { if (c && c.orderId && c.valor >= 0 && SHC.tipoCustoFechamento(c.texto) !== 'devolucao') (ped[c.orderId] || (ped[c.orderId] = [])).push(c); });
+        (cobs || []).forEach(c => { if (c && c.orderId && c.valor >= 0 && SHC.tipoCustoFechamento(c.texto, c.id) !== 'devolucao') (ped[c.orderId] || (ped[c.orderId] = [])).push(c); });
         const out = [], freteItem = {};
         const tituloDe = (id, cs) => ((cs.find(c => c.titulo) || {}).titulo) || ((itensPorId[id] || {}).titulo) || '';
         Object.keys(ped).forEach(o => {
             const cs = ped[o], data = cs.map(c => c.data).filter(Boolean).sort()[0] || '';
             const liq = {};   // tipo|MLB → cobrado − estornado
-            const grupos = {};
+            const ops = {};   // tipo|MLB → conceptIds (envios/pagamentos) das cobranças
+            const grupos = {}, totais = {};
             cs.forEach(c => {
-                const t = SHC.tipoCustoFechamento(c.texto), k = t + '|' + c.itemId;
+                const t = SHC.tipoCustoFechamento(c.texto, c.id), k = t + '|' + c.itemId, op = operacaoDe(c);
                 liq[k] = r2((liq[k] || 0) + (c.estorno ? -c.valor : c.valor));
-                const g = String(c.texto).replace(/^cancelamento\s+(d[oa]s?|de)\s+/i, '').toLowerCase() + '|' + c.itemId + '|' + c.valor;
-                const x = grupos[g] || (grupos[g] = { c: 0, e: 0, cob: c });
+                if (op && !c.estorno) (ops[k] || (ops[k] = new Set())).add(op);
+                // v3.3: o conceptId entra na chave: só é "repetida" a mesma cobrança sobre o MESMO pagamento, pedido ou envio.
+                const gt = String(c.texto).replace(/^cancelamento\s+(d[oa]s?|de)\s+/i, '').toLowerCase() + '|' + c.itemId + '|' + c.valor, g = gt + '|' + op;
+                const x = grupos[g] || (grupos[g] = { c: 0, e: 0, cob: c, op, gt });
                 if (c.estorno) x.e++; else { x.c++; x.cob = c; }
+                const T = totais[gt] || (totais[gt] = { c: 0, e: 0, ops: 0 });
+                if (c.estorno) T.e++; else T.c++;
             });
+            // v3.3.1: o estorno vem com OUTRO conceptId (visto no storage: cobrança …|CFONPN, estorno …|BFONPN, mesmo valor) → cai em outro grupo.
+            // Por isso as cópias a mais de um grupo são limitadas pela sobra do total (texto|MLB|valor, sem o conceptId):
+            // sobra = cobranças − estornos − nº de pagamentos/envios com cobrança em aberto (1 legítima para cada). Cada grupo gasta da sobra.
+            Object.keys(grupos).forEach(g => { if (grupos[g].c - grupos[g].e > 0) totais[grupos[g].gt].ops++; });
+            Object.keys(totais).forEach(gt => { const T = totais[gt]; T.sobra = T.c - T.e - T.ops; });
             const base = (c, extra) => Object.assign({ pedido: o, data, itemId: c.itemId, titulo: tituloDe(c.itemId, cs), cobranca: c.texto }, extra);
             Object.keys(grupos).forEach(g => {
-                const x = grupos[g];
-                if (x.c - x.e >= 2) out.push(base(x.cob, { regra: 'repetida', valor: r2(x.cob.valor * (x.c - x.e)), esperado: x.cob.valor, diferenca: r2(x.cob.valor * (x.c - x.e - 1)),
-                    motivo: 'A mesma cobrança aparece ' + (x.c - x.e) + ' vezes neste pedido, com o mesmo valor.' }));
+                const x = grupos[g], T = totais[x.gt], porOp = POR_OPERACAO[SHC.tipoCustoFechamento(x.cob.texto, x.cob.id)];
+                const n = 1 + Math.min(x.c - x.e - 1, T.sobra);
+                if (n < 2) return;
+                T.sobra -= n - 1;
+                // Sem o conceptId numa cobrança que vem 1 vez por pagamento/envio: pode ser legítima → só "para conferir" (duvida), fora do "Como pedir de volta".
+                const duvida = !x.op && !!porOp;
+                out.push(base(x.cob, Object.assign({ regra: 'repetida', valor: r2(x.cob.valor * n), esperado: x.cob.valor, diferenca: r2(x.cob.valor * (n - 1)),
+                    motivo: duvida ? 'Esta cobrança aparece ' + n + ' vezes neste pedido, com o mesmo valor. Pode ser 1 cobrança por ' + porOp + ' — confira no detalhe da venda (o pedido pode ter tido '
+                        + n + ' ' + porOp + 's).'
+                        : 'A mesma cobrança aparece ' + n + ' vezes neste pedido, com o mesmo valor' + (x.op ? ', sobre o mesmo ' + (porOp || 'pedido') : '') + '.' },
+                    // duvida = a pergunta do chamado (texto para o ML; o motivo acima é para a dona).
+                    duvida ? { duvida: 'Esta cobrança aparece ' + n + ' vezes neste pedido, com o mesmo valor. O pedido teve ' + n + ' ' + porOp + 's (uma cobrança para cada) ou ela foi lançada em duplicidade?' } : {})));
             });
             // Venda cancelada: tarifa de venda estornada por inteiro, outra cobrança do MESMO pedido sem estorno.
-            const cancelada = cs.some(c => c.estorno && SHC.tipoCustoFechamento(c.texto) === 'tarifa_venda')
+            const cancelada = cs.some(c => c.estorno && SHC.tipoCustoFechamento(c.texto, c.id) === 'tarifa_venda')
                 && !Object.keys(liq).some(k => /^tarifa_venda\|/.test(k) && liq[k] > 0.01);
             Object.keys(liq).forEach(k => {
-                const [t, id] = k.split('|'), v = liq[k], c = cs.find(x => !x.estorno && SHC.tipoCustoFechamento(x.texto) === t && x.itemId === id);
+                const [t, id] = k.split('|'), v = liq[k], c = cs.find(x => !x.estorno && SHC.tipoCustoFechamento(x.texto, x.id) === t && x.itemId === id);
                 if (!c || !(v > 0.01)) return;
-                if (cancelada && t !== 'tarifa_venda') out.push(base(c, { regra: 'sem_estorno', valor: v, esperado: 0, diferenca: v,
-                    motivo: 'A venda foi cancelada e a tarifa de venda foi devolvida, mas esta cobrança não.' }));
+                // v3.3: data = a da própria cobrança (não a 1ª do pedido). Frete e o resto: o ML cobra o envio (sem o desconto) quando o pacote
+                // já saiu e a venda não se concluiu → "para conferir" (duvida), fora do "Como pedir de volta".
+                if (cancelada && t !== 'tarifa_venda') out.push(base(c, VOLTA_NO_CANCELAMENTO[t] ? { data: c.data || data, regra: 'sem_estorno', valor: v, esperado: 0, diferenca: v,
+                    motivo: 'A venda foi cancelada e a tarifa de venda foi devolvida, mas esta cobrança não.' }
+                    : { data: c.data || data, regra: 'sem_estorno', valor: v, esperado: 0, diferenca: v,
+                        duvida: 'A venda foi cancelada e a tarifa de venda foi devolvida, mas ' + (t === 'frete' ? 'o frete' : 'esta cobrança') + ' não. O pacote chegou a ser despachado? '
+                            + 'Se o cancelamento não foi por minha causa (extravio ou não entregue), esta cobrança deveria ser devolvida?',
+                        motivo: 'A venda foi cancelada e a tarifa de venda foi devolvida, mas ' + (t === 'frete' ? 'o frete' : 'esta cobrança') + ' não. Se o pacote já tinha saído (ou voltou para você), '
+                            + 'o ML cobra o envio sem o desconto e pode estar certo. Vale pedir a revisão só se o cancelamento não foi por sua causa (extravio, não entregue) — confira no detalhe da venda.' }));
                 const it = itensPorId[id];
                 if (t === 'tarifa_venda' && it && it.tarifa > 0) {
                     const razao = v / it.tarifa;
                     if (razao >= F.TARIFA_RAZAO && !variasUnidades(razao) && v - it.tarifa >= F.DIF_MIN) out.push(base(c, { regra: 'tarifa', valor: v, esperado: it.tarifa, diferenca: r2(v - it.tarifa),
                         motivo: 'No preço de hoje (' + SHC.moeda(it.preco) + '), este anúncio paga ' + SHC.moeda(it.tarifa) + ' de tarifa por unidade. Se o preço da venda foi outro, pode estar certo.' }));
                 }
-                if (t === 'frete' && id && !/comprador/i.test(c.texto)) (freteItem[id] || (freteItem[id] = [])).push({ c: base(c, {}), v });
+                if (t === 'frete' && id && !/comprador/i.test(c.texto)) (freteItem[id] || (freteItem[id] = [])).push({ c: base(c, {}), v, envios: ops[k] ? ops[k].size : 0 });
             });
         });
         Object.keys(freteItem).forEach(id => {
@@ -378,8 +454,11 @@
                 const outros = l.filter((_, j) => j !== i).map(y => y.v).sort((a, b) => a - b);
                 if (outros.length < 3) return;
                 const med = outros.length % 2 ? outros[(outros.length - 1) / 2] : r2((outros[outros.length / 2 - 1] + outros[outros.length / 2]) / 2);
+                // v3.3: frete de 2+ envios no mesmo pedido (pacote dividido, reenvio) = 2 fretes legítimos → só "para conferir".
                 if (x.v >= med * F.FRETE_RAZAO && x.v - med >= F.DIF_MIN && !variasUnidades(x.v / med)) out.push(Object.assign(x.c, { regra: 'frete', valor: x.v, esperado: med, diferenca: r2(x.v - med),
-                    motivo: 'O frete deste pedido ficou bem acima do que este anúncio costuma pagar (' + SHC.moeda(med) + ' nos outros ' + outros.length + ' pedidos). Se o pedido teve mais de 1 unidade, pode estar certo.' }));
+                    motivo: x.envios >= 2 ? 'O frete deste pedido soma ' + x.envios + ' envios diferentes (pacote dividido ou reenvio): cada envio tem o seu frete e pode estar certo — confira no detalhe da venda.'
+                        : 'O frete deste pedido ficou bem acima do que este anúncio costuma pagar (' + SHC.moeda(med) + ' nos outros ' + outros.length + ' pedidos). Se o pedido teve mais de 1 unidade, pode estar certo.' },
+                    x.envios >= 2 ? { duvida: 'O frete deste pedido soma ' + x.envios + ' envios diferentes. Os ' + x.envios + ' envios foram necessários (pacote dividido ou reenvio) ou algum foi cobrado a mais?' } : {}));
             });
         });
         return out.sort((a, b) => b.diferenca - a.diferenca);
@@ -434,6 +513,14 @@
 
     /** Texto educado e factual para o chamado. Só pede a revisão (nunca promete reembolso). */
     F.textoChamado = function (x) {
+        // v3.3: na dúvida o texto só pergunta (sem "valor esperado" nem "diferença", que afirmariam erro).
+        if (x.duvida) return ['Olá! Tenho uma dúvida sobre uma cobrança do meu Faturamento.', '',
+            'Pedido: #' + x.pedido + (x.data ? ' (' + dataBR(x.data) + ')' : ''),
+            'Anúncio: ' + (x.itemId || '—') + (x.titulo ? ' – ' + x.titulo : ''),
+            'Cobrança: ' + x.cobranca,
+            'Valor cobrado: ' + SHC.moeda(x.valor),
+            'Minha dúvida: ' + (typeof x.duvida === 'string' ? x.duvida : x.motivo), '',
+            'Podem conferir se esta cobrança está correta? Obrigado.'].join('\n');
         return ['Olá! Peço, por favor, a revisão de uma cobrança do meu Faturamento.', '',
             'Pedido: #' + x.pedido + (x.data ? ' (' + dataBR(x.data) + ')' : ''),
             'Anúncio: ' + (x.itemId || '—') + (x.titulo ? ' – ' + x.titulo : ''),
@@ -490,13 +577,25 @@
         return `<div class="rola"><table class="cascata"><thead><tr><th>O que</th><th class="bar"></th><th class="num">R$</th><th class="num">% das vendas</th></tr></thead><tbody>${c.linhas.map(linha).join('')}</tbody></table></div>`;
     };
 
+    // "Ver menos" (v3.3): seções de consulta começam recolhidas (título + "Ver mais"); as de ação (Mês, Para onde foi, Gargalo,
+    // Recuperar, Conferir, Custo novo, Repasse com o botão do Mercado Pago, Ciclo pedido pelo botão) ficam abertas. abertas = Set de ids
+    // que a pessoa abriu. Seção com data-alerta (Confere que não bate, fatura com cobrança que subiu ou nova) nunca recolhe.
+    F.SEC_RECOLHIDAS = ['f-tipos', 'f-faturas', 'f-custos', 'f-rateio', 'f-notas', 'f-confere', 'f-faturavs'];
+    F.recolheSecoes = (html, abertas) => String(html).replace(/<section class="card" id="(f-[a-z]+)"( data-alerta)?><h2>([\s\S]*?)<\/h2>/g, (m, id, alerta, tit) => {
+        if (alerta || F.SEC_RECOLHIDAS.indexOf(id) < 0) return m;
+        const ab = !!(abertas && abertas.has(id));
+        return `<section class="card vm-sec${ab ? '' : ' fechada'}" id="${id}"><h2>${tit} <button class="lnk vm-bt" data-vm-sec="${id}" aria-expanded="${ab}">${ab ? 'Ver menos' : 'Ver mais'}</button></h2>`;
+    });
+    // Lista longa: n linhas à vista e o resto escondido (classe vm-x) até "Ver mais (N)"; quem envolve marca o bloco com data-vm-box.
+    F.vmBotao = (total, n) => total > n ? `<p class="vm-pe"><button class="lnk" data-vm-lista="Ver mais (${total - n})" aria-expanded="false">Ver mais (${total - n})</button></p>` : '';
     F.htmlConferir = function (lista) {
         if (!lista.length) return '<p class="sub">Nenhuma cobrança fora do normal nos pedidos lidos.</p>';
-        return `<div class="rola"><table class="tabela"><thead><tr><th>Pedido</th><th>Data</th><th>Cobrança</th><th class="num">Cobrado</th><th class="num">Esperado</th><th class="num">Diferença</th><th>Por quê</th><th></th></tr></thead><tbody>`
-            + lista.map((x, i) => `<tr><td>#${esc(x.pedido)}<span class="mini">${esc(x.itemId)}</span></td><td>${esc(dataBR(x.data))}</td><td class="mot">${esc(x.cobranca)}</td>`
-                + `<td class="num">${esc(SHC.moeda(x.valor))}</td><td class="num">${esc(SHC.moeda(x.esperado))}</td><td class="num"><b>${esc(SHC.moeda(x.diferenca))}</b></td>`
+        return `<div data-vm-box><div class="rola"><table class="tabela"><thead><tr><th>Pedido</th><th>Data</th><th>Cobrança</th><th class="num">Cobrado</th><th class="num">Esperado</th><th class="num">Diferença</th><th>Por quê</th><th></th></tr></thead><tbody>`
+            + lista.map((x, i) => (i === 10 ? '</tbody><tbody class="vm-x">' : '') + `<tr><td>#${esc(x.pedido)}<span class="mini">${esc(x.itemId)}</span></td><td>${esc(dataBR(x.data))}</td><td class="mot">${esc(x.cobranca)}</td>`
+                + `<td class="num">${esc(SHC.moeda(x.valor))}</td>` + (x.duvida ? '<td class="num">—</td><td class="num">pode estar certo</td>'   // v3.3: dúvida não afirma diferença
+                    : `<td class="num">${esc(SHC.moeda(x.esperado))}</td><td class="num"><b>${esc(SHC.moeda(x.diferenca))}</b></td>`)
                 + `<td class="mot">${esc(x.motivo)}</td><td><button class="bt sec pq" data-copiar="${i}">Copiar texto do chamado</button> <a class="lnk" href="${esc(F.URL.cobranca(x.pedido))}" target="_blank" rel="noopener">Abrir a cobrança</a></td></tr>`).join('')
-            + '</tbody></table></div>';
+            + '</tbody></table></div>' + F.vmBotao(lista.length, 10) + '</div>';
     };
 
     /** Tabela "Custos por tipo": descontado nas vendas | na fatura | total ("—" enquanto o ML não separa a origem). */
@@ -597,6 +696,7 @@
         if (a.produtos.semCusto.length) notas.push('Falta o custo de ' + SHC.qtd(a.produtos.semCusto.length, 'anúncio vendido', 'anúncios vendidos') + ' no mês: ' + a.produtos.semCusto.slice(0, 3).map(s => s.itemId).join(', ') + (a.produtos.semCusto.length > 3 ? '…' : '') + '.');
         if (a.produtos.faltam) notas.push('O Faturamento tem ' + SHC.qtd(a.produtos.faltam, 'venda', 'vendas') + ' a mais que as achadas nos anúncios: pode ser venda sem anúncio identificado ou cancelada no mês seguinte.'
             + (a.produtos.faltamDemais ? ' A diferença é grande: o custo dos produtos fica sem valor.' : ''));
+        if (a.produtos.aviso) notas.push('Custo dos produtos: ' + a.produtos.aviso.charAt(0).toLowerCase() + a.produtos.aviso.slice(1) + ' As unidades entram quando a leitura de vendas por anúncio do mês terminar.');
         if (a.impostoPct === null) notas.push('Informe o seu imposto no painel do Copiloto (Ajustes) para ver o lucro.');
         else if (a.impostoPct === 0) notas.push('O imposto está em 0% nos Ajustes. Se você paga imposto, corrija lá.');
         const fat = ((v.fat && v.fat.faturas) || []).slice(0, 6);
@@ -616,7 +716,7 @@
             ${F.htmlRecuperar(v.rec || null, v.tituloDe, !!v.recLido)}
             ${F.htmlCustoNovo(v.fat)}
             ${visao === 'ciclo' ? `<section class="card" id="f-ciclo"><h2>Ciclo da fatura</h2>${F.htmlCiclo(ciclo, v.vb)}</section>` : ''}
-            <section class="card" id="f-cascata"><h2>Da venda ao lucro</h2><p class="sub">${visao === 'ciclo' ? 'Mês do calendário, para comparar com o ciclo acima. ' : ''}Cada linha em R$ e em % das vendas brutas. "—" = ainda não lido (não é zero).</p>${F.htmlCascata(a.casc)}</section>
+            <section class="card" id="f-cascata"><h2>Da venda ao lucro</h2><p class="sub">${visao === 'ciclo' ? 'Mês do calendário, para comparar com o ciclo acima. ' : ''}Cada linha em R$ e em % das vendas brutas. "—" = ainda não lido (não é zero).</p>${F.htmlCascata(a.casc)}${a.casc.despesas === null || a.casc.despesas === undefined ? '<p class="sub" id="f-semDespesas">Aluguel, salários, sistemas: cadastre as despesas fixas em Ajustes, no painel do Copiloto, para ver a sobra no fim do mês.</p>' : ''}</section>
             <section class="card" id="f-tipos"><h2>Custos por tipo</h2>${F.htmlTipos(a.fech)}</section>
             <section class="card" id="f-gargalo"><h2>Maior gargalo</h2>${g.maior || g.subiu ? gl(g.maior) + (g.subiu && (!g.maior || g.subiu.id !== g.maior.id) ? gl(g.subiu) : (g.subiu ? `<p class="sub">${esc(g.subiu.frase)}</p>` : '')) : '<p class="sub">Sem cobranças lidas neste mês.</p>'}</section>
             ${F.htmlRepasse(Object.assign({}, v, { st, agora }), a.casc.liquido)}
@@ -661,19 +761,24 @@
     /** Seção "Quanto dá para recuperar" (estimativa). rec = F.recuperar; tituloDe(MLB) → título; lido = alguma das bases já foi lida. */
     F.htmlRecuperar = function (rec, tituloDe, lido) {
         const cab = '<section class="card" id="f-recuperar"><h2>Quanto dá para recuperar <small>estimativa</small></h2>';
-        const rod = '<p class="sub">Estimativa: quem decide o que devolve é o ML. O texto do chamado só pede a revisão. Devoluções do pós-venda ficam fora: o ML não informa se o dinheiro voltou.</p></section>';
-        if (!rec || !rec.parcelas.length) return cab + `<p class="sub">${lido ? '✓ Nada para recuperar nas cobranças, fretes e remessas lidos.' : 'Aparece depois da próxima sincronização (Faturamento, frete e Full).'}</p>` + rod;
+        const rod = '<p class="sub">Estimativa: quem decide o que devolve é o ML. O texto do chamado só pede a revisão. O valor devolvido ao comprador fica fora: o ML não informa se o dinheiro voltou.</p></section>';
+        // v3.2: 🟡 tarifas de devolução que valem conferir: à parte, fora do total (SHC.devolucoesContestar).
         const t = id => esc((tituloDe && tituloDe(id)) || id || '');
-        const item = (p, x, i) => {
+        const dc = rec && rec.devConferir && rec.devConferir.itens && rec.devConferir.itens.length ? rec.devConferir : null;
+        const blocoDc = () => (dc ? `<div class="parc devconf"><div class="pc-cab"><b><span class="pt at"></span>Tarifa de devolução: vale conferir <small>fora do total</small></b><b class="num">${esc(SHC.moeda(dc.valor))}</b></div>`
+            + '<span class="mini">Sem base para dizer que volta. Confira e, se fizer sentido, peça a revisão.</span>'
+            + `<div data-vm-box><ul class="rec-it">${dc.itens.slice(0, 5).map((x, i) => item({ id: 'devconf' }, x, i)).join('')}</ul>${dc.itens.length > 5 ? `<ul class="rec-it vm-x">${dc.itens.slice(5).map((x, i) => item({ id: 'devconf' }, x, i + 5)).join('')}</ul>` : ''}${F.vmBotao(dc.itens.length, 5)}</div></div>` : '');
+        if (!rec || !rec.parcelas.length) return cab + `<p class="sub">${lido ? '✓ Nada para recuperar nas cobranças, fretes e remessas lidos.' : 'Aparece depois da próxima sincronização (Faturamento, frete e Full).'}</p>` + blocoDc() + rod;
+        function item(p, x, i) {
             if (p.id === 'full') return `<li><span><b>Remessa ${esc(x.id)}</b><small>${esc(x.motivos.join(' · '))}${x.prazo ? ' · reclamar até ' + esc(dataBR(x.prazo).slice(0, 5)) : ''}</small></span><b class="num">${esc(SHC.moeda(x.valor))}</b><a class="bt pq" href="${esc(x.link)}" target="_blank" rel="noopener">Reclamar no ML</a></li>`;
-            const sub = p.id === 'frete' ? 'cobrado ' + SHC.moeda(x.cobrado) + ' × ' + SHC.moeda(x.esperado) + ' do anúncio' : curto(x.cobranca || '', 60);
+            const sub = p.id === 'frete' ? 'cobrado ' + SHC.moeda(x.cobrado) + ' × ' + SHC.moeda(x.esperado) + ' do anúncio' : (p.id === 'devolucao' || p.id === 'devconf') ? x.motivo || '' : curto(x.cobranca || '', 60);
             return `<li><span><b>Pedido #${esc(x.pedido)} · ${t(x.itemId)}</b><small>${esc(sub)}</small></span><b class="num">${esc(SHC.moeda(x.valor))}</b>`
                 + `<span class="acoes"><button class="bt sec pq" data-copiar-rec="${p.id}:${i}">Copiar texto do chamado</button>`
                 + (p.id === 'estorno' ? `<a class="lnk" href="${esc(SHC.POSVENDA_URL || F.URL.faturamento)}" target="_blank" rel="noopener">Ver no pós-venda</a>` : `<a class="lnk" href="${esc(F.URL.cobranca(x.pedido))}" target="_blank" rel="noopener">Abrir a cobrança</a>`) + '</span></li>';
         };
         return cab + `<p class="rec-tot"><b>${esc(SHC.moeda(rec.total))}</b> em ${esc(SHC.qtd(rec.parcelas.reduce((s, p) => s + p.itens.length, 0), 'item', 'itens'))}</p>`
-            + rec.parcelas.map(p => `<div class="parc ${p.id}"><div class="pc-cab"><b>${esc(p.rotulo)}</b><b class="num">${esc(SHC.moeda(p.valor))}</b></div><span class="mini">Origem: ${esc(p.origem)}</span>`
-                + `<ul class="rec-it">${p.itens.slice(0, 5).map((x, i) => item(p, x, i)).join('')}</ul>${p.itens.length > 5 ? `<p class="sub">E mais ${p.itens.length - 5}${p.id === 'frete' ? ' na aba Frete do painel' : p.id === 'full' ? ' na aba Full' : ' em “Cobranças para conferir”'}.</p>` : ''}</div>`).join('') + rod;
+            + rec.parcelas.map(p => `<div class="parc ${p.id}"><div class="pc-cab"><b>${p.id === 'devolucao' ? '<span class="pt ok"></span>' : ''}${esc(p.rotulo)}</b><b class="num">${esc(SHC.moeda(p.valor))}</b></div><span class="mini">Origem: ${esc(p.origem)}</span>`
+                + `<div data-vm-box><ul class="rec-it">${p.itens.slice(0, 5).map((x, i) => item(p, x, i)).join('')}</ul>${p.itens.length > 5 ? `<ul class="rec-it vm-x">${p.itens.slice(5).map((x, i) => item(p, x, i + 5)).join('')}</ul>` : ''}${F.vmBotao(p.itens.length, 5)}</div></div>`).join('') + blocoDc() + rod;
     };
     const curto = (s, n) => (String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s));
     /** v3.1: seção "Custo novo na fatura" (SHC.custosNovos de fat:<conta>). Sem 2 faturas lidas não compara → nada; sem custo novo → 1 linha verde. */
@@ -694,19 +799,28 @@
 
     // ── v3.1 (29/09, perguntas da dona): CONFERE COM A FATURA DO ML · FATURA × FATURA ANTERIOR · PARA ONDE FOI O DINHEIRO ──
     // Categoria da fatura do ML ↔ tipos do Copiloto: UM LUGAR SÓ. A ordem importa ("Tarifas de envios Full" é Full, não envio).
-    // A fatura põe a devolução dentro de "Tarifas de envios" e "Custo por cobrar", "Taxa de recebimento" e uma "Taxa de parcelamento" dentro de
-    // "Tarifas de venda" (visto ao vivo 26/09): por isso "Tarifas de venda" e "Taxas de parcelamento" viram 1 linha (o Copiloto não separa as duas).
-    // Afiliados ("Tarifas do programa de afiliados") e assinaturas caem em "Outras tarifas" (tipo 'outro' no Copiloto).
+    // A fatura põe a devolução dentro de "Tarifas de envios" e "Custo por cobrar", "Taxa de recebimento" e uma "Taxa de parcelamento" (CVVFN) dentro de
+    // "Tarifas de venda" (visto ao vivo 26/09). v3.4: "Tarifas de venda" e "Taxas de parcelamento" são 2 linhas, como na tela do ML, quando a
+    // conferência é pela fatura de cada cobrança (porFatura separa a CVVFN como 'parcelamento_venda'); pelo ciclo por data (porTipo junta as
+    // duas taxas de parcelamento) viram 1 linha (F.GRUPOS_JUNTOS).
+    // Afiliados ("Tarifas do programa de afiliados") e assinaturas caem em "Outras tarifas" (tipo 'outro' no Copiloto); o rótulo da linha é o
+    // nome da categoria do ML quando a linha tem uma só.
     F.GRUPOS_FATURA = [
         ['full', 'Full', /\bfull\b/i, ['full']],
         ['envios', 'Envios', /envio|devolu/i, ['frete', 'devolucao']],
         ['ads', 'Publicidade (Ads)', /publicidad|product ads/i, ['ads', 'ads_seguidores']],
-        ['venda', 'Tarifas de venda e parcelamento', /^(?!.*afiliad).*(venda|vender|parcel|mercado pago|recebimento)/i, ['tarifa_venda', 'cobranca_mp', 'recebimento', 'parcelamento']],
+        ['parcelamento', 'Taxas de parcelamento', /^(?!.*afiliad).*parcel/i, ['parcelamento']],
+        ['venda', 'Tarifas de venda', /^(?!.*afiliad).*(venda|vender|mercado pago|recebimento)/i, ['tarifa_venda', 'cobranca_mp', 'recebimento', 'parcelamento_venda']],
         ['impostos', 'Impostos (DIFAL)', /imposto|difal|icms/i, ['impostos_ml']],
         ['minha_pagina', 'Minha página', /minha p[áa]gina/i, ['minha_pagina']],
         ['outro', 'Outras tarifas', /[\s\S]/, ['outro']],
     ];
     F.grupoFatura = nome => F.GRUPOS_FATURA.find(g => g[2].test(String(nome || '')));
+    /** Nome de um tipo de cobrança (fatura.categorias[].tipos[].nome) → a linha da fatura onde o Copiloto o põe (a mesma regra do porFatura). */
+    F.grupoDoTipo = nome => { const tp = SHC.tipoCustoFechamento(nome), lf = tp === 'parcelamento' && !/equivalente|acr[ée]scimo/i.test(String(nome || '')) ? 'parcelamento_venda' : tp;
+        return (F.GRUPOS_FATURA.find(g => g[3].indexOf(lf) >= 0) || ['outro'])[0]; };
+    F.GRUPOS_JUNTOS = F.GRUPOS_FATURA.filter(g => g[0] !== 'parcelamento')
+        .map(g => (g[0] === 'venda' ? ['venda', 'Tarifas de venda e parcelamento', g[2], g[3].concat('parcelamento')] : g));
     /** Mês do calendário que o Copiloto põe ao lado da fatura: fecha até o dia 15 → o mês anterior (a maior parte do ciclo; retrato 29/09:
      *  a fatura "Setembro", que fecha 05/09, bate com agosto do Copiloto em Ads e frete); fecha depois do dia 15 → o próprio mês. */
     F.mesDaFatura = (mes, fechamento) => { const d = +String(fechamento || '').slice(8, 10); return d >= 1 && d <= 15 ? F.mesAntes(mes, 1) : mes; };
@@ -745,12 +859,36 @@
         return { de, ate, porTipo, estornos: r2(Math.max(0, bruto - total)), total: r2(total) };
     };
     /**
+     * v3.4 (01/10, "todas as linhas têm que bater"): as cobranças que o ML lançou NESTA fatura (fech.porFatura[fechamento] de todos os meses):
+     * custo por linha, cancelamentos (feitos antes do fechamento) e total = a conta da tela da fatura, ao centavo (provado ao vivo em agosto e
+     * setembro). ncProx = notas de crédito com a data da fatura seguinte = "Cancelamentos de tarifas em estornos" desta (null sem essa data).
+     * O mês do fechamento (até ele) e o anterior têm de ter sido lidos com a fatura de cada cobrança; senão null (fica o ciclo por data).
+     * → { modo:'fatura', porTipo, estornos (≥ 0), total, ncProx } | null
+     */
+    F.somaFatura = function (fechs, fechamento, fechProx) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(fechamento || '')) return null;
+        const mF = fechamento.slice(0, 7), mA = F.mesAntes(mF, 1);
+        const lido = (m, ate) => { const f = (fechs || {})[m]; return !!(f && f.porFatura && !f.semFatura && (!ate || !f.ate || f.ate >= ate)); };
+        if (!lido(mA, fimMesISO(mA)) || !lido(mF, fechamento)) return null;
+        const okProx = /^\d{4}-\d{2}-\d{2}$/.test(fechProx || '') && fechProx > fechamento && lido(mF) && lido(fechProx.slice(0, 7));
+        const porTipo = {};
+        let cancel = 0, nc = 0;
+        Object.keys(fechs || {}).forEach(m => {
+            const p = (fechs[m] && fechs[m].porFatura) || {}, x = p[fechamento], y = okProx ? p[fechProx] : null;
+            if (x) { Object.keys(x.custo || {}).forEach(t => { porTipo[t] = r2((porTipo[t] || 0) + (SHC.num(x.custo[t]) || 0)); }); cancel += SHC.num(x.cancel) || 0; }
+            if (y) nc += SHC.num(y.nc) || 0;
+        });
+        const bruto = Object.keys(porTipo).reduce((s, t) => s + porTipo[t], 0);
+        return { modo: 'fatura', porTipo, estornos: r2(cancel), total: r2(bruto - cancel), ncProx: okProx ? r2(nc) : null };
+    };
+    /**
      * A conta do "Total da fatura" em cada modo (a frase tem de fechar com o número mostrado; teste_confere_fatura confere):
      *  'ciclo'/'bruto': as linhas estão ANTES dos cancelamentos nos dois lados → total = custos − diferença dos cancelamentos.
      *  'misto': o Copiloto já tirou os cancelamentos das linhas; a fatura, não → total = custos + cancelamentos da fatura.
      *  'liquido': os dois lados já sem cancelamentos → total = custos + os de faturas anteriores (a fatura põe nos pagamentos).
      * → { custos (soma das diferenças das linhas), outro } com total.dif ≈ custos + outro.
      */
+    F.SEM_MOTIVO = 'Não dá para saber o motivo: confira esta linha no detalhe da fatura.';
     F.contaTotal = function (modo, linhas, cancel, ant) {
         const custos = r2((linhas || []).reduce((s, l) => s + l.dif, 0));
         const outro = modo === 'misto' ? (cancel ? cancel.ml : 0) : modo === 'liquido' ? (ant || 0) : (cancel ? -cancel.dif : 0);
@@ -769,38 +907,54 @@
      *  'ciclo' (soma = F.somaCiclo: os dias exatos da fatura, antes dos cancelamentos — o jeito certo) | e, sem ele, o mês do calendário
      *  (fech de F.mesDaFatura): 'bruto' (o fech tem estornosPorTipo) | 'liquido' (a fatura tem o cancelado de cada categoria) |
      *  'misto' (lidos por versão anterior: Copiloto sem estorno × fatura antes dos cancelamentos — o motivo diz isso).
+     * v3.4: 'fatura' (soma = F.somaFatura: as cobranças que o ML lançou nesta fatura — o jeito exato; cada linha tem de bater ao centavo).
      * ciclo = {de, ate} (F.cicloDaFatura, só para o texto do motivo; opcional).
-     * → { mesFat, fatura, fechamento, mes, modo, de, ate, linhas:[{id, rotulo, ml, cop, dif, ok, motivo}], cancel (linha | null), total (linha | null),
-     *     ok, manchete, link } | { mesFat, fatura, mes, semFech:true } (mês do Copiloto não lido inteiro) | null (fatura aberta ou sem categorias)
+     * antPrev = "Cancelamentos de tarifas em estornos" da fatura ANTERIOR (null = não lida): no ciclo por data, são as notas de crédito de tarifas
+     * da fatura anterior feitas nos dias desta (o Copiloto as soma no ciclo; a fatura, não).
+     * → { mesFat, fatura, fechamento, mes, modo, de, ate, linhas:[{id, rotulo, ml, cop, dif, ok, motivo}], cancel (linha | null),
+     *     estornos (linha informativa | null), total (linha | null), ok, manchete, link }
+     *   | { mesFat, fatura, mes, semFech:true } (mês do Copiloto não lido inteiro) | null (fatura aberta ou sem categorias)
      */
-    F.conferirFatura = function (cat, fech, mesFat, soma, ciclo, novos) {
+    F.conferirFatura = function (cat, fech, mesFat, soma, ciclo, novos, antPrev) {
         if (!cat || !Array.isArray(cat.categorias) || cat.aberta || !/^\d{4}-\d{2}$/.test(mesFat || '')) return null;
         const mes = F.mesDaFatura(mesFat, cat.fechamento), base = { mesFat, fatura: cat.nome || F.nomeMes(mesFat), fechamento: cat.fechamento || '', mes, link: cat.link || '' };
         if (!soma && (!fech || fech.parcial || (fech.ate && fech.ate < fimMesISO(mes)))) return Object.assign(base, { semFech: true });
         const pt = soma ? soma.porTipo : fech.porTipo || {}, ept = soma ? null : fech.estornosPorTipo || null;
-        const modo = soma ? 'ciclo' : ept ? 'bruto' : cat.categorias.length && cat.categorias.every(c => typeof c.cancelado === 'number') ? 'liquido' : 'misto';
-        const cic = soma || ciclo || null, periodo = cic ? dm(cic.de) + ' a ' + dm(cic.ate) : '';
+        const modo = soma ? (soma.modo === 'fatura' ? 'fatura' : 'ciclo') : ept ? 'bruto' : cat.categorias.length && cat.categorias.every(c => typeof c.cancelado === 'number') ? 'liquido' : 'misto';
+        const exato = modo === 'fatura', bateL = (dif, m) => (exato ? Math.abs(dif) < 0.015 : F.bate(dif, m));
+        // Ciclo por data com a fatura anterior lida: tira do Copiloto as notas de crédito da fatura anterior (antPrev) em vez de somar o "ant" desta.
+        const cicloAnt = modo === 'ciclo' && typeof antPrev === 'number';
+        // v3.4: a mesma "Taxa de parcelamento" o ML às vezes põe em "Tarifas de venda" e às vezes em "Taxas de parcelamento" (ao vivo, maio
+        // de uma conta: as duas na mesma fatura). Quando os tipos de uma linha do ML caem na outra pelo Copiloto, venda e parcelamento viram 1 linha.
+        const vp = g => g === 'venda' || g === 'parcelamento', junta = exato && cat.categorias.some(c => (c.tipos || []).some(t => {
+            const g = F.grupoDoTipo(t && t.nome), gc = F.grupoFatura(c.nome)[0]; return g !== gc && vp(g) && vp(gc); }));
+        const sep = exato && !junta, GR = sep ? F.GRUPOS_FATURA : F.GRUPOS_JUNTOS, gid = nome => { const g = F.grupoFatura(nome)[0]; return !sep && g === 'parcelamento' ? 'venda' : g; };
+        const cic = (modo === 'ciclo' ? soma : null) || ciclo || null, periodo = cic ? dm(cic.de) + ' a ' + dm(cic.ate) : '';
         // Dias comparados (o ciclo, ou o mês do calendário): o motivo "virada" só vale para diferença do tamanho de ~2 dias da linha.
         const dias = cic ? Math.max(1, Math.round((Date.parse(cic.ate) - Date.parse(cic.de)) / 864e5) + 1) : +fimMesISO(mes).slice(8, 10);
-        // Cancelamentos: a fatura põe à parte os das tarifas do mesmo ciclo; os de tarifas de fatura ANTERIOR viram "Cancelamentos de tarifas
-        // em estornos" (nos pagamentos). O Copiloto soma todo cancelamento do período. Fatura lida por versão anterior (sem a linha):
-        // cancelamentos = soma das categorias − total da fatura.
+        // Cancelamentos: a fatura põe à parte os das tarifas dela feitos ATÉ o fechamento; os feitos depois viram nota de crédito, "Cancelamentos
+        // de tarifas em estornos" (nos pagamentos desta fatura, com a data da seguinte). O Copiloto (por data) soma todo cancelamento do período.
+        // Fatura lida por versão anterior (sem a linha): cancelamentos = soma das categorias − total da fatura.
         const somaCat = r2(cat.categorias.reduce((s, c) => s + (SHC.num(c.valor) || 0), 0));
         const canc = typeof cat.cancelamentos === 'number' ? cat.cancelamentos : typeof cat.total === 'number' && somaCat - cat.total > 0 ? r2(somaCat - cat.total) : null;
         const ant = typeof cat.estornosAnteriores === 'number' ? cat.estornosAnteriores : 0;
-        const ml = {};
-        cat.categorias.forEach(c => { const g = F.grupoFatura(c.nome)[0]; ml[g] = r2((ml[g] || 0) + (SHC.num(c.valor) || 0) - (modo === 'liquido' ? c.cancelado : 0)); });
+        const ml = {}, nomes = {};
+        cat.categorias.forEach(c => { const g = gid(c.nome); ml[g] = r2((ml[g] || 0) + (SHC.num(c.valor) || 0) - (modo === 'liquido' ? c.cancelado : 0));
+            (nomes[g] || (nomes[g] = [])).push(String(c.nome)); });
         const cop = ids => r2(ids.reduce((s, id) => s + (SHC.num(pt[id]) || 0) - (ept ? SHC.num(ept[id]) || 0 : 0), 0));
-        const SEM_MOTIVO = 'Não dá para saber o motivo: confira esta linha no detalhe da fatura.';
+        const SEM_MOTIVO = F.SEM_MOTIVO;
         const linhas = [];
-        F.GRUPOS_FATURA.forEach(([id, rotulo, , ids]) => {
-            const m = ml[id] || 0, c = cop(ids);
-            if (!(m > 0) && Math.abs(c) < 1) return;
-            const dif = r2(c - m), ok = F.bate(dif, m), diario = Math.max(m, c) / dias;
+        GR.forEach(([id, rotuloC, , ids]) => {
+            const m = ml[id] || 0, c = cop(ids), rotulo = nomes[id] && nomes[id].length === 1 ? nomes[id][0] : rotuloC;
+            if (!(m > 0) && Math.abs(c) < (exato ? 0.01 : 1)) return;
+            const dif = r2(c - m), ok = bateL(dif, m), diario = Math.max(m, c) / dias;
             // Cobrança nova desta fatura na mesma categoria (SHC.custosNovos), quando a fatura cobrou mais: é a pista mais concreta.
-            const nv = !ok && dif < 0 && (novos || []).find(x => x && x.novo && x.valor > 0 && (F.grupoFatura(x.categoria || x.tipo) || [])[0] === id);
+            const nv = !ok && dif < 0 && (novos || []).find(x => x && x.novo && x.valor > 0 && gid(x.categoria || x.tipo) === id);
             const motivo = ok ? '' : nv ? 'Nesta fatura há uma cobrança nova: ' + nv.tipo + ' (' + SHC.moeda(nv.valor) + '). Pode ser ela: confira no detalhe da fatura.'
-                : modo === 'ciclo' ? 'Nos mesmos dias da fatura (' + periodo + ') não bate: confira esta linha no detalhe da fatura.'
+                : exato ? 'Somando as cobranças que o ML lançou nesta fatura, esta linha não bate: confira no detalhe da fatura.'
+                : modo === 'ciclo' ? 'Nos mesmos dias da fatura (' + periodo + ') não bate. O ML às vezes lança uma cobrança de perto do fechamento na fatura seguinte: '
+                    + (soma.semDoc ? 'o ML não disse a fatura de ' + SHC.qtd(soma.semDoc, 'cobrança', 'cobranças') + ', então o Copiloto conferiu pelos dias. Confira no detalhe da fatura.'
+                        : 'nas próximas sincronizações o Copiloto relê as cobranças com a fatura de cada uma e confere linha por linha.')
                 : !(m > 0) ? 'Não está nesta fatura: pode ter ido para a fatura anterior ou para a próxima.'
                 : Math.abs(c) < 1 ? 'O Copiloto não achou esta cobrança em ' + nomeC(mes) + ': pode ser de outro mês.'
                 : id === 'ads' ? (Math.abs(dif) <= 1.5 * diario ? 'O Copiloto conta o Ads pelo dia das visitas; o ML cobra no dia seguinte. Na virada do mês, 1 dia muda de lado.' : SEM_MOTIVO)
@@ -810,30 +964,44 @@
                 : 'Pode ser cobrança perto da virada do mês (a fatura fecha em ' + dm(cat.fechamento) + ') ou cancelada depois.';
             linhas.push({ id, rotulo, ml: r2(m), cop: c, dif, ok, motivo });
         });
+        // Pela fatura: cancelamentos dela (antes do fechamento) × "Cancelamentos de tarifas". Ciclo por data com antPrev: o Copiloto menos as notas
+        // de crédito da fatura anterior. Senão (mês do calendário): a fatura + os de faturas anteriores × tudo o que o Copiloto cancelou.
+        const sub = exato || cicloAnt;
         let cancel = null;
         if (canc !== null) {
-            const m = r2(canc + ant), c = r2(Math.abs(soma ? soma.estornos : SHC.num(fech.estornos) || 0));
-            const dif = r2(c - m), ok = F.bate(dif, m);
+            const m = r2(sub ? canc : canc + ant), c = r2(Math.abs(soma ? soma.estornos : SHC.num(fech.estornos) || 0) - (cicloAnt ? antPrev : 0));
+            const dif = r2(c - m), ok = bateL(dif, m);
             cancel = { id: 'cancel', rotulo: 'Cancelamentos de tarifas', ml: m, cop: c, dif, ok,
-                motivo: ok ? '' : modo === 'ciclo' ? 'Nos mesmos dias da fatura não bate. A fatura põe à parte os cancelamentos feitos depois do fechamento: confira no detalhe da fatura.'
+                motivo: ok ? '' : exato ? 'Somando os cancelamentos que o ML lançou nesta fatura, a linha não bate: confira no detalhe da fatura.'
+                    : modo === 'ciclo' ? 'Nos mesmos dias da fatura não bate' + (cicloAnt ? ' (já tirei ' + SHC.moeda(antPrev) + ' de cancelamentos de tarifas da fatura anterior)' : '. A fatura põe à parte os cancelamentos feitos depois do fechamento') + ': confira no detalhe da fatura.'
                     : 'O Copiloto soma os cancelamentos feitos em ' + nomeC(mes) + ', de qualquer fatura; a fatura só os das tarifas dela' + (ant ? ' (mais ' + SHC.moeda(ant) + ' de faturas anteriores, já somados)' : '') + '. Não é cobrança a mais.' };
         }
-        // Total: o Copiloto tira todo cancelamento; a fatura, só os dela (os de faturas anteriores estão nos pagamentos): soma de volta o "ant".
+        // "Cancelamentos de tarifas em estornos" (nos pagamentos): tarifas desta fatura canceladas depois do fechamento. Informativa (fora do total
+        // da fatura): o Copiloto confere pelas notas de crédito com a data da fatura seguinte (só no modo 'fatura').
+        const estornos = sub && ant > 0 ? (() => { const c = exato && typeof soma.ncProx === 'number' ? soma.ncProx : null;
+            return { id: 'estornos', rotulo: 'Cancelamentos de tarifas em estornos', ml: ant, cop: c, info: true, ok: c !== null && Math.abs(c - ant) < 0.015,
+                motivo: 'São tarifas desta fatura canceladas depois do fechamento. O ML devolve nos pagamentos e o Copiloto conta na fatura seguinte.' }; })() : null;
+        // Total. Pela fatura: custos − cancelamentos dela. Ciclo com antPrev: o líquido do ciclo + as notas de crédito da fatura anterior (que a
+        // fatura não tira). Senão: o Copiloto tira todo cancelamento; a fatura, só os dela → soma de volta o "ant".
         let total = null;
         if (typeof cat.total === 'number') {
-            const liq = soma ? soma.total : SHC.TIPOS_FECHAMENTO.reduce((s, id) => s + (SHC.num(pt[id]) || 0), 0), c = r2(liq + ant), dif = r2(c - cat.total);
+            const liq = soma ? soma.total : SHC.TIPOS_FECHAMENTO.reduce((s, id) => s + (SHC.num(pt[id]) || 0), 0);
+            const c = r2(liq + (exato ? 0 : cicloAnt ? antPrev : ant)), dif = r2(c - cat.total);
             // "✓ bate" no total só com diferença de até R$ 1, ou dentro dos 0,5% E com todas as linhas batendo (0,5% de um total grande
-            // escondia uma linha ✗ de R$ 61).
-            const ok = Math.abs(dif) <= F.BATE_RS || (F.bate(dif, cat.total) && linhas.every(l => l.ok) && (!cancel || cancel.ok));
+            // escondia uma linha ✗ de R$ 61). Pela fatura: ao centavo.
+            const ok = exato ? Math.abs(dif) < 0.015 : Math.abs(dif) <= F.BATE_RS || (F.bate(dif, cat.total) && linhas.every(l => l.ok) && (!cancel || cancel.ok));
             total = { id: 'total', rotulo: 'Total da fatura', ml: cat.total, cop: c, dif, ok, motivo: ok ? '' : F.motivoTotal(modo, linhas, cancel, ant, dif) };
         }
         // A manchete fala primeiro de custo (o que pode ser cobrança a mais); o cancelamento que não bate só vem depois.
         const ruins = linhas.filter(l => !l.ok).sort((a, b) => Math.abs(b.dif) - Math.abs(a.dif)).concat(cancel && !cancel.ok ? [cancel] : []);
         const ok = !ruins.length && (!total || total.ok), Nome = nomeC(mes).charAt(0).toUpperCase() + nomeC(mes).slice(1);
-        const manchete = ok ? Nome + ' bate com a fatura do ML.'
+        // v3.4: a manchete diz a fatura (a "Agosto" que fecha 15/08 saía "Julho bate com a fatura do ML."); só o mês do calendário diz o mês.
+        const fl = String(base.fatura).toLowerCase();
+        const manchete = ok ? (exato ? 'A fatura de ' + fl + ' bate linha por linha com o Copiloto.' : modo === 'ciclo' ? 'A fatura de ' + fl + ' bate com o Copiloto.'
+                : Nome + ' bate com a fatura ' + (nomeC(mes) === fl ? '' : 'de ' + fl + ' ') + 'do ML.')
             : ruins.length ? 'Diferença de ' + SHC.moeda(Math.abs(ruins[0].dif)) + ' em ' + ruins[0].rotulo.toLowerCase() + (ruins.length > 1 ? ' (e mais ' + (ruins.length - 1) + ')' : '') + '.'
             : 'Diferença de ' + SHC.moeda(Math.abs(total.dif)) + ' no total da fatura.';
-        return Object.assign(base, { modo, de: cic ? cic.de : '', ate: cic ? cic.ate : '', linhas, cancel, total, ok, manchete });
+        return Object.assign(base, { modo, de: cic ? cic.de : '', ate: cic ? cic.ate : '', linhas, cancel, estornos, total, ok, manchete });
     };
     /** As faturas fechadas com categorias, da mais recente para trás (até n), cada uma × o Copiloto (ciclo exato quando der; senão o mês).
      *  fechs = {'AAAA-MM': fech | null}. A que ainda não dá para comparar (semFech) vai para o fim. */
@@ -842,8 +1010,15 @@
         let novos = [];
         try { novos = typeof SHC.custosNovos === 'function' ? SHC.custosNovos(fat).itens : []; } catch (e) { novos = []; }
         return Object.keys(cat).filter(m => /^\d{4}-\d{2}$/.test(m)).sort().reverse()
-            .map(m => { const c = F.cicloDaFatura(fat, m), s = c && F.somaCiclo(fechs, c.de, c.ate);
-                return F.conferirFatura(cat[m], (fechs || {})[F.mesDaFatura(m, cat[m] && cat[m].fechamento)] || null, m, s, c, novos.filter(x => x && x.fatura === m)); })
+            .map(m => {
+                // v3.4: pela fatura de cada cobrança quando der (exato); senão o ciclo por data; senão o mês do calendário.
+                const c = F.cicloDaFatura(fat, m), prox = cat[F.mesAntes(m, -1)], ap = cat[F.mesAntes(m, 1)];
+                const s = F.somaFatura(fechs, cat[m] && cat[m].fechamento, prox && prox.fechamento) || (c && F.somaCiclo(fechs, c.de, c.ate));
+                // Mês já lido com a fatura de cada cobrança (porFatura) e mesmo assim com semFatura: o ML não mandou a fatura dessas → o motivo avisa.
+                if (s && s.modo !== 'fatura' && c) s.semDoc = [F.mesAntes(c.ate.slice(0, 7), 1), c.ate.slice(0, 7)].reduce((n, k) => { const f = (fechs || {})[k];
+                    return n + (f && f.porFatura && f.semFatura > 0 ? f.semFatura : 0); }, 0);
+                const antPrev = ap && typeof ap.estornosAnteriores === 'number' ? ap.estornosAnteriores : null;
+                return F.conferirFatura(cat[m], (fechs || {})[F.mesDaFatura(m, cat[m] && cat[m].fechamento)] || null, m, s, c, novos.filter(x => x && x.fatura === m), antPrev); })
             .filter(Boolean).sort((a, b) => !!a.semFech - !!b.semFech).slice(0, n || 3);
     };
 
@@ -886,16 +1061,25 @@
     /** Cartão "Confere com a fatura do ML" (conteúdo; o título fica com quem chama). r = F.conferirFatura. */
     F.htmlConfere = function (r) {
         if (!r) return '';
-        const cab = `${esc(r.fatura)}${r.fechamento ? ' (fecha ' + esc(dm(r.fechamento)) + ')' : ''} × ${r.modo === 'ciclo' ? 'Copiloto de ' + esc(dm(r.de)) + ' a ' + esc(dm(r.ate)) : esc(nomeC(r.mes)) + ' no Copiloto'}`;
+        // v3.2.0: com 2+ linhas sem motivo conhecido, a frase sai das linhas e aparece 1 vez só, no pé do bloco (antes: 3 vezes seguidas).
+        const nSem = r.linhas ? r.linhas.concat(r.cancel ? [r.cancel] : []).filter(l => !l.ok && l.motivo === F.SEM_MOTIVO).length : 0;
+        const mot = l => (nSem > 1 && l.motivo === F.SEM_MOTIVO ? '' : `<small class="cf-m">${esc(l.motivo)}</small>`);
+        const cab = `${esc(r.fatura)}${r.fechamento ? ' (fecha ' + esc(dm(r.fechamento)) + ')' : ''} × ${r.modo === 'fatura' ? 'as cobranças desta fatura no Copiloto' : r.modo === 'ciclo' ? 'Copiloto de ' + esc(dm(r.de)) + ' a ' + esc(dm(r.ate)) : esc(nomeC(r.mes)) + ' no Copiloto'}`;
+        // v3.4: "Cancelamentos de tarifas em estornos" (nos pagamentos): informativa, nunca ✗ (fica fora do total da fatura).
+        const e = r.estornos, linEst = e ? `<div class="cf-l ${e.ok ? 'ok' : 'mx'}"><div class="cf-t"><span class="cf-i" aria-label="${e.ok ? 'bate' : 'informativo'}">${e.ok ? '✓' : '·'}</span><b>${esc(e.rotulo)}</b>`
+            + `<span class="cf-v">${e.ok ? 'bate' : ''}</span></div><small class="cf-n">ML ${esc(SHC.moeda(e.ml))}${e.cop !== null ? ' · Copiloto ' + esc(SHC.moeda(e.cop)) : ''}</small><small class="cf-m">${esc(e.motivo)}</small></div>` : '';
         if (r.semFech) return `<p class="cf-sub">${cab}</p><p class="est vazio">${esc(nomeC(r.mes).charAt(0).toUpperCase() + nomeC(r.mes).slice(1))} ainda não foi lido inteiro no Copiloto: sem comparação.</p>`;
         const todas = r.linhas.concat(r.cancel ? [r.cancel] : []), max = Math.max(1, ...todas.map(l => Math.max(l.ml, l.cop)));
-        const lin = (l, forte) => `<div class="cf-l ${l.ok ? 'ok' : 'x'}${forte ? ' tot' : ''}"><div class="cf-t"><span class="cf-i" aria-label="${l.ok ? 'bate' : 'não bate'}">${l.ok ? '✓' : '✗'}</span><b>${esc(l.rotulo)}</b>`
-            + `<span class="cf-v">${l.ok ? 'bate' : esc(sinalM(l.dif))}</span></div>`
+        // Leitura da versão anterior (misto): as bases são diferentes e a própria tela diz que não compara → sem ✗, sem valor no título, linhas em cinza.
+        const mx = r.modo === 'misto' && !r.ok;
+        const lin = (l, forte) => `<div class="cf-l ${l.ok ? 'ok' : mx ? 'mx' : 'x'}${forte ? ' tot' : ''}"><div class="cf-t"><span class="cf-i" aria-label="${l.ok ? 'bate' : mx ? 'sem comparação' : 'não bate'}">${l.ok ? '✓' : mx ? '·' : '✗'}</span><b>${esc(l.rotulo)}</b>`
+            + `<span class="cf-v">${l.ok ? 'bate' : mx ? '' : esc(sinalM(l.dif))}</span></div>`
             + (forte ? '' : `<div class="cf-b" title="Fatura do ML: ${esc(SHC.moeda(l.ml))}"><i class="ml" style="width:${larg(l.ml, max)}%"></i></div><div class="cf-b" title="Copiloto: ${esc(SHC.moeda(l.cop))}"><i class="cp" style="width:${larg(l.cop, max)}%"></i></div>`)
-            + `<small class="cf-n">ML ${esc(SHC.moeda(l.ml))} · Copiloto ${esc(SHC.moeda(l.cop))}</small>${l.ok ? '' : `<small class="cf-m">${esc(l.motivo)}</small>`}</div>`;
-        return `<p class="manchete"><span class="pt ${r.ok ? 'ok' : 'at'}"></span><b>${esc(r.manchete)}</b></p>`
+            + `<small class="cf-n">ML ${esc(SHC.moeda(l.ml))} · Copiloto ${esc(SHC.moeda(l.cop))}</small>${l.ok || mx ? '' : mot(l)}</div>`;
+        return `<p class="manchete"><span class="pt ${r.ok ? 'ok' : mx ? '' : 'at'}"></span><b>${esc(mx ? 'Comparação com a fatura volta na próxima fatura.' : r.manchete)}</b></p>`
             + `<p class="cf-sub">${cab} · <span class="cf-lg ml"></span>ML <span class="cf-lg cp"></span>Copiloto</p>`
-            + todas.map(l => lin(l)).join('') + (r.total ? lin(r.total, true) : '')
+            + todas.map(l => lin(l)).join('') + linEst + (r.total ? lin(r.total, true) : '')
+            + (nSem > 1 && !mx ? `<p class="cf-sub">${esc(nSem + ' linhas com ✗ sem motivo conhecido: confira cada uma no detalhe da fatura.')}</p>` : '')
             + (r.modo === 'misto' ? '<p class="cf-sub">Lido por versão anterior: o Copiloto mostra as tarifas já sem os cancelamentos; a fatura, antes deles. A comparação nos mesmos dias da fatura aparece nas próximas faturas, lidas por esta versão.</p>' : '')
             + (/^https:\/\/([a-z]+\.)*mercadolivre\.com\.br\//.test(r.link) ? `<a class="lnk" href="${esc(r.link)}" target="_blank" rel="noopener">Abrir a fatura no ML</a>` : '');
     };
@@ -956,14 +1140,18 @@
     };
     F.htmlConfFaturas = function (fat, fechs, vbRaw, hoje) {
         const d = F.dadosConf(fat, fechs, vbRaw, hoje);
-        return (d.conf ? `<section class="card" id="f-confere"><h2>Confere com a fatura do ML</h2>${F.htmlConfere(d.conf)}</section>` : '')
-            + (d.vs ? `<section class="card" id="f-faturavs"><h2>${esc(d.vs.nome)} × ${esc(d.vs.nomeAnt)}: por que mudou</h2>${F.htmlFaturaVs(d.vs)}</section>` : '');
+        // Problema de dinheiro fica à vista: não bate com a fatura, ou alguma cobrança subiu ou é nova → seção aberta (data-alerta).
+        const alConf = d.conf && !d.conf.semFech && !d.conf.ok && d.conf.modo !== 'misto' ? ' data-alerta' : '';   // misto = bases diferentes: não é alerta
+        const alVs = d.vs && (d.vs.linhas || []).some(l => l.dir === 'sobe' || l.dir === 'novo') ? ' data-alerta' : '';
+        return (d.conf ? `<section class="card" id="f-confere"${alConf}><h2>Confere com a fatura do ML</h2>${F.htmlConfere(d.conf)}</section>` : '')
+            + (d.vs ? `<section class="card" id="f-faturavs"${alVs}><h2>${esc(d.vs.nome)} × ${esc(d.vs.nomeAnt)}: por que mudou</h2>${F.htmlFaturaVs(d.vs)}</section>` : '');
     };
     F.porCss = doc => { if (doc && doc.head && !doc.getElementById('cf-css')) { const s = doc.createElement('style'); s.id = 'cf-css'; s.textContent = F.CSS_CONF; doc.head.appendChild(s); } };
     /** CSS dos cartões acima (o painel lateral e a página do fechamento usam o mesmo desenho). */
     F.CSS_CONF = '.cf-sub{margin:4px 0 8px;font-size:11.5px;color:#64748B}.cf-l{padding:7px 0;border-top:1px solid #F1F5F9}.cf-l:first-of-type{border-top:0}'
         + '.cf-t{display:flex;align-items:center;gap:6px;font-size:12.5px}.cf-t b{flex:1;min-width:0;font-weight:650}.cf-v{font-weight:750;font-variant-numeric:tabular-nums;white-space:nowrap}'
         + '.cf-i{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:99px;font-size:11px;font-weight:800;flex:none}.cf-l.ok .cf-i{background:#ECFDF5;color:#047857}.cf-l.x .cf-i{background:#FFFBEB;color:#B45309}.cf-l.ok .cf-v{color:#047857}.cf-l.x .cf-v{color:#B45309}'
+        + '.cf-l.mx .cf-i{background:#F1F5F9;color:#64748B}.cf-l.mx .cf-t b{color:#64748B}.cf-l.mx .cf-b i.ml{background:#94A3B8}.cf-l.mx .cf-b i.cp{background:#475569}'
         + '.cf-b{height:6px;border-radius:99px;background:#F1F5F9;margin-top:3px;overflow:hidden}.cf-b i{display:block;height:100%;border-radius:99px}'
         + '.cf-b i.ml{background:#3483FA}.cf-b i.cp{background:#0F172A}.cf-b i.an{background:#CBD5E1}.cf-b i.pr{background:#EF4444}.cf-b i.ok{background:#10B981}.cf-b i.cz,.cf-b i.an2{background:#64748B}'
         + '.cf-n{display:block;font-size:11px;color:#64748B;margin-top:3px;font-variant-numeric:tabular-nums}.cf-m{display:block;font-size:11.5px;color:#92400E;margin-top:3px}'
@@ -1088,7 +1276,8 @@
         const hoje = SHC.hoje();
         F.porCss(document);
         let rec = null, mes = F.mesAntes(hoje.slice(0, 7), 1), dados = null, lidas = null, conferencia = [], msg = '', lendoMP = false, conferindo = false, lendoVb = false, querAula = location.hash === '#aula', visao = 'mes';
-        const aula = () => { if (root.SHCTour) root.SHCTour.iniciar(F.AULA); };
+        // A aula mostra as Faturas e as Notas: abre essas seções antes (começam recolhidas).
+        const aula = () => { if (dados) { secAbertas.add('f-faturas'); secAbertas.add('f-notas'); desenha(); } if (root.SHCTour) root.SHCTour.iniciar(F.AULA); };
         const btAula = document.getElementById('verAula');
         if (btAula) btAula.addEventListener('click', aula);
         if (querAula) history.replaceState(null, '', location.pathname);
@@ -1109,28 +1298,55 @@
             const d = dados, fechGuardado = d.tudo[SHC.chaveFech(d.conta, m)] || null;
             const fech = fechGuardado || (lidas && lidas[m]) || null;
             const vb = F.vendasBrutas(fech, d.vb, m, hoje);
-            const produtos = F.custoProdutos(d.itens, d.vm, d.tudo, m, fech ? fech.qtdVendas : null);
+            const produtos = F.custoProdutos(d.itens, d.vm, d.tudo, m, fech ? fech.qtdVendas : null, d.tudo['vbAnuncio:' + d.conta]);   // F1: unidades
             const impostoPct = d.cfg.configurado ? SHC.num(d.cfg.imposto_pct) : null;
             const afil = d.afil && d.afil.temAfiliados ? d.afil.metricas : null;
-            return { m, fech, fechGuardado, vb, produtos, impostoPct, casc: F.cascata({ fech, vb, produtos, impostoPct, afil, mes: m }) };
+            const despesas = SHC.despesasFixasDoMes(SHC.despesasFixas(d.cfg), m, hoje);   // Ajustes › Despesas fixas do mês (vazio = sem a linha)
+            return { m, fech, fechGuardado, vb, produtos, impostoPct, casc: F.cascata({ fech, vb, produtos, impostoPct, afil, mes: m, despesas }) };
         }
+        const secAbertas = new Set();   // seções de consulta que a pessoa abriu ("Ver mais") nesta página
         function desenha(soSync) {
             const d = dados, a = doMes(mes), b = doMes(F.mesAntes(mes, 1));
             const fechs = {}; for (let i = 0; i < 14; i++) { const m = F.mesAntes(hoje.slice(0, 7), i); fechs[m] = d.tudo[SHC.chaveFech(d.conta, m)] || (lidas && lidas[m]) || null; }
             // Quanto dá para recuperar: frete a mais (frete:<conta>:hist), cobranças para conferir (as lidas agora ou as da sincronização) e o Full.
             const fh = d.tudo['frete:' + d.conta + ':hist'], cfG = d.tudo['conferir:' + d.conta], rem = d.tudo['ml:full:remessas:' + d.conta];
             const conc = fh && fh.vendasLidas !== false ? fh.conciliacao || null : null;
-            rec = F.recuperar({ conc, conferir: lidas ? conferencia : ((cfG && cfG.itens) || []), inconformes: rem ? SHC.remessasInconformes(rem, d.tudo['remessas:' + d.conta + ':detalhe'], hoje) : [] });
+            rec = F.recuperar({ conc, conferir: lidas ? conferencia : ((cfG && cfG.itens) || []), inconformes: rem ? SHC.remessasInconformes(rem, d.tudo['remessas:' + d.conta + ':detalhe'], hoje) : [],
+                devolucoes: F.devolucoesDe(fh, d.tudo['posvenda:' + d.conta]) });   // v3.2: tarifa de devolução × pós-venda
             const porId = {}; d.itens.forEach(i => { porId[i.itemId] = i; });
-            (soSync ? h => SHC.trocarSoSync(app, h) : h => { app.innerHTML = h; })(F.htmlPagina({ a, b, mes, hoje, msg, lidas, conferencia, st: d.st, agora: Date.now(), temMP: d.temMP, rep: d.rep, fat: d.fat, vb: d.vb, fechs, visao, lendoMP, conferindo, lendoVb,
-                rec, recLido: !!(conc || cfG || lidas || rem), tituloDe: id => (porId[id] || {}).titulo || '' }));
+            // Lista "Ver mais (N)" aberta continua aberta quando a sincronização refaz a página (chave = seção + posição na seção).
+            const chaveBox = bx => { const s = bx.closest('section'); return (s ? s.id : '') + ':' + Array.prototype.indexOf.call((s || app).querySelectorAll('[data-vm-box]'), bx); };
+            const listasAbertas = soSync ? [] : Array.from(app.querySelectorAll('[data-vm-box].vm-aberta'), chaveBox);
+            (soSync ? h => SHC.trocarSoSync(app, F.recolheSecoes(h, secAbertas)) : h => {
+                app.innerHTML = F.recolheSecoes(h, secAbertas);
+                if (listasAbertas.length) app.querySelectorAll('[data-vm-box]').forEach(bx => {
+                    if (listasAbertas.indexOf(chaveBox(bx)) < 0) return;
+                    bx.classList.add('vm-aberta');
+                    const bt = bx.querySelector('[data-vm-lista]'); if (bt) { bt.textContent = 'Ver menos'; bt.setAttribute('aria-expanded', 'true'); }
+                });
+            })(F.htmlPagina({ a, b, mes, hoje, msg, lidas, conferencia, st: d.st, agora: Date.now(), temMP: d.temMP, rep: d.rep, fat: d.fat, vb: d.vb, fechs, visao, lendoMP, conferindo, lendoVb,
+                rec, recLido: !!(conc || cfG || lidas || rem || (fh && fh.devolucoes)), tituloDe: id => (porId[id] || {}).titulo || '' }));
         }
         async function redesenha() { try { await carregar(); desenha(); if (querAula) { querAula = false; aula(); } } catch (e) { app.innerHTML = '<section class="card"><p class="msg erro">Não deu para montar a página: ' + esc((e && e.message) || e) + '</p></section>'; } }
 
-        app.addEventListener('change', ev => { if (ev.target.id === 'mes') { mes = ev.target.value; desenha(); } });
+        app.addEventListener('change', ev => { if (ev.target.id === 'mes') { mes = ev.target.value; app.querySelectorAll('.vm-aberta').forEach(bx => bx.classList.remove('vm-aberta')); desenha(); } });   // outro mês: listas voltam fechadas
         app.addEventListener('click', async ev => {
             const bt = ev.target.closest('button');
             if (!bt) return;
+            if (bt.hasAttribute('data-vm-sec')) {   // seção de consulta: "Ver mais" ↔ "Ver menos" sem refazer a página
+                const id = bt.getAttribute('data-vm-sec'), s = bt.closest('section'), ab = !secAbertas.has(id);
+                if (ab) secAbertas.add(id); else secAbertas.delete(id);
+                if (s) s.classList.toggle('fechada', !ab);
+                bt.textContent = ab ? 'Ver menos' : 'Ver mais'; bt.setAttribute('aria-expanded', String(ab));
+                if (!ab && s && s.scrollIntoView) s.scrollIntoView({ block: 'nearest' });
+                return;
+            }
+            if (bt.hasAttribute('data-vm-lista')) {   // lista longa: "Ver mais (N)" ↔ "Ver menos"
+                const box = bt.closest('[data-vm-box]'), ab = !!box && box.classList.toggle('vm-aberta');
+                bt.textContent = ab ? 'Ver menos' : bt.getAttribute('data-vm-lista'); bt.setAttribute('aria-expanded', String(ab));
+                if (!ab && box && box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
+                return;
+            }
             if (bt.hasAttribute('data-visao')) { visao = bt.getAttribute('data-visao') === 'ciclo' ? 'ciclo' : 'mes'; return desenha(); }
             if (bt.hasAttribute('data-mp')) {
                 // O pedido de permissão tem de sair direto do clique (sem await antes).
@@ -1176,10 +1392,11 @@
                 return redesenha();
             }
             if (bt.hasAttribute('data-copiar-rec')) {
-                const [pid, i] = bt.getAttribute('data-copiar-rec').split(':'), p = rec && rec.parcelas.find(x => x.id === pid), x = p && p.itens[+i];
+                const [pid, i] = bt.getAttribute('data-copiar-rec').split(':');
+                const p = pid === 'devconf' ? rec && rec.devConferir : rec && rec.parcelas.find(x => x.id === pid), x = p && p.itens[+i];   // v3.2: 🟡 da devolução
                 if (!x) return;
                 const tit = ((dados.itens.find(it => it.itemId === x.itemId)) || {}).titulo;
-                try { await navigator.clipboard.writeText(pid === 'frete' ? F.chamadoFrete(x, tit) : F.textoChamado(x)); bt.textContent = 'Copiado'; }
+                try { await navigator.clipboard.writeText(x.texto ? x.texto : pid === 'frete' ? F.chamadoFrete(x, tit) : F.textoChamado(x)); bt.textContent = 'Copiado'; }
                 catch (e) { bt.textContent = 'Não copiou: selecione e copie à mão'; }
                 return;
             }

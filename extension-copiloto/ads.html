@@ -97,6 +97,7 @@
   details.vm > summary::after { content: "Ver mais"; color: var(--c-azul); font: 600 var(--fs-2)/1 var(--f); flex: none; }
   details.vm[open] > summary::after { content: "Ver menos"; }
   details.vm > .in { padding: 8px 0 0; }
+  [data-vm-box]:not(.vm-aberta) .vm-x { display: none; } .vm-pe { margin: 6px 0 0; text-align: right; }
   .dentro-card { border-top: 1px solid var(--c-neutro-bg); margin-top: 8px; }
   #a-modelos .dentro-card { border-top: 0; margin-top: 0; }
   #a-modelos details.vm > summary { padding-top: 0; }

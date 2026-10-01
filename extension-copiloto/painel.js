@@ -13,25 +13,38 @@
     // Custo antigo de um anúncio do retrato (MLB… de anúncio com SKU, ou F… da família dele) vai para l.antigos da linha dele.
     // custos = SHC.lerTudo().custos → { 'sku|X': {canal:'sku', id:'X', custo…}, 'ml|MLB…': {…} }; famDe = { MLB…: 'F…' } (Central de promoções)
     P.montaLinhas = function (itensRetrato, custos, famDe) {
-        const skus = {}, anuncios = {}, donos = {};
+        const skus = {}, anuncios = {}, donos = {}, naFrente = {};
         const novo = (tipo, o) => Object.assign({ tipo, titulo: '', ids: [], precos: [], custo: null, antigos: [] }, o);
         const liga = (k, l) => { const d = donos[k] || (donos[k] = []); if (d.indexOf(l) < 0) d.push(l); };
+        // Linha de SKU pela MESMA forma da chave do custo (c|sku|… = SHC.normalizaSku): o SKU lido em telas diferentes (lista, vendas,
+        // Full) cai numa linha só, e o custo gravado no SKU acha a linha dele.
+        const kSku = s => SHC.normalizaSku(s);
         P.anunciosReais(itensRetrato).forEach(it => {
-            const l = it.sku ? (skus[it.sku] || (skus[it.sku] = novo('sku', { sku: it.sku, titulo: it.titulo })))
-                : (anuncios['ml|' + it.itemId] || (anuncios['ml|' + it.itemId] = novo('anuncio', { canal: 'ml', id: it.itemId, titulo: it.titulo })));
-            if (l.ids.indexOf(it.itemId) < 0) l.ids.push(it.itemId);
-            if (it.preco > 0) l.precos.push(it.preco);
-            if (!l.titulo) l.titulo = it.titulo || '';
-            if (it.sku) liga('ml|' + it.itemId, l);
-            if (famDe && famDe[it.itemId]) liga('ml|' + famDe[it.itemId], l);
+            // Anúncio com variações de SKUs diferentes (it.skus, 30/09/2026): entra na linha de CADA SKU, não em "anúncio sem SKU".
+            // O custo antigo gravado no anúncio (c|ml|MLB…) vira l.antigos dessas linhas ("usar para o SKU"): não some — e, quando ele é o
+            // que o lucro do anúncio usa (SHC.mlbNaFrente), a linha mostra os dois valores (prevalece).
+            const lista = SHC.skusDoAnuncio(it);
+            if (lista.length && SHC.mlbNaFrente(it)) naFrente['ml|' + it.itemId] = true;
+            const ls = lista.length ? lista.map(s => skus[kSku(s)] || (skus[kSku(s)] = novo('sku', { sku: s, titulo: it.titulo })))
+                : [anuncios['ml|' + it.itemId] || (anuncios['ml|' + it.itemId] = novo('anuncio', { canal: 'ml', id: it.itemId, titulo: it.titulo }))];
+            // SKU que a linha da lista não mostra (anúncio com variações ou linha de dentro) e que o Copiloto ainda não leu em outra tela:
+            // não é "anúncio sem SKU" (o SKU existe no ML, nas variações).
+            if (!lista.length && it.skuForaDaLinha) ls[0].skuNaoLido = it.variacoes ? 'variacoes' : 'linha';
+            ls.forEach(l => {
+                if (l.ids.indexOf(it.itemId) < 0) l.ids.push(it.itemId);
+                if (it.preco > 0) l.precos.push(it.preco);
+                if (!l.titulo) l.titulo = it.titulo || '';
+                if (it.sku) liga('ml|' + it.itemId, l);
+                if (famDe && famDe[it.itemId]) liga('ml|' + famDe[it.itemId], l);
+            });
         });
         Object.keys(custos || {}).forEach(k => {
             const c = custos[k];
             if (!(SHC.num(c.custo) > 0)) return;
             let l;
-            if (c.canal === 'sku') l = skus[c.id] || (skus[c.id] = novo('sku', { sku: c.id }));
+            if (c.canal === 'sku') l = skus[c.id] || (skus[c.id] = novo('sku', { sku: c.id }));   // c.id já é a forma da chave
             else if (anuncios[k]) l = anuncios[k];
-            else if (donos[k]) { donos[k].forEach(d => d.antigos.push(Object.assign({}, c, { custo: SHC.num(c.custo) }))); return; }
+            else if (donos[k]) { donos[k].forEach(d => d.antigos.push(Object.assign({}, c, { custo: SHC.num(c.custo) }, naFrente[k] ? { prevalece: true } : {}))); return; }
             else l = anuncios[k] = novo('anuncio', { canal: c.canal, id: c.id, antigo: true });
             l.custo = c;
             if (!l.titulo) l.titulo = c.titulo || '';
@@ -39,6 +52,36 @@
         const ordem = (a, b) => String(a.titulo || a.sku || a.id).localeCompare(String(b.titulo || b.sku || b.id), 'pt-BR');
         return { skus: Object.values(skus).sort(ordem), anuncios: Object.values(anuncios).sort(ordem) };
     };
+    // Etiqueta da linha de anúncio (sem linha de SKU). "anúncio sem SKU" só quando a lista do ML mostra o anúncio SEM SKU; com variações
+    // (ou linha de dentro) o SKU existe no ML e só não foi lido ainda — dizer "sem SKU" ali era falso (relato de 30/09/2026).
+    P.EXPLICA_SKU_NAO_LIDO = 'O Mercado Livre não mostra o SKU na linha fechada deste anúncio (o SKU fica em cada variação). O Copiloto completa sozinho quando ler as vendas por anúncio ou o Full desse anúncio. Enquanto isso, o custo informado aqui fica no próprio anúncio.';
+    P.etiquetaAnuncio = l => l.antigo ? 'custo antigo por anúncio'
+        : l.skuNaoLido === 'variacoes' ? 'SKU nas variações · ainda não lido'
+        : l.skuNaoLido ? 'SKU fora da lista · ainda não lido' : 'anúncio sem SKU';
+    // Contagem das linhas de anúncio por tipo (rodapé e título do grupo): { semSku, naoLido, antigos }.
+    P.contaAnuncios = ls => (ls || []).reduce((o, l) => { o[l.antigo ? 'antigos' : l.skuNaoLido ? 'naoLido' : 'semSku']++; return o; }, { semSku: 0, naoLido: 0, antigos: 0 });
+    // " · 2 anúncios sem SKU · 3 com SKU nas variações ainda não lido · 1 custo antigo por anúncio" (só o que existe).
+    P.rodapeAnuncios = n => (n.semSku ? ' · ' + SHC.qtd(n.semSku, 'anúncio sem SKU', 'anúncios sem SKU') : '')
+        + (n.naoLido ? ' · ' + SHC.qtd(n.naoLido, 'anúncio com SKU ainda não lido', 'anúncios com SKU ainda não lido') : '')
+        + (n.antigos ? ' · ' + SHC.qtd(n.antigos, 'custo antigo por anúncio', 'custos antigos por anúncio') : '');
+    P.tituloGrupoAnuncios = n => {
+        const p = [];
+        if (n.semSku) p.push('Anúncios sem SKU');
+        if (n.naoLido) p.push((p.length ? 'anúncios' : 'Anúncios') + ' com SKU ainda não lido');
+        if (n.antigos) p.push((p.length ? 'custos' : 'Custos') + ' antigos por anúncio');
+        return p.length > 1 ? p.slice(0, -1).join(', ') + ' e ' + p[p.length - 1] : (p[0] || 'Anúncios');
+    };
+    // Linha de SKU com custo cujo anúncio (ou promoção) tem custo próprio DIFERENTE → texto que mostra os dois e qual o lucro usa.
+    P.dicaDivergencia = function (l) {
+        const cs = SHC.num(l.custo && l.custo.custo), vistos = new Set();
+        const txt = (l.antigos || []).filter(a => a.custo > 0 && Math.abs(a.custo - cs) >= 0.005 && !vistos.has(a.id) && vistos.add(a.id)).map(a => /^F/.test(String(a.id))
+            ? 'Custo antigo da promoção ' + SHC.moeda(a.custo) + ' (o lucro usa o do SKU)'
+            : 'Anúncio ' + a.id + ' tem custo próprio ' + SHC.moeda(a.custo) + (a.prevalece ? ' — o lucro dele usa esse, não o do SKU' : ' (o lucro dele usa o do SKU)'));
+        return txt.join(' · ');
+    };
+    // Anúncios cujo custo próprio ganha do custo do SKU (prevalece) e é diferente dele: botão "usar o do SKU" (apaga só o do anúncio).
+    P.idsQuePrevalecem = l => (l.antigos || []).filter(a => a.prevalece && a.custo > 0 && Math.abs(a.custo - SHC.num(l.custo && l.custo.custo)) >= 0.005)
+        .map(a => String(a.id)).filter((x, i, a) => a.indexOf(x) === i);
     // Linhas da cópia de segurança (SHC.paraCSV): SKUs, anúncios e também os custos antigos por família/anúncio (l.antigos,
     // V11), um por chave, com a origem (V12). Sem isso o CSV perdia esses custos e eles sumiam ao restaurar.
     // Origem na cópia: custo do Tiny redigitado (custoErp diferente) sai 'manual', senão o restaurar perde custoErp e o Tiny troca.
@@ -93,6 +136,8 @@
         const m = /^#(?:bem-vindo|guia)(?:-([1-5]))?$/.exec(h || '');
         if (m) return { guia: m[1] ? +m[1] : 0 };
         if (h === '#guia-custos') return { custos: true, guia: true };
+        const x = /^#erpx(?:-([a-e]))?$/.exec(h || '');   // v3.2 cruzamento ERP × ML: #erpx ou #erpx-a … #erpx-e (o grupo)
+        if (x) return { erpx: x[1] || '' };
         return h === '#custos' ? { custos: true } : (h === '#erp' ? { erp: true } : null);
     };
     P.textoConta = function (st) {
@@ -102,6 +147,123 @@
         if (st.familias > 0) partes.push(st.familias + (st.familias === 1 ? ' produto' : ' produtos') + ' nas promoções');
         if (partes.length === 1) partes.push('nenhum anúncio encontrado ainda');
         return partes.join(' · ');
+    };
+
+    // Lista de kits (SHC.lerKits): o que vai dentro e o custo que vale. Kit incompleto diz de quais SKUs falta o custo.
+    // → [{sku, dentro, custo (o que vale | null), soma (dos itens | null), proprio (custo do kit vale, não a soma), faltam, outros}]
+    P.linhasKits = function (lk) {
+        return ((lk && lk.kits) || []).map(k => {
+            const r = SHC.kitDe(lk.custos, k.dados), c = SHC.custoDeAnuncio(lk.custos, { sku: k.sku });
+            return { sku: k.sku, dentro: k.dados.kit.map(i => i.q + '× ' + i.sku).join(' + '), custo: c ? SHC.num(c.dados.custo) : null,
+                soma: r.custo, proprio: !!c && c.dados.origem !== 'kit', faltam: r.faltam, outros: SHC.num(k.dados.outros) || 0 };
+        });
+    };
+
+    // ── v3.2 (A3): custos PAI → VARIAÇÕES + ESTOQUE. Só a tela muda: as linhas de P.montaLinhas, as chaves c|sku|… e o CSV ficam iguais. ──
+    // Anúncio finalizado no ML (closed; inclui o antigo "closed_migrated_to_up", que virou família e AINDA mostra estoque) não conta estoque.
+    // Mesma regra do painel-lateral.js (P.anuncioFinalizado): status texto ou {id|label}, "closed…" ou "finalizad…".
+    P.finalizado = it => { let s = it && it.status; if (s && typeof s === 'object') s = s.id || s.label || ''; return /^(closed|finalizad)/i.test(String(s || '').trim()); };
+    P.porId = itens => (itens || []).reduce((o, i) => { if (i && i.itemId) o[i.itemId] = i; return o; }, {});
+    // Linha (SKU ou anúncio) cujos anúncios no retrato estão TODOS finalizados: fica fora da tela por padrão ("Mostrar finalizados").
+    P.linhaFinalizada = (l, porId) => !!(l.ids && l.ids.length) && l.ids.every(id => P.finalizado(porId[id]));
+    // Base do estoque (uma vez por desenho): anúncios não finalizados + a mesma lista com o produto = SKU — o mesmo SKU em 2 user products
+    // é o mesmo estoque físico (SHC.estoqueSku soma por UP: 258 + 258 = 516): aqui conta 1 vez, o maior.
+    P.baseEstoque = (itens, full) => {
+        const ativos = (itens || []).filter(i => i && i.itemId && !P.finalizado(i));
+        return { ativos, porSku: ativos.map(i => Object.assign({}, i, { familia: 'sku:' + SHC.normalizaSku(i.sku) })), full: full || null };
+    };
+    // Estoque de uma linha → { faixa: 'tem'|'zero'|'nl', lido, total, proprio, full, pausa (zerado e pausado), pausado (pausado COM estoque), semAnuncio }.
+    // Não lido NUNCA vira 0 (faixa 'nl': só conta em "Todos").
+    P.estoqueLinha = function (l, base) {
+        const sku = l.tipo === 'sku' ? SHC.normalizaSku(l.sku) : '';
+        const e = SHC.estoqueSku({ sku, itemIds: l.ids || [] }, sku ? base.porSku : base.ativos, base.full);
+        const meus = base.ativos.filter(i => (l.ids || []).indexOf(i.itemId) >= 0);
+        if (!e.lido) return { faixa: 'nl', lido: false, semAnuncio: !meus.length };
+        const semEst = i => /sem estoque/i.test(String(i.estoque || '')) || (i.restricao && i.restricao.id === 'out_of_stock');
+        return { faixa: e.total > 0 ? 'tem' : 'zero', lido: true, total: e.total, proprio: e.proprio, full: e.full,
+            pausa: !(e.total > 0) && meus.some(i => i.status === 'paused' && semEst(i)),
+            pausado: e.total > 0 && meus.length > 0 && meus.every(i => i.status === 'paused') };
+    };
+    const milhar = n => Number(n || 0).toLocaleString('pt-BR');
+    // Selos do estoque → [{cls, txt}] ('est tem' verde, 'est full' azul, 'est zero' vermelho, 'est pausa' tracejado, 'est nl' cinza).
+    P.selos = function (e) {
+        if (!e || e.faixa === 'nl') return e && e.semAnuncio ? [] : [{ cls: 'nl', txt: 'Estoque não lido ainda' }];
+        if (e.faixa === 'zero') return [{ cls: e.pausa ? 'pausa' : 'zero', txt: e.pausa ? 'Pausado sem estoque' : 'Zerado' }];
+        const out = [];
+        if (e.proprio > 0) out.push({ cls: 'tem', txt: 'Com estoque ' + milhar(e.proprio) + (e.pausado ? ' · pausado' : '') });
+        if (e.full > 0) out.push({ cls: 'full', txt: 'Full: ' + milhar(e.full) + (e.pausado && !(e.proprio > 0) ? ' · pausado' : '') });
+        return out;
+    };
+    // Grupos: PAI = família do ML (familyId) com 2+ SKUs, ou anúncio antigo com variações de SKUs diferentes; senão a linha fica sozinha.
+    // → [{ tipo:'pai'|'solo', chave, titulo, filhos:[linha] }]; no pai cada filho ganha l.nomeVar (nome da variação).
+    P.agrupa = function (skus, itens, familias, full) {
+        const porId = P.porId(itens), vivo = id => porId[id] && !P.finalizado(porId[id]);
+        const chaveDe = l => {
+            const ids = (l.ids || []).filter(vivo);
+            const f = ids.map(id => porId[id].familyId).find(Boolean);
+            if (f) return 'f:' + f;
+            const v = ids.find(id => SHC.skusDoAnuncio(porId[id]).length > 1);
+            return v ? 'v:' + v : '';
+        };
+        const mapa = new Map(), out = [];
+        (skus || []).forEach(l => {
+            const k = chaveDe(l);
+            if (!k) { out.push({ tipo: 'solo', chave: 's:' + l.sku, filhos: [l] }); return; }
+            let g = mapa.get(k);
+            if (!g) { g = { tipo: 'pai', chave: k, filhos: [] }; mapa.set(k, g); out.push(g); }
+            g.filhos.push(l);
+        });
+        return out.map(g => {
+            if (g.tipo !== 'pai') return g;
+            if (g.filhos.length < 2) return { tipo: 'solo', chave: 's:' + g.filhos[0].sku, filhos: g.filhos };
+            const id = g.chave.slice(2), fam = g.chave[0] === 'f' ? (familias || []).find(x => x && String(x.familyId) === id) : null;
+            g.titulo = (fam && fam.titulo) || (g.chave[0] === 'v' && porId[id] ? porId[id].titulo : '') || g.filhos[0].titulo || '';
+            P.nomeiaVariacoes(g.filhos, porId, full);
+            g.filhos.sort((a, b) => a.nomeVar.localeCompare(b.nomeVar, 'pt-BR', { numeric: true }));
+            return g;
+        });
+    };
+    // Nome da variação, nesta ordem: o lido do ML (item.nomeVariacao), o do Full (produtos[].variacao), o fim do SKU que muda entre os
+    // irmãos (BA-914516-04 / BA-914516-KITCOM06 → "04" / "KITCOM06") e, por último, o próprio SKU.
+    P.nomeiaVariacoes = function (filhos, porId, full) {
+        const ss = filhos.map(l => SHC.normalizaSku(l.sku));
+        let pre = ss[0] || '';
+        ss.forEach(s => { while (pre && s.indexOf(pre) !== 0) pre = pre.slice(0, -1); });
+        filhos.forEach((l, i) => {
+            const doMl = (l.ids || []).map(id => porId[id] && porId[id].nomeVariacao).find(Boolean);
+            const p = ((full && full.produtos) || []).find(x => x && x.variacao && SHC.normalizaSku(x.sku) === ss[i]);
+            const fim = pre.length >= 3 && ss[i].length > pre.length ? ss[i].slice(pre.length).replace(/^[-_.\s]+/, '') : '';
+            l.nomeVar = String(doMl || (p && p.variacao) || fim || l.sku || '').trim();
+        });
+    };
+    // Faixa do grupo: com estoque se algum filho tem; não lido se algum não foi lido; senão zerado.
+    P.faixaGrupo = (g, est) => { const fs = g.todosFilhos || g.filhos; return fs.some(l => est(l).faixa === 'tem') ? 'tem' : fs.some(l => est(l).faixa === 'nl') ? 'nl' : 'zero'; };
+    // Ordem padrão: com estoque → não lido → zerados; dentro da faixa, quem vende mais (o grupo soma os filhos), empate em ordem alfabética.
+    P.ordenaGrupos = function (gs, est, vendasDe) {
+        const R = { tem: 0, nl: 1, zero: 2 }, v = g => g.filhos.reduce((t, l) => t + (vendasDe(l) || 0), 0);
+        const nome = g => String(g.titulo || g.filhos[0].titulo || g.filhos[0].sku || g.filhos[0].id || '');
+        return gs.map(g => ({ g, r: R[P.faixaGrupo(g, est)], v: v(g) })).sort((a, b) => (a.r - b.r) || (b.v - a.v) || nome(a.g).localeCompare(nome(b.g), 'pt-BR')).map(x => x.g);
+    };
+    // Filtro com hierarquia: passa(l, g) olha cada filho; o pai fica se algum filho passa, só com os que passam (de = quantos tinha).
+    P.filtraGrupos = (gs, passa) => gs.map(g => {
+        const fs = g.filhos.filter(l => passa(l, g));
+        // todosFilhos: o estoque e o "N de M com custo" do pai continuam os do produto inteiro (filtrar Zerados não zera o pai).
+        return fs.length ? Object.assign({}, g, { filhos: fs, de: g.filhos.length, todosFilhos: g.todosFilhos || g.filhos }) : null;
+    }).filter(Boolean);
+    // Chips: contagem por SKU/anúncio → { todos, tem, zero, nl, sem }. Sem anúncio ativo no ML (sem) não promete leitura: fica fora do nl.
+    P.contaEstoque = (ls, est) => ls.reduce((o, l) => { const e = est(l); o.todos++; o[e.semAnuncio ? 'sem' : e.faixa]++; return o; }, { todos: 0, tem: 0, zero: 0, nl: 0, sem: 0 });
+    // Tem custo = o que a etiqueta usa: o do SKU, a soma do kit ou o antigo da família/anúncio (mesma conta do painel lateral).
+    P.temCusto = l => !!l.custo || !!l.kitCalc || (l.antigos || []).some(a => a.custo > 0);
+    // "Mesmo custo para todas as variações": só as que NÃO têm custo nenhum (nem do kit, nem antigo do anúncio); com trocarTodos,
+    // também as que já têm → [SKU a gravar]. Mesmo critério do "N de M variações com custo" do pai.
+    P.aplicaMesmoCusto = (filhos, valor, trocarTodos) => !(valor > 0) ? [] : filhos.filter(l => trocarTodos || !P.temCusto(l)).map(l => l.sku);
+    // "Estoque lido do Mercado Livre hoje às 14:20" / "em 28/09 às 09:10"; mais de 24 h: "há N dias: pode ter mudado". Sem retrato: ''.
+    P.textoLeituraEstoque = function (ts, agora) {
+        if (!ts) return '';
+        const d = new Date(ts), h = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'), ms = (agora || Date.now()) - ts;
+        if (ms > 86400000) { const n = Math.max(1, Math.floor(ms / 86400000)); return 'Estoque lido há ' + (n === 1 ? '1 dia' : n + ' dias') + ': pode ter mudado.'; }
+        const hoje = new Date(agora || Date.now()).toDateString() === d.toDateString();
+        return 'Estoque lido do Mercado Livre ' + (hoje ? 'hoje' : 'em ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0')) + ' às ' + h + '.';
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = P;
@@ -122,7 +284,9 @@
 
     let cfg = {}, guia = { passo: 0, feitos: {}, tours: {} }, modelo = { skus: [], anuncios: [] }, porChave = new Map(), temRetrato = false;
     let principais = { com: 0, de: 0, comTodos: 0, deTodos: 0, faltam: [] };   // SHC.guiaCustos: os 10 que mais vendem
+    let kits = { kits: [], custos: {} };   // SHC.lerKits: kits gravados + custos c|sku (para somar os itens)
     let vendasChave = {}, verTodos = false, peloGuia = false;   // vendas por SKU/anúncio na janela do guia; "Ver todos"; aberta pelo guia (#guia-custos)
+    let retrato = { itens: [], familias: [], ts: 0, full: null }, porIdRet = {};   // v3.2: retrato ml:anuncios (itens + famílias) e o Full, para estoque e pai → variações
     // Gravações do progresso uma de cada vez (senão uma apaga a outra).
     let filaGuia = Promise.resolve();
     const gravaGuia = patch => (filaGuia = filaGuia.then(() => SHC.salvarGuia(patch)).then(g => (guia = g), () => guia));
@@ -136,20 +300,45 @@
         return out;
     }
 
+    // F16 (auditoria 30/09): a tabela mostra os anúncios de UMA conta — diz qual, e com 2+ contas deixa escolher (o custo do SKU vale para todas).
+    let contaVer = '';   // '' = a conta aberta agora no ML
+    async function desenhaContaTab() {
+        const box = $('#contaTab'), sel = $('#contaEsc');
+        if (!box || !sel) return;
+        let cs = [];
+        try { cs = SHC.contas ? await SHC.contas() : []; } catch (e) { cs = []; }
+        box.hidden = !cs.length;
+        if (!cs.length) return;
+        const atual = contaVer || (cs.find(c => c.atual) || cs[0]).sellerId;
+        sel.innerHTML = cs.map(c => `<option value="${esc(c.sellerId)}"${c.sellerId === atual ? ' selected' : ''}>${esc(c.nome)}${c.atual ? ' (aberta agora)' : ''}</option>`).join('');
+        sel.disabled = cs.length < 2;
+    }
     async function lerDados() {
-        const [tudo, an, promos, g] = await Promise.all([SHC.lerTudo(), SHC.lerAnuncios(), SHC.lerPromos(), SHC.lerGuia()]);
+        const cv = contaVer || undefined;
+        const [tudo, an, promos, g, full] = await Promise.all([SHC.lerTudo(), SHC.lerAnuncios(cv), SHC.lerPromos(cv), SHC.lerGuia(),
+            SHC.lerFull ? SHC.lerFull(cv).catch(() => null) : null]);
         cfg = tudo.cfg; guia = g;
+        try { erpx = await SHC.lerChave('erpx:' + (cv || await SHC.contaAtual())); } catch (e) { erpx = null; }   // v3.2 cruzamento ERP × ML
         const itens = (an && an.itens) || [];
         temRetrato = itens.length > 0;
         modelo = P.montaLinhas(itens, tudo.custos, familiaPorItem(promos));
+        // v3.2: estoque (retrato + Full) e pai → variações (snap.familias), sem nenhuma chamada nova ao ML.
+        retrato = { itens, familias: (an && an.familias) || [], ts: (an && an.ts) || 0, full: full || null };
+        porIdRet = P.porId(itens); baseEst = null; cacheEst = new Map();
         const vm = itens.length ? await SHC.lerVendasMes(itens.map(it => it.itemId)) : {}, brutos = {};
         Object.keys(tudo.custos).forEach(k => { brutos['c|' + k] = tudo.custos[k]; });   // lerTudo tira o "c|" da chave
+        kits = await SHC.lerKits();
+        Object.assign(brutos, kits.custos);   // kit sem custo próprio também conta (soma dos itens)
+        modelo.skus.forEach(l => { const c = !l.custo && SHC.custoDeAnuncio(kits.custos, { sku: l.sku }); l.kitCalc = c && c.dados.origem === 'kit' ? c.dados : null; });
         principais = SHC.guiaCustos(itens, brutos, vm);
         // Unidades vendidas por SKU (ou por anúncio sem SKU) na mesma janela do guia (principais.desde): ordem da tabela reduzida.
         vendasChave = {};
+        // Anúncio com vários SKUs (variações): as vendas dele contam na linha de cada SKU (igual a SHC.guiaCustos).
         itens.forEach(it => {
-            const k = it.sku ? 'sku:' + SHC.normalizaSku(it.sku) : 'mlb:' + it.itemId, v = vm[it.itemId] || {};
-            Object.keys(v).forEach(m => { if (m >= principais.desde) vendasChave[k] = (vendasChave[k] || 0) + (Number(v[m]) || 0); });
+            const ss = SHC.skusDoAnuncio(it), v = vm[it.itemId] || {};
+            (ss.length ? ss.map(s => 'sku:' + SHC.normalizaSku(s)) : ['mlb:' + it.itemId]).forEach(k => {
+                Object.keys(v).forEach(m => { if (m >= principais.desde) vendasChave[k] = (vendasChave[k] || 0) + (Number(v[m]) || 0); });
+            });
         });
         porChave = new Map();
         modelo.skus.forEach(l => porChave.set('sku|' + l.sku, l));
@@ -163,13 +352,40 @@
         desenhaCopia();
         desenhaMeta();
         desenhaContas().catch(() => {});
+        desenhaContaTab().catch(() => {});
         const pedido = P.lerHash(location.hash);
         if (pedido) history.replaceState(null, '', location.pathname);
-        if (pedido && pedido.custos) { peloGuia = !!pedido.guia; if (peloGuia) $('#gBar').hidden = false; desenhaRetoma(); $('#custos').scrollIntoView(); }
+        if (pedido && pedido.erpx !== undefined) erpxFiltro = pedido.erpx;
+        desenhaErpx();
+        if (pedido && pedido.erpx !== undefined) { desenhaRetoma(); ($('#erpx').hidden ? $('#erp') : $('#erpx')).scrollIntoView(); }
+        else if (pedido && pedido.custos) { peloGuia = !!pedido.guia; if (peloGuia) $('#gBar').hidden = false; desenhaRetoma(); $('#custos').scrollIntoView(); }
         else if (pedido && pedido.erp) { desenhaRetoma(); $('#erp').scrollIntoView(); }
         else if (pedido || (!guia.fim && !guia.fechado && !cfg.configurado)) abrirGuia((pedido && pedido.guia) || (guia.fim ? 1 : P.passoInicial(guia)));
         else desenhaRetoma();
     }
+    // ── v3.2 Cruzamento ERP × ML (erpx:<conta>, gravado pelo fundo): 5 botões que filtram o grupo, "Conferir agora" e a planilha. Só lê. ──
+    let erpx = null, erpxFiltro = '';
+    function desenhaErpx() {
+        const el = $('#erpx');
+        el.hidden = !(erpx && erpx.r && SHC.erpxSecaoHtml);
+        el.innerHTML = el.hidden ? '' : SHC.erpxSecaoHtml(erpx, erpxFiltro);
+    }
+    $('#erpx').addEventListener('click', async e => {
+        const f = e.target.closest('[data-erpx-f]');
+        if (f) { erpxFiltro = f.getAttribute('data-erpx-f'); desenhaErpx(); const b = $('#erpx [data-erpx-f="' + erpxFiltro + '"]'); if (b) b.focus(); return; }
+        if (e.target.closest('[data-erpx-csv]')) {
+            const url = URL.createObjectURL(new Blob([SHC.erpxCSV(erpx)], { type: 'text/csv;charset=utf-8' })), a = document.createElement('a');
+            a.href = url; a.download = 'copiloto-' + String(erpx.erp || 'erp') + '-x-ml-' + SHC.hoje() + '.csv'; document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            return;
+        }
+        const c = e.target.closest('[data-erpx-conferir]');
+        if (c) {
+            c.disabled = true; c.textContent = 'Conferindo…';
+            try { const r = await chrome.runtime.sendMessage({ acao: 'erp_conferir' }); if (r && r.erpx) erpx = r.erpx; } catch (err) { /* fundo reiniciando */ }
+            desenhaErpx();
+        }
+    });
     // Um nome só para a meta ("meta de margem") em toda a página; a legenda das cores usa o valor do seller.
     function desenhaMeta() {
         const v = nf(cfg.margem_alvo_pct === undefined ? 10 : cfg.margem_alvo_pct);
@@ -390,7 +606,8 @@
         const pedido = P.lerHash(location.hash);
         if (!pedido) return;
         history.replaceState(null, '', location.pathname);
-        if (pedido.custos) { if (!$('#guia').hidden) fecharGuia(); $('#custos').scrollIntoView({ behavior: 'smooth' }); }
+        if (pedido.erpx !== undefined) { if (!$('#guia').hidden) fecharGuia(); erpxFiltro = pedido.erpx; desenhaErpx(); ($('#erpx').hidden ? $('#erp') : $('#erpx')).scrollIntoView({ behavior: 'smooth' }); }
+        else if (pedido.custos) { if (!$('#guia').hidden) fecharGuia(); $('#custos').scrollIntoView({ behavior: 'smooth' }); }
         else abrirGuia(pedido.guia || (guia.fim ? 1 : P.passoInicial(guia)));
     });
 
@@ -429,101 +646,326 @@
 
     // ── Custos por SKU ──
     // Tem custo = o que a etiqueta usa: o do SKU ou, na falta dele, o antigo da família/anúncio (mesma conta do painel lateral).
-    const temCusto = l => !!l.custo || l.antigos.some(a => a.custo > 0);
+    const temCusto = P.temCusto;
+    // Só o custo antigo (campo vazio, valor em cinza): conta no lucro, mas ainda é para conferir — entra no "Só onde falta o custo".
+    const soAntigo = l => !l.custo && !l.kitCalc && temCusto(l);
     const valoresAntigos = l => l.antigos.map(a => a.custo).filter((v, i, a) => a.indexOf(v) === i);
     // Mesma chave de SHC.guiaCustos: SKU normalizado ou, sem SKU, o MLB do anúncio.
     const chaveGuia = l => l.tipo === 'sku' ? 'sku:' + SHC.normalizaSku(l.sku) : 'mlb:' + l.id;
-    function filtra(ls) {
+    // Busca, "Só os sem custo", "Só os que mais vendem…" e o chip de estoque, por linha (o pai fica se algum filho passa).
+    // A busca também acha pelo título do pai e pelo nome da variação.
+    function filtroLinha() {
         const busca = ($('#busca').value || '').trim().toLowerCase();
         const soSem = $('#soSem').checked;
         const falta = $('#soPrinc').checked ? new Set(principais.faltam.map(f => f.sku ? 'sku:' + SHC.normalizaSku(f.sku) : 'mlb:' + f.itemId)) : null;
-        return ls.filter(l => (!soSem || !temCusto(l)) && (!falta || falta.has(chaveGuia(l))) &&
-            (!busca || [l.titulo, l.sku, l.id].concat(l.ids).join(' ').toLowerCase().indexOf(busca) >= 0));
+        return (l, g) => (!soSem || !temCusto(l) || soAntigo(l)) && (!falta || falta.has(chaveGuia(l))) && (filtroEst === 'todos' || est(l).faixa === filtroEst) &&
+            (!busca || [l.titulo, l.sku, l.id, l.nomeVar, g && g.titulo].concat(l.ids).join(' ').toLowerCase().indexOf(busca) >= 0);
     }
-    function linhaHtml(l) {
+    // Estoque por linha (cache por desenho; P.estoqueLinha) e o que fica aberto (pai e opções de compra), lembrado neste Chrome.
+    let filtroEst = 'todos', verFin = false, mesmoAberto = '', baseEst = null, cacheEst = new Map(), abertos = new Set();
+    const est = l => { let e = cacheEst.get(l); if (!e) { e = P.estoqueLinha(l, baseEst || (baseEst = P.baseEstoque(retrato.itens, retrato.full))); cacheEst.set(l, e); } return e; };
+    const LS_ABERTOS = 'shc:custos:abertos';
+    try { abertos = new Set(JSON.parse(localStorage.getItem(LS_ABERTOS) || '[]')); } catch (e) { abertos = new Set(); }
+    const lembraAbertos = () => { try { localStorage.setItem(LS_ABERTOS, JSON.stringify([...abertos].slice(-200))); } catch (e) { /* só conforto */ } };
+    const seloHtml = (e, l) => {
+        const s = P.selos(e);
+        if (!s.length) return '<span class="cinza">—</span>';
+        return s.map(x => `<span class="est ${x.cls}"${x.cls === 'nl' ? ' title="O Copiloto lê o estoque quando sincroniza (a cada 3 horas) ou quando você abre a lista de Anúncios do Mercado Livre."' : ''}>${esc(x.txt)}</span>`).join('');
+    };
+    // o = { cls (classes da linha), de (grupo), nome (nome da variação), achou, abrirOp } — sem o, a linha simples de sempre.
+    function linhaHtml(l, o) {
+        o = o || {};
         const k = l.tipo === 'sku' ? 'sku|' + l.sku : l.canal + '|' + l.id;
         const c = l.custo || {};
-        const qtd = l.ids.length ? l.ids.length + (l.ids.length === 1 ? ' anúncio' : ' anúncios') : 'sem anúncio no ML agora';
-        const sub = l.tipo === 'sku' ? 'SKU ' + l.sku + ' · ' + qtd
-            : (l.canal === 'sp' ? 'Shopee · ' : '') + l.id;
+        const vivos = l.ids.filter(id => !P.finalizado(porIdRet[id]));
+        // 2 ou mais anúncios do mesmo SKU = opções de compra (Clássico/Premium/catálogo): abrem embaixo, com o custo do SKU.
+        const chOp = 'op:' + k, opAberta = vivos.length > 1 && (abertos.has(chOp) || o.abrirOp);
+        const qtd = vivos.length > 1 ? `<button class="tag opc" type="button" aria-expanded="${!!opAberta}" data-tog="${esc(chOp)}">${vivos.length} opções de compra ${opAberta ? '▾' : '▸'}</button>`
+            : esc(vivos.length ? SHC.qtd(vivos.length, 'anúncio', 'anúncios') : l.ids.length ? SHC.qtd(l.ids.length, 'anúncio finalizado', 'anúncios finalizados') : 'sem anúncio no ML agora');
+        const sub = l.tipo === 'sku' ? esc('SKU ' + l.sku + ' · ') + qtd
+            : esc((l.canal === 'sp' ? 'Shopee · ' : '') + l.id);
         let dica = '';
         // Custo antigo (v2.0) gravado na família da promoção (F…) ou no anúncio: um valor só → usa no SKU com 1 clique.
         const vs = l.custo ? [] : valoresAntigos(l);
         if (vs.length === 1) dica = `<span class="dica">Custo antigo ${esc(SHC.moeda(vs[0]))} (${l.antigos.some(a => /^F/.test(a.id)) ? 'da promoção' : 'do anúncio'}) · <button class="lnk" data-usar="1">usar ${l.tipo === 'sku' ? 'para o SKU' : 'neste anúncio'}</button></span>`;
         else if (vs.length > 1) dica = `<span class="dica">Custos antigos diferentes nos anúncios: ${esc(vs.map(v => SHC.moeda(v)).join(', '))}. Informe o custo aqui.</span>`;
-        if (l.custo && P.custoSuspeito(SHC.num(c.custo), l.precos)) dica = `<span class="dica alerta">Custo maior que o preço de venda (${esc(SHC.moeda(Math.max.apply(null, l.precos)))}). Confira se não sobrou um zero.</span>`;
-        const origem = l.custo ? ((c.origem === 'erp' && SHC.tinyDigitado(c) ? 'digitado' : ORIGEM(c)) ||(l.tipo === 'sku' ? 'digitado' : 'por anúncio')) + (c.atualizado ? ' · ' + dataBR(c.atualizado) : '') : (vs.length ? 'custo antigo' : 'sem custo');
-        return `<tr data-k="${esc(k)}">
-  <td class="tit"><b title="${esc(l.titulo || '')}">${esc(l.titulo || '(sem título)')}</b><span>${l.tipo === 'anuncio' ? '<span class="tag' + (l.canal === 'sp' ? ' sp' : '') + '">' + (l.antigo ? 'custo antigo por anúncio' : 'anúncio sem SKU') + '</span> ' : ''}${esc(sub)}</span></td>
-  <td><input class="inp" data-f="custo" inputmode="decimal" value="${esc(nfr(c.custo))}" placeholder="informe">${dica}</td>
-  <td><input class="inp" data-f="outros" inputmode="decimal" value="${esc(nfr(c.outros))}" placeholder="0,00"></td>
-  <td style="color:#64748B;font-size:12px;white-space:nowrap">${esc(origem)}</td>
+        else if (l.custo) {
+            // O SKU tem custo E algum anúncio dele tem custo próprio diferente: mostra os dois, nunca esconde (P.dicaDivergencia).
+            const dv = P.dicaDivergencia(l);
+            if (dv) dica = `<span class="dica alerta">${esc(dv)}${P.idsQuePrevalecem(l).map(id => ` · <button class="lnk" data-rm-antigo="${esc(id)}">usar o do SKU em ${esc(id)}</button>`).join('')}</span>`;
+        }
+        if (l.custo && P.custoSuspeito(SHC.num(c.custo), l.precos)) dica = `<span class="dica alerta">Custo maior que o preço de venda (${esc(SHC.moeda(Math.max.apply(null, l.precos)))}). Confira se não sobrou um zero.</span>` + dica;
+        const origem = l.custo ? ((c.origem === 'erp' && SHC.tinyDigitado(c) ? 'digitado' : ORIGEM(c)) ||(l.tipo === 'sku' ? 'digitado' : 'por anúncio')) + (c.atualizado ? ' · ' + dataBR(c.atualizado) : '') : l.kitCalc ? 'kit · soma ' + SHC.moeda(l.kitCalc.custo) : '—';   // sem custo ou só o antigo: o campo e a dica já dizem (não repete na Origem)
+        const e = est(l), cls = [o.cls, e.faixa === 'zero' ? 'zerada' : '', o.achou ? 'achou' : ''].filter(Boolean).join(' ');
+        const nome = o.nome ? `<b title="${esc(l.titulo || '')}"><span class="var">${esc(o.nome)}</span></b>` : `<b title="${esc(l.titulo || '')}">${esc(l.titulo || '(sem título)')}</b>`;
+        const semCusto = !temCusto(l), rot = esc(o.nome || l.sku || l.titulo || l.id);
+        let html = `<tr data-k="${esc(k)}"${cls ? ' class="' + cls + '"' : ''}${o.de ? ' data-de="' + esc(o.de) + '"' : ''}>
+  <td class="tit">${nome}<span>${l.tipo === 'anuncio' ? '<span class="tag' + (l.canal === 'sp' ? ' sp' : '') + '"' + (l.skuNaoLido ? ' title="' + esc(P.EXPLICA_SKU_NAO_LIDO) + '"' : '') + '>' + esc(P.etiquetaAnuncio(l)) + '</span> ' : ''}${sub}</span></td>
+  <td class="estq">${seloHtml(e, l)}</td>
+  <td data-r="Custo (R$)"><input class="inp${semCusto ? ' falta' : ''}" data-f="custo" inputmode="decimal" value="${esc(nfr(c.custo))}" placeholder="${semCusto ? 'falta o custo' : vs.length === 1 ? esc(nfr(vs[0])) : l.kitCalc ? esc(nfr(l.kitCalc.custo)) : ''}" aria-label="Custo de ${rot}">${dica}</td>
+  <td data-r="Embalagem/outros"><input class="inp" data-f="outros" inputmode="decimal" value="${esc(nfr(c.outros))}" placeholder="0,00" aria-label="Embalagem e outros de ${rot}"></td>
+  <td data-r="Origem" style="color:#64748B;font-size:12px;white-space:nowrap">${esc(origem)}</td>
   <td>${l.custo ? '<button class="x" data-rm="1" title="Apagar este custo">×</button>' : ''}</td></tr>`;
+        if (opAberta) html += vivos.map((id, i) => {
+            const it = porIdRet[id] || {}, a = P.idsQuePrevalecem(l).indexOf(id) >= 0 && l.antigos.find(x => String(x.id) === id);
+            const tipo = [it.tipo, it.catalogoML ? 'Catálogo' : '', it.status === 'paused' ? 'pausado' : ''].filter(Boolean).join(' · ');
+            const usa = a ? `<span class="dica alerta" style="margin:0">Custo próprio ${esc(SHC.moeda(a.custo))}: o lucro deste anúncio usa esse · <button class="lnk" data-rm-antigo="${esc(id)}">usar o do SKU</button></span>`
+                : '<span class="usa">Usa o custo do SKU</span>';
+            return `<tr class="${o.de ? 'neto' : 'fil opcl'}${i === vivos.length - 1 ? ' ult' : ''}" data-de="${esc(chOp)}">
+  <td class="tit"><b>${esc(id + (tipo ? ' · ' + tipo : ''))}</b>${tipo ? '' : '<span><span class="tag opc">opção de compra</span></span>'}</td>
+  <td class="estq"></td>
+  <td colspan="3" class="cpai">${usa}</td><td class="vaz"></td></tr>`;
+        }).join('');
+        return html;
     }
-    let redesenharDepois = false;
+    // Linha do PAI (família do ML / anúncio com variações): título, "N variações", estoque somado, "N de M com custo" e "Mesmo custo para todas".
+    function paiHtml(g, aberto) {
+        const fs = g.todosFilhos || g.filhos, todos = fs.length, es = fs.map(est), com = fs.filter(temCusto).length, ant = fs.filter(soAntigo).length;   // custo antigo: sem ✓ (ainda é para conferir)
+        // Variações que usam o MESMO anúncio (anúncio antigo com variações, grupo 'v:') recebem o estoque do anúncio inteiro: conta 1 vez (o maior).
+        // ponytail: dedupe pela lista exata de anúncios; um filho com anúncio compartilhado + um próprio ainda soma o compartilhado.
+        const porIds = {}; fs.forEach((l, i) => { const e = es[i]; if (e.lido) { const k = l.ids.slice().sort().join(); porIds[k] = Math.max(porIds[k] || 0, e.total || 0); } });
+        const soma = Object.keys(porIds).reduce((t, k) => t + porIds[k], 0);
+        const zer = es.filter(e => e.faixa === 'zero').length, faltaLer = es.filter(e => e.faixa === 'nl' && !e.semAnuncio).length, fx = P.faixaGrupo(g, est);
+        const anuncios = new Set(); fs.forEach(l => l.ids.forEach(id => { if (!P.finalizado(porIdRet[id])) anuncios.add(id); }));
+        const selo = fx === 'zero' ? '<span class="est zero">Zerado</span>' : fx === 'tem' ? `<span class="est tem">Com estoque ${esc(milhar(soma))}</span>` : seloHtml({ faixa: 'nl' });
+        // Termo neutro: o filho diz se é "Zerado" ou "Pausado sem estoque"; o pai só conta.
+        const avisos = [fx !== 'zero' && zer ? (zer === 1 ? '1 variação sem estoque' : zer + ' variações sem estoque') : '',
+            fx === 'tem' && faltaLer ? (faltaLer === 1 ? 'falta ler 1 variação' : 'falta ler ' + faltaLer + ' variações') : ''].filter(Boolean).join(' · ');
+        const dicaEst = avisos ? `<span class="dica alerta">${avisos}</span>` : fx === 'zero' ? `<span class="dica">${fs.length === 1 ? 'a variação' : 'as ' + fs.length + ' variações'}</span>` : '';
+        // A caixinha usa o MESMO critério do resumo (P.temCusto): custo do kit ou antigo do anúncio conta como "já tem" e só muda marcando.
+        const nComCusto = com, semC = fs.length - nComCusto, outros = fs.filter(l => !l.custo && temCusto(l)).length;
+        const mesmo = mesmoAberto === g.chave ? `<div class="mesmo"><div class="lin"><b style="font-size:12.5px">Mesmo custo para todas as variações:</b><input class="inp" data-mesmo-val inputmode="decimal" placeholder="R$" aria-label="Custo para todas as variações"><button class="bt verde" type="button" data-mesmo-ok="${esc(g.chave)}">Aplicar</button></div>`
+            + (nComCusto ? `<label><input type="checkbox" data-mesmo-todas${semC || outros ? '' : ' checked'}> Trocar também ${nComCusto === 1 ? 'a 1 que já tem' : 'as ' + nComCusto + ' que já têm'} custo${outros ? ' (' + (outros === 1 ? '1 usa' : outros + ' usam') + ' a soma do kit ou o custo do anúncio)' : ''}${semC ? '. Sem marcar, só preenche ' + (semC === 1 ? 'a 1 vazia' : 'as ' + semC + ' vazias') : ''}</label>` : '') + '</div>'
+            : `<button class="lnk" type="button" data-mesmo="${esc(g.chave)}">Mesmo custo para todas as variações</button>`;
+        return `<tr class="pai${fx === 'zero' ? ' zerada' : ''}" data-pai="${esc(g.chave)}">
+  <td class="tit"><div class="cab"><button class="tog" type="button" aria-expanded="${aberto}" aria-label="${aberto ? 'Recolher' : 'Abrir'} variações" data-tog="${esc(g.chave)}">${aberto ? '▾' : '▸'}</button><div>
+    <b title="${esc(g.titulo)}">${esc(g.titulo || '(sem título)')}</b><span><span class="tag fam">${todos} variações</span> ${esc(SHC.qtd(anuncios.size, 'anúncio', 'anúncios'))}${g.filhos.length < todos ? ' · mostrando ' + g.filhos.length + ' de ' + todos : ''}</span></div></div></td>
+  <td class="estq">${selo}${dicaEst}</td>
+  <td class="cpai" colspan="3" data-r="Custo"><span class="resumo"${com < fs.length || ant ? ' style="color:var(--ambar);font-weight:600"' : ''}>${com} de ${fs.length} variações com custo${ant ? ` · <button class="lnk" type="button" data-ver-antigo="${esc(g.chave)}">${ant === 1 ? '1 custo antigo' : ant + ' custos antigos'}</button>` : com === fs.length ? ' ✓' : ''}</span>${mesmo}</td>
+  <td class="vaz"></td></tr>`;
+    }
+    // Um grupo (pai + filhos abertos, ou a linha simples) em HTML. busca = o texto procurado (abre o pai e pinta a variação achada).
+    function grupoHtml(g, abrir, busca) {
+        if (g.tipo !== 'pai') return linhaHtml(g.filhos[0], { abrirOp: busca && g.filhos[0].ids.some(id => id.toLowerCase().indexOf(busca) >= 0) });
+        const aberto = abrir || abertos.has(g.chave);
+        let html = paiHtml(g, aberto);
+        if (aberto) html += g.filhos.map((l, i) => linhaHtml(l, { cls: 'fil' + (i === g.filhos.length - 1 ? ' ult' : ''), de: g.chave, nome: l.nomeVar,
+            achou: !!busca && String(g.titulo || '').toLowerCase().indexOf(busca) < 0, abrirOp: busca && l.ids.some(id => id.toLowerCase().indexOf(busca) >= 0) })).join('');
+        return html;
+    }
+    let redesenharDepois = false, usarAntigos = [];
     // Seção "Custo dos produtos que mais vendem": as 3 formas + progresso dos 10 principais (etapa "custos" do guia).
     const txtPrincipais = () => principais.de ? principais.com + ' de ' + principais.de + ' principais com custo' : '';
     function desenhaPrincipais() {
         const pronto = !!guia.feitos.custos || (principais.de > 0 && principais.com >= principais.de);
         $('#cPrinc').textContent = txtPrincipais() || 'Primeiro o Copiloto precisa ler a sua conta do Mercado Livre.';
-        $('#cProg').style.width = (principais.de ? Math.round(principais.com / principais.de * 100) : 0) + '%';
-        $('#cTodos').textContent = principais.deTodos ? principais.comTodos + ' de ' + principais.deTodos + ' SKUs com custo' : '';
+        $('#cProg').style.width = (principais.de ? Math.round(principais.com / principais.de * 100) : 0) + '%';   // v3.2.0: uma fração só (o total fica em "Custos por SKU")
         $('#cJa').hidden = pronto;
         $('#cFaltam').hidden = !principais.faltam.length;
         $('#cFaltamLista').innerHTML = principais.faltam.map(f => `<li>${esc(f.titulo || f.sku || f.itemId)}${f.sku ? ' <span class="cinza">SKU ' + esc(f.sku) + '</span>' : ''}</li>`).join('');
         $('#cOk').textContent = pronto ? '✓ Etapa de custos concluída. O guia segue no painel lateral.' : '';
     }
-    // "Conectar Tiny ou Omie" (Bling: planilha): vai para os cartões "Custos do ERP" (conexão por chave que importa sozinha).
+    // "Puxar do ERP ou de planilha ↓": vai para "Custos do ERP" — o único lugar com conectar o ERP e importar planilha (v3.2.0).
     $('#cTiny').addEventListener('click', () => { $('#erp').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
-    $('#cAnuncios').addEventListener('click', () => { chrome.tabs.create({ url: URL_ANUNCIOS }); });
     // Mostra na tabela só os principais sem custo, com o campo de custo de cada um.
     $('#cDigitar').addEventListener('click', () => { $('#soPrinc').checked = true; $('#busca').value = ''; desenhaTabela(); $('#lista').scrollIntoView({ behavior: 'smooth' }); });
     $('#cJa').addEventListener('click', async () => { await gravaGuia({ feitos: { custos: SHC.hoje() } }); desenhaPrincipais(); salvoEFecha('✓ Salvo'); });
 
+    // ── Kits (produto composto): SKU do kit = lista de SKUs × quantidade; custo = soma (SHC.kitDe) ──
+    let kitsTodos = false;   // "Ver mais (N)" ↔ "Ver menos" da tabela de kits (10 à vista)
+    function desenhaKits() {
+        const todas = P.linhasKits(kits), ls = kitsTodos ? todas : todas.slice(0, 10);
+        const vm = todas.length > 10 ? `<tr><td colspan="4" style="text-align:center"><button class="bt sec" type="button" data-kits-ver aria-expanded="${kitsTodos}">${kitsTodos ? 'Ver menos' : `Ver mais (${todas.length - 10})`}</button></td></tr>` : '';
+        $('#kCorpo').innerHTML = ls.length ? ls.map(l => `<tr data-kit="${esc(l.sku)}">
+  <td style="word-break:break-all;min-width:80px"><b>${esc(l.sku)}</b></td>
+  <td style="font-size:12.5px">${esc(l.dentro)}</td>
+  <td>${l.custo !== null ? '<b>' + esc(SHC.moeda(SHC.r2(l.custo + l.outros))) + '</b><span class="dica">' + (l.proprio ? 'custo do próprio kit' + (l.soma !== null ? ' · soma dos itens ' + esc(SHC.moeda(l.soma)) : '') : 'soma dos itens')
+        + (l.outros ? ' + ' + esc(SHC.moeda(l.outros)) + ' de embalagem/outros' : '') + '</span>'
+        : '<b style="color:var(--ambar)">Falta o custo</b><span class="dica alerta">de: ' + esc(l.faltam.join(', ')) + '</span>'}</td>
+  <td style="white-space:nowrap"><button class="lnk" data-kit-ed="1">editar</button> <button class="x" data-kit-rm="1" title="Deixar de ser kit">×</button></td></tr>`).join('') + vm
+            : '<tr><td colspan="4" class="vazio">Nenhum kit ainda.</td></tr>';
+    }
+    $('#kCorpo').addEventListener('click', async e => {
+        if (e.target.closest('[data-kits-ver]')) { kitsTodos = !kitsTodos; desenhaKits(); return; }
+        const tr = e.target.closest('tr[data-kit]'), k = tr && kits.kits.find(x => x.sku === tr.getAttribute('data-kit'));
+        if (!k) return;
+        if (e.target.closest('[data-kit-ed]')) {
+            $('#kForm').open = true; $('#kSku').value = k.sku;
+            $('#kItens').value = k.dados.kit.map(i => i.sku + ' x ' + i.q).join('\n');
+            $('#kOutros').value = nfr(k.dados.outros); $('#kSku').focus();
+        } else if (e.target.closest('[data-kit-rm]')) {
+            try { await SHC.salvarKit(k.sku, [], undefined); } catch (err) { falhaTabela(null); return; }
+            await lerDados(); desenhaTabela();
+        }
+    });
+    $('#kSalvar').addEventListener('click', async () => {
+        const msg = $('#kMsg'), sku = SHC.normalizaSku($('#kSku').value), r = SHC.lerComposicao($('#kItens').value, sku), o = P.valorCampo($('#kOutros').value);
+        const erro = !sku ? 'Digite o SKU do kit.' : r.erros[0] || (!r.itens.length ? 'Diga o que vai dentro do kit (um SKU por linha).' : !o.ok || o.valor < 0 ? 'Embalagem/outros: digite só o número. Ex.: 2,50' : '');
+        msg.className = erro ? 'msg erro' : 'ok';
+        if (erro) { msg.textContent = erro; return; }
+        try { await SHC.salvarKit(sku, r.itens, o.valor || 0); } catch (err) { msg.className = 'msg erro'; msg.textContent = FALHA; return; }
+        await lerDados(); desenhaTabela();
+        const l = P.linhasKits(kits).find(x => x.sku === sku);
+        msg.textContent = l && l.custo !== null ? '✓ Kit salvo: ' + SHC.moeda(l.custo) : '✓ Kit salvo. Falta o custo de: ' + (l ? l.faltam.join(', ') : '');
+        $('#kSku').value = ''; $('#kItens').value = ''; $('#kOutros').value = '';
+    });
+
     function desenhaTabela() {
         desenhaPrincipais();
+        desenhaKits();
         redesenharDepois = false;
         const todas = modelo.skus.concat(modelo.anuncios);
         // Progresso = SKUs + anúncios sem SKU (igual ao Catálogo do painel lateral). Com retrato, SKU sem anúncio na conta
         // (ex.: produto que só existe no Tiny) e custo só antigo não entram.
-        const base = modelo.skus.filter(l => !temRetrato || l.ids.length).concat(modelo.anuncios.filter(l => !l.antigo));
+        // v3.2: anúncio finalizado no ML (closed) fica fora por padrão — não conta no progresso nem nos chips ("Mostrar finalizados").
+        const fin = l => temRetrato && P.linhaFinalizada(l, porIdRet), nFin = todas.filter(fin).length;
+        const vivas = l => verFin || !fin(l);
+        const base = modelo.skus.filter(l => (!temRetrato || l.ids.length) && !fin(l)).concat(modelo.anuncios.filter(l => !l.antigo && !fin(l)));
         const com = base.filter(temCusto).length;
-        $('#contador').textContent = base.length ? com + ' de ' + base.length + ' produtos com custo' : 'Nenhum produto ainda';
-        const pctCusto = base.length ? Math.round(com / base.length * 100) : 0;
+        // v3.2.0: quem só tem o custo antigo (campo vazio, valor em cinza) fica à parte: "3 de 8 com custo · 5 com custo antigo para conferir".
+        // A barra e o % contam só os confirmados — senão "100%" com 5 campos vazios. (A etiqueta continua usando o custo antigo.)
+        const antigos = base.filter(soAntigo), nAntigo = antigos.length, conf = com - nAntigo;
+        $('#contador').textContent = base.length ? conf + ' de ' + base.length + ' produtos com custo' : 'Nenhum produto ainda';
+        // Ação em lote no lugar do texto: grava de uma vez os custos antigos de valor único (os com valores diferentes pedem o custo na linha).
+        usarAntigos = antigos.filter(l => valoresAntigos(l).length === 1);
+        $('#usarAntigos').hidden = !nAntigo;
+        $('#usarAntigos').textContent = usarAntigos.length ? 'Usar ' + (usarAntigos.length === 1 ? 'o 1 custo antigo' : 'os ' + usarAntigos.length + ' custos antigos')
+            : SHC.qtd(nAntigo, 'custo antigo', 'custos antigos') + ' para conferir';
+        const pctCusto = base.length ? Math.round(conf / base.length * 100) : 0;
         $('#contProg').style.width = pctCusto + '%';
         $('#contPct').textContent = base.length ? pctCusto + '%' : '';
-        let skus = filtra(modelo.skus), ans = filtra(modelo.anuncios);
-        const corpo = $('#corpo'), MAX = 400;
-        // Sem busca nem filtro: só os 10 que mais vendem (ordem por venda), com "Ver todos os N produtos". A busca e os filtros
-        // continuam procurando em todos.
-        const filtrando = !!($('#busca').value || '').trim() || $('#soSem').checked || $('#soPrinc').checked;
+        $('#finLbl').hidden = !nFin;
+        $('#finN').textContent = nFin ? '(' + nFin + ')' : '';
+        // Chips de estoque (contagem por SKU/anúncio) + quando o estoque foi lido. Sem retrato: some (não há estoque para mostrar).
+        // Mesma base do contador (SKU sem anúncio e custo antigo de anúncio fora da lista ficam à parte); com "Mostrar finalizados", eles entram.
+        const noContador = l => l.tipo === 'sku' ? (!temRetrato || l.ids.length) : !l.antigo;
+        const vivasT = todas.filter(vivas), n = P.contaEstoque(vivasT.filter(noContador), est), semAn = temRetrato ? vivasT.length - n.todos : 0;
+        $('#fEst').hidden = !temRetrato;
+        $('#fEst').innerHTML = [['todos', 'Todos', n.todos], ['tem', 'Com estoque', n.tem], ['zero', 'Zerados', n.zero]].map(([k, t, q]) =>
+            `<button type="button" data-est="${k}" class="${filtroEst === k ? 'on' : ''}" aria-pressed="${filtroEst === k}">${t}<b>${q}</b></button>`).join('')
+            + (n.nl ? `<span class="nl">${n.nl === 1 ? '1 ainda sem leitura' : n.nl + ' ainda sem leitura'} de estoque</span>` : '')   // o "· " vem do CSS (some quando quebra a linha)
+            + (semAn ? `<span class="nl">${semAn} sem anúncio ativo no ML</span>` : '');
+        // Legenda curta das palavras do estoque (as mesmas dos selos); a ordem já aparece na linha "Zerados · no fim da lista".
+        // A legenda só aparece quando há as duas palavras na tela (alguma linha "Pausado sem estoque").
+        const temPausa = temRetrato && vivasT.some(l => { const e = est(l); return e.faixa === 'zero' && e.pausa; });
+        $('#estInfo').textContent = temRetrato ? (temPausa ? 'Zerado = ativo e sem estoque · Pausado sem estoque = parado porque o estoque acabou. ' : '') + P.textoLeituraEstoque(retrato.ts) : '';
+        const busca = ($('#busca').value || '').trim().toLowerCase(), passa = filtroLinha();
+        // Pai → variações (P.agrupa) e o filtro olhando cada variação; anúncio sem SKU fica no grupo de sempre.
+        let gs = P.filtraGrupos(P.agrupa(modelo.skus.filter(vivas), retrato.itens, retrato.familias, retrato.full), passa);
+        let ans = P.filtraGrupos(modelo.anuncios.filter(vivas).map(l => ({ tipo: 'solo', chave: 'a:' + l.canal + '|' + l.id, filhos: [l] })), passa);
+        const corpo = $('#corpo'), MAX = 400, vendasDe = l => vendasChave[chaveGuia(l)];
+        // Sem busca nem filtro: só os 10 que mais vendem (o grupo vale 1, com as vendas somadas), com "Ver mais (N)". A busca e os
+        // filtros continuam procurando em todos. Depois: com estoque → não lido → zerados.
+        // Qualquer filtro (inclusive o chip de estoque) abre os pais: a variação que bateu (ex.: a zerada) aparece sem precisar abrir.
+        const abreTudo = !!busca || $('#soSem').checked || $('#soPrinc').checked || filtroEst !== 'todos';
+        const filtrando = abreTudo;
         let escondidas = 0;
         if (!filtrando && !verTodos) {
-            const r = P.reduzida(skus.concat(ans), l => vendasChave[chaveGuia(l)], 10);
+            const r = P.reduzida(gs.concat(ans), g => g.filhos.reduce((t, l) => t + (vendasDe(l) || 0), 0), 10);
             escondidas = r.escondidas;
-            skus = r.linhas.filter(l => l.tipo === 'sku'); ans = r.linhas.filter(l => l.tipo !== 'sku');
+            gs = r.linhas.filter(g => g.chave.slice(0, 2) !== 'a:'); ans = r.linhas.filter(g => g.chave.slice(0, 2) === 'a:');
         }
-        if (!skus.length && !ans.length) {
-            corpo.innerHTML = `<tr><td colspan="5" class="vazio">${todas.length ? 'Nada encontrado com esse filtro.'
+        gs = P.ordenaGrupos(gs, est, vendasDe); ans = P.ordenaGrupos(ans, est, vendasDe);
+        if (!gs.length && !ans.length) {
+            corpo.innerHTML = `<tr><td colspan="6" class="vazio">${todas.length ? 'Nada encontrado com esse filtro.'
                 : 'Nenhum produto ainda. Abra a lista de Anúncios do Mercado Livre neste Chrome: o Copiloto lê seus SKUs sozinho.'}</td></tr>`;
             $('#rodape').textContent = '';
             return;
         }
-        let html = skus.slice(0, MAX).map(linhaHtml).join('');
-        if (ans.length) html += '<tr class="grp"><td colspan="5">Anúncios sem SKU e custos antigos por anúncio · o custo fica gravado no próprio anúncio</td></tr>' + ans.slice(0, MAX).map(linhaHtml).join('');
-        if (escondidas) html += `<tr><td colspan="5" style="text-align:center"><button class="bt sec" type="button" data-ver-todos="1">Ver todos os ${todas.length} produtos</button></td></tr>`;
+        let html = '', faixaZero = false;
+        gs.slice(0, MAX).forEach(g => {
+            if (!faixaZero && temRetrato && P.faixaGrupo(g, est) === 'zero') { faixaZero = true; html += '<tr class="grp"><td colspan="6">Zerados · no fim da lista</td></tr>'; }
+            html += grupoHtml(g, abreTudo, busca);
+        });
+        if (ans.length) html += '<tr class="grp"><td colspan="6">' + esc(P.tituloGrupoAnuncios(P.contaAnuncios(ans.map(g => g.filhos[0])))) + ' · o custo fica gravado no próprio anúncio</td></tr>' + ans.slice(0, MAX).map(g => grupoHtml(g, abreTudo, busca)).join('');
+        if (escondidas) html += `<tr><td colspan="6" style="text-align:center"><button class="bt sec" type="button" data-ver-todos="1" aria-expanded="false">Ver mais (${escondidas})</button></td></tr>`;
+        else if (verTodos && !filtrando && gs.length + ans.length > 10) html += `<tr><td colspan="6" style="text-align:center"><button class="bt sec" type="button" data-ver-todos="1" aria-expanded="true">Ver menos</button></td></tr>`;
         corpo.innerHTML = html;
-        const cortou = skus.length > MAX || ans.length > MAX;
-        $('#rodape').textContent = (escondidas ? 'Mostrando os ' + (skus.length + ans.length) + ' que mais vendem · ' : '') + SHC.qtd(modelo.skus.length, 'SKU', 'SKUs') + (modelo.anuncios.length ? ' · ' + SHC.qtd(modelo.anuncios.length, 'anúncio sem SKU', 'anúncios sem SKU') : '')
+        const cortou = gs.length > MAX || ans.length > MAX;
+        $('#rodape').textContent = (escondidas ? 'Mostrando os ' + (gs.length + ans.length) + ' que mais vendem · ' : '') + SHC.qtd(modelo.skus.filter(vivas).length, 'SKU', 'SKUs') + P.rodapeAnuncios(P.contaAnuncios(modelo.anuncios.filter(vivas)))
+            + (nFin && !verFin ? ' · ' + SHC.qtd(nFin, 'finalizado fora da lista', 'finalizados fora da lista') : '')
             + (cortou ? ' · mostrando até ' + MAX + ' (use a busca)' : '')
             + (temRetrato ? '' : ' · Os SKUs aparecem depois que o Copiloto ler a lista de Anúncios do Mercado Livre.');
     }
-    $('#corpo').addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-ver-todos]')) { verTodos = true; desenhaTabela(); } });
+    const contaEsc = $('#contaEsc');   // F16: trocar a conta da tabela relê só o retrato dela (nenhum pedido ao ML)
+    if (contaEsc && contaEsc.addEventListener) contaEsc.addEventListener('change', async () => { contaVer = contaEsc.value || ''; await lerDados(); desenhaTabela(); desenhaErpx(); desenhaContaTab().catch(() => {}); });
+    $('#corpo').addEventListener('click', e => {
+        if (!(e.target.closest && e.target.closest('[data-ver-todos]'))) return;
+        verTodos = !verTodos; desenhaTabela();
+        if (!verTodos) { const l = $('#lista'); if (l && l.scrollIntoView) l.scrollIntoView({ block: 'nearest' }); }   // "Ver menos": volta ao topo da lista
+    });
+    // Abrir/recolher (pai e opções de compra), "Mesmo custo para todas as variações".
+    $('#corpo').addEventListener('click', async e => {
+        const t = e.target.closest && e.target.closest('[data-tog]'), m = e.target.closest && e.target.closest('[data-mesmo]'), ok = e.target.closest && e.target.closest('[data-mesmo-ok]');
+        if (t) {
+            const k = t.getAttribute('data-tog');
+            if (abertos.has(k)) abertos.delete(k); else abertos.add(k);
+            lembraAbertos(); desenhaTabela();
+            return;
+        }
+        if (m) { mesmoAberto = m.getAttribute('data-mesmo'); abertos.add(mesmoAberto); desenhaTabela(); const i = document.querySelector('[data-mesmo-val]'); if (i && i.focus) i.focus(); return; }
+        if (!ok) return;
+        const g = P.agrupa(modelo.skus, retrato.itens, retrato.familias, retrato.full).find(x => x.chave === ok.getAttribute('data-mesmo-ok'));
+        const caixa = ok.closest('.mesmo'), inp = caixa && caixa.querySelector('[data-mesmo-val]'), todas = caixa && caixa.querySelector('[data-mesmo-todas]');
+        const lido = P.valorCampo(inp && inp.value);
+        if (!g || !lido.ok || !(lido.valor > 0)) { if (inp) avisa(inp, '#B91C1C', 'Digite só o número. Ex.: 18,40'); msgTabela('Digite o custo (só o número, ex.: 18,40). Nada foi mudado.'); return; }
+        const skus = P.aplicaMesmoCusto(g.filhos, lido.valor, !!(todas && todas.checked));
+        const kitOuAnuncio = g.filhos.filter(l => skus.indexOf(l.sku) >= 0 && !l.custo && temCusto(l)).length;
+        let salvos = 0;
+        try {
+            for (const s of skus) { const l = g.filhos.find(x => x.sku === s); await SHC.salvarCustoSku(s, Object.assign({ custo: lido.valor, origem: 'manual' }, l && l.custo && l.custo.titulo ? {} : { titulo: (l && l.titulo) || '' })); salvos++; }
+        } catch (err) {
+            // Parte já foi gravada: redesenha com os valores novos e diz quantas entraram.
+            try { await lerDados(); desenhaTabela(); } catch (e2) { /* a mensagem abaixo já avisa */ }
+            msgTabela('Salvei ' + salvos + ' de ' + skus.length + ' variações e a gravação parou. Confira e tente de novo.');
+            return;
+        }
+        mesmoAberto = '';
+        await lerDados(); desenhaTabela();
+        msgTabela(skus.length ? '✓ ' + SHC.qtd(skus.length, 'variação salva', 'variações salvas') + ' com ' + SHC.moeda(lido.valor)
+            + (kitOuAnuncio ? ' (' + (kitOuAnuncio === 1 ? '1 usava' : kitOuAnuncio + ' usavam') + ' a soma do kit ou o custo do anúncio: agora usa' + (kitOuAnuncio === 1 ? '' : 'm') + ' este valor)' : '') + '.'
+            : 'Todas as variações já tinham custo: marque “Trocar também” para mudar.', !!skus.length);
+    });
     $('#busca').addEventListener('input', desenhaTabela);
     $('#soSem').addEventListener('change', desenhaTabela);
+    // "1 custo antigo" no pai: abre a família já filtrada em "Só onde falta o custo" (que inclui quem só tem o custo antigo).
+    $('#corpo').addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('[data-ver-antigo]');
+        if (!b) return;
+        $('#soSem').checked = true; abertos.add(b.getAttribute('data-ver-antigo')); lembraAbertos(); desenhaTabela();
+        const p = document.querySelector('tr[data-pai="' + CSS.escape(b.getAttribute('data-ver-antigo')) + '"]');
+        if (p && p.scrollIntoView) p.scrollIntoView({ block: 'nearest' });
+    });
+    // "Usar os N custos antigos": grava cada custo antigo de valor único como custo do SKU/anúncio (o mesmo do "usar para o SKU" da linha).
+    $('#usarAntigos').addEventListener('click', async () => {
+        if (!usarAntigos.length) { $('#soSem').checked = true; desenhaTabela(); return; }   // só valores diferentes: mostra as linhas para digitar
+        const ls = usarAntigos.slice();
+        let salvos = 0;
+        try {
+            for (const l of ls) {
+                const d = { custo: valoresAntigos(l)[0], titulo: l.titulo || '', origem: 'manual' };
+                if (l.tipo === 'sku') await SHC.salvarCustoSku(l.sku, d); else await SHC.salvarCusto(l.canal, l.id, d);
+                salvos++;
+            }
+        } catch (err) {
+            try { await lerDados(); desenhaTabela(); } catch (e2) { /* a mensagem abaixo já avisa */ }
+            msgTabela('Salvei ' + salvos + ' de ' + ls.length + ' custos antigos e a gravação parou. Confira e tente de novo.');
+            return;
+        }
+        await lerDados(); desenhaTabela();
+        msgTabela('✓ ' + SHC.qtd(salvos, 'custo antigo virou custo', 'custos antigos viraram custo') + '. Dá para mudar qualquer um na tabela.', true);
+    });
     $('#soPrinc').addEventListener('change', desenhaTabela);
+    $('#verFin').addEventListener('change', () => { verFin = !!$('#verFin').checked; desenhaTabela(); });
+    $('#fEst').addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('[data-est]');
+        if (!b) return;
+        filtroEst = b.getAttribute('data-est');
+        desenhaTabela();
+    });
+    function msgTabela(txt, bom) { const m = $('#msgTab'); m.className = bom ? 'ok' : 'msg erro'; m.textContent = txt; }
 
-    function falhaTabela(el) { if (el) avisa(el, '#B91C1C', FALHA); $('#msgTab').textContent = FALHA; }
+    function falhaTabela(el) { if (el) avisa(el, '#B91C1C', FALHA); msgTabela(FALHA); }
     function avisa(el, cor, dica) {
         el.style.borderColor = cor;
         el.title = dica || '';
@@ -538,7 +980,7 @@
         if (!lido.ok || (valor !== null && valor < 0)) {   // texto que não é número não apaga o custo gravado
             e.target.value = nfr(l.custo ? l.custo[campo] : '');
             avisa(e.target, '#B91C1C', lido.ok ? 'Use um valor positivo' : 'Digite só o número. Ex.: 25,90');
-            $('#msgTab').textContent = lido.ok ? 'Use um valor positivo.' : 'Valor não entendido: digite só o número, por exemplo 25,90. Nada foi mudado.';
+            msgTabela(lido.ok ? 'Use um valor positivo.' : 'Valor não entendido: digite só o número, por exemplo 25,90. Nada foi mudado.');
             return;
         }
         const custoAtual = l.custo ? SHC.num(l.custo.custo) : null;
@@ -566,13 +1008,16 @@
         if (redesenharDepois && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('#corpo'))) desenhaTabela();
     }, 50));
     $('#corpo').addEventListener('click', async e => {
-        const rm = e.target.closest('[data-rm]'), usar = e.target.closest('[data-usar]');
-        if (!rm && !usar) return;
+        const rm = e.target.closest('[data-rm]'), usar = e.target.closest('[data-usar]'), rmAntigo = e.target.closest('[data-rm-antigo]');
+        if (!rm && !usar && !rmAntigo) return;
         const tr = e.target.closest('tr[data-k]');
         const l = tr && porChave.get(tr.getAttribute('data-k'));
-        if (!l) return;
+        if (!l && !rmAntigo) return;   // "usar o do SKU" da linha da opção de compra (sem data-k) só precisa do MLB
         try {
-            if (usar) {   // grava o custo antigo (valor único) como custo do SKU / do anúncio
+            // Custo próprio do anúncio que ganhava do SKU (P.dicaDivergencia): apaga só o do anúncio; o lucro passa a usar o do SKU.
+            // custo 0 (não remove o registro: outros campos dele ficam).
+            if (rmAntigo) await SHC.salvarCusto('ml', rmAntigo.getAttribute('data-rm-antigo'), { custo: 0 });
+            else if (usar) {   // grava o custo antigo (valor único) como custo do SKU / do anúncio
                 const d = { custo: valoresAntigos(l)[0], titulo: l.titulo || '' };
                 if (l.tipo === 'sku') await SHC.salvarCustoSku(l.sku, Object.assign(d, { origem: 'manual' }));
                 else await SHC.salvarCusto(l.canal, l.id, Object.assign(d, { origem: 'manual' }));
@@ -696,17 +1141,11 @@
 
     // ── Tiny (API v2 por token, tiny.js): só lê os custos; grava origem 'erp' sem trocar o que o seller digitou ──
     const TINY = { origins: [SHC.TINY_ORIGEM] };
-    let tinyRodando = false, tinyToken = '';   // tinyToken: o guardado (clique no botão rápido decide sem esperar o armazenamento)
-    // A mesma mensagem na seção do Tiny e na faixa rápida da tabela de custos.
-    const tinyMsg = (t, erro) => ['#tinyMsg', '#rMsg'].forEach(s => { const m = $(s); m.className = 'msg' + (erro ? ' erro' : (/^✓/.test(t || '') ? ' ok' : '')); m.textContent = t || ''; });
-    const tinyBotoes = off => ['#tinyConectar', '#tinyAtualizar', '#tinyEsquecer', '#rTiny', '#rConectar'].forEach(s => { $(s).disabled = off; });
-    const tinyBarra = (p, n) => {
-        const pct = n ? Math.round(p / n * 100) : 0;
-        $('#rProgLin').hidden = false;
-        $('#rProg').style.width = pct + '%';
-        $('#rProgTxt').textContent = pct + '% · ' + p + ' de ' + n + (n === 1 ? ' página' : ' páginas');
-        impBarra({ erp: 'tiny', feito: p, de: n, unidade: n === 1 ? 'página' : 'páginas' });
-    };
+    let tinyRodando = false;
+    // A mensagem fica na seção "Custos do ERP" (v3.2.0: saiu a faixa rápida da tabela, que repetia conectar/importar).
+    const tinyMsg = (t, erro) => { const m = $('#tinyMsg'); m.className = 'msg' + (erro ? ' erro' : (/^✓/.test(t || '') ? ' ok' : '')); m.textContent = t || ''; };
+    const tinyBotoes = off => ['#tinyConectar', '#tinyAtualizar', '#tinyEsquecer'].forEach(s => { $(s).disabled = off; });
+    const tinyBarra = (p, n) => impBarra({ erp: 'tiny', feito: p, de: n, unidade: n === 1 ? 'página' : 'páginas' });
     // Importação visual (Tiny, Omie): barra "Importando do Tiny: 120 de 253 SKUs" e, no fim, os cartões do resumo.
     function impBarra(p) {
         const txt = P.textoImportando(p);
@@ -726,8 +1165,6 @@
     $('#suporteZap').href = SHC.SUPORTE_WHATSAPP;
     async function desenhaTiny() {
         const t = await SHC.lerChave(SHC.TINY_CHAVE), com = !!(t && t.token);
-        tinyToken = com ? t.token : '';
-        $('#rTiny').textContent = com ? 'Puxar custos do Tiny' : 'Conectar o Tiny e puxar custos';
         $('#tinySem').hidden = com;
         $('#tinyCom').hidden = !com;
         $('#tinyMasc').textContent = com ? SHC.tinyMascara(t.token) : '';
@@ -742,15 +1179,16 @@
         tinyRodando = true;
         tinyBotoes(true);
         tinyMsg('Lendo os produtos do Tiny…');
-        $('#rProgLin').hidden = true;
         try {
             const produtos = await SHC.tinyPuxar(token, {
                 fetch: (u, i) => fetch(u, i), espera: ms => new Promise(r => setTimeout(r, ms)),
                 progresso: (p, n) => { tinyMsg('Lendo os produtos do Tiny… página ' + p + ' de ' + n); tinyBarra(p, n); },
             });
             const r = await SHC.tinyGravar(produtos, 'tiny');
+            const antes = await SHC.lerChave(SHC.TINY_CHAVE);
             await SHC.gravarChave(SHC.TINY_CHAVE, { token, ultima: Object.assign({ ts: Date.now() }, r) });   // token só é guardado depois que o Tiny aceitou
-            $('#tinyToken').value = ''; $('#rToken').value = ''; $('#rPassos').hidden = true;
+            if (SHC.erpRetratoDaTela) await SHC.erpRetratoDaTela('tiny', produtos, !(antes && antes.ultima));   // v3.2: cruzamento ERP × ML
+            $('#tinyToken').value = '';
             await lerDados();
             desenhaTabela();
             tinyMsg('✓ ' + SHC.tinyResumo(r) + '.' + (txtPrincipais() ? ' Agora: ' + txtPrincipais() + '.' : ''));
@@ -908,19 +1346,6 @@
         puxarTiny(chrome.permissions.request(TINY), token);
     });
     $('#tinyToken').addEventListener('keydown', e => { if (e.key === 'Enter') $('#tinyConectar').click(); });
-    // Botão rápido: conectado → puxa com 1 clique; sem token → abre o passo a passo com o campo do token ali mesmo.
-    function tinyRapido() {
-        if (tinyToken) return puxarTiny(chrome.permissions.request(TINY), tinyToken);
-        $('#rPassos').hidden = false;
-        $('#rToken').focus();
-    }
-    $('#rTiny').addEventListener('click', tinyRapido);
-    $('#rConectar').addEventListener('click', () => {
-        const token = $('#rToken').value.trim();
-        if (token.length < 10 || /\s/.test(token)) return tinyMsg('Cole o token inteiro do Tiny (passo 2 acima).', true);
-        puxarTiny(chrome.permissions.request(TINY), token);
-    });
-    $('#rToken').addEventListener('keydown', e => { if (e.key === 'Enter') $('#rConectar').click(); });
     $('#tinyAtualizar').addEventListener('click', () => {
         const pedido = chrome.permissions.request(TINY);
         SHC.lerChave(SHC.TINY_CHAVE).then(t => (t && t.token ? puxarTiny(pedido, t.token) : desenhaTiny()));
@@ -941,6 +1366,7 @@
         // Importação pelo fundo (Omie, ou o Tiny a cada sincronização): a barra acompanha shc:status.custosProgresso.
         if (mud['shc:status'] && !tinyRodando) impBarra((mud['shc:status'].newValue || {}).custosProgresso);
         const relevante = Object.keys(mud).some(k => /^(c\||vm\||ml:anuncios|ml:promos|cfg$|shc:guia$)/.test(k));
+        if (Object.keys(mud).some(k => /^erpx:/.test(k))) (async () => { erpx = await SHC.lerChave('erpx:' + (contaVer || await SHC.contaAtual())); desenhaErpx(); })().catch(() => {});
         if (!relevante) return;
         clearTimeout(espera);
         espera = setTimeout(async () => {

@@ -78,7 +78,8 @@
     }
     function mostraFim(f) {
         const c = SHC.canalContagem(f);
-        mostra('<b>Copiloto:</b> agenda concluída — ' + c.feitos + ' de ' + c.total + ' criadas no ML' + (c.pulados ? ', ' + c.pulados + ' puladas' : '') + '.', [['parar', 'Fechar', true]]);
+        // "criadas" = cliques em Criar; a Agenda confere na lista do canal se ficaram programadas (quem envia aos seguidores é o ML).
+        mostra('<b>Copiloto:</b> agenda concluída — ' + c.feitos + ' de ' + c.total + ' criadas' + (c.pulados ? ', ' + c.pulados + ' puladas' : '') + '. Confira na agenda (“Conferir no ML”) se ficaram programadas.', [['abrir_agenda', 'Abrir a agenda'], ['parar', 'Fechar', true]]);
     }
 
     // ── Pré-preenchimento (campos controlados pelo React: setter nativo + eventos) ──

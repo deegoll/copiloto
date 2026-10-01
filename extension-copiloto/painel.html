@@ -49,6 +49,65 @@
   .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; background: #F1F5F9; color: var(--suave); }
   .tag.sp { background: #FFEDD5; color: #9A3412; }
   .x { border: 0; background: none; cursor: pointer; color: #94A3B8; font-size: 16px; } .x:hover { color: var(--verm); }
+  /* v3.2 custos: estoque e pai → variações → opções de compra (prévia aprovada em tests/copiloto/previa-custos-variacoes). O contêiner dos chips é .chips.fe — .est é só o selo. */
+  .chips.fe { margin: 0 0 6px; } .chips.fe button b { font-weight: 800; margin-left: 6px; }
+  .chips.fe .nl { align-self: center; font-size: 12px; color: var(--suave); }
+  .chips.fe .nl::before { content: '· '; }
+  .ordem { font-size: 12px; color: var(--suave); margin: 0 0 10px; } .ordem:empty { display: none; }
+  .est { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+  .est.tem { background: #ECFDF5; color: var(--verde); } .est.full { background: #E0F2FE; color: var(--azul); }
+  .est.zero { background: #FEF2F2; color: var(--verm); } .est.pausa { background: #FEF2F2; color: var(--verm); border: 1px dashed #FCA5A5; }
+  .est.nl { background: #F1F5F9; color: var(--suave); border: 1px dashed #CBD5E1; } .est + .est { margin-left: 4px; }
+  td.estq { white-space: nowrap; } td.estq .dica { white-space: normal; }
+  .tog { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; border: 1px solid #CBD5E1; background: #fff; color: var(--tinta); cursor: pointer; font-size: 11px; font-weight: 800; flex: none; padding: 0; }
+  .tog:focus-visible, button.tag.opc:focus-visible { outline: 2px solid #0EA5E9; outline-offset: 1px; }
+  .cab { display: flex; gap: 8px; align-items: flex-start; min-width: 0; } .cab > div { min-width: 0; }
+  tr.pai td { background: #F8FAFC; border-bottom-color: var(--linha); } tr.pai .tit b { font-weight: 700; }
+  .tag.fam { background: #EEF2FF; color: #3730A3; } .tag.opc { background: #F0F9FF; color: var(--azul); }
+  button.tag.opc { border: 1px solid #BAE6FD; cursor: pointer; font-family: inherit; } button.tag.opc:hover { background: #E0F2FE; }
+  .resumo { font-size: 12px; color: var(--suave); display: block; }
+  .mesmo { margin-top: 6px; border: 1px solid #A7F3D0; background: #F0FDF4; border-radius: 10px; padding: 8px 10px; }
+  .mesmo .lin { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; } .mesmo .inp { max-width: 96px !important; }
+  .mesmo .bt { padding: 6px 12px; font-size: 12.5px; }
+  .mesmo label { font-size: 11.5px; color: var(--suave); display: flex; gap: 5px; align-items: center; margin-top: 5px; }
+  tr.fil td:first-child, tr.neto td:first-child { position: relative; }
+  tr.fil td:first-child { padding-left: 40px; }
+  tr.fil td:first-child::before { content: ''; position: absolute; left: 18px; top: 0; bottom: 0; border-left: 2px solid #CBD5E1; }
+  tr.fil.ult td:first-child::before { bottom: 50%; }
+  tr.fil td:first-child::after { content: ''; position: absolute; left: 18px; top: 50%; width: 14px; border-top: 2px solid #CBD5E1; }
+  tr.neto td:first-child { padding-left: 70px; }
+  tr.neto td:first-child::before { content: ''; position: absolute; left: 48px; top: 0; bottom: 0; border-left: 2px dotted #CBD5E1; }
+  tr.neto.ult td:first-child::before { bottom: 50%; }
+  tr.neto td:first-child::after { content: ''; position: absolute; left: 48px; top: 50%; width: 14px; border-top: 2px dotted #CBD5E1; }
+  tr.neto td, tr.opcl td { background: #FCFDFE; }
+  .var { font-weight: 700; } .usa { font-size: 12px; color: var(--suave); }
+  tr.zerada .var, tr.zerada .tit b { color: #64748B; }
+  tr.achou td { background: #FEFCE8; }
+  .inp.falta { border-color: #F59E0B; background: #FFFBEB; }
+  @media (max-width: 600px) {
+    .tabela.hier, .tabela.hier tbody { display: block; }
+    .tabela.hier thead { display: none; }
+    .tabela.hier tr { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--linha); }
+    .tabela.hier td { border: 0; padding: 3px 6px; background: none !important; }
+    .tabela.hier td.tit, .tabela.hier td.estq, .tabela.hier td.cpai, .tabela.hier td[colspan] { grid-column: 1 / -1; max-width: none; }
+    .tabela.hier td[data-r]::before { content: attr(data-r); display: block; font-size: 11px; color: var(--suave); font-weight: 700; }
+    .tabela.hier td.cpai[data-r]::before { display: none; }
+    .tabela.hier td .inp { max-width: none; }
+    .tabela.hier td.vaz { display: none; }
+    .tabela.hier td:last-child { justify-self: end; align-self: end; }
+    .tabela.hier .x { font-size: 20px; padding: 4px 10px; }
+    tr.pai { background: #F8FAFC; border-radius: 10px; }
+    tr.fil td:first-child, tr.neto td:first-child { padding-left: 6px; }
+    tr.fil td:first-child::before, tr.fil td:first-child::after, tr.neto td:first-child::before, tr.neto td:first-child::after { display: none; }
+    tr.fil { margin-left: 12px; padding-left: 6px !important; border-left: 2px solid #CBD5E1; }
+    tr.neto { margin-left: 26px; padding-left: 6px !important; border-left: 2px dotted #CBD5E1; }
+    .tit b { white-space: normal; }
+    .tog { width: 32px; height: 32px; font-size: 13px; }
+    button.tag.opc { padding: 5px 10px; font-size: 12px; margin-top: 2px; }
+    .chips.fe .nl { flex-basis: 100%; }
+    .chips.fe .nl::before { content: none; }
+    .tabela.hier tr.grp td:last-child { justify-self: start; align-self: auto; }
+  }
   .vazio { text-align: center; color: var(--suave); padding: 26px 10px; }
   .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   textarea { width: 100%; min-height: 90px; font: 12.5px/1.4 ui-monospace, Consolas, monospace; padding: 8px; border: 1px solid #CBD5E1; border-radius: 8px; }
@@ -60,8 +119,8 @@
   .mais { font-size: 12.5px; color: var(--suave); margin-top: 8px; }
   .prog { height: 6px; background: #E2E8F0; border-radius: 99px; overflow: hidden; }
   .prog i { display: block; height: 100%; background: var(--verde); border-radius: 99px; transition: width .25s; }
-  .contador { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; }
-  .contador .prog { flex: 1; max-width: 420px; }
+  .contador { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 12px; font-size: 13px; }
+  .contador .prog { flex: 1; max-width: 420px; min-width: 140px; }
 
   /* Boas-vindas guiadas */
   body.guiando main > section:not(#guia), body.guiando #retoma { display: none; }
@@ -108,12 +167,7 @@
   .fx-dots button.on { background: var(--tinta); border-color: var(--tinta); color: #fff; }
   .fx-dots button:focus-visible { outline: 2px solid #0EA5E9; outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { .fx-q { display: block; margin-bottom: 14px; } .fx-dots { display: none; } }
-  /* Custos por SKU: ação rápida, arrastar e soltar, barra grossa */
-  .rapido { border: 1px solid #A7F3D0; background: #F0FDF4; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
-  .rapido .acoes { margin-top: 0; }
-  .bt.grande { padding: 12px 20px; font-size: 15px; }
-  .passos { margin: 10px 0 0; padding-left: 20px; font-size: 13px; }
-  .passos li { margin-bottom: 4px; }
+  /* Custos por SKU: arrastar e soltar, barra grossa */
   .prog.grossa { height: 10px; }
   .prog-lin { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; font-weight: 700; }
   .prog-lin .prog { flex: 1; max-width: 420px; }
@@ -123,6 +177,8 @@
   .soltar.arrastando .solte { display: grid; }
   .duv { margin-top: 16px; font-size: 13px; color: var(--suave); }
   .duv summary { cursor: pointer; color: var(--azul); }
+  /* todo <details> aberto diz como fechar */
+  details[open] > summary::after { content: " · Ver menos"; color: var(--azul); font-weight: 600; }
   .duv p { margin: 8px 0 0; }
   .duv b { color: var(--tinta); }
   .retoma { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; font-size: 13.5px; }
@@ -133,8 +189,6 @@
   .previa .tabela { background: #fff; margin: 8px 0; }
   .previa p { margin: 4px 0; font-size: 13px; }
   .tres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .forma { border: 1px solid var(--linha); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-  .forma p { margin: 0; font-size: 12.5px; color: var(--suave); flex: 1; }
   .cinza { color: #94A3B8; font-size: 12.5px; }
   @media (max-width: 820px) { .grade { grid-template-columns: 1fr 1fr; } .dupla, .tres { grid-template-columns: 1fr; } }
 
@@ -165,6 +219,40 @@
   .cartoes div { border: 1px solid var(--linha); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; color: var(--suave); }
   .cartoes b { display: block; font-size: 16px; color: var(--tinta); } .cartoes .falta b { color: var(--ambar); }
   @media (max-width: 820px) { .leg4, .cartoes { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) { .leg4 { grid-template-columns: minmax(0, 1fr); } }   /* painel estreito (430 px): a legenda não passa da largura */
+  /* v3.2 cruzamento ERP × ML (#erpx): peças da prévia aprovada (tests/copiloto/previa-erp-cruzamento/previa.html) */
+  #erpx .res { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 12px 0 6px; }
+  #erpx .res button { all: unset; cursor: pointer; border: 1px solid var(--linha); border-radius: 12px; padding: 10px 12px; background: #fff; }
+  #erpx .res button:focus-visible { outline: 2px solid #0EA5E9; outline-offset: 1px; }
+  #erpx .res button.on { box-shadow: inset 0 0 0 2px var(--tinta); }
+  #erpx .res small { display: block; font-size: 11.5px; font-weight: 700; color: var(--suave); line-height: 1.3; }
+  #erpx .res b { font-size: 22px; letter-spacing: -.3px; }
+  #erpx .res .a b, #erpx .res .e b { color: var(--ambar); } #erpx .res .b b, #erpx .res .c b { color: var(--verm); } #erpx .res .d b { color: #475467; }
+  #erpx .nconf { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #F1F5F9; border-radius: 10px; padding: 9px 12px; font-size: 13px; margin: 10px 0 4px; }
+  #erpx .nconf span { flex: 1 1 320px; }
+  #erpx .grupo { border-top: 1px solid var(--linha); padding-top: 14px; margin-top: 16px; }
+  #erpx .grupo h3 { margin: 0 0 2px; font-size: 15px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #erpx .grupo h3 .n { font-size: 12px; font-weight: 800; border-radius: 999px; padding: 1px 9px; background: #F1F5F9; color: var(--suave); }
+  #erpx .grupo > p { margin: 0 0 8px; color: var(--suave); font-size: 13px; }
+  #erpx .bt.mini { padding: 5px 10px; font-size: 12.5px; border-radius: 8px; white-space: nowrap; }
+  #erpx .tit b { display: block; font-weight: 600; } #erpx .tit span { color: var(--suave); font-size: 11.5px; }
+  #erpx .mot { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #FEF2F2; color: var(--verm); white-space: nowrap; margin: 1px 0; }
+  #erpx .mot.p { background: #FFFBEB; color: var(--ambar); } #erpx .mot.f { background: #F1F5F9; color: var(--suave); }
+  #erpx .dica { display: block; font-size: 11.5px; color: var(--suave); margin-top: 2px; } #erpx .dica.alerta { color: var(--verm); font-weight: 650; }
+  #erpx td.ac { text-align: right; white-space: nowrap; }
+  #erpx .var { display: inline-block; font-size: 11px; font-weight: 700; color: #3730A3; background: #EEF2FF; border-radius: 6px; padding: 0 6px; margin-right: 4px; }
+  #erpx .mais { font-size: 12.5px; color: var(--suave); margin: 8px 0 0; }
+  #erpx td.sku, #erpx b.sku { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: 12px; word-break: break-all; }
+  #erpx .risco { color: var(--verm); font-weight: 800; }
+  @media (max-width: 700px) {
+    #erpx .res { grid-template-columns: repeat(2, 1fr); } #erpx .res button:last-child { grid-column: 1 / -1; }
+    #erpx .erpx-t thead { display: none; }
+    #erpx .erpx-t, #erpx .erpx-t tbody, #erpx .erpx-t tr, #erpx .erpx-t td { display: block; width: 100%; }
+    #erpx .erpx-t tr { border: 1px solid var(--linha); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: #fff; }
+    #erpx .erpx-t td { border: 0; padding: 2px 0; }
+    #erpx .erpx-t td[data-r]:not(.tit):not(.ac)::before { content: attr(data-r) ": "; font-size: 11.5px; font-weight: 700; color: var(--suave); }
+    #erpx td.ac { text-align: left; padding-top: 6px; white-space: normal; }
+  }
 </style>
 </head>
 <body>
@@ -293,56 +381,59 @@
 
   <section class="card" id="custos">
     <h2>Custo dos produtos que mais vendem</h2>
-    <p class="sub">Sem o custo, o Copiloto não sabe se o produto dá lucro. Comece pelos 10 que mais vendem. Escolha um jeito:</p>
-    <div class="contador"><b id="cPrinc">—</b><div class="prog"><i id="cProg" style="width:0"></i></div><span class="cinza" id="cTodos"></span></div>
-    <div class="tres">
-      <div class="forma"><b>1. Planilha do Tiny ou Bling</b><p>Exporte os produtos do seu sistema e importe o arquivo como veio (.xls ou .csv).</p><label class="bt verde" for="arquivo" style="cursor:pointer">⬆ Importar planilha</label></div>
-      <div class="forma"><b>2. Conectar o seu ERP</b><p>Tiny, Omie ou Bling: conecte uma vez e os custos entram sozinhos, e se atualizam a cada sincronização. O Copiloto só lê.</p><button class="bt" id="cTiny">Conectar Tiny, Omie ou Bling</button></div>
-      <div class="forma"><b>3. Digitar nos anúncios</b><p>Na lista de Anúncios do Mercado Livre, clique em “Informar custo” na etiqueta de cada produto.</p><button class="bt sec" id="cAnuncios">Abrir meus anúncios</button></div>
-    </div>
+    <p class="sub">Sem o custo, o Copiloto não sabe se o produto dá lucro. Comece pelos 10 que mais vendem.</p>
+    <div class="contador"><b id="cPrinc">—</b><div class="prog grossa"><i id="cProg" style="width:0"></i></div></div>
+    <div class="acoes" style="margin-bottom:8px"><button class="lnk" id="cTiny" type="button">Puxar do ERP ou de planilha ↓</button></div>
     <div id="cFaltam" hidden><p class="sub">Faltam estes (do que mais vende para o que menos vende):</p><ol id="cFaltamLista"></ol>
       <button class="bt" id="cDigitar">Digitar o custo desses aqui</button></div>
     <div class="acoes"><button class="bt sec" id="cJa">Já informei os principais</button><span class="ok" id="cOk"></span></div>
   </section>
 
+  <!-- v3.2 cruzamento ERP × ML (erp-cruzar.js: SHC.erpxSecaoHtml desenha erpx:<conta>; prévia em tests/copiloto/previa-erp-cruzamento) -->
+  <section class="card" id="erpx" hidden aria-live="polite"></section>
+
   <section class="card" id="lista">
     <h2>Custos por SKU</h2>
     <p class="sub">Um custo por SKU vale para todos os anúncios desse SKU. Edite direto na tabela: salva sozinho.</p>
-    <div class="contador"><b id="contador">—</b><div class="prog grossa"><i id="contProg" style="width:0"></i></div><b id="contPct"></b></div>
-    <div class="rapido" id="rapido">
-      <div class="acoes">
-        <button class="bt grande verde" id="rTiny" type="button">Puxar custos do Tiny</button>
-        <label class="bt grande sec" for="arquivo" style="cursor:pointer">Importar planilha do Tiny ou Bling</label>
-      </div>
-      <p class="mais">Ou arraste a planilha (.xls ou .csv) para cima da tabela.</p>
-      <div id="rPassos" hidden>
-        <ol class="passos">
-          <li>No Tiny: Início › Extensões › Token API › Instalar.</li>
-          <li>Depois: Configurações › E-commerce › Token API › Copiar.</li>
-          <li>Cole aqui e clique em Conectar. O Copiloto só lê o custo; não muda nada no Tiny.</li>
-        </ol>
-        <div class="barra"><input class="inp" id="rToken" type="password" autocomplete="off" spellcheck="false" placeholder="Cole aqui o token do Tiny" aria-label="Token da API do Tiny"><button class="bt verde" id="rConectar" type="button">Conectar e puxar</button></div>
-      </div>
-      <div class="prog-lin" id="rProgLin" hidden><div class="prog grossa"><i id="rProg" style="width:0"></i></div><span id="rProgTxt"></span></div>
-      <p class="msg" id="rMsg" role="status" aria-live="polite"></p>
-      <p class="mais">Omie e Bling: veja “Custos do ERP”, logo abaixo da tabela.</p>
-    </div>
+    <div class="barra" id="contaTab" hidden><label for="contaEsc" style="font-weight:650">Conta dos anúncios:</label> <select class="inp" id="contaEsc" style="max-width:280px"></select><span class="sub" style="margin:0">O custo do SKU vale para todas as contas.</span></div>
+    <div class="contador"><b id="contador">—</b><div class="prog grossa"><i id="contProg" style="width:0"></i></div><b id="contPct"></b><button class="bt sec" id="usarAntigos" type="button" hidden></button></div>
+    <!-- v3.2.0 polimento: conectar o ERP e importar planilha ficam só em "Custos do ERP"; aqui fica arrastar a planilha e o aviso dela -->
+    <p class="mais" style="margin:0 0 8px">Tem a planilha do Tiny ou do Bling? Arraste o arquivo (.xls ou .csv) para cima da tabela.</p>
+    <p class="msg" id="rMsg" role="status" aria-live="polite"></p>
     <p class="msg erro" id="msgTab"></p>
     <div class="barra">
       <input class="inp" id="busca" placeholder="Buscar por nome, SKU ou MLB">
-      <label class="chk"><input type="checkbox" id="soSem"> Só os sem custo</label>
-      <label class="chk"><input type="checkbox" id="soPrinc"> Só os que mais vendem e estão sem custo</label>
+      <label class="chk"><input type="checkbox" id="soSem"> Só onde falta o custo</label>
+      <label class="chk"><input type="checkbox" id="soPrinc"> Só os que mais vendem e falta o custo</label>
+      <label class="chk" id="finLbl" hidden><input type="checkbox" id="verFin"> Mostrar finalizados <span id="finN"></span></label>
     </div>
+    <div class="chips fe" id="fEst" role="group" aria-label="Filtrar por estoque" hidden></div>
+    <p class="ordem" id="estInfo"></p>
     <div class="soltar" id="soltar">
       <div class="solte" aria-hidden="true">Solte a planilha aqui</div>
       <div style="overflow-x:auto">
-        <table class="tabela">
-          <thead><tr><th>Produto</th><th>Custo (R$)</th><th>Embalagem/outros</th><th>Origem</th><th></th></tr></thead>
+        <table class="tabela hier">
+          <thead><tr><th>Produto</th><th>Estoque</th><th>Custo (R$)</th><th>Embalagem/outros</th><th>Origem</th><th></th></tr></thead>
           <tbody id="corpo"></tbody>
         </table>
       </div>
     </div>
     <p class="mais" id="rodape"></p>
+  </section>
+
+  <section class="card" id="kits">
+    <h2>Kits (produto composto)</h2>
+    <p class="sub">Vende kit? Diga o que vai dentro e o Copiloto soma o custo dos itens. O custo do kit vale na etiqueta, nas vendas, promoções, Ads e no Fechamento. Se você digitar um custo para o kit na tabela acima, vale o seu.</p>
+    <div style="overflow-x:auto"><table class="tabela">
+      <thead><tr><th>Kit</th><th>O que vai dentro</th><th>Custo do kit</th><th></th></tr></thead>
+      <tbody id="kCorpo"></tbody>
+    </table></div>
+    <details id="kForm" style="margin-top:10px"><summary style="cursor:pointer;color:var(--azul);font-weight:600">＋ Criar ou editar um kit</summary>
+      <div class="campo" style="margin-top:8px"><label for="kSku">SKU do kit</label><input class="inp" id="kSku" maxlength="80" placeholder="Ex.: KIT-3-CANECAS" style="max-width:300px"></div>
+      <div class="campo"><label for="kItens">O que vai dentro (um por linha: SKU x quantidade)</label><textarea id="kItens" placeholder="CANECA-AZUL x 2&#10;CANECA-VERDE x 1"></textarea></div>
+      <div class="campo"><label for="kOutros">Embalagem/outros do kit (R$, opcional)</label><input class="inp" id="kOutros" inputmode="decimal" placeholder="0,00" style="max-width:140px"></div>
+      <div class="acoes"><button class="bt" id="kSalvar" type="button">Salvar kit</button><span class="msg" id="kMsg" role="status" aria-live="polite"></span></div>
+    </details>
   </section>
 
   <section class="card" id="erp">
@@ -461,6 +552,7 @@
 <script src="xls.js"></script>
 <script src="tiny.js"></script>
 <script src="omie.js"></script>
+<script src="erp-cruzar.js"></script>
 <script src="bling.js"></script>
 <script src="painel.js"></script>
 </body>

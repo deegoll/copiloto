@@ -79,6 +79,11 @@
   .rec-it li > span:first-child { flex: 1; min-width: 200px; } .rec-it small { display: block; color: var(--suave); }
   .rec-it .acoes { gap: 8px; align-items: center; }
   .tabela th.num { text-align: right; }
+  /* "Ver mais" ↔ "Ver menos": seção de consulta recolhida (fica o título) e lista longa (o resto fica escondido) */
+  button.lnk { border: 0; background: none; cursor: pointer; font-weight: 600; padding: 0; text-decoration: underline; }
+  .vm-sec h2 { display: flex; align-items: baseline; gap: 10px; } .vm-sec h2 .vm-bt { margin-left: auto; white-space: nowrap; }
+  .vm-sec.fechada > :not(h2) { display: none; } .vm-sec.fechada h2 { margin: 0; }
+  [data-vm-box]:not(.vm-aberta) .vm-x { display: none; } .vm-pe { margin: 8px 0 0; text-align: right; }
   @media (max-width: 600px) { .card { padding: 14px; } .cascata td.bar, .cascata th.bar { display: none; } .custos th:nth-child(3), .custos td:nth-child(3) { display: none; } .custos td.rot, .custos th { white-space: normal; } .custos td, .custos th { padding: 6px 4px; } }
 </style>
 </head>

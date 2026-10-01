@@ -33,6 +33,7 @@
   .topo .ic:hover,.topo .ic:focus-visible{background:var(--c-topo-2);color:#fff}.topo .ic:focus-visible{outline:2px solid #93C5FD}
   .topo .ic .n{position:absolute;top:1px;right:-2px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#D97706;color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 0 0 2px var(--c-topo);box-sizing:border-box}
   .topo .ic .n.pr{background:#EF4444}
+.ic .n.ponto{min-width:10px;width:10px;height:10px;padding:0;top:3px;right:1px}
   .topo .volta{all:unset;cursor:pointer;order:3;color:#93C5FD;font-weight:600;font-size:12px;white-space:nowrap;padding:6px 4px}
   @media (max-width:359px){.cp-marca>span:last-child{display:none}.l1{gap:4px}.topo .ic{width:28px}
     /* 320 px: "✓ Atualizado às · próxima às" numa linha só; o botão vira ↻ (o texto continua para o leitor de tela) */
@@ -44,7 +45,7 @@
   .topo #st .shs-amarelo .shs-selo{color:#FCD34D}.topo #st .shs-vermelho .shs-selo{color:#FCA5A5}.topo #st .st-px{color:var(--c-topo-txt);white-space:nowrap}
   #st .shs{display:flex;flex-wrap:wrap;align-items:center;gap:0 6px;min-width:0}#st .shs-selo{padding:1px 8px;font-size:11.5px;white-space:normal;min-width:0;max-width:100%;overflow-wrap:anywhere}
   #st .shs-barra{order:3;flex-basis:100%;height:3px;margin:4px 0 0}#st .shs-lin{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .sync button{all:unset;cursor:pointer;color:#93C5FD;font-weight:600;white-space:nowrap;margin-left:auto}
+  .sync button{all:unset;cursor:pointer;color:#93C5FD;font-weight:600;white-space:nowrap;margin-left:auto;flex:none}
   #syncLista .shs>.shs-selo,#syncLista .shs>.shs-barra,#syncLista .shs>.shs-lin{display:none}#syncLista .shs-lista{margin:0}
   .dot.lendo{background:#0284C7}#syncLista .sync-prog{height:6px;margin:6px 0 2px}#syncLista .sync-prog i{background:#0284C7}#syncLista .sync-fila{margin:2px 0 0}#syncLista .gb-l .lnk{margin-left:auto}#syncLista .shs-lista{margin-top:8px}
   #st.so-selo .shs-barra,#st.so-selo .shs-lin{display:none}
@@ -185,21 +186,27 @@
   .gb-c{border-top:1px dashed var(--linha);margin-top:7px;padding-top:6px;font-size:12px}.gb-c .it{padding:3px 0;border-bottom:1px solid #F1F5F9}.gb-c .it small{display:block;color:var(--suave);font-size:10.5px}
   .gb-c .ir{margin-top:6px;display:inline-block}
   .res{color:var(--suave);font-size:12px}.card>button.ver,.card>div>button.ver{margin-left:6px}
+  /* "Ver mais" ↔ "Ver menos": o do fim de lista longa e o de <details> (aberto troca o rótulo por "Ver menos") */
+  .vm-fim{margin:8px 0 0;text-align:right}.vm-fim .lnk{font-size:12px}
+  details.vm-d>summary .vm-f{color:var(--azul);font-weight:600}details.vm-d[open]>summary .vm-f{display:none}
+  details.vm-d[open]>summary::after{content:"Ver menos";color:var(--azul);font-weight:600}
   .topo-geral{font-size:13px}.topo-geral b{font-size:14px}
   .atalho-nf{display:grid;grid-template-columns:1fr;gap:6px;margin-top:6px}.atalho-nf a{display:block;text-decoration:none;color:inherit;border:1px solid var(--linha);border-radius:10px;padding:7px 9px}
   .atalho-nf a b{display:block;font-size:12px;color:var(--azul)}.atalho-nf a small{color:var(--suave);font-size:11px}
-  body.larga{font-size:14px}
-  body.larga .topo{padding:8px max(24px,calc((100% - 1400px) / 2)) 0}
+  body.larga{font-size:14px;--miolo:1120px}   /* modo largo: miolo de 1120px no meio da tela (topo, abas e conteúdo alinhados) */
+  body.larga .topo{padding:8px calc(max(24px,calc((100% - var(--miolo)) / 2)) + var(--sb,0px)) 0 max(24px,calc((100% - var(--miolo)) / 2))}   /* --sb = barra reservada na .corpo (painel-lateral.js largura()) */
   body.larga .l1{flex-wrap:nowrap;gap:12px}body.larga .conta{flex:0 1 280px}
   body.larga .sync{order:2;flex:1 1 auto;padding:0;margin-left:4px}
   body.larga .abas-w{margin:6px 0 0}body.larga .todas,body.larga .menu-abas{display:none!important}
   body.larga .abas{padding:0;-webkit-mask-image:none;mask-image:none;justify-content:space-between}
   body.larga .abas button{flex:1 1 0;min-width:0;padding:8px 2px 7px}
-  @media (min-width:1240px){body.larga .abas button{flex:0 1 auto;flex-direction:row;gap:6px;padding:10px 8px;font-size:12.5px}body.larga .abas .b{position:static;margin-left:2px}}
-  body.larga .corpo{padding:16px max(24px,calc((100% - 1400px) / 2))}
+  @media (min-width:1240px){body.larga .abas button{flex:0 1 auto;flex-direction:row;gap:6px;padding:10px 6px;font-size:12.5px}body.larga .abas .b{position:static;margin-left:2px}}
+  body.larga .corpo{padding:16px max(24px,calc((100% - var(--miolo)) / 2));scrollbar-gutter:stable}
   body.larga .gb-grade,body.larga #listaPromo,body.larga #listaFrete,body.larga #listaCat,body.larga #listaFull,body.larga #listaSaude,body.larga #listaConc,body.larga #listaAds{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:10px;align-items:start}
   body.larga .gb-grade>.card,body.larga #listaPromo>.card,body.larga #listaFrete>.card,body.larga #listaCat>*,body.larga #listaFull>.card,body.larga #listaSaude>.card,body.larga #listaConc>.card,body.larga #listaAds>.card{margin:0}
   body.larga #listaPromo>:not(.card),body.larga #listaFrete>:not(.card),body.larga #listaFull>:not(.card),body.larga #listaSaude>:not(.card),body.larga #listaConc>:not(.card),body.larga #listaAds>:not(.card){grid-column:1 / -1}
+  /* Conciliação: faixa de largura total com os cartões de 1 linha; o que a seller abre ocupa a faixa inteira */
+  body.larga .conc-faixa{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;align-items:start}body.larga .conc-faixa>.card{margin:0}body.larga .conc-faixa>.card:has(>.ver[aria-expanded="true"]){grid-column:1 / -1}
   body.larga #listaCat>p{grid-column:1 / -1}body.larga .atalho-nf{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}body.larga .modal{max-width:640px;margin:0 auto}
   .andam{font-size:12px;color:#344054;margin:0 2px 8px;font-weight:600}
   .legenda{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--suave);margin:-4px 2px 10px}.legenda span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}
@@ -316,6 +323,7 @@
   ul.acoes{display:block;list-style:none;margin:0;padding:0}
   .acao{display:flex;align-items:center;gap:10px;padding:8px 0 8px 10px;border-top:1px solid #F1F5F9;position:relative}.acao:first-child{border-top:0}
   .acao::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:2px;background:#CBD5E1}.acao.pr::before{background:var(--verm)}.acao.at::before{background:#F59E0B}.acao.ok::before{background:var(--verde)}
+  .acao .tx details.pq-ev{margin-top:2px}.acao .tx details.pq-ev summary{cursor:pointer;color:var(--azul);font-size:11.5px;font-weight:600}.acao .tx details.pq-ev span{display:block;font-size:11.5px;color:var(--suave)}
   .acao .tx{flex:1;min-width:0}.acao .tx b{font-size:12.5px;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.acao .tx>span{display:block;font-size:11.5px;color:var(--suave)}
   .bt.pq{padding:5px 10px;font-size:11.5px}
   .tb{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
@@ -324,6 +332,7 @@
   .tb tr:first-child td{border-top:0}.tb thead+tbody tr:first-child td{border-top:1px solid var(--linha)}
   .tb .sm{display:block;color:#64748B;font-size:10.5px;font-weight:400}
   .selo.ok{background:var(--verde-bg);color:#065F46}.selo.at{background:var(--ambar-bg);color:#92400E}.selo.pr{background:var(--verm-bg);color:#991B1B}.selo.az{background:#DBEAFE;color:#1E40AF}.selo.cz{background:#F1F5F9;color:#475569}.tb .sm .selo{margin:2px 0 0}
+  .selo.ent{background:#fff;color:#1E3A8A;box-shadow:inset 0 0 0 1px #93C5FD}.selo.ent::before{content:"";display:inline-block;width:8px;height:5px;margin-right:4px;border:1.5px solid currentColor;border-radius:1px;vertical-align:1px}.selo.ent.at{background:var(--ambar-bg);color:#92400E;box-shadow:inset 0 0 0 1px #F59E0B}
   .etapa{display:flex;gap:8px;align-items:flex-start;margin:8px 0;font-size:12.5px}.etapa i{width:20px;height:20px;border-radius:50%;background:#E0E7FF;color:#3730A3;font-style:normal;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;flex:none}
   /* v2.9 aba Pós-venda: barras de motivo (largura = casos ÷ maior) e dica por produto */
   .hb{margin:8px 0 0}.hb .l{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px}.hb .l b{font-weight:650;min-width:0;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
@@ -343,8 +352,9 @@
   #ads .rleg i.c{margin-left:0}#ads .rleg i.l{margin-left:8px;background:#10B981}#ads .rleg i.p{margin-left:8px;background:#EF4444}
   #ads .linha-ads small .rv{display:inline;font-size:11px}#ads .linha-ads small:last-child{font-size:11px;color:#475569}
   /* v3.1 aba Ads (imagem aprovada): blocos "título + resumo" com "Ver mais" à direita; "Precisa de você" vazio com ✓ (ESPEC §4) */
-  #ads .ad-cab{display:flex;align-items:center;gap:10px}#ads .ad-t{flex:1;min-width:0}#ads .ad-t h3{margin:0;font-size:13.5px;font-weight:700}#ads .ad-t>span{display:block;font-size:12px;color:var(--suave);margin-top:2px}
-  #ads .ad-cab .ver{flex:none;margin:0;white-space:nowrap}#ads .ad-in{margin-top:8px;border-top:1px solid #F1F5F9;padding-top:8px}#ads .ad-in>.rleg:first-child{margin-top:0}
+  /* cartão que recolhe (Ads, Afiliados, Pós-venda): título + resumo de 1 linha, "Ver mais"/"Ver menos" à direita */
+  .ad-cab{display:flex;align-items:center;gap:10px}.ad-t{flex:1;min-width:0}.ad-t h3{margin:0;font-size:13.5px;font-weight:700}.ad-t>span{display:block;font-size:12px;color:var(--suave);margin-top:2px}
+  .ad-cab .ver{flex:none;margin:0;white-space:nowrap}.ad-in{margin-top:8px;border-top:1px solid #F1F5F9;padding-top:8px}#ads .ad-in>.rleg:first-child{margin-top:0}
   #ads .est{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--suave);padding:4px 0;margin:0}#ads .est b{color:var(--tinta)}
   #ads .est.vazio::before{content:"✓";flex:none;width:18px;height:18px;border-radius:50%;background:#ECFDF5;color:#047857;font-weight:800;font-size:11px;text-align:center;line-height:18px}
   #ads .acao .tx b,#ads .linha-ads .rlt b{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}#ads .acao .bt{flex:none}   /* nome inteiro: quebra a linha, nunca "…" */
@@ -388,6 +398,11 @@
   #promo .ch .selo{margin:0 0 0 auto}#promo .ajuda{all:unset;cursor:help;margin-left:auto;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1px #CBD5E1;color:#64748B;font-size:11px;font-weight:700;text-align:center;line-height:20px;flex:none}
   #promo .acao .tx b{white-space:normal;overflow:hidden;text-overflow:clip;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}#promo .acao .tx>span{margin-top:1px}   /* lista densa: até 2 linhas, o nome inteiro no title */
   #afiliados .rlt b,#afiliados .acao .tx b{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}   /* nome inteiro: quebra a linha, nunca "…" */
+  /* v3.2 aba TikTok: pedido que abre (details nativo) com a conta, no mesmo visual das linhas do ML */
+  #tiktok details.tt-ped{border-top:1px dashed var(--linha);margin-top:7px;padding-top:6px}#tiktok details.tt-ped summary{list-style:none;cursor:pointer}#tiktok details.tt-ped summary::-webkit-details-marker{display:none}
+  #tiktok details.tt-ped summary small{display:block;color:var(--suave);font-size:10.5px}#tiktok details.tt-ped[open] summary small::after{content:" ▴"}#tiktok details.tt-ped:not([open]) summary small::after{content:" ▾"}
+  #tiktok .conta-ped{background:var(--bg);border-radius:9px;padding:6px 8px;margin-top:6px;font-size:12px}#tiktok .conta-ped .selo{margin:0 0 0 4px}
+  #tiktok details.tt-mais>summary{display:inline-block;margin-top:8px}#tiktok .rlt b{display:block;-webkit-line-clamp:unset;white-space:normal;overflow:visible;overflow-wrap:anywhere}#tiktok .sim .inp{max-width:90px}
   #promo .pr-v{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;flex:none}#promo .pr-v b{display:block;font-size:13.5px;color:#B91C1C}#promo .pr-v.at b{color:#92400E}#promo .pr-v small{font-size:10.5px;color:#64748B}
   #promo .pr-mais{display:flex;align-items:center;gap:8px;border-top:1px solid #F1F5F9;padding:8px 0 0;margin-top:2px;font-size:12px;color:var(--suave)}#promo .pr-mais .lnk{margin-left:auto}
   #promo .pr-abaixo{margin:4px 0 0}#promo .est{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--suave);padding:4px 0}#promo .est b{color:var(--tinta)}
@@ -415,7 +430,23 @@
   #frete .kpis.k3{gap:8px}#frete .kpi.kn{display:block}#frete button.kpi.kn{cursor:pointer}#frete .kpi.kn>span{display:block}#frete .kpi.kn .v{font-size:19px;line-height:1.25;margin:1px 0}#frete .kpi.kn .s{white-space:normal}
   #frete .kpi.kn.on{box-shadow:inset 0 0 0 2px var(--tinta)}#frete button.kpi.kn:hover{border-color:#CBD5E1}
   #frete .ajuda{all:unset;cursor:help;margin-left:auto;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1px #CBD5E1;color:#64748B;font-size:11px;font-weight:700;text-align:center;line-height:20px;flex:none}
-  #frete .kpi.kn .l{white-space:normal}#frete .acao .tx b,#frete .fr-hb .l b{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}   /* nome inteiro: quebra a linha, nunca "…" */#frete .acao .tx>span{margin-top:1px}#frete .acao .bt{flex:none}
+  #frete .kpi.kn .l{white-space:normal}#frete .fr-hb .l b{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;display:block;-webkit-line-clamp:unset}   /* nome inteiro: quebra a linha, nunca "…" (v3.3: sem o clamp herdado de .hb, a 3ª linha não vaza por cima da barra) */#frete .acao .tx b{white-space:normal;overflow:hidden;text-overflow:clip;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}   /* B1: "Precisa de você" igual ao cartão: até 2 linhas, o nome inteiro no title */#frete .acao .tx>span{margin-top:1px}#frete .acao .bt{flex:none}
+  /* v3.3 cartão "Frete cobrado a mais" (print 71 da dona, 30/09): período → total grande → 2 caixas (contestar/conferir) → por anúncio (título 2 linhas + "…", nome inteiro no title; barra numa linha própria, parte do total) → frete do anúncio subiu */
+  #frete .fr-am .fr-per{margin:-2px 0 6px;font-size:11.5px;color:var(--suave)}
+  #frete .fr-big{margin:0;font-size:12.5px;color:var(--suave)}#frete .fr-big b{font-size:22px;font-weight:800;color:var(--tinta);font-variant-numeric:tabular-nums;margin-right:4px;letter-spacing:-.01em}
+  #frete .fr-split{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px}#frete .fr-split li{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:baseline;gap:8px;font-size:13px;padding:6px 8px;border-radius:8px;background:var(--bg)}
+  #frete .fr-split .pt{margin:0}#frete .fr-split .r small{font-size:11px;color:var(--suave);margin-left:4px}#frete .fr-split b{font-weight:750;font-variant-numeric:tabular-nums;white-space:nowrap}#frete .fr-split .fr-c b{color:var(--verm)}#frete .fr-split li>small{font-size:11.5px;color:var(--suave);white-space:nowrap;min-width:62px;text-align:right}
+  #frete .fr-sec{margin:12px 0 0;padding-top:10px;border-top:1px solid #F1F5F9;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--suave)}
+  #frete .fr-pd{padding:9px 0;border-bottom:1px solid #F1F5F9}#frete .fr-pd:last-child,#frete .fr-pd:has(+ :not(.fr-pd)){border-bottom:0}
+  #frete .fr-pd-l{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  #frete .fr-pd-t{font-size:12.5px;font-weight:650;line-height:1.35;min-width:0;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}   /* lista densa: até 2 linhas, o nome inteiro no title */
+  #frete .fr-pd-v{flex:none;white-space:nowrap;font-size:13px;font-weight:750;font-variant-numeric:tabular-nums}
+  #frete .fr-pd-m{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;margin:3px 0 0;font-size:11.5px;color:var(--suave);font-variant-numeric:tabular-nums}#frete .fr-pd-m .selo{margin:0}
+  #frete .fr-bar{display:flex;height:8px;border-radius:99px;background:#EEF2F6;overflow:hidden;margin-top:7px}#frete .fr-bar i{display:block;height:100%}#frete .fr-bar i.pr{background:#EF4444}#frete .fr-bar i.at{background:#F59E0B}#frete .fr-bar i.cz{background:#94A3B8}
+  #frete .fr-pd-n{margin:3px 0 0;font-size:11px;color:var(--suave)}
+  #frete .fr-pd-a{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px}#frete .fr-pd-a .lnk{font-size:12px}
+  #frete .fr-tp td:nth-child(3){white-space:normal}#frete .fr-tp .selo{margin:0 0 0 4px;vertical-align:1px}#frete .fr-tp tr.fr-conf td{background:#FFFBEB}#frete .fr-lk{margin-top:4px;text-align:left}
+  #frete .fr-am>.det{margin-top:8px}#frete .fr-subiu .det{margin-top:4px}
   #frete .fr-v{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;flex:none}#frete .fr-v b{display:block;font-size:13.5px;color:#92400E}#frete .fr-v.pr b{color:#B91C1C}#frete .fr-v small{font-size:10.5px;color:#64748B}
   #frete .linha-bts{margin-top:10px}#frete .est{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--suave);padding:4px 0;margin:0}#frete .est b{color:var(--tinta)}
   #frete .est.vazio::before{content:"✓";flex:none;width:18px;height:18px;border-radius:50%;background:#ECFDF5;color:#047857;font-weight:800;font-size:11px;text-align:center;line-height:18px}
@@ -425,7 +456,7 @@
   #frete .fr-t>span{display:block;font-size:12px;color:var(--suave);margin-top:2px}#frete .fr-cab .ver{flex:none;white-space:nowrap}#frete .fr-ant{color:#64748B}
   #frete .fr-in{margin-top:8px;border-top:1px solid #F1F5F9;padding-top:8px}#frete .fr-in .busca{margin:0 0 8px}#frete .fr-in .linha-fr{margin:0 0 6px}#frete .fr-in .tb{width:100%}
   #frete .linha-fr .tit .selo{margin:0 0 0 4px;vertical-align:1px;white-space:nowrap}
-  #frete .fr-rod{margin:2px 2px 4px}#frete .fr-grade{display:grid;grid-template-columns:minmax(0,1fr);gap:0}
+  #frete .fr-rod{margin:2px 2px 4px;display:block}#frete .fr-rod summary{cursor:pointer;color:var(--suave)}#frete .fr-rod[open] summary{margin-bottom:2px}#frete .fr-grade{display:grid;grid-template-columns:minmax(0,1fr);gap:0}
   body.larga #frete .fr-grade{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:12px;align-items:start}body.larga #frete .kpi.kn .v{font-size:22px}
   /* v3.1 perfumaria da aba Full (29/09, igual à imagem tela-full aprovada): manchete → KPIs → remessa com diferença em destaque → "O que enviar primeiro" → a caminho | pontuação em gauge → saúde do estoque em 6 números (+ parado em barras) → blocos "título + resumo · Ver mais" */
   #full .manchete{font-size:14px}
@@ -452,7 +483,9 @@
   body.larga #full .fu-grade{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:12px;align-items:start}body.larga #full .fu-grade.um{grid-template-columns:minmax(0,1fr)}body.larga #full .fu-col>.card{margin:0 0 10px}
   body.larga #full ul.estq{grid-template-columns:repeat(6,minmax(0,1fr))}body.larga #full .fu-met{display:grid;grid-template-columns:1fr 1fr;column-gap:18px}
   /* v3.1 perfumaria da aba Pós-venda (29/09, igual à imagem tela-posvenda): motivos em barras grossas com R$ → produtos com barra e cor, % vendas (vermelho > 5%) e dica em azul; em tela larga, os dois lado a lado */
-  #posvenda .manchete{font-size:14px}#posvenda .kpi .l{white-space:normal;overflow:visible}#posPrecisa .prazo{margin-right:6px;vertical-align:1px}#posPrecisa .acao .tx b{font-size:13px;white-space:normal;overflow:visible}#posPrecisa .acao .bt{flex:none}#posMotivos .ch{padding-bottom:8px;border-bottom:1px solid var(--linha)}
+  #posvenda .manchete{font-size:14px}#posvenda .kpi .l{white-space:normal;overflow:visible}#posPrecisa .prazo{margin-right:6px;vertical-align:1px}#posPrecisa .acao .tx b{font-size:13px;white-space:normal;overflow:visible}
+/* Título que mostra o texto inteiro (overflow:visible) não pode herdar o -webkit-box de 2 linhas da regra base: a caixa ficava com 2 linhas e a 3ª era desenhada POR CIMA da linha de baixo (Afiliados "O que mais vendeu", Ads, Full, Pós-venda). */
+#ads .acao .tx b,#ads .linha-ads .rlt b,#afiliados .rlt b,#afiliados .acao .tx b,#full .acao .tx b,#full .hb .l b,#posPrecisa .acao .tx b{display:block;-webkit-line-clamp:unset}#posPrecisa .acao .bt{flex:none}#posMotivos .ch{padding-bottom:8px;border-bottom:1px solid var(--linha)}
   #posvenda .ajuda{all:unset;cursor:help;margin-left:auto;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1px #CBD5E1;color:#64748B;font-size:11px;font-weight:700;text-align:center;line-height:20px;flex:none}
   #posvenda .hb{margin:12px 0 0}#posvenda .hb .l{font-size:13px}#posvenda .hb .v{font-weight:700}#posvenda .hb .medidor{height:10px;margin-top:6px}
   #posProdutos .tb td{padding:9px 0 9px 6px;vertical-align:middle}#posProdutos .tb td:first-child{vertical-align:top;padding-left:0}#posProdutos .tb b{font-size:13px}#posProdutos .tb .sm{font-size:11px}
@@ -511,10 +544,22 @@
   #cardRobo .ef-l{display:grid;grid-template-columns:82px minmax(0,1fr) 44px;align-items:center;gap:8px;font-size:11px;color:var(--suave)}
   #cardRobo .ef-l .medidor{height:9px;margin:0}#cardRobo .ef-l b{text-align:right;font-size:12.5px;color:var(--tinta);font-variant-numeric:tabular-nums}
   #cardRobo .ef-l b.ok{color:#065F46}#cardRobo .ef-l b.pr{color:#991B1B}#cardRobo ul.vant{margin:6px 0}
+  /* v3.1 Registro do robô (30/09): por anúncio; cada entrada com a faixa da cor do efeito (verde ajudou · âmbar medindo/pouco dado/sem mudança · vermelho piorou · cinza sem mudança nas fotos) */
+  #cardRobo .rg-h{display:flex;align-items:center;gap:8px;margin-top:10px}#cardRobo .rg-h .rb-t{margin:0;flex:1}
+  #cardRobo .rg textarea{width:100%;box-sizing:border-box;min-height:120px;font:11px/1.4 ui-monospace,Consolas,monospace;margin:4px 0}
+  #cardRobo .rg-an{border-top:1px dashed var(--linha);margin-top:8px;padding-top:7px}#cardRobo .rg-an>b{display:block;font-size:13px;line-height:1.3}#cardRobo .rg-an>small{display:block;color:var(--suave);font-size:11px}
+  #cardRobo .rg-an.foco{background:#F8FAFC;border-radius:8px;padding:7px 8px;box-shadow:inset 0 0 0 1px #CBD5E1}
+  .rg-e{margin:6px 0 0;padding:6px 8px 6px 10px;border-radius:8px;background:#F8FAFC;box-shadow:inset 3px 0 0 #CBD5E1;min-width:0}
+  .rg-e.ok{background:var(--verde-bg);box-shadow:inset 3px 0 0 #10B981}.rg-e.at{background:var(--ambar-bg);box-shadow:inset 3px 0 0 #F59E0B}.rg-e.pr{background:var(--verm-bg);box-shadow:inset 3px 0 0 #EF4444}
+  .rg-e small{display:block;color:var(--suave);font-size:11px;overflow-wrap:anywhere}.rg-e .rg-d{font-weight:650;color:var(--tinta)}
+  .rg-e p{margin:2px 0;font-size:12px;overflow-wrap:anywhere}.rg-e .rg-st .selo{margin:0 4px 0 0}.rg-ef.ok{color:#065F46}.rg-ef.at{color:#92400E}.rg-ef.pr{color:#991B1B}
+  .rg-fotos{display:flex;gap:6px;margin:4px 0}.rg-fotos figure{margin:0;width:56px;text-align:center}.rg-fotos img{display:block;width:56px;height:56px;object-fit:cover;border-radius:6px;background:#E2E8F0;box-shadow:inset 0 0 0 1px var(--linha)}
+  .rg-fotos figcaption{font-size:9.5px;line-height:1.2;color:var(--suave);margin-top:2px}
+  .rg-mini{display:block;font-size:11px;color:var(--suave);margin-top:3px}.rg-mini .selo{margin:0;font-size:10px}.rg-mini .rg-ef{font-weight:650}
   /* v3.1 perfumaria da aba Geral (29/09, igual à imagem tela-geral): manchete → KPIs (meta com barra, lucro e alertas com ▲▼) → "Precisa de você hoje" com etiqueta da aba → "Cada aba em 1 linha" que abre a aba */
   #geral #cardSync:has(.gb-l .dot.ok):not(:has(.recnota,.shs-lista,.prep)){display:none}
   #geral .manchete{font-size:14px;margin:2px 0 10px}#geral .manchete .pt{width:9px;height:9px}#geral .manchete .zap{float:right;margin:0 0 2px 10px;font-size:12px;white-space:nowrap}
-  #geral .kpis.gk{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}#geral .kpis.gk>.kpi{display:block;min-width:0;cursor:default;padding:9px 12px}
+  #geral .kpis.gk{grid-template-columns:1fr;gap:8px;margin-bottom:10px}#geral .kpis.gk>.kpi{display:block;min-width:0;cursor:default;padding:9px 12px}
   #geral .kpi.meta{grid-column:1/-1}#geral .kpi.meta .lin{display:flex;align-items:baseline;gap:8px}#geral .kpi.meta .l{font-size:11.5px;color:var(--suave)}
   #geral .kpi.meta .lin .s{margin-left:auto;white-space:nowrap}#geral .kpi.meta .s{font-size:11px;color:#64748B}#geral .kpi.meta .lnk{font-size:11px}
   #geral .kpi.meta .v{font-size:17px;font-weight:750;margin:2px 0;font-variant-numeric:tabular-nums;white-space:nowrap}#geral .kpi .v small{display:inline;font-size:12px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--suave)}
@@ -529,7 +574,7 @@
   #geral li.mod b{font-size:13px;min-width:74px}#geral li.mod .gb-v{color:var(--suave);line-height:1.35}#geral li.mod .seta{color:#94A3B8;font-size:18px;line-height:1;flex:none}
   body.larga #geral .gb-grade{display:block}
   @media (max-width:379px){#geral li.mod .gb-l{flex-wrap:wrap;row-gap:1px}#geral li.mod .gb-v{order:1;flex-basis:100%;padding-left:32px}#geral li.mod .seta{margin-left:auto}}
-  @media (min-width:900px){#geral .kpis.gk{grid-template-columns:2fr 1fr 1fr}#geral .kpi.meta{grid-column:auto}body.larga #geral ul.mods{display:grid;grid-template-columns:1fr 1fr;column-gap:24px}body.larga #geral li.mod:nth-child(2){border-top:0}}
+  @media (min-width:900px){#geral .kpis.gk{grid-template-columns:2fr 1fr}#geral .kpi.meta{grid-column:auto}body.larga #geral ul.mods{display:grid;grid-template-columns:1fr 1fr;column-gap:24px}body.larga #geral li.mod:nth-child(2){border-top:0}}
   /* v3.1 Ajustes (imagem tela-ajustes, ESPEC §6): cartões com título e "?", campos em 2 colunas com sufixo, interruptores, blocos recolhidos */
   #ajustes .ch h3{font-size:13.5px}#ajustes .ch{margin-bottom:8px}
   #ajustes .ajuda{all:unset;cursor:help;margin-left:auto;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1px #CBD5E1;color:#64748B;font-size:11px;font-weight:700;text-align:center;line-height:20px;flex:none}#ajustes .ajuda:focus-visible{outline:2px solid #93C5FD}
@@ -560,8 +605,18 @@
   #ajustes details.aj-vm[open]>summary{margin-bottom:8px}
   #ajustes .aj-bl+.aj-bl{border-top:1px solid #F1F5F9;margin-top:10px;padding-top:10px}#ajustes .aj-bl>b{font-size:12.5px}#ajustes .aj-bl>.det{margin:2px 0 6px}
   #ajustes .campo>.inp{display:block;width:100%;box-sizing:border-box;padding:9px 11px;font-size:14px}
+  /* Despesas fixas do mês: nome | R$ valor /mês | tirar */
+  #ajustes .aj-desp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 28px;gap:6px;align-items:center;margin:0 0 6px}
+  #ajustes .aj-desp>.inp{width:100%;box-sizing:border-box;padding:9px 11px;font-size:14px}#ajustes .aj-desp .aj-pre .inp{padding-right:44px}
+  #ajustes .aj-desp .aj-tira{all:unset;cursor:pointer;width:28px;height:28px;display:grid;place-items:center;border-radius:6px;color:#64748B;font-size:18px;line-height:1}#ajustes .aj-desp .aj-tira:hover{background:#FEF2F2;color:var(--verm)}#ajustes .aj-tira:focus-visible{outline:2px solid #93C5FD}
+  #cardDespesas #totalDespesas{margin:2px 0 8px}#cardDespesas .dois{margin:0}#cardDespesas .ok-msg:empty,#erroDespesas:empty{display:none}#cardDespesas .ok-msg{display:block;margin:6px 0 0}
   /* tela cheia: "Abas que aparecem" à direita; o resto à esquerda (a última linha, 1fr, recebe a sobra de altura) */
-  body.larga #ajustes.on{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(5,auto) 1fr;column-gap:12px;align-items:start}body.larga #cardModulos{grid-column:2;grid-row:1/-1}
+  body.larga #ajustes.on{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(6,auto) 1fr;column-gap:12px;align-items:start}body.larga #cardModulos{grid-column:2;grid-row:1/-1}
+  /* v3.2 cruzamento ERP × ML (erp-cruzar.js): cartão da Geral e janela depois de conectar o ERP */
+  #cardErpx .gb-l .lnk{margin-left:auto}#cardErpx .gb-c .it{display:flex;gap:8px;align-items:center}#cardErpx .gb-c .it>div{flex:1;min-width:0}#cardErpx .gb-c .it:last-child{border-bottom:0}
+  #cardErpx .num,#modal .grp .num{font-weight:800;font-size:15px;min-width:26px;text-align:right;font-variant-numeric:tabular-nums}
+  #modal .grp{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid #F1F5F9}#modal .grp .num{font-size:18px;min-width:30px}
+  #modal .grp div{flex:1;min-width:0}#modal .grp b{display:block;font-size:12.5px}#modal .grp small{display:block;color:var(--suave);font-size:11px;line-height:1.35}
 </style>
 </head>
 <body>
@@ -578,6 +633,7 @@
     <symbol id="i-saude" viewBox="0 0 16 16"><path d="M1 8.5h3l2-4.5 3 8 2-3.5h4"/></symbol>
     <symbol id="i-conciliacao" viewBox="0 0 16 16"><path d="M3 1.5h10v13l-2-1.2-2 1.2-2-1.2-2 1.2-2-1.2zM5.5 5h5M5.5 8h5M5.5 11h3"/></symbol>
     <symbol id="i-canal" viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.6"/><path d="M5 5a4.2 4.2 0 000 6M11 5a4.2 4.2 0 010 6M2.8 2.8a7.3 7.3 0 000 10.4M13.2 2.8a7.3 7.3 0 010 10.4"/></symbol>
+    <symbol id="i-tiktok" viewBox="0 0 16 16"><path d="M2.8 5.5h10.4l-.9 8.5H3.7zM5.6 5.5V4a2.4 2.4 0 014.8 0v1.5M8.8 8v3.1M8.8 8l1.7.7"/><circle cx="7.9" cy="11.2" r=".9"/></symbol>
     <symbol id="i-ajustes" viewBox="0 0 16 16"><path d="M2 4.5h12M2 11.5h12"/><circle cx="5.5" cy="4.5" r="1.8" style="fill:var(--kn,#fff)"/><circle cx="10.5" cy="11.5" r="1.8" style="fill:var(--kn,#fff)"/></symbol>
     <symbol id="i-sino" viewBox="0 0 16 16"><path d="M4 11V7a4 4 0 018 0v4l1.3 1.5H2.7zM6.5 14a1.6 1.6 0 003 0"/></symbol>
     <symbol id="i-cheia" viewBox="0 0 16 16"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></symbol>
@@ -610,6 +666,7 @@
         <button data-a="saude" role="tab" aria-selected="false" aria-controls="saude" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-saude"/></svg>Saúde<span class="b" hidden></span></button>
         <button data-a="conciliacao" role="tab" aria-selected="false" aria-controls="conciliacao" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-conciliacao"/></svg>Conciliação<span class="b" hidden></span></button>
         <button data-a="canal" role="tab" aria-selected="false" aria-controls="canal" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-canal"/></svg>Canal<span class="b" hidden></span></button>
+        <button data-a="tiktok" role="tab" aria-selected="false" aria-controls="tiktok" tabindex="-1" hidden><svg class="i" aria-hidden="true"><use href="#i-tiktok"/></svg>TikTok<span class="b" hidden></span></button>
         <button data-a="ajustes" role="tab" aria-selected="false" aria-controls="ajustes" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-ajustes"/></svg>Ajustes<span class="b" hidden></span></button>
       </div>
       <button class="todas" id="todasAbas" aria-expanded="false" aria-controls="menuAbas" aria-haspopup="true" title="Ver todas as abas"><svg class="i" aria-hidden="true"><use href="#i-mais"/></svg>Todas<span class="b" hidden></span></button>
@@ -625,6 +682,7 @@
         <button data-a="saude" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-saude"/></svg>Saúde<span class="b" hidden></span></button>
         <button data-a="conciliacao" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-conciliacao"/></svg>Conciliação<span class="b" hidden></span></button>
         <button data-a="canal" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-canal"/></svg>Canal<span class="b" hidden></span></button>
+        <button data-a="tiktok" role="menuitem" hidden><svg class="i" aria-hidden="true"><use href="#i-tiktok"/></svg>TikTok<span class="b" hidden></span></button>
         <button data-a="ajustes" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-ajustes"/></svg>Ajustes<span class="b" hidden></span></button>
         <div class="rod">Esconder o que você não usa: Ajustes › Quais módulos você usa</div>
       </div>
@@ -639,6 +697,7 @@
       <div id="geralContas"></div>
       <div id="geralTopo"></div>
       <div class="gb-grade" id="listaGeral"></div>
+      <div id="geralErpx"></div>
       <div id="geralSemanal"></div>
     </section>
 
@@ -654,6 +713,7 @@
       <div id="promoTopo"></div>
       <div class="kpis k4" id="kpis"></div>
       <div id="roboPromo"></div>
+      <div id="promoSaiu"></div>
       <div class="card pr-todos" id="promoTodos" hidden><div class="tx"><b>Todos os produtos</b><span id="promoTodosRs"></span></div><button class="mais" id="promoVer" data-ver="promo:lista" hidden>Ver mais</button></div>
       <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="ip-robo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16.5h5M2 12v3M22 12v3"/></symbol></svg>
       <div id="promoMais">
@@ -661,6 +721,7 @@
         <p class="nota"><span class="auto"></span><span id="notaPromo">Preço, tarifa, frete e “você recebe” vêm do próprio Mercado Livre. Você só informa o custo.</span></p>
         <div id="listaPromo"></div>
       </div>
+      <div id="fa-promo"></div>
     </section>
 
     <section class="aba" id="frete">
@@ -711,11 +772,17 @@
       <div id="ta-canal"></div>
       <div id="listaCanal"></div>
       <button class="bt leve" data-abrir-agenda style="display:block;box-sizing:border-box;width:100%;margin-top:4px">Abrir a agenda</button>
+      <p class="det" id="canalQuem"></p>
     </section>
 
     <section class="aba" id="afiliados">
       <div id="ta-afiliados"></div>
       <div id="listaAfil"></div>
+    </section>
+
+    <section class="aba" id="tiktok">
+      <div id="ta-tiktok"></div>
+      <div id="listaTT"></div>
     </section>
 
     <section class="aba" id="ajustes">
@@ -725,14 +792,33 @@
         <div id="listaContasAj"></div>
         <button class="bt verde" id="salvarApelidos">Salvar apelido</button><span class="ok-msg" id="okApelidos"></span>
       </div>
+      <!-- F1 (licenca.js + licenca-tela.js): o plano do Copiloto. Só mostra; nenhuma aba é travada nesta fase.
+           v3.2.0: DESLIGADO (hidden + licenca-tela.js fora) até o servidor do SellerHub entrar no ar e a política citar o login. -->
+      <div class="card" id="cardPlano" hidden>
+        <div class="ch"><h3>Seu plano</h3><button type="button" class="ajuda" id="planoAjudaBt" aria-expanded="false" aria-controls="planoAjuda" aria-label="O que é o plano">?</button></div>
+        <p class="det" id="planoAjuda" hidden>O plano Grátis (lucro por anúncio, visão Geral e 1 conta do Mercado Livre) funciona sempre, mesmo sem entrar. Entrar com o SellerHub começa o teste de 7 dias. A senha é digitada só no site do SellerHub, e as suas vendas continuam no seu computador.</p>
+        <p id="planoLinha" style="margin:0 0 4px;font-weight:650">Seu plano: Grátis · 1 conta do Mercado Livre</p>
+        <p class="det" id="planoAviso" role="status">Entre para testar 7 dias com tudo liberado e até 3 contas do Mercado Livre. Sem cartão.</p>
+        <button type="button" class="bt verde" id="planoEntrar">Entrar com o SellerHub</button>
+        <button type="button" class="bt leve" id="planoSair" style="display:none">Sair do SellerHub</button>
+        <p class="det" id="planoMsg" role="status"></p>
+      </div>
       <div class="card" id="cardImposto">
         <div class="ch"><h3>Seus números</h3><button type="button" class="ajuda" title="Entram no lucro de todas as telas. O estoque mínimo é definido por produto, em unidades, na aba Full.">?</button></div>
         <div class="aj-campos">
           <div class="campo"><label for="imposto_pct">Imposto</label><div class="aj-suf"><input class="inp" id="imposto_pct" inputmode="decimal" placeholder="Ex.: 6"><span>%</span></div></div>
           <div class="campo"><label for="margem_alvo_pct">Meta de margem</label><div class="aj-suf"><input class="inp" id="margem_alvo_pct" inputmode="decimal" placeholder="Ex.: 10"><span>%</span></div></div>
           <div class="campo larga"><label for="meta_mes">Meta de vendas do mês</label><div class="aj-suf aj-pre"><i>R$</i><input class="inp" id="meta_mes" inputmode="decimal" placeholder="Ex.: 50.000"><span>opcional</span></div></div>
+          <div class="campo larga"><label for="promo_aviso_dias" title="O Copiloto avisa no sino quando a promoção de um produto estiver acabando. 0 = só no último dia.">Avisar fim da promoção</label><div class="aj-suf"><input class="inp" id="promo_aviso_dias" inputmode="numeric" placeholder="2"><span>dias antes</span></div></div>
         </div>
         <button class="bt" id="salvarCfg">Salvar meus números</button><span class="ok-msg" id="okCfg"></span><p class="det" id="erroCfg" role="alert" style="color:var(--verm)"></p>
+      </div>
+      <div class="card" id="cardDespesas">
+        <div class="ch"><h3>Despesas fixas do mês</h3><button type="button" class="ajuda" title="O que você paga a cada mês fora do ML: aluguel, salários, embalagem, sistemas, contador. Entram no Fechamento e na Conciliação depois do lucro, para mostrar a sobra no fim do mês. No mês em andamento, a conta é proporcional até hoje.">?</button></div>
+        <div id="listaDespesas"></div>
+        <p class="det" id="totalDespesas"></p>
+        <div class="dois"><button type="button" class="bt leve" id="maisDespesa">+ Adicionar despesa</button><button type="button" class="bt" id="salvarDespesas">Salvar despesas</button></div>
+        <span class="ok-msg" id="okDespesas"></span><p class="det" id="erroDespesas" role="alert" style="color:var(--verm)"></p>
       </div>
       <div class="card" id="cardModulos">
         <div class="ch"><h3>Abas que aparecem</h3><button type="button" class="ajuda" title="Desligue o que você não usa: a aba some do topo, da Geral e do sino. Nada do que já foi lido é apagado.">?</button></div>
@@ -744,11 +830,21 @@
         <label class="aj-sw"><span class="nm"><b>Continuar sincronizando com o Chrome fechado</b><small id="infoFundo">enquanto o computador estiver ligado</small></span><input type="checkbox" class="tg" id="syncFundo"></label>
         <p class="det" id="infoSync">Automática a cada 3 horas.</p>
       </div>
+      <!-- v3.2: resumo para a equipe (cfg.resumo_freq / cfg.resumo_hora; o fundo gera na hora, o seller envia) -->
+      <div class="card" id="cardResumoAj">
+        <div class="ch"><h3>Resumo para a equipe</h3><button type="button" class="ajuda" title="O Copiloto deixa pronto, na Geral, um texto com vendas, lucro, o que subiu e caiu, Full, pós-venda e o que fazer. Quem envia é você, pelo WhatsApp.">?</button></div>
+        <div class="aj-campos">
+          <div class="campo"><label for="resumo_freq">Frequência</label><select class="inp" id="resumo_freq"><option value="ambos">Do dia e da semana</option><option value="dia">Só do dia</option><option value="semana">Só da semana (segunda)</option></select></div>
+          <div class="campo"><label for="resumo_hora">Fica pronto às</label><select class="inp" id="resumo_hora"></select></div>
+        </div>
+        <span class="ok-msg" id="okResumoAj"></span>
+      </div>
       <details class="card aj-vm" id="cardCustos">
         <summary><span class="t"><b>Custos dos produtos</b><span id="custosRes">planilha ou ERP</span></span></summary>
         <div class="barra-g" role="progressbar" aria-label="SKUs com custo" aria-valuemin="0" aria-valuemax="100" id="custosBarra"><i id="custosProg" style="width:0"></i></div>
         <p style="margin:0;font-size:12.5px" id="infoCustos">—</p>
         <p style="margin:2px 0 0;color:var(--suave);font-size:12px" id="infoPrincipais"></p>
+        <div id="erpxAj"></div>
         <div class="dois"><button class="bt verde" id="abrirTiny">Tiny · Conectar em 1 minuto</button><button class="bt" id="abrirBling">Omie ou Bling · Conectar</button></div>
         <div id="tinyBox" hidden>
           <ol class="passos">
@@ -808,9 +904,21 @@
   <script src="ml-extrator.js"></script>
   <script src="tiny.js"></script>
   <script src="omie.js"></script>
+  <script src="erp-cruzar.js"></script>
   <script src="tour.js"></script>
   <script src="fechamento.js"></script>
   <script src="agenda-canal.js"></script>
+  <script src="nucleo/util.js"></script>
+  <script src="nucleo/modelo.js"></script>
+  <script src="nucleo/tarifas.js"></script>
+  <script src="nucleo/motor.js"></script>
+  <script src="nucleo/conciliacao.js"></script>
+  <script src="nucleo/adaptador.js"></script>
+  <script src="nucleo/adaptadores/tiktok.js"></script>
+  <script src="tiktok.js"></script>
+  <script src="tiktok-aba.js"></script>
   <script src="painel-lateral.js"></script>
+  <script src="licenca.js"></script>
+  <!-- v3.2.0: licenca-tela.js ("Entrar com o SellerHub") fora até o servidor entrar no ar: <script src="licenca-tela.js"></script> -->
 </body>
 </html>

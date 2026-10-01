@@ -38,10 +38,16 @@
             if (cod === 6 || cod === 11) return { ok: false, erro: 'limite', msg: 'O Tiny pediu para esperar (muitos acessos).' };
             return { ok: false, erro: 'outro', msg: 'O Tiny respondeu com erro' + (cod ? ' ' + cod : '') + (txt ? ': ' + String(txt).slice(0, 120) : '') + '.' };
         }
+        // v3.2 (cruzamento ERP × ML): situacao (A/I) e tipoVariacao (P = pai, V = variação) vêm de graça na mesma resposta. O estoque do Tiny
+        // é 1 chamada por produto: não é lido (fica null e o "estoque diferente" não compara). ponytail: o pai da variação (produto.obter) também não.
         const produtos = (r.produtos || []).map(x => (x && x.produto) || x || {}).map(p => ({
+            id: p.id === undefined || p.id === null ? '' : String(p.id),
             sku: SHC.normalizaSku(p.codigo),
             custo: dec(p.preco_custo) || dec(p.preco_custo_medio),
             titulo: String(p.nome || '').replace(/\s+/g, ' ').trim().slice(0, 120),
+            situacao: !p.situacao || p.situacao === 'A' ? 'A' : 'I',
+            tipo: p.tipoVariacao === 'P' ? 'pai' : p.tipoVariacao === 'V' ? 'variacao' : 'simples',
+            estoque: null,
         })).filter(p => p.sku);
         const pagina = Number(r.pagina) || 1;
         return { ok: true, pagina, paginas: Math.max(pagina, Number(r.numero_paginas) || 1), produtos };
@@ -107,21 +113,33 @@
     SHC.tinyGravar = async function (produtos, erp) {
         const chaves = [...new Set((produtos || []).map(p => SHC.chaveSku(p.sku)).filter(Boolean))];
         const atuais = chaves.length ? await chrome.storage.local.get(chaves) : {};
-        const itens = ((await SHC.lerAnuncios()) || {}).itens || [];
-        const doMl = new Map();   // c|sku|X → [{familia, itemId}] dos anúncios do retrato
-        itens.forEach(i => { const k = i.sku && SHC.chaveSku(i.sku); if (k) (doMl.get(k) || doMl.set(k, []).get(k)).push({ familia: i.familia, itemId: i.itemId }); });
+        // F17a (auditoria 30/09): os retratos de TODAS as contas (antes só a aberta) e TODOS os SKUs de cada anúncio (antes só o 1º).
+        let cs = [];
+        try { cs = SHC.contas ? await SHC.contas() : []; } catch (e) { cs = []; }
+        const contas = cs.length ? cs : [{ sellerId: undefined, nome: '' }];
+        const retratos = await Promise.all(contas.map(c => SHC.lerAnuncios(c.sellerId).catch(() => null)));
+        const doMl = new Map(), porConta = contas.map(() => new Set());   // c|sku|X → [{familia, itemId}] dos anúncios dos retratos
+        let nItens = 0;
+        retratos.forEach((r, ci) => ((r && r.itens) || []).forEach(i => {
+            nItens++;
+            SHC.skusDoAnuncio(i).forEach(s => { const k = SHC.chaveSku(s); if (!k) return; (doMl.get(k) || doMl.set(k, []).get(k)).push({ familia: i.familia, itemId: i.itemId }); porConta[ci].add(k); });
+        }));
         const sem = chaves.filter(k => doMl.has(k) && !(SHC.num((atuais[k] || {}).custo) > 0));
         const achou = sem.length ? await SHC.custosDe([].concat(...sem.map(k => doMl.get(k)))) : new Map();
         const antigos = new Set(sem.filter(k => doMl.get(k).some(i => achou.get(i))));
         const d = SHC.tinyDecide(produtos, atuais, Date.now(), antigos, erp);
         if (Object.keys(d.lote).length) await chrome.storage.local.set(d.lote);
-        return { atualizados: d.atualizados, semCusto: d.semCusto, mantidos: d.mantidos, noMl: itens.length ? Object.keys(d.lote).filter(k => doMl.has(k)).length : null };
+        const gravadas = Object.keys(d.lote);
+        return { atualizados: d.atualizados, semCusto: d.semCusto, mantidos: d.mantidos, noMl: nItens ? gravadas.filter(k => doMl.has(k)).length : null,
+            noMlPorConta: contas.length > 1 ? contas.map((c, ci) => ({ nome: c.nome, n: gravadas.filter(k => porConta[ci].has(k)).length })) : null };
     };
 
     /** "12 custos atualizados (5 nos seus anúncios do Mercado Livre), 3 SKUs sem custo no Tiny, 2 mantidos porque você digitou" */
     SHC.tinyResumo = function (r) {
         const pl = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
-        const ml = typeof r.noMl === 'number' && r.atualizados ? ' (' + r.noMl + ' nos seus anúncios do Mercado Livre)' : '';
+        // F17a: com 2+ contas, por conta ("5 na conta Loja 1, 3 na conta Loja 2").
+        const pc = Array.isArray(r.noMlPorConta) && r.noMlPorConta.some(x => x.n) ? r.noMlPorConta.filter(x => x.n).map(x => x.n + ' na conta ' + x.nome).join(', ') : '';
+        const ml = typeof r.noMl === 'number' && r.atualizados ? ' (' + (pc || r.noMl + ' nos seus anúncios do Mercado Livre') + ')' : '';
         return [pl(r.atualizados, 'custo atualizado', 'custos atualizados') + ml, pl(r.semCusto, 'SKU sem custo no Tiny', 'SKUs sem custo no Tiny'),
             pl(r.mantidos, 'mantido porque você digitou', 'mantidos porque você digitou')].join(', ')
             + (r.atualizados && r.noMl === 0 ? '. Nenhum código do Tiny é igual ao SKU dos seus anúncios: confira o SKU no Mercado Livre' : '');

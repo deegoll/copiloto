@@ -57,6 +57,9 @@
   .mot { color: var(--suave); font-size: 11.5px; margin: 4px 0 6px; }
   .cartao .ac { display: flex; flex-direction: column; gap: 3px; }
   .vazio { color: var(--suave); }
+  .sem-canal { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 12px; padding: 12px 14px; border-radius: 10px; background: #FFFBEB; border: 1px solid #FCD34D; }
+  .sem-canal p { margin: 0; flex: 1 1 260px; color: #78350F; font-weight: 600; }
+  .kpis[hidden], .sem-canal[hidden] { display: none !important; }
   details summary { cursor: pointer; font-weight: 700; }
   /* Situação: ok verde · at âmbar · pr vermelho · az azul (ação sua) · ne cinza (informativo) */
   .c-ok { --c: var(--verde); --cb: var(--ok-bg); } .c-at { --c: var(--ambar); --cb: var(--at-bg); } .c-pr { --c: var(--verm); --cb: var(--pr-bg); }
@@ -114,6 +117,18 @@
   .itens .and:empty { display: none; }
   .itens .and.a-lido { color: var(--verde); } .itens .and.a-nao, .itens .and.a-erro { color: var(--verm); }
   .robo .tg { font-size: 13.5px; margin: 0; }
+  /* Conferência no ML: status real da transmissão (ok verde · pr vermelho · ne cinza) e alcance */
+  .cf-ok { --c: var(--verde); --cb: var(--ok-bg); } .cf-pr { --c: var(--verm); --cb: var(--pr-bg); } .cf-ne { --c: var(--suave); --cb: var(--tag); }
+  .st-ml { margin: -2px 0 6px; font-size: 12px; font-weight: 700; color: var(--c); }
+  .resumo.cf-ok { color: var(--verde); } .resumo.cf-pr { color: var(--verm); }
+  .conf-alerta { margin: 0 0 8px; background: var(--pr-bg); color: var(--verm); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; font-weight: 600; }
+  .cartao.feito:has(.cf-pr) { opacity: 1; border-color: var(--verm); }
+  .alc { font-size: 11.5px; color: var(--suave); margin: 0 0 4px; }
+  #conf-lista .alc { margin: 0; flex-basis: 100%; }
+  #conf-card .resumo { font-size: 14.5px; }
+  /* "Ver mais (N)" ↔ "Ver menos": o resto da lista fica escondido até abrir; <details> aberto diz como fechar */
+  [data-vm-box]:not(.vm-aberta) .vm-x { display: none; } .vm-pe { margin: 6px 0 0; text-align: right; } .vm-li { list-style: none; border: 0; justify-content: flex-end; }
+  details[open] > summary::after { content: " · Ver menos"; color: var(--azul); font-weight: 600; }
   @media (max-width: 520px) { .kpi .v { font-size: 22px; } .kpi { padding: 8px; } }
 </style>
 </head>
@@ -125,7 +140,7 @@
   </div></div>
   <main>
     <div class="card">
-      <p class="aviso">O Copiloto monta a agenda e preenche o formulário do Mercado Livre. Você confere e clica em Criar em cada uma — nada é enviado sem o seu clique.</p>
+      <p class="aviso">O Copiloto monta a agenda e pré-preenche o formulário do Mercado Livre. Quem cria cada transmissão é você (clique em Criar no ML). Quem envia aos seguidores é o próprio ML — o Copiloto não impulsiona nem paga divulgação.</p>
       <div class="grade-f" style="margin-top:14px">
         <div class="campo" id="canal-campo" hidden><label for="canal">Canal</label><select id="canal"></select></div>
         <!-- Confirmado ao vivo em 24/09/2026: o ML aceitava até 8 dias à frente (só dias úteis). -->
@@ -152,7 +167,8 @@
     </div>
 
     <div class="card">
-      <div class="kpis">
+      <div class="sem-canal" id="sem-canal" hidden><p id="sem-canal-txt"></p><a class="bt sec" id="sem-canal-link" target="_blank" rel="noopener">Abrir a Minha página no Mercado Livre</a></div>
+      <div class="kpis" id="kpis">
         <div class="kpi ok" id="kpi-agenda"><span class="v" id="k-agenda">0</span><span class="l">na agenda</span></div>
         <div class="kpi" id="kpi-podem"><span class="v" id="k-podem">0</span><span class="l">produtos podem entrar</span></div>
         <div class="kpi" id="kpi-fora"><span class="v" id="k-fora">0</span><span class="l">fora da agenda</span></div>
@@ -164,6 +180,20 @@
       </div>
       <p class="sub">Cada dia só recebe produto conferido naquele dia (promoção confirmada, lucro na meta, custo, estoque). Lucro é estimativa do Copiloto.</p>
       <div id="grade"></div>
+    </div>
+
+    <!-- 4b: o "criada" é o clique em Criar; aqui ele é conferido na lista do próprio canal no ML (status e alcance que o ML mostra). -->
+    <div class="card" id="conf-card" data-vm-box hidden>
+      <h2>Conferência no Mercado Livre</h2>
+      <p class="sub">Cada transmissão que você criou, conferida na lista do seu canal no ML: se ficou programada, se foi enviada e o alcance que o ML mostra.</p>
+      <div class="acoes" style="margin:0 0 8px">
+        <span class="resumo" id="conf-titulo"></span>
+        <button class="bt sec pq" id="conferir" type="button">Conferir no ML</button>
+        <span class="msg" id="conf-status" role="status" aria-live="polite"></span>
+      </div>
+      <p class="sub" id="conf-det" style="margin:0 0 6px"></p>
+      <p class="conf-alerta" id="conf-alerta" role="status" hidden></p>
+      <ul class="itens" id="conf-lista"></ul>
     </div>
 
     <div class="card" id="fora-card" hidden>
