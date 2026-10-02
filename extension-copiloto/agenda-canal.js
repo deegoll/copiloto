@@ -970,7 +970,9 @@
     if (typeof module !== 'undefined' && module.exports) module.exports = SHC;
 
     // ── 3. Tela (agenda-canal.html) ──────────────────────────────────────────────────────────
-    if (typeof document === 'undefined' || !document.getElementById('shc-agenda') || !root.chrome || !chrome.storage) return;
+    // 3.2.1: só numa página da própria extensão. Nas páginas do Canal este arquivo também roda (só dá SHC.canal* ao ml-canal.js):
+    // ali quem decidiria se a tela liga seria o DOM do ML (um id="shc-agenda" na página).
+    if (typeof document === 'undefined' || !root.location || root.location.protocol !== 'chrome-extension:' || !document.getElementById('shc-agenda') || !root.chrome || !chrome.storage) return;
 
     const $ = id => document.getElementById(id);
     const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

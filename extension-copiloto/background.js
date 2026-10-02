@@ -1369,7 +1369,8 @@ const urlAfilProdutos = (de, ate, p) => BASE + '/meliconnect/api/seller-affiliat
 // v2.9 (mapeado ao vivo em 26/09/2026): a lista da campanha pagina por esta API; "?page=N" na página devolve sempre a 1ª.
 const urlAfilCampanha = (uuid, p, total) => BASE + '/meliconnect/api/seller-affiliates/campaigns/' + encodeURIComponent(uuid) + '?page=' + p
     + '&orderBy=extra_commission&order=desc&countExec=false&countVal=' + (total || 0);
-// Pedidos por afiliados (page começa em 0). A resposta traz o afiliado e o número do pedido: o Copiloto só guarda a SOMA por SKU e por situação.
+// Pedidos por afiliados (page começa em 0). A resposta traz o afiliado e o número do pedido: o Copiloto guarda a SOMA por SKU e por situação
+// e, por 30 dias, o número, a comissão e a situação de cada venda com afiliado (porPedido, para a etiqueta da venda). Nunca o afiliado.
 const urlAfilPedidos = (de, ate, p) => BASE + '/meliconnect/api/seller-affiliates/orders/detail?date_from=' + de + '&date_to=' + ate + '&page=' + p + '&campaign_sales=false';
 // Preparado, NÃO chamado: métricas por campanha e por afiliado. Os valores dos parâmetros não foram confirmados ao vivo (net_sales|all|false|0
 // deram HTTP 400). Confirmar o que a tela manda antes de ligar; por afiliado, guardar só quantidade/vendas/custo, nunca nome ou apelido.
@@ -1439,7 +1440,7 @@ async function lerMetricasAfiliados(de, ate, progresso) {
     return { periodo: { de, ate }, vendas: m0.vendas, unidades: m0.unidades, qtdVendas: m0.qtdVendas, custoEstimado: m0.custoEstimado,
         ultimaAtualizacao: m0.ultimaAtualizacao, porProduto, completo };
 }
-// Pedidos por afiliados do período, todas as páginas → soma por SKU e por situação (SHC.afilPedidosAgrega) | { falha }.
+// Pedidos por afiliados do período, todas as páginas → soma por SKU e por situação + comissão por nº da venda (porPedido, para a etiqueta) (SHC.afilPedidosAgrega) | { falha }.
 async function lerPedidosAfiliados(de, ate, progresso) {
     const vendas = [];
     let completo = true, total = null;
@@ -1447,7 +1448,7 @@ async function lerPedidosAfiliados(de, ate, progresso) {
         if (p >= AFIL_PED_PAGINAS_MAX) { completo = false; break; }
         const pg = await naCiclo('afiliados', 'pedidos|' + de + '|' + ate + '|' + p, async () => {
             if (p) await espera(PAUSA_MS);
-            const b = await buscarJson(urlAfilPedidos(de, ate, p)), x = b && b.json ? SHC.afilPedidos(b.json) : null;   // só SKU, valor e situação: nada do afiliado
+            const b = await buscarJson(urlAfilPedidos(de, ate, p)), x = b && b.json ? SHC.afilPedidos(b.json) : null;   // SKU, valor, situação e nº da venda (comissão na etiqueta): nada do afiliado
             return x && (x.pagina === null || x.pagina === p) ? x : { falha: b && b.login ? 'login' : 'indisponivel' };
         });
         await bateVivo(progresso);
@@ -2378,6 +2379,9 @@ async function gravarCertificado(msg) {
     const c = msg && msg.semAviso === true ? { ok: true, ts: Date.now(), fonte: 'faturador' } : certDaMsg(msg || {});
     if (!c) return { ok: false, motivo: 'texto' };
     const conta = await SHC.contaAtual();
+    // 3.2.1: o "vencido" que veio da remessa do Full (lida pelo fundo) só sai pela própria remessa, não pela tela sem o aviso.
+    const ant = c.ok ? await SHC.lerChave('cert:' + conta) : null;
+    if (ant && ant.fonte === 'remessa' && ant.expirou) return { ok: true, cert: ant };
     await SHC.gravarChave('cert:' + conta, c);
     await atualizarAlertas(conta).catch(() => {});
     return { ok: true, cert: c };
@@ -2831,9 +2835,59 @@ async function gerarResumo(conta, periodo, origem) {
     return { ok: true, resumo: snap };
 }
 
+// ── 3.2.1 (revisão de 02/10/2026): faixa dos números que a aba do ML manda (o que vem da página não é verdade por si) ──
+// O leitor do ML (SHC.valorRS, dinheiro) só devolve número ≥ 0; tarifa e "você recebe" nunca passam do preço; o frete do ML para o vendedor
+// fica muito abaixo de R$ 1.000. Texto, NaN, Infinity, negativo ou fora disso não é leitura do ML: o número sai (null), o anúncio fica.
+// Um número possível e errado continua passando: veja NOVIDADES-3.2.1.md, "Riscos que ficam", item 3.
+const FAIXA_FRETE_MAX = 1000;
+const numOk = (v, min, max) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
+const naFaixa = (v, min, max) => (v === null || v === undefined || numOk(v, min, max) ? v : null);   // ausente continua ausente
+const qtdOk = v => (v === null || v === undefined || (Number.isInteger(v) && v >= 0 && v <= 1e7) ? v : null);
+const txtOk = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
+// Um anúncio da lista (SHC.mlAnunciosDoEstado). Sem preço possível não há como conferir a tarifa e o "você recebe": saem também.
+// Frete e taxa operacional (custo de envio do ML) podem passar do preço num anúncio barato: até o preço ou até R$ 1.000.
+function anuncioNaFaixa(i) {
+    if (!i || typeof i !== 'object' || Array.isArray(i)) return null;
+    const o = Object.assign({}, i), temPreco = numOk(o.preco, 0.01, Infinity), p = temPreco ? o.preco : 0;
+    o.preco = temPreco ? o.preco : null;
+    ['tarifa', 'recebe'].forEach(k => { if (k in o) o[k] = temPreco ? naFaixa(o[k], 0, p) : null; });
+    ['frete', 'taxaOperacional'].forEach(k => { if (k in o) o[k] = naFaixa(o[k], 0, Math.max(p, FAIXA_FRETE_MAX)); });
+    ['precoCheio', 'flexBonus'].forEach(k => { if (k in o) o[k] = naFaixa(o[k], k === 'precoCheio' ? 0.01 : 0, Infinity); });
+    if ('qtdVariacoes' in o && !(Number.isInteger(o.qtdVariacoes) && o.qtdVariacoes > 0 && o.qtdVariacoes <= 5000)) delete o.qtdVariacoes;
+    if ('skus' in o) o.skus = Array.isArray(o.skus) ? o.skus.filter(s => typeof s === 'string') : [];
+    // Revisão final 02/10: os textos que o painel percorre (titulo.toLowerCase() na busca) ficam texto; o leitor do ML sempre manda texto.
+    ['titulo', 'status', 'sku', 'skuFonte', 'tipo', 'estoque', 'familia', 'familyId', 'userProductId'].forEach(k => { if (k in o && typeof o[k] !== 'string') o[k] = ''; });
+    return o;
+}
+// Uma proposta da Central de promoções (SHC.mlPromosDoEstado): sem preço e "você recebe" possíveis ela não serve (o leitor do ML também
+// descarta). Tarifa ou envio presentes e impossíveis: a proposta não entra (regra da 3.2.1, já no NOVIDADES).
+function propostaNaFaixa(x) {
+    if (!x || typeof x !== 'object' || Array.isArray(x) || !numOk(x.preco, 0.01, Infinity)) return false;
+    const opcional = (v, max) => v === null || v === undefined || numOk(v, 0, max);
+    return numOk(x.recebe, 0, x.preco) && opcional(x.tarifa, x.preco) && opcional(x.envio, Math.max(x.preco, FAIXA_FRETE_MAX));
+}
+// Uma linha do Editor em massa (SHC.editorLinha + variacoes:[SHC.editorVariacoes]). Os campos que o Copiloto percorre ou soma ficam com o tipo
+// certo (variacoes texto travava o fontesSku e, com ele, toda leitura de Anúncios; dicas texto travava o cartão de pendências).
+function editorNaFaixa(o) {
+    const r = Object.assign({}, o);
+    ['estoque', 'estoqueFlex', 'estoqueFull'].forEach(k => { if (k in r) r[k] = qtdOk(r[k]); });
+    if ('nVar' in r && !(Number.isInteger(r.nVar) && r.nVar > 0 && r.nVar <= 5000)) delete r.nVar;
+    ['id', 'status', 'up', 'familyId', 'titulo', 'sku', 'tipo', 'tarifaTxt', 'prazo', 'garantia', 'qualidade', 'pai', 'nome'].forEach(k => { if (k in r && typeof r[k] !== 'string') r[k] = ''; });
+    ['entrega', 'custoEnvio'].forEach(k => { if (k in r) r[k] = r[k] && typeof r[k] === 'object' && !Array.isArray(r[k]) ? { id: txtOk(r[k].id, 40), txt: txtOk(r[k].txt, 80) } : null; });
+    if ('dicas' in r) r.dicas = Array.isArray(r.dicas) ? r.dicas.filter(t => typeof t === 'string').map(t => t.slice(0, 80)).slice(0, 10) : [];
+    if ('variacoes' in r) {
+        if (!Array.isArray(r.variacoes)) delete r.variacoes;
+        else r.variacoes = r.variacoes.filter(v => v && typeof v === 'object' && !Array.isArray(v)).slice(0, 1000)
+            .map(v => ({ id: txtOk(v.id, 40), sku: txtOk(v.sku, 80), nome: txtOk(v.nome, 60), estoque: qtdOk(v.estoque), estoqueFlex: qtdOk(v.estoqueFlex), estoqueFull: qtdOk(v.estoqueFull) }));
+    }
+    return r;
+}
+
 // A aba aberta na Central de promoções manda o que está na tela (mais fresco que a última sincronização). Mesma fila das gravações.
 async function juntarPagina(conta, dados) {
-    const familias = Array.isArray(dados.familias) ? dados.familias : [], propostas = Array.isArray(dados.propostas) ? dados.propostas : [];
+    // 3.2.1: teto igual ao dos outros caminhos da aba e só proposta com preço, tarifa, envio e "você recebe" possíveis (propostaNaFaixa).
+    const familias = Array.isArray(dados.familias) ? dados.familias.filter(f => f && typeof f.chave === 'string').slice(0, 500) : [];
+    const propostas = Array.isArray(dados.propostas) ? dados.propostas.filter(propostaNaFaixa).slice(0, 2000) : [];
     await emFila(async () => {
         const snap = (await SHC.lerPromos(conta)) || { ts: Date.now(), paginas: 0, familias: [], propostas: [] };
         const chaves = new Set(familias.map(f => f.chave));
@@ -2849,7 +2903,7 @@ async function juntarPagina(conta, dados) {
 // v3.2: famílias abertas pela aba (SHC.mlParaAbrir + row/expanded) vêm em familias → snap.familias (pai separado dos itens).
 // lidoEm = quando a aba leu a página (o estado embutido é do carregamento da página): leitura mais velha que o retrato não entra (SHC.mesclaAnuncios).
 async function juntarAnuncios(conta, itens, familias, lidoEm) {
-    const lote = itens.slice(0, 500), fams = Array.isArray(familias) ? familias.filter(f => f && /^[A-Z]{2}\d+$/.test(String(f.id || ''))).slice(0, 100) : [];
+    const lote = itens.slice(0, 500).map(anuncioNaFaixa), fams = Array.isArray(familias) ? familias.filter(f => f && /^[A-Z]{2}\d+$/.test(String(f.id || ''))).slice(0, 100) : [];
     let saiu = 0;
     const snap = await emFila(async () => {
         const antes = await SHC.lerAnuncios(conta);
@@ -2867,7 +2921,7 @@ async function juntarAnuncios(conta, itens, familias, lidoEm) {
 // Leitura parcial só junta. Depois completa o SKU que a lista não mostra (anúncio com variações) no retrato. → quantos anúncios vieram.
 async function juntarEditor(conta, d) {
     const porItem = {};
-    Object.keys(d.porItem).slice(0, 5000).forEach(id => { const o = d.porItem[id]; if (/^MLB\d{6,14}$/.test(id) && o && typeof o === 'object') porItem[id] = o; });
+    Object.keys(d.porItem).slice(0, 5000).forEach(id => { const o = d.porItem[id]; if (/^MLB\d{6,14}$/.test(id) && o && typeof o === 'object' && !Array.isArray(o)) porItem[id] = editorNaFaixa(o); });   // 3.2.1: tipos conferidos
     const n = Object.keys(porItem).length;
     if (!n) return 0;
     await emFila(async () => {
@@ -2966,18 +3020,19 @@ const daExtensao = s => !!(s && s.id === chrome.runtime.id && /^chrome-extension
 chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     if (!msg) return false;
     if (msg.acao === 'concorrentes') {
-        if (!(daExtensao(sender) || daAbaDoML(sender)) || !/^MLB\d{6,14}$/.test(String(msg.itemId || ''))) return false;
+        if (!daExtensao(sender) || !/^MLB\d{6,14}$/.test(String(msg.itemId || ''))) return false;
         lerConcorrentes(String(msg.itemId)).then(responder, () => responder({ ok: false, erro: 'O Mercado Livre não respondeu. Tente de novo em alguns minutos.' }));
         return true;
     }
     // v2.5.3 (D5a): responde logo depois da 1ª batida ({ok, iniciou} — o andamento vem por shc:status). esperar:true = responde o status final.
     if (msg.acao === 'sincronizar') {
+        if (!daExtensao(sender)) return false;   // 3.2.1: só as telas da extensão pedem a leitura
         (msg.esperar ? sincronizar('manual') : iniciarSync('manual')).then(responder, () => responder({ ok: false, motivo: 'erro' }));
         return true;
     }
     // v2.5.3 (D6): {acao:'fiscal_agora'} → só a parte fiscal, agora (fiscalAgora).
     if (msg.acao === 'fiscal_agora') {
-        if (!(daExtensao(sender) || daAbaDoML(sender))) return false;
+        if (!daExtensao(sender)) return false;
         fiscalAgora().then(responder, () => responder({ ok: false, motivo: 'ml_indisponivel' }));
         return true;
     }
@@ -2995,8 +3050,8 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         vendasBrutasMes(String(msg.mes || '')).then(responder, () => responder({ ok: false, motivo: 'indisponivel' }));
         return true;
     }
-    if (msg.acao === 'sincronizar_custos') {   // botão "Sincronizar custos" em qualquer tela da extensão ou na aba do ML; erp: 'tiny' (padrão) | 'omie' | 'bling'
-        if (!(daExtensao(sender) || daAbaDoML(sender))) return false;
+    if (msg.acao === 'sincronizar_custos') {   // botão "Sincronizar custos" das telas da extensão (3.2.1: a aba do ML não pede); erp: 'tiny' (padrão) | 'omie' | 'bling'
+        if (!daExtensao(sender)) return false;
         // Sem erp (painel lateral sem Tiny/Omie guardado): o Tiny, ou o Bling se só ele estiver conectado.
         const escolhe = async () => (['tiny', 'omie', 'bling'].indexOf(msg.erp) >= 0 ? msg.erp : (!((await SHC.lerChave(SHC.TINY_CHAVE)) || {}).token && ERPS.bling.cred(await SHC.lerChave(SHC.BLING_CHAVE)) ? 'bling' : 'tiny'));
         escolhe().then(erp => sincronizarCustos(erp, 0).then(responder, () => responder({ ok: false, erp, msg: 'Não consegui falar com o ' + ERPS[erp].nome + '. Tente de novo em alguns minutos.' })));
@@ -3062,8 +3117,9 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         lerAnunciosPorId(msg.itemIds).then(responder, () => responder({ ok: false, lidos: [] }));
         return true;
     }
-    if (msg.acao === 'recalcular_alertas') { atualizarAlertas().then(r => responder({ ok: true, criticos: r.criticos, anomalias: r.anomalias ? r.anomalias.total : null }), () => responder({ ok: false })); return true; }
+    if (msg.acao === 'recalcular_alertas') { if (!daExtensao(sender)) return false; atualizarAlertas().then(r => responder({ ok: true, criticos: r.criticos, anomalias: r.anomalias ? r.anomalias.total : null }), () => responder({ ok: false })); return true; }
     if (msg.acao === 'sincronizar_repasse') {   // página de Fechamento, logo depois de o seller conceder a permissão do Mercado Pago
+        if (!daExtensao(sender)) return false;
         if (emAndamento) { responder({ ok: false, motivo: 'sincronizando' }); return false; }
         SHC.contaAtual().then(async conta => {
             if (conta !== 'atual' && await confereSessao(conta) === 'outra_conta') return { ok: false, motivo: 'outra_conta' };   // repasse de outra conta não entra nesta
@@ -3078,13 +3134,20 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         }).then(responder, () => responder({ ok: false }));
         return true;
     }
-    if (msg.acao === 'abrir_frete' && sender && sender.tab && /^MLB\d{6,14}$/.test(String(msg.itemId || ''))) {
+    // 3.2.1: a Agenda do Canal abre numa aba pelo fundo (a página dela não fica mais exposta ao ML: sem web_accessible_resources).
+    if (msg.acao === 'abrir_agenda') {
+        if (!daAbaDoML(sender)) return false;
+        chrome.tabs.create({ url: chrome.runtime.getURL('agenda-canal.html') });
+        responder({ ok: true });
+        return false;
+    }
+    if (msg.acao === 'abrir_frete' && daAbaDoML(sender) && /^MLB\d{6,14}$/.test(String(msg.itemId || ''))) {
         abrirFrete(String(msg.itemId), sender.tab.id);
         responder({ ok: true });
         return false;
     }
-    if (msg.acao === 'simulador') {   // painel/etiqueta: {acao:'simulador', itemId, forcar?} → { ok, sim:{ts, itemId, hoje, outro} }
-        if (!(daExtensao(sender) || daAbaDoML(sender))) return false;
+    if (msg.acao === 'simulador') {   // painel lateral: {acao:'simulador', itemId, forcar?} → { ok, sim:{ts, itemId, hoje, outro} }
+        if (!daExtensao(sender)) return false;
         if (!/^MLB\d{6,14}$/.test(String(msg.itemId || ''))) { responder({ ok: false, motivo: 'item' }); return false; }
         simulador(msg.itemId, !!msg.forcar).then(responder, () => responder({ ok: false, motivo: 'ml_indisponivel' }));
         return true;
@@ -3092,7 +3155,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     // v2.5: {acao:'saude_agora', itemId?} → com itemId: lê fotos e visitas do anúncio agora ({ok, itemId, fotos, visitas, radar, semPermissao});
     // sem itemId: começa a rodada lenta ({ok, iniciado} | {ok, emCurso}); o andamento vai em shc:status.saudeProgresso.
     if (msg.acao === 'saude_agora') {
-        if (!(daExtensao(sender) || daAbaDoML(sender))) return false;
+        if (!daExtensao(sender)) return false;
         if (msg.itemId !== undefined && !/^MLB\d{6,14}$/.test(String(msg.itemId || ''))) { responder({ ok: false, motivo: 'item' }); return false; }
         if (!msg.itemId) {
             const emCurso = !!saudeEmCurso;
@@ -3105,21 +3168,21 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     }
     // v2.5.2: {acao:'medidas_agora', itemId} → relê as medidas do anúncio agora (medidasAgora).
     if (msg.acao === 'medidas_agora') {
-        if (!(daExtensao(sender) || daAbaDoML(sender))) return false;
+        if (!daExtensao(sender)) return false;
         if (!/^MLB\d{6,14}$/.test(String(msg.itemId || ''))) { responder({ ok: false, motivo: 'item' }); return false; }
         SHC.contaAtual().then(c => medidasAgora(c, String(msg.itemId)).then(r => { if (r.ok) atualizarAlertas(c).catch(() => {}); return r; })).then(responder, () => responder({ ok: false, motivo: 'ml_indisponivel' }));
         return true;
     }
     // v3.1: {acao:'catalogo_agora', itemId} → compCatAgora (1 GET da tela "Alterar anúncio"; só leitura).
     if (msg.acao === 'catalogo_agora') {
-        if (!(daExtensao(sender) || daAbaDoML(sender))) return false;
+        if (!daExtensao(sender)) return false;
         if (!/^MLB\d{6,14}$/.test(String(msg.itemId || ''))) { responder({ ok: false, motivo: 'item' }); return false; }
         SHC.contaAtual().then(c => compCatAgora(c, String(msg.itemId))).then(responder, () => responder({ ok: false, motivo: 'ml_indisponivel' }));
         return true;
     }
     // v2.5.2: {acao:'medidas_marca', itemId, tipo:'alterar'|'fui_eu', em (só no fui_eu)} → medidasMarca.
     if (msg.acao === 'medidas_marca') {
-        if (!(daExtensao(sender) || daAbaDoML(sender))) return false;
+        if (!daExtensao(sender)) return false;
         if (!/^MLB\d{6,14}$/.test(String(msg.itemId || '')) || !/^(alterar|fui_eu)$/.test(String(msg.tipo || '')) || (msg.tipo === 'fui_eu' && !(+msg.em > 0))) {
             responder({ ok: false, motivo: 'item' }); return false;
         }
@@ -3129,7 +3192,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     // {acao:'robo_rodar_agora'} → {ok, sugestoes (quantas), feitos:[entradas do histórico], desligado?}
     // {acao:'robo_desfazer', itemId} → a entrada gravada no histórico ({ok, resultado, erro?…}) | {ok:false, resultado:'nada'|'desligado'|'limite'|'semPermissao'|'item'}
     if (msg.acao === 'robo_rodar_agora' || msg.acao === 'robo_desfazer') {
-        if (!(daExtensao(sender) || daAbaDoML(sender))) return false;
+        if (!daExtensao(sender)) return false;
         if (msg.acao === 'robo_desfazer' && !/^MLB\d{6,14}$/.test(String(msg.itemId || ''))) { responder({ ok: false, resultado: 'item' }); return false; }
         SHC.contaAtual().then(c => (msg.acao === 'robo_desfazer' ? roboDesfazer(c, String(msg.itemId)) : roboPassada(c, true)))
             .then(responder, () => responder({ ok: false, resultado: 'falhou' }));
@@ -3165,6 +3228,6 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         }).then(responder, () => responder({ ok: false }));
         return true;
     }
-    if (msg.acao === 'abrir_painel') { chrome.runtime.openOptionsPage(); responder({ ok: true }); return false; }
+    if (msg.acao === 'abrir_painel') { if (!daExtensao(sender)) return false; chrome.runtime.openOptionsPage(); responder({ ok: true }); return false; }
     return false;
 });

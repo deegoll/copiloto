@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Copiloto: lucro no Mercado Livre",
   "short_name": "Copiloto",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "description": "Lucro real de cada anúncio, promoção, frete, Ads e Full no Mercado Livre, com os números do próprio ML. Você só informa o custo.",
   "homepage_url": "https://especialistaemmarketplace.com.br/sellerhub/",
   "minimum_chrome_version": "116",
@@ -71,16 +71,6 @@
         "ml-canal.js"
       ],
       "run_at": "document_idle"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "agenda-canal.html"
-      ],
-      "matches": [
-        "https://vendedores.mercadolivre.com.br/*"
-      ]
     }
   ],
   "icons": {

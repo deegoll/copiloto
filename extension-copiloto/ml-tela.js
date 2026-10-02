@@ -813,7 +813,8 @@
             + '<div class="pausa" role="status"><div>Copiloto pausado nesta tela — o Mercado Livre mudou a página. Os números continuam no painel do Copiloto.</div><button type="button" data-a="tentar">Tentar de novo</button></div>';
         tipEl = SR.querySelector('.tip');
         // Teclas e cliques dentro do host não vazam para os atalhos do ML.
-        ['keydown', 'keyup', 'keypress', 'click', 'mousedown'].forEach(t => SR.addEventListener(t, e => e.stopPropagation()));
+        // 3.2.1: input/beforeinput também (o e.data do custo digitado não sobe para a página na fase de bolha; a captura a página ainda vê).
+        ['keydown', 'keyup', 'keypress', 'click', 'mousedown', 'input', 'beforeinput'].forEach(t => SR.addEventListener(t, e => e.stopPropagation()));
         SR.addEventListener('click', e => {
             const a = e.target.closest && e.target.closest('[data-a]');
             if (!a) return;

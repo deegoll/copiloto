@@ -307,7 +307,8 @@
     /** Planilha (CSV ; com BOM) com os 5 grupos inteiros. */
     SHC.erpxCSV = function (x) {
         if (!x || !x.r) return '';
-        const c = v => { const s = String(v === null || v === undefined ? '' : v); return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+        // 3.2.1: a mesma regra do SHC.paraCSV (store.js) — texto que começa com = + - @ vira fórmula no Excel: apóstrofo na frente.
+        const c = v => { let s = String(v === null || v === undefined ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
         const r = x.r, G = SHC.erpxGrupos(x.nome), h = k => G.find(y => y.k === k).h, out = [['grupo', 'sku', 'produto', 'anuncio', 'detalhe']];
         r.naoPublicado.forEach(p => out.push([h('a'), p.sku, p.nome, p.noAnuncio, p.acao === 'adicionarVariacao' ? 'adicionar variação' : 'publicar; estoque ' + (p.estoqueErp === null ? '?' : p.estoqueErp)]));
         r.parado.forEach(p => out.push([h('b'), p.sku, p.nome, p.anuncios.map(a => a.itemId).join(' '), p.anuncios.map(a => a.motivo).join(' / ')]));

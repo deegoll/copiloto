@@ -56,13 +56,13 @@
         botoes.forEach(([id, rot, sec]) => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-a', id); b.textContent = rot; if (sec) b.className = 'sec'; a.append(b); });
     }
     const esconde = () => { if (H) H.remove(); H = null; };
-    // Entrada da Agenda nas páginas do canal (sem fila ativa). agenda-canal.html está em web_accessible_resources.
+    // Entrada da Agenda nas páginas do canal (sem fila ativa). 3.2.1: o fundo abre a agenda-canal.html (ela não fica mais exposta às páginas do ML).
     let fechouEntrada = false;
     const mostraEntrada = () => mostra('<b>Copiloto:</b> monte a agenda da semana do canal com os produtos que dão lucro.', [['abrir_agenda', 'Montar agenda da semana'], ['fechar', '×', true]]);
     const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     async function acao(a) {
-        if (a === 'abrir_agenda') { window.open(chrome.runtime.getURL('agenda-canal.html'), '_blank', 'noopener'); return; }
+        if (a === 'abrir_agenda') { try { await chrome.runtime.sendMessage({ acao: 'abrir_agenda' }); } catch (e) { if (!vivo()) parar(); } return; }
         if (a === 'fechar') { fechouEntrada = true; return esconde(); }
         const f = await ler();
         if (!f) return esconde();

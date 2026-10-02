@@ -2012,7 +2012,8 @@
 
     // ── Faturas por mês (/billing/resume/api/initial-group-one e initial-group-two), mapeado ao vivo em 24/09/2026 ──
     const valorDe = (dados, txt) => { const v = dados ? valorCobranca(dados) : null; return v !== null ? v : (txt ? SHC.valorRS(txt) : null); };
-    const linkML = u => (!u ? '' : /^https:\/\//.test(u) ? String(u) : /^\//.test(u) ? 'https://vendedores.mercadolivre.com.br' + u : '');
+    // 3.2.1 (segurança): link absoluto só do ML/Mercado Pago (linkMLOk); outro domínio → '' (sem botão).
+    const linkML = u => (!u ? '' : linkMLOk(u) ? String(u) : /^\/(?!\/)/.test(u) ? 'https://vendedores.mercadolivre.com.br' + u : '');
     /**
      * → { faturas:[{mes, nome, fechamento, vencimento, total, divida, pago, aPagar, quitado, status, aberta, linkDetalhe,
      *               notas:{titulo, url (aba ?fiscalTab=true), pendente (o ML ainda não emitiu: "Vamos te avisar quando…")} | null}],
@@ -3183,7 +3184,7 @@
     /**
      * Pedidos por afiliados, uma página (GET /meliconnect/api/seller-affiliates/orders/detail, 10 por página, page começa em 0) →
      * { pagina, paginas, total, vendas:[{ itemId, sku, titulo, valor, unidades, comissao, verificacao }] } | null.
-     * NUNCA lê affiliate{} (nome/apelido/foto do afiliado) nem o número do pedido.
+     * NUNCA lê affiliate{} (nome/apelido/foto do afiliado). Lê o nº do pedido (orderId) só para a comissão na etiqueta da venda (porPedido).
      */
     SHC.afilPedidos = function (j) {
         if (!j || !Array.isArray(j.sales)) return null;
@@ -3399,7 +3400,7 @@
     SHC.fotosLink = itemId => 'https://www.mercadolivre.com.br/syi/core/modify?itemId=' + encodeURIComponent(itemId);
     SHC.visitasLink = itemId => 'https://vendedores.mercadolivre.com.br/metricas/performance-item/api/item/' + encodeURIComponent(itemId)
         + '/evolutionary/bricks?variation.id=&start_period_evolutionary=lastThirtyDays&finish_period_evolutionary=lastPeriod&';
-    const linkMLOk = u => /^https:\/\/([a-z]+\.)?mercadoli[vb]re\.com\.br\//.test(String(u || ''));
+    const linkMLOk = u => /^https:\/\/([a-z0-9-]+\.)*(mercadoli[vb]re|mercadopago)\.com\.br\//.test(String(u || ''));
 
     /** Avisos da lista de Anúncios → [{id, qtd, titulo, texto, link}] | null (resposta que não é a lista de avisos: nunca "0"). */
     SHC.mlTarefasAnuncios = function (j) {
@@ -4982,7 +4983,7 @@
     };
 
     // ── Resumo do vendedor (GET /resumo/api/content), visto ao vivo em 25/09/2026: cartões "Perguntas N", "Anúncios a melhorar", Full para repor… ──
-    const linkDe = o => { const ev = ((o && o.cta && o.cta.events) || (o && o.events) || []).find(e => e && e.type === 'redirect' && e.data && e.data.href); return ev ? String(ev.data.href) : ''; };
+    const linkDe = o => { const ev = ((o && o.cta && o.cta.events) || (o && o.events) || []).find(e => e && e.type === 'redirect' && e.data && e.data.href); const h = ev ? String(ev.data.href) : ''; return linkMLOk(h) || /^\/(?![/\\])[^\x00-\x1f\x7f\\]*$/.test(h) ? h : ''; };   // 3.2.1: href de outro domínio não entra (nem '//x', barra invertida ou TAB, que o navegador lê como //x)
     /**
      * JSON do Resumo → { perguntas:{pendentes, link} | null (cartão não achado), cartoes:[{id, grupo, texto, qtd, cor, link}], full:[{nome, pct, texto}], vendas7:{valor, variacaoPct}|null, reputacao:{texto}|null }
      * Só quantidades, textos dos cartões e links (nada de pessoa).
@@ -5075,7 +5076,7 @@
             const th = v.thresholds || {};
             return { id: String(v.id), rotulo: ROTULO_REP[v.id] || String(v.id).replace(/_/g, ' '), pct: pctNum(v.percentage), qtd: inteiro(v.quantity), vendas: inteiro(v.transactions),
                 limitePct: pctNum(th.quality && th.quality.percentage), proximoNivelPct: pctNum(th.next && th.next.percentage), saude: String(v.health || ''),
-                link: v.metric_section && v.metric_section.url ? String(v.metric_section.url) : '' };
+                link: v.metric_section && linkMLOk(v.metric_section.url) ? String(v.metric_section.url) : '' };
         });
         const top = ((pp.topItemProblemsData || {}).items || []).filter(i => i && i.id).map(i => ({ itemId: String(i.id), problemas: inteiro(i.quantity) }));
         const rq = pp.requirementsData, push = rq && rq.push && rq.push.level && rq.push.level !== cod ? rq.push.level : '';
