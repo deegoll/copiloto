@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Copiloto</title>
+<style>
+  * { box-sizing: border-box; }
+  body { width: 330px; margin: 0; background: #F8FAFC; color: #0F172A; font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  .topo { background: #0F172A; color: #fff; padding: 12px 14px; display: flex; gap: 10px; align-items: center; }
+  .topo img { width: 26px; height: 26px; border-radius: 6px; }
+  .topo b { display: block; font-size: 14px; } .topo span { color: #CBD5E1; font-size: 11.5px; }
+  .in { padding: 12px 14px; }
+  .card { background: #fff; border: 1px solid #E2E8F0; border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+  h3 { margin: 0 0 8px; font-size: 12.5px; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
+  .seg button { border: 1px solid #CBD5E1; background: #fff; border-radius: 8px; padding: 6px 4px; font-size: 11.5px; font-weight: 700; cursor: pointer; color: #334155; }
+  .seg button.on { background: #0F172A; border-color: #0F172A; color: #fff; }
+  .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  label { display: block; font-size: 11px; font-weight: 700; color: #334155; margin: 4px 0 3px; }
+  .inp { width: 100%; padding: 7px 8px; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 14px; }
+  .inp:focus { outline: 2px solid #0EA5E9; outline-offset: 0; border-color: #0EA5E9; }
+  .res { margin-top: 10px; border-radius: 10px; padding: 9px 11px; background: #F1F5F9; font-size: 12px; color: #475569; }
+  .res.lucrativo { background: #ECFDF5; } .res.apertado { background: #FFFBEB; } .res.prejuizo { background: #FEF2F2; }
+  .res .v { font-size: 19px; font-weight: 800; color: #0F172A; }
+  .res.lucrativo .v { color: #047857; } .res.apertado .v { color: #B45309; } .res.prejuizo .v { color: #B91C1C; }
+  .bt { display: block; width: 100%; text-align: center; border: 0; cursor: pointer; padding: 9px; border-radius: 9px; font-weight: 700; font-size: 13px; background: #0F172A; color: #fff; margin-top: 6px; text-decoration: none; }
+  .bt.sec { background: #fff; color: #0F172A; border: 1px solid #CBD5E1; }
+  .st { font-size: 12px; color: #475569; }
+  .aviso { background: #FFFBEB; border: 1px solid #FCD34D; border-radius: 10px; padding: 8px 10px; font-size: 12px; margin-bottom: 10px; display: none; }
+  .aviso.on { display: block; }
+</style>
+</head>
+<body>
+<div class="topo"><img src="icons/icon48.png" alt=""><div><b>Copiloto</b><span>Quanto sobra no final</span></div></div>
+<div class="in">
+  <div class="aviso" id="aviso">Confira seu imposto e suas comissões para a conta ficar certa. <a href="#" id="ajustar">Ajustar →</a></div>
+
+  <div class="card">
+    <h3>Calculadora rápida</h3>
+    <div class="seg" id="seg">
+      <button data-c="ml" data-t="classico" class="on">ML Clássico</button>
+      <button data-c="ml" data-t="premium">ML Premium</button>
+      <button data-c="sp" data-t="">Shopee</button>
+    </div>
+    <div class="dupla">
+      <div><label for="preco">Preço da promoção</label><input class="inp" id="preco" inputmode="decimal" placeholder="R$ 0,00"></div>
+      <div><label for="custo">Custo do produto</label><input class="inp" id="custo" inputmode="decimal" placeholder="R$ 0,00"></div>
+    </div>
+    <label for="frete">Frete que você paga (se houver)</label><input class="inp" id="frete" inputmode="decimal" placeholder="R$ 0,00">
+    <div class="res" id="res">Digite o preço e o custo.</div>
+  </div>
+
+  <div class="card">
+    <div class="st" id="st">…</div>
+    <a class="bt" href="https://www.mercadolivre.com.br/promocoes" target="_blank" rel="noopener">Abrir promoções do Mercado Livre</a>
+    <a class="bt" href="https://seller.shopee.com.br/portal/marketing" target="_blank" rel="noopener">Abrir marketing da Shopee</a>
+    <button class="bt sec" id="painel">Custos e configurações ⚙</button>
+  </div>
+</div>
+<script src="nucleo/util.js"></script>
+<script src="nucleo/modelo.js"></script>
+<script src="nucleo/tarifas.js"></script>
+<script src="calc.js"></script>
+<script src="store.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

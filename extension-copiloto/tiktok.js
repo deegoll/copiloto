@@ -37,7 +37,7 @@
     TT.MAX_DIAS = 180;
     TT.MAX_PEDIDOS = 3000;
     TT.contaValida = c => /^(tiktok|\d{5,25})$/.test(String(c || ''));
-    const k = (conta, s) => 'tt:' + conta + ':' + s;
+    const k = (conta, s) => SHC.chaveConta(s, conta, 'tiktok');   // tt:<loja>:<s> (regra do canal na chave: store.js)
     const valores = o => (o && typeof o === 'object' ? Object.keys(o).map(x => o[x]) : []);
     const num = v => (SHC.num ? SHC.num(v) : U.num(v));
     const normSku = s => (SHC.normalizaSku ? SHC.normalizaSku(s) : String(s || '').trim().toUpperCase());
@@ -186,7 +186,7 @@
     TT.ler = async function (conta) {
         conta = conta || (await area().get('tt:conta'))['tt:conta'] || null;
         if (!TT.contaValida(conta)) return null;
-        const pre = 'tt:' + conta + ':', ks = (await chavesCom(pre, 'c|sku|', 'c|tiktok|')).concat(['cfg']);
+        const pre = k(conta, ''), ks = (await chavesCom(pre, 'c|sku|', 'c|tiktok|')).concat(['cfg']);
         const t = await area().get(ks), d = { conta, peds: [], custos: {}, cfg: Object.assign({}, SHC.PADRAO || {}, t.cfg || {}) };
         Object.keys(t).forEach(x => {
             if (x.indexOf('c|') === 0) d.custos[x] = t[x];

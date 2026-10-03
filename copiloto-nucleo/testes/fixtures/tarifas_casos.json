@@ -1,0 +1,30 @@
+{
+  "_leia": "Casos de controle das tarifas (Conselho de 30/09/2026). Os MESMOS casos rodam no JS (testes/tarifas.test.js, copiloto-nucleo/src/tarifas.js) e no PHP (tests/Unit/TarifasCanalTest.php, core/TarifasCanal.php). Valores em R$ por item. Fontes: Shopee seller.shopee.com.br/edu/article/18483 e /26839; TikTok seller-br.tiktok.com knowledge_id 24428156307201 e 5665577566734097.",
+  "casos": [
+    { "nome": "Shopee R$ 6 (fixo reduzido: metade do preco)", "canal": "shopee", "preco": 6, "data": "2026-09-30", "comissao": 1.2, "fixo": 3, "sfp": 0, "total": 4.2 },
+    { "nome": "Shopee R$ 8,50 em 30/09 (fixo cheio R$ 4)", "canal": "shopee", "preco": 8.5, "data": "2026-09-30", "comissao": 1.7, "fixo": 4, "sfp": 0, "total": 5.7 },
+    { "nome": "Shopee R$ 8,50 em 01/10 (abaixo de R$ 9: metade)", "canal": "shopee", "preco": 8.5, "data": "2026-10-01", "comissao": 1.7, "fixo": 4.25, "sfp": 0, "total": 5.95 },
+    { "nome": "Shopee R$ 30 em 30/09 (33,3%)", "canal": "shopee", "preco": 30, "data": "2026-09-30", "comissao": 6, "fixo": 4, "sfp": 0, "total": 10 },
+    { "nome": "Shopee R$ 30 em 01/10 (fixo R$ 4,50)", "canal": "shopee", "preco": 30, "data": "2026-10-01", "comissao": 6, "fixo": 4.5, "sfp": 0, "total": 10.5 },
+    { "nome": "Shopee R$ 79,99 em 30/09 (20% + R$ 4)", "canal": "shopee", "preco": 79.99, "data": "2026-09-30", "comissao": 16, "fixo": 4, "sfp": 0, "total": 20 },
+    { "nome": "Shopee R$ 79,99 em 01/10 (20% + R$ 4,50)", "canal": "shopee", "preco": 79.99, "data": "2026-10-01", "comissao": 16, "fixo": 4.5, "sfp": 0, "total": 20.5 },
+    { "nome": "Shopee R$ 80 (14% + R$ 16)", "canal": "shopee", "preco": 80, "data": "2026-09-30", "comissao": 11.2, "fixo": 16, "sfp": 0, "total": 27.2 },
+    { "nome": "Shopee R$ 99,99 (14% + R$ 16)", "canal": "shopee", "preco": 99.99, "data": "2026-09-30", "comissao": 14, "fixo": 16, "sfp": 0, "total": 30 },
+    { "nome": "Shopee R$ 100 (14% + R$ 20)", "canal": "shopee", "preco": 100, "data": "2026-09-30", "comissao": 14, "fixo": 20, "sfp": 0, "total": 34 },
+    { "nome": "Shopee R$ 200 (14% + R$ 26)", "canal": "shopee", "preco": 200, "data": "2026-09-30", "comissao": 28, "fixo": 26, "sfp": 0, "total": 54 },
+    { "nome": "Shopee R$ 500 (exemplo oficial: R$ 96)", "canal": "shopee", "preco": 500, "data": "2026-09-30", "comissao": 70, "fixo": 26, "sfp": 0, "total": 96 },
+    { "nome": "Shopee R$ 1.000 (R$ 166)", "canal": "shopee", "preco": 1000, "data": "2026-10-01", "comissao": 140, "fixo": 26, "sfp": 0, "total": 166 },
+    { "nome": "TikTok R$ 39,90 em 14/07 (6% + R$ 4 + SFP)", "canal": "tiktok", "preco": 39.9, "data": "2026-07-14", "comissao": 2.39, "fixo": 4, "sfp": 2.39, "total": 8.78 },
+    { "nome": "TikTok R$ 39,90 em 15/07 (10% + R$ 4 + SFP 6%, ~26%)", "canal": "tiktok", "preco": 39.9, "data": "2026-07-15", "comissao": 3.99, "fixo": 4, "sfp": 2.39, "total": 10.38 },
+    { "nome": "TikTok R$ 49,99 (ultima faixa abaixo de R$ 50)", "canal": "tiktok", "preco": 49.99, "data": "2026-09-30", "comissao": 5, "fixo": 4, "sfp": 3, "total": 12 },
+    { "nome": "TikTok R$ 50 (6% + R$ 6)", "canal": "tiktok", "preco": 50, "data": "2026-09-30", "comissao": 3, "fixo": 6, "sfp": 3, "total": 12 },
+    { "nome": "TikTok R$ 549,90 (32,99 + 6 + SFP 32,99)", "canal": "tiktok", "preco": 549.9, "data": "2026-09-30", "comissao": 32.99, "fixo": 6, "sfp": 32.99, "total": 71.98 },
+    { "nome": "TikTok R$ 833,33 (SFP chega no teto de R$ 50)", "canal": "tiktok", "preco": 833.33, "data": "2026-09-30", "comissao": 50, "fixo": 6, "sfp": 50, "total": 106 },
+    { "nome": "TikTok R$ 1.000 (SFP no teto de R$ 50)", "canal": "tiktok", "preco": 1000, "data": "2026-09-30", "comissao": 60, "fixo": 6, "sfp": 50, "total": 116 },
+    { "nome": "TikTok R$ 1.000 fora do programa de frete (sem SFP)", "canal": "tiktok", "preco": 1000, "data": "2026-09-30", "ctx": { "frete_gratis_programa": false }, "comissao": 60, "fixo": 6, "sfp": 0, "total": 66 },
+    { "nome": "Shopee conta CPF usa a tarifa de CNPJ", "canal": "shopee", "preco": 30, "data": "2026-09-30", "ctx": { "pessoa": "cpf" }, "comissao": 6, "fixo": 4, "sfp": 0, "total": 10 },
+    { "nome": "Shopee R$ 549,90 (14% + R$ 26 = 18,7%; o 14% gravado dava 76,99)", "canal": "shopee", "preco": 549.9, "data": "2026-09-30", "comissao": 76.99, "fixo": 26, "sfp": 0, "total": 102.99 },
+    { "nome": "TikTok R$ 549,90 em 14/07 (fixo R$ 4, antes da troca de 15/07)", "canal": "tiktok", "preco": 549.9, "data": "2026-07-14", "comissao": 32.99, "fixo": 4, "sfp": 32.99, "total": 69.98 },
+    { "nome": "Shopee R$ 100 pago com Pix (subsidio -5%: so com ctx.pagamento = pix)", "canal": "shopee", "preco": 100, "data": "2026-09-30", "ctx": { "pagamento": "pix" }, "comissao": 14, "fixo": 20, "sfp": 0, "total": 29 }
+  ]
+}

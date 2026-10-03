@@ -1,0 +1,4 @@
+# credenciais da API da Chrome Web Store (nunca versionar)
+deploy/cws-credentials.json
+deploy/cws-autorizar.url
+node_modules/

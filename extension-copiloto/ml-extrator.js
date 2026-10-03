@@ -1862,8 +1862,10 @@
     // ── Fechamento do mês: TODAS as cobranças do Faturamento por tipo (estorno com sinal negativo) ──
     // v3.4 (01/10): código do ML (modalTrigger.type, 3º pedaço de c.id) → tipo, para quando o texto não diz (o ML às vezes manda detail_1
     // vazio: 465 cobranças de 26 a 28/08 numa conta). Cancelamento = B + o código cobrado sem o C (BVVML ↔ CVVML). Código desconhecido = ''.
+    // v3.4.1 (OK da dona 02/10): DSB = "Tarifa do Mercado Envios" (CDSB) e "Cancelamento da tarifa por envios no Mercado Livre" (BDSB):
+    // com o texto já davam 'frete' (linha "Tarifas de envios no Mercado Livre" da fatura); sem o texto caíam em 'outro'.
     const TIPO_POR_CODIGO = { VVML: 'tarifa_venda', VVPRC: 'cobranca_mp', RAD: 'cobranca_mp', VVFN: 'parcelamento', FONPN: 'parcelamento', VVFNU: 'recebimento',
-        XDE: 'frete', XD: 'frete', XDI: 'frete', FFE: 'frete', FFI: 'frete', XDED: 'devolucao', DSDB: 'devolucao', PADS: 'ads', DLIT: 'ads_seguidores',
+        XDE: 'frete', XD: 'frete', XDI: 'frete', FFE: 'frete', FFI: 'frete', DSB: 'frete', XDED: 'devolucao', DSDB: 'devolucao', PADS: 'ads', DLIT: 'ads_seguidores',
         DIFAL: 'impostos_ml', ESM: 'minha_pagina', FWA: 'full', FBA: 'full', FCBE: 'full', FPB: 'full', FRS: 'full' };
     SHC.codigoCobranca = id => { const t = String(String(id || '').split('|')[2] || '').toUpperCase(); return /^[CB][A-Z]/.test(t) ? t.slice(1) : t; };
     /** detail_1 do Faturamento (+ c.id, opcional) → tipo do fechamento. "Cancelamento …" cai no mesmo tipo (o estorno é o sinal).
@@ -4253,7 +4255,7 @@
         }
         const ret = {};
         ((retrato && retrato.itens) || []).forEach(i => { if (i && i.itemId && !ret[i.itemId]) ret[i.itemId] = i; });
-        // v3.4 (01/10, ROSSI BIKE: outubro 100% "Sem categoria"): anúncio de CATÁLOGO não traz a categoria na tela "Alterar anúncio" (sem o bloco
+        // v3.4 (01/10, conta de cliente: outubro 100% "Sem categoria"): anúncio de CATÁLOGO não traz a categoria na tela "Alterar anúncio" (sem o bloco
         // category_change) → herda do anúncio tradicional de origem ("Sincronizado com #N" = ret[id].catalogo) ou de outro anúncio do mesmo
         // produto (userProductId MLBU…, ret[id].familia). Mesmo produto = mesma família de 1º nível. Nenhum GET a mais.
         const porUP = {};

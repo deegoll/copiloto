@@ -173,6 +173,20 @@
     //   vd|pend                → {<sellerId>: {<título>: {titulo, cobs}}} frete sem MLB esperando o título casar (v2.3)
     //   ml:full:<sellerId>     → {ts, temFull, espaco, mesesEspaco, pontuacao, produtos, avisos, …} (v2.3, SHC.mlFullDoEstado)
     //   shc:guia               → progresso do primeiro uso {passo, feitos:{…}, pulados:{…}, tours:{anuncios, promos}} (v2.5: SHC.guiaProximo)
+    // ── v3.3: o canal na chave por conta (multicanal). REGRA PARA SEMPRE: chave por conta SEM prefixo de canal = Mercado Livre.
+    //   Os dados de quem usa a 3.2.1 ficam onde estão (sem migração). Canal novo SEMPRE leva o prefixo dele, antes da conta:
+    //     ML           <familia>:<conta>[:<resto>]             ads:123 · fech:123:2026-09 · frete:123:hist (como sempre foi)
+    //     outro canal  <prefixo>:<conta>:<familia>[:<resto>]   tt:765:afil · tt:765:ped:<pedido> (o jeito que o tiktok.js já grava)
+    //   Prefixo de cada canal em SHC.PREFIXO_CANAL (ids do copiloto-nucleo; tiktok → tt). Nenhuma família do ML começa com prefixo de
+    //   canal: o mesmo número de conta em dois canais nunca dá a mesma chave (teste_chave_canal.js confere).
+    //   Código NOVO monta a chave por SHC.chaveConta(familia, conta, canal, resto). As chamadas antigas do ML ('ads:' + conta …) ficam
+    //   como estão: dão o mesmo nome. (SHC.chave é outra coisa: o custo c|<canal>|<id>; chave por anúncio já leva o canal.)
+    SHC.PREFIXO_CANAL = { ml: '', tiktok: 'tt', shopee: 'shopee', magalu: 'magalu', amazon: 'amazon', shein: 'shein', temu: 'temu' };
+    SHC.chaveConta = function (familia, conta, canal, resto) {
+        const p = SHC.PREFIXO_CANAL[canal || 'ml'], fim = resto ? ':' + resto : '';
+        if (typeof p !== 'string') throw new Error('SHC.chaveConta: canal desconhecido (' + canal + ')');   // canal errado nunca cai na chave do ML
+        return p ? p + ':' + conta + ':' + familia + fim : familia + ':' + conta + fim;
+    };
     const MEDIDAS = ['pesoKg', 'larguraCm', 'alturaCm', 'comprimentoCm', 'ean'];
     const CAMPOS_DE_CUSTO = { custo: 1, outros: 1, origem: 1, erp: 1, custoErp: 1, titulo: 1, atualizado: 1 };
     SHC.lerChave = async k => (await area().get(k))[k] || null;

@@ -372,7 +372,7 @@
      */
     // Valor ≈ 2×, 3×… o de 1 unidade (±8%): pedido com várias unidades, não é alerta. ponytail: pedido de 2+ unidades com preço diferente escapa.
     const variasUnidades = razao => { const k = Math.round(razao); return k >= 2 && Math.abs(razao - k) <= 0.08 * k; };
-    // v3.3 (relato 01/10, ROSSI BIKE): o 2º campo do id da cobrança (entityId|conceptId|type, SHC.mlCobrancasDaResposta) diz SOBRE O QUÊ ela foi:
+    // v3.3 (relato 01/10, conta de cliente): o 2º campo do id da cobrança (entityId|conceptId|type, SHC.mlCobrancasDaResposta) diz SOBRE O QUÊ ela foi:
     // na taxa de parcelamento é o pagamento do Mercado Pago, no frete é o envio, na tarifa de venda é o pedido. Pedido pago em 2 partes =
     // 2 parcelamentos legítimos com conceptId diferente. '' = cobrança guardada sem o id (não dá para saber).
     const operacaoDe = c => String((c && c.id) || '').split('|')[1] || '';

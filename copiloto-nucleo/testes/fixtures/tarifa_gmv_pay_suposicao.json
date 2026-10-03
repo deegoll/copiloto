@@ -1,0 +1,22 @@
+{
+  "_leia": "SUPOSIÇÃO (30/09/2026): caso montado à mão, NÃO é retrato. O ajuste 'Pagamento de GMV para anúncios do TikTok' (GMV Pay, ads.tiktok.com/help/article/about-gmv-pay) nunca apareceu no extrato desta conta; a chave abaixo é inventada para provar que o texto documentado vira 'ads' e que uma chave desconhecida sem esse texto continua 'outro'.",
+  "code": 0,
+  "message": "success",
+  "data": {
+    "order_record": {
+      "statement_detail_id": "5770000000000000901",
+      "trade_order_id": "5770000000000000900",
+      "placed_time": "1790700556183",
+      "settlement_status": 2,
+      "settlement_amount": { "amount": "54.00", "currency": "BRL" },
+      "in_come": { "fee_list": [
+        { "type": "subtotal_before_discount", "amount": { "amount": "100.00", "currency": "BRL" }, "statement_item_id": 1 }
+      ] },
+      "out_come": { "fee_list": [
+        { "type": "platform_commission", "amount": { "amount": "-6.00", "currency": "BRL" }, "statement_item_id": 2 },
+        { "type": "adjustment_x_suposto", "starling": { "starling_key": "finance_adjustment_x_suposto", "starling_text": "Pagamento de GMV para anúncios do TikTok" }, "amount": { "amount": "-30.00", "currency": "BRL" }, "statement_item_id": 3 },
+        { "type": "adjustment_y_desconhecido", "starling": { "starling_key": "finance_adjustment_y", "starling_text": "Ajuste desconhecido" }, "amount": { "amount": "-10.00", "currency": "BRL" }, "statement_item_id": 4 }
+      ] }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "copiloto-nucleo",
+  "version": "0.1.0",
+  "description": "Núcleo multi-marketplace do Copiloto: modelo único de dados, motor de lucro, conciliação pedido × repasse e adaptadores (ML, TikTok Shop). JavaScript puro, sem dependências.",
+  "main": "index.js",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node rodar.js"
+  }
+}
