@@ -879,7 +879,7 @@
     async function salvaCusto() {
         if (!popItem || !vivo()) return fechaPop();
         const inp = SR.querySelector('.pop input'), err = SR.querySelector('.err'), bt = SR.querySelector('[data-a="salvar"]');
-        const v = SHC.num(inp.value);
+        const v = SHC.r2(SHC.num(inp.value));   // #11: grava em centavos ("12,345" → 12,35), o mesmo número que a etiqueta mostra
         if (!(v > 0)) { err.textContent = 'Digite um valor maior que zero. Ex.: 250,00'; return; }
         bt.disabled = true;
         try {

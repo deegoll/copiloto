@@ -100,9 +100,10 @@
     SHC.ehKit = d => !!d && Array.isArray(d.kit) && d.kit.length > 0;
     SHC.kitDe = function (custos, d) {
         if (!SHC.ehKit(d)) return null;
+        // #11: soma em centavos inteiros do custo de cada componente JÁ arredondado (SHC.r2, o mesmo que a tela mostra): 1 × 1,005 = 1,01.
         let soma = 0; const faltam = [];
-        d.kit.forEach(c => { const x = custos[SHC.chaveSku(c.sku)], v = x ? SHC.num(x.custo) : 0; if (v > 0) soma += v * c.q; else faltam.push(c.sku); });
-        return { custo: faltam.length ? null : Math.round(soma * 100) / 100, faltam };
+        d.kit.forEach(c => { const x = custos[SHC.chaveSku(c.sku)], v = x ? SHC.r2(SHC.num(x.custo)) : 0; if (v > 0) soma += Math.round(v * 100) * c.q; else faltam.push(c.sku); });
+        return { custo: faltam.length ? null : soma / 100, faltam };
     };
     // SKUs do anúncio (it.sku + it.skus, sem repetir): anúncio com variações pode ter um SKU por variação.
     SHC.skusDoAnuncio = info => (info && info.sku ? [info.sku] : []).concat(info && Array.isArray(info.skus) ? info.skus : []).filter((s, i, a) => s && a.indexOf(s) === i);
@@ -290,7 +291,7 @@
     SHC.salvarCustoSku = async function (sku, dados) {
         const k = SHC.chaveSku(sku);
         if (!k) return null;
-        const custo = SHC.num(dados.custo);
+        const custo = SHC.r2(SHC.num(dados.custo));   // #11: grava em centavos (12,345 → 12,35), o mesmo número que a tela mostra
         const atual = (await area().get(k))[k] || {};
         if (!(custo > 0)) {   // custo 0 ou vazio = sem custo; medidas/EAN da planilha (v2.2) ficam
             // Só apaga o registro se nele só havia custo: medidas, EAN e o mínimo do Full (fullMinUn) ficam.
@@ -300,6 +301,7 @@
             return null;
         }
         const novo = Object.assign(atual, dados, { custo, atualizado: Date.now() });
+        if (SHC.num(dados.outros) !== null) novo.outros = SHC.r2(SHC.num(dados.outros));
         if (!novo.origem) novo.origem = 'manual';
         await area().set({ [k]: novo });
         return novo;
@@ -1093,7 +1095,7 @@
         const dados = tab.slice(temCab ? 1 : 0);
         dados.forEach((c, n) => {
             const nLinha = n + (temCab ? 2 : 1);
-            const custo = SHC.num(c[idx.custo]);
+            const custo = SHC.r2(SHC.num(c[idx.custo]));   // #11: custo, outros e frete da planilha em centavos (custo médio "10,0040" → 10,00)
             const sku = idx.sku >= 0 && formato !== 'simples' ? SHC.normalizaSku(c[idx.sku]) : '';
             const med = sku ? medidasDe(c) : {};
             if (!(custo > 0)) {
@@ -1119,12 +1121,12 @@
                 const id = SHC.normalizaId(canal, bruto);
                 if (!id) { ignora('ID inválido'); erros.push('Linha ' + nLinha + ': ID inválido "' + String(bruto).slice(0, 40) + '"'); return; }
                 it = { canal, id, custo }; chave = canal + '|' + id;
-                if (idx.frete >= 0 && SHC.num(c[idx.frete]) !== null) { if (SHC.num(c[idx.frete]) >= 0) it.frete = SHC.num(c[idx.frete]); else erros.push('Linha ' + nLinha + ': frete negativo não foi usado'); }
+                if (idx.frete >= 0 && SHC.num(c[idx.frete]) !== null) { if (SHC.num(c[idx.frete]) >= 0) it.frete = SHC.r2(SHC.num(c[idx.frete])); else erros.push('Linha ' + nLinha + ': frete negativo não foi usado'); }
                 if (idx.tipo >= 0 && /prem/i.test(c[idx.tipo] || '')) it.tipo = 'premium';
                 else if (idx.tipo >= 0 && /cl[aá]ss/i.test(c[idx.tipo] || '')) it.tipo = 'classico';
             }
             // Negativo aumentaria a sobra (a tabela do painel também recusa): fica de fora, com aviso da linha.
-            if (idx.outros >= 0 && SHC.num(c[idx.outros]) !== null) { if (SHC.num(c[idx.outros]) >= 0) it.outros = SHC.num(c[idx.outros]); else erros.push('Linha ' + nLinha + ': "outros" negativo não foi usado'); }
+            if (idx.outros >= 0 && SHC.num(c[idx.outros]) !== null) { if (SHC.num(c[idx.outros]) >= 0) it.outros = SHC.r2(SHC.num(c[idx.outros])); else erros.push('Linha ' + nLinha + ': "outros" negativo não foi usado'); }
             if (idx.titulo >= 0 && c[idx.titulo]) it.titulo = c[idx.titulo].replace(/\s+/g, ' ').slice(0, 120);
             const org = idx.origem >= 0 ? String(c[idx.origem] || '').trim().toLowerCase() : '';
             if (/^(manual|planilha|tiny|erp)$/.test(org)) it.origem = org === 'tiny' ? 'erp' : org;
