@@ -162,16 +162,23 @@
         const alvo = U.num(ctx.margem_alvo_pct) || 0;
         const status = faltando.length ? 'nao_lido' : (semCusto.length ? 'sem_custo' : (cancelado ? 'cancelado' : 'ok'));
 
-        // Rateio por item (para o lucro por produto): custo exato; o resto pela participação do item na receita bruta.
-        const porItem = pedido.itens.map(it => {
-            const k = chaveItem(it), part = bruto > 0 ? (valorItem(it) || 0) / bruto : 1 / pedido.itens.length;
-            const mesmos = pedido.itens.filter(x => x.anuncio_id && x.anuncio_id === it.anuncio_id);
-            const partAnuncio = mesmos.length > 1 ? ((valorItem(it) || 0)) / (U.soma(mesmos, x => (valorItem(x) || 0)) || 1) : 1;
-            const adsItem = it.anuncio_id && adsPorAnuncio[it.anuncio_id] !== undefined ? U.r2(adsPorAnuncio[it.anuncio_id] * partAnuncio) : U.r2((adsRs - U.soma(Object.keys(adsPorAnuncio), a => adsPorAnuncio[a])) * part);
+        // Rateio por item (para o lucro por produto): custo exato; o resto pela participação do item na receita bruta, pelo maior resto
+        // (Σ itens = o pedido, no centavo). Ads de um anúncio fica nos itens dele; o Ads do pedido sem anúncio, nos itens sem Ads próprio.
+        const its = pedido.itens, nIt = its.length, pesos = its.map(it => (bruto > 0 ? (valorItem(it) || 0) : 1));
+        const recI = reparte(receitaLiq, pesos), tarI = reparte(tarifasRs, pesos), outI = reparte(outros, pesos), impI = reparte(imposto, pesos);
+        const adsI = its.map(() => 0), poeAds = (i, v) => { adsI[i] = U.r2(adsI[i] + v); };
+        const anuncios = Object.keys(adsPorAnuncio).filter(a => its.some(it => it.anuncio_id === a));
+        anuncios.forEach(a => {
+            const ix = its.map((it, i) => (it.anuncio_id === a ? i : -1)).filter(i => i >= 0);
+            reparte(U.num(adsPorAnuncio[a]) || 0, ix.map(i => valorItem(its[i]) || 0)).forEach((v, k) => poeAds(ix[k], v));
+        });
+        const semAnuncio = its.map((it, i) => (anuncios.indexOf(it.anuncio_id) < 0 ? i : -1)).filter(i => i >= 0), alvoAds = semAnuncio.length ? semAnuncio : its.map((it, i) => i);
+        reparte(U.r2(adsRs - U.soma(anuncios, a => U.num(adsPorAnuncio[a]) || 0)), alvoAds.map(i => pesos[i])).forEach((v, k) => poeAds(alvoAds[k], v));
+        const porItem = its.map((it, i) => {
+            const k = chaveItem(it), part = bruto > 0 ? (valorItem(it) || 0) / bruto : 1 / nIt;
             const c = custoUnitario(ctx.custos, k, pedido.data_venda);
-            return { sku: k, anuncio_id: it.anuncio_id, qtd: it.qtd, participacao: part,
-                receita: U.r2(receitaLiq * part), tarifas: tarifasRs === null ? null : U.r2(tarifasRs * part),
-                custo: c ? (custoZero ? 0 : U.r2(c.custo * it.qtd)) : null, outros: U.r2(outros * part), imposto: U.r2(imposto * part), ads: adsItem };
+            return { sku: k, anuncio_id: it.anuncio_id, qtd: it.qtd, participacao: part, receita: recI[i], tarifas: tarI[i],
+                custo: c ? (custoZero ? 0 : U.r2(c.custo * it.qtd)) : null, outros: outI[i], imposto: impI[i], ads: adsI[i] };
         });
 
         const linhas = [];
