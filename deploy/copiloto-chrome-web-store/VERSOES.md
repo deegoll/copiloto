@@ -8,7 +8,7 @@ Cada versão publicada tem uma etiqueta no Git (`copiloto-vX.Y.Z`). Nela, a past
 | 3.1.0 | 29/09/2026 20:05 | Publicada (100%) em 30/09/2026 | `4a730e6f3c29c921734b35da49780dfbf930853eb423b6572ecbffcca2f4c909` | `copiloto-v3.1.0` |
 | 3.2.0 | 01/10/2026 16:22 | Publicada (100%) em 01/10/2026 | `33571b17ac0d22014645137c91ee0ef9a344860a122755810158b60abeddfcff` | `copiloto-v3.2.0` |
 | 3.2.1 | 02/10/2026 04:20 | Publicada (100%) em 02/10/2026 | `809bea9ba393637328f19f7ba49d58694bb12975ed6f60eb8afea0acd213f0f1` | `copiloto-v3.2.1` |
-| 3.3.0 | 07/10/2026 (junção com o C2 da nuvem, `nuvem2/330-final`) | Pronta, **não enviada** (falta o OK da dona na política, a política no site, colar no painel e o envio) | `dd29a5519352004d96178c3003f35cebef389e25dd8112ee3e0785736a7bc3fe` (refeito na local depois da suíte de 111 arquivos: ícone espera a conferência da conta) | `copiloto-v3.3.0` (criar no commit enviado) |
+| 3.3.0 | 07/10/2026 (junção com o C2 da nuvem, `nuvem2/330-final`) | Pronta, **não enviada** (falta o OK da dona na política, a política no site, colar no painel e o envio) | `d306725fee35b0a4dffbc494da18873c614a76ec215f3d8762f1f970d1bc04fa` (refeito na local 07/10: ícone espera a conferência da conta; envio extra compartilhado não vira "a mais") | `copiloto-v3.3.0` (criar no commit enviado) |
 
 ## Como conferir uma versão
 

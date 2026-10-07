@@ -1340,7 +1340,12 @@
             if (c.tipo === 'frete_estorno') { p.est = SHC.r2(p.est + c.valor); return; }
             p.cob = SHC.r2(p.cob + c.valor);
             p.cheio = SHC.r2(p.cheio + (c.cheio > c.valor ? c.cheio : c.valor));
-            if (/extra ou intermunicipal/i.test(c.texto)) p.extra = true; else if (c.tipo === 'frete_parcial') p.compart = true; else p.gratis = true;
+            // 07/10 (teste de usuário, pedido 2000018677349834): "Tarifa de envio extra ou intermunicipal (Por sua conta e por conta do comprador)"
+            // é compartilhada: o comprador pagou parte (o ML credita à parte, "Pagamento do Mercado Envios", que o Faturamento não traz). Antes o
+            // "extra" vinha primeiro e ela virava 'extra': a tarifa inteira (R$ 35,04) contra o frete do anúncio (R$ 15,05) dava R$ 19,99 "a mais"
+            // que era exatamente o que o comprador pagou.
+            if (c.tipo === 'frete_parcial') p.compart = true;
+            if (/extra ou intermunicipal/i.test(c.texto)) p.extra = true; else if (c.tipo !== 'frete_parcial') p.gratis = true;
             if (c.data && (!p.data || c.data < p.data)) p.data = c.data;
         });
         return Object.keys(g).map(k => g[k]).filter(p => p.data && p.cob > 0).map(p => {
