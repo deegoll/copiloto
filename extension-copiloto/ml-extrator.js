@@ -1522,9 +1522,13 @@
             regras: ['exclusao', 'experiencia'],
             pedido: 'a análise de ' + (peds.length > 1 ? 'cada pedido acima' : peds.length ? 'este pedido' : 'cada caso') + ' e, ' + (peds.length > 1 ? 'nos que se enquadrarem' : 'se ele se enquadrar') + ', a exclusão da reclamação do cálculo da nossa reputação e da experiência de compra dos anúncios (Métricas › Atendimento aos seus compradores › Vendas com problemas).' });
     };
-    /** v3.3 Remessa do Full com inconformidade (SHC.remessasInconformes) → texto da reclamação por diferenças, produto a produto. */
+    /**
+     * v3.3 Remessa do Full com inconformidade (SHC.remessasInconformes) → texto da reclamação por diferenças, produto a produto.
+     * Rastreio 07/10/2026 (bloqueio 4, regra da local): sem o detalhe por produto não sai texto ('') — na lista do Full o units_count conta
+     * PRODUTOS, não unidades, e "declaradas 3; disponíveis 2" seria uma reclamação firme com número que o Copiloto não leu.
+     */
     SHC.chamadoRemessa = function (r) {
-        if (!r || !r.id) return '';
+        if (!r || !r.id || r.semDetalhe || !(r.produtos || []).length) return '';
         const n = v => (typeof v === 'number' ? String(v) : '—'), dt = x => (/^\d{4}-\d{2}-\d{2}/.test(String(x || '')) ? x.slice(8, 10) + '/' + x.slice(5, 7) + '/' + x.slice(0, 4) : '');
         const ps = (r.produtos || []).filter(p => p && ((p.diferencas || 0) !== 0 || (p.naoAptas || 0) > 0));
         const fatos = ps.slice(0, 15).map(p => (p.sku ? 'SKU ' + p.sku : p.itemId || 'produto') + (p.itemId && p.sku ? ' (' + p.itemId + ')' : '') + ': declaradas ' + n(p.declaradas)

@@ -3982,7 +3982,8 @@
                 : ['Reclamar no ML', 'Abre a remessa no ML: lá, toque em “Iniciar reclamação por diferenças”.'];
             const ver = ps.length && (ps.length > vis.length || aberto(k) || decl) ? `<button class="bt leve" data-ver="${esc(k)}" aria-expanded="${aberto(k)}">${aberto(k) ? 'Ver menos' : 'Ver a remessa'}</button>` : '';
             // v3.3: texto da reclamação pronto (SHC.chamadoRemessa): declaradas × processadas por SKU, o que o ML cobrou, anexos e o pedido.
-            const cop = pend ? `<button class="bt leve" data-rem-copiar="${esc(r.id)}">${remCopiada === r.id ? '✓ Texto copiado' : 'Copiar texto da reclamação'}</button>` : '';
+            // Rastreio 07/10: sem o detalhe por produto não há texto (SHC.chamadoRemessa → ''), e o botão não aparece.
+            const cop = pend && SHC.chamadoRemessa(r) ? `<button class="bt leve" data-rem-copiar="${esc(r.id)}">${remCopiada === r.id ? '✓ Texto copiado' : 'Copiar texto da reclamação'}</button>` : '';
             return h + `<div class="linha-bts"><a class="bt ${pend ? 'ml' : 'leve'}" href="${esc(r.link)}" target="_blank" rel="noopener">${esc(bt)}</a>${cop}${ver}</div>`
                 + `<p class="det" style="margin:6px 0 0">${esc(dica)}</p></div>`;
         }).join('');
@@ -5817,7 +5818,8 @@
         const rc = t.closest('[data-rem-copiar]');   // v3.3: texto da reclamação da remessa do Full (SHC.chamadoRemessa)
         if (rc) {
             const r = incRemessas().find(x => String(x.id) === rc.dataset.remCopiar);
-            try { await navigator.clipboard.writeText(SHC.chamadoRemessa(r)); remCopiada = r ? r.id : ''; } catch (e) { remCopiada = ''; }
+            const txt = SHC.chamadoRemessa(r);
+            try { if (!txt) throw new Error('sem detalhe'); await navigator.clipboard.writeText(txt); remCopiada = r.id; } catch (e) { remCopiada = ''; }
             if (aba === 'full') desenhaFull();
             return;
         }

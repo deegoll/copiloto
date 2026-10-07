@@ -12,6 +12,7 @@ const EXT = path.join(__dirname, '../../extension-copiloto');
 const SHC = require(path.join(EXT, 'calc.js'));
 ['store.js', 'ml-extrator.js', 'fechamento.js', 'painel-lateral.js'].forEach(a => require(path.join(EXT, a)));
 let f = 0;
+const pendentes = [];   // conferências que rodam o clique do painel (async): rodam no fim, uma depois da outra
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) f++; };
 const linhas = t => t.split('\n');
 
@@ -114,6 +115,34 @@ console.log('Medidas (rastreio 07/10, R13): "o ML mudou" e "não foi feita por n
             Object.assign({ de: D('2026-08-01'), ate: D('2026-09-18'), vistoAte: D('2026-09-11'), quem: 'seller' }, A)] } };
     const s2 = sino(conf);
     ok(s2.length === 1 && /^Bomba HA: o Mercado Livre mudou as medidas da embalagem para 45×20×15 cm e 3,20 kg\.$/.test(s2[0]), 'sino com a marca de autoria (medida confirmada pelo seller era a de antes): "o Mercado Livre mudou"');
+}
+
+console.log('Remessa do Full sem o detalhe por produto (rastreio 07/10, bloqueio 4): nenhum texto de contestação');
+{
+    // Só a lista do Full (dados inventados): units_count=3 conta PRODUTOS, não unidades; on_sale_units=2.
+    const lista = { remessas: [{ id: '61239001', status: 'closed_with_changes', recebida: '2026-09-20', unidades: 3, aptas: 2, custo: 27 }] };
+    const inc = SHC.remessasInconformes(lista, { porId: {} }, '2026-09-25');
+    ok(inc.length === 1 && inc[0].semDetalhe && SHC.chamadoRemessa(inc[0]) === '', 'só a lista (sem o detalhe lido): nenhum texto ("declaradas 3; disponíveis 2" seria número que o Copiloto não leu)');
+    ok(SHC.chamadoRemessa({ id: '61239002', quando: '2026-09-20', custo: 27, declaradas: 3, aptas: 2, produtos: [] }) === '', 'detalhe sem a lista de produtos: também nenhum texto');
+    const det = { porId: { '61239001': { produtos: [{ itemId: 'MLB8000000021', sku: 'HA-77001', declaradas: 40, processadas: 37, diferencas: -3, aptas: 37, naoAptas: 0, resultado: 'faltando' }],
+        reclamacoesDisponiveis: ['diferencas'] } } };
+    const comDet = SHC.remessasInconformes(lista, det, '2026-09-25')[0], t = SHC.chamadoRemessa(comDet);
+    ok(/SKU HA-77001 \(MLB8000000021\): declaradas 40, processadas 37/.test(t) && /\(coleta e\/ou penalidade\): R\$ 27,00/.test(t) && !/multa/i.test(t) && !/Unidades declaradas: 3/.test(t),
+        'com o detalhe por produto: o texto sai com as unidades do detalhe e o total cobrado como coleta e/ou penalidade (nunca "multa")');
+    // O botão e o clique do painel, como estão no arquivo.
+    const fs = require('fs'), src = fs.readFileSync(path.join(EXT, 'painel-lateral.js'), 'utf8');
+    ok(/const cop = pend && SHC\.chamadoRemessa\(r\) \?/.test(src), 'painel: o botão "Copiar texto da reclamação" só aparece quando há texto');
+    const ini = src.indexOf("const rc = t.closest('[data-rem-copiar]');"), bloco = src.slice(ini, src.indexOf("const pex = t.closest('[data-pos-excluir]');", ini));
+    const clique = (rs, id) => {
+        let copiado = null;
+        const t = { closest: x => (x === '[data-rem-copiar]' ? { dataset: { remCopiar: id } } : null) }, nav = { clipboard: { writeText: async x => { copiado = x; } } };
+        const f = new Function('t', 'incRemessas', 'navigator', 'SHC', 'aba', 'desenhaFull', 'let remCopiada = ""; return (async () => { ' + bloco + ' })().then(() => remCopiada);');
+        return f(t, () => rs, nav, SHC, 'full', () => {}).then(rc => ({ copiado, rc }));
+    };
+    pendentes.push(() => Promise.all([clique(inc, '61239001'), clique([comDet], '61239001')]).then(([a, b]) => {
+        console.log('Remessa do Full: o clique do painel');
+        ok(ini > 0 && a.copiado === null && a.rc === '' && b.copiado === t && b.rc === '61239001', 'painel: o clique sem detalhe não copia nada; com detalhe copia o texto');
+    }));
 }
 
 console.log('Frete casado pela data (auditoria da loja): só o par sem ambiguidade é contestável');
@@ -301,5 +330,5 @@ console.log('Pedido de exclusão (rastreio 07/10, R10): os pedidos certos, o SKU
         const semSku = SHC.chamadoExclusao({ motivo: mot, casos: 1, naReputacao: 1, produtos: [{ sku: '', titulo: 'Produto sem SKU' }], pedidos: ['2000000107'] });
         ok(/^Assunto: Pedido de análise de reclamações para exclusão da reputação – Pedido: #2000000107\n/.test(semSku) && /- Produtos: Produto sem SKU\./.test(semSku), 'sem SKU conhecido: o título');
     })();
-    espera.then(() => { console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK'); process.exit(f ? 1 : 0); }, e => { console.error(e); process.exit(1); });
+    espera.then(() => pendentes.reduce((p, fn) => p.then(fn), Promise.resolve())).then(() => { console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK'); process.exit(f ? 1 : 0); }, e => { console.error(e); process.exit(1); });
 }
