@@ -233,15 +233,21 @@ async function gravarFreteHist(conta, cobs, mesesLidos) {
         SHC.devolucoesDasCobrancas(cobs).forEach(p => { if (p.data >= limF) devs[p.pedido] = { itemId: p.itemId, data: p.data, valor: p.valor, linhas: p.linhas }; });
         // Estorno lido agora de um pedido cobrado num mês que não foi relido: desconta do valor BRUTO guardado, uma vez por estorno
         // (est = {id do estorno: valor}; o mesmo estorno relido a cada 3 h não desconta de novo).
+        // Revisão 07/10/2026 (cada centavo): o cheio (antes do desconto do ML) baixa junto, como no SHC.freteDasCobrancas quando lê a tarifa e
+        // o estorno juntos (cheio = máx(cobrado, cheio − estornos)); antes ficava inteiro e o estorno aparecia como "Desconto do ML no frete".
+        // cheioBruto = o cheio de antes de qualquer estorno (como o bruto): a releitura não desconta 2 vezes. Sem cheio (aprox), fica sem.
         const comCobranca = new Set(cobs.filter(c => c && /^frete/.test(c.tipo) && c.tipo !== 'frete_estorno').map(c => c.orderId));
         cobs.forEach(c => {
             const p = c && c.tipo === 'frete_estorno' && c.orderId && !comCobranca.has(c.orderId) ? pedidos[c.orderId] : null;
             if (!p || (p.cancelado && !p.est)) return;
             const est = Object.assign({}, p.est), bruto = typeof p.bruto === 'number' ? p.bruto : p.cobrado;
+            const cheioBruto = typeof p.cheioBruto === 'number' ? p.cheioBruto : typeof p.cheio === 'number' ? p.cheio : null;
             const kEst = c.id || (c.data + '|' + c.valor), linhas = p.linhas && !(kEst in est) ? p.linhas.concat({ t: c.texto, v: c.valor, d: c.data, e: 1 }) : p.linhas;
             est[kEst] = c.valor;
-            const resto = SHC.r2(bruto - Object.keys(est).reduce((t, k) => t + est[k], 0));
-            pedidos[c.orderId] = Object.assign({}, p, { bruto, est }, linhas ? { linhas } : {}, resto > 0.004 ? { cobrado: resto, cancelado: false } : { cobrado: 0, cheio: 0, formato: 'cancelado', cancelado: true });
+            const somaEst = Object.keys(est).reduce((t, k) => t + est[k], 0), resto = SHC.r2(bruto - somaEst);
+            pedidos[c.orderId] = Object.assign({}, p, { bruto, est }, cheioBruto !== null ? { cheioBruto } : {}, linhas ? { linhas } : {}, resto > 0.004
+                ? Object.assign({ cobrado: resto, cancelado: false }, cheioBruto !== null ? { cheio: Math.max(resto, SHC.r2(cheioBruto - somaEst)) } : {})
+                : { cobrado: 0, cheio: 0, formato: 'cancelado', cancelado: true });
         });
     }
     // Versão anterior: frete por pedido só em vd|ml|<MLB> ({d, f, pc}). Entra o que não está em lugar nenhum (nunca por cima do que foi lido).
