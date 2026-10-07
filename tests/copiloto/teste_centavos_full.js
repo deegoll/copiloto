@@ -329,7 +329,11 @@ console.log('F. Remessa com diferença: SHC.remessasInconformes, SHC.chamadoReme
     const ta = SHC.chamadoRemessa(a), tb = SHC.chamadoRemessa(b);
     ok(ta.indexOf('Total cobrado pelo Mercado Livre nesta remessa (coleta e/ou penalidade): R$ 312,40.') >= 0 && !/multa/i.test(ta) && limpo(ta),
         'reclamação: "Total cobrado … (coleta e/ou penalidade): R$ 312,40." e nunca "multa"');
-    ok(!/Total cobrado/.test(tb) && !/R\$/.test(tb) && /declaradas: 10; disponíveis para venda: 8/.test(tb), 'sem cobrança: a reclamação não inventa "R$ 0,00" e usa as unidades da lista');
+    // 3.3.0 (regra da dona): sem o detalhe por produto NÃO há texto — na lista do ML o units_count ("declaradas") conta PRODUTOS, não
+    // unidades, então os totais da lista (10 e 8) nunca viram reclamação; e nada de "R$ 0,00" inventado.
+    ok(b.semDetalhe === true && tb === '' && !/declaradas: 10|disponíveis para venda: 8/.test(tb), 'sem cobrança e sem detalhe: nenhum texto (\'\'), sem "R$ 0,00" e sem as unidades da lista (que contam produtos)');
+    ok(/declaradas 30, processadas 28, não aptas 1\./.test(ta) && /declaradas 20, processadas 19\./.test(ta) && !/declaradas: 50|disponíveis para venda: 46/.test(ta),
+        'com detalhe: o texto traz os números de cada produto (30/28 e 20/19), nunca os totais da lista');
     const an = SHC.anomalias('900000001', { remessas: SHC.remessasResumo(lista, det, '2026-09', HOJE) });
     const it = an.itens.find(x => x.remessaId === '8200001'), ib = an.itens.find(x => x.remessaId === '8200009');
     ok(it && /o ML cobrou R\$ 312,40/.test(it.texto) && !/multa/i.test(it.texto) && ib && !/R\$/.test(ib.texto), 'sino: "o ML cobrou R$ 312,40" (não "multa"); a sem cobrança não mostra R$');
@@ -347,17 +351,35 @@ console.log('F. Remessa com diferença: SHC.remessasInconformes, SHC.chamadoReme
         const c = ent(r, 0, 3) ? ent(r, 1, 300000) : pega(r, [0, null]), un = ent(r, 1, 900), ap = ent(r, 0, un);
         lt.push({ id, status: pega(r, ['closed_ok', 'closed_with_changes']), recebida: dia(ent(r, 0, 80)), unidades: un, aptas: ap, custo: c === null ? null : c / 100 });
         if (nP && ent(r, 0, 3)) dt.porId[id] = SHC.mlRemessaDetalheDoEstado({ inboundId: id, status: 'closed_with_changes', units: ps });
-        ora[id] = { sd: temD ? sd : null, sa: temA ? sa : null, c, un, ap, comDet: !!dt.porId[id] };
+        ora[id] = { sd: temD ? sd : null, sa: temA ? sa : null, c, un, ap, comDet: !!dt.porId[id], ps };
     }
     const g = SHC.remessasInconformes(lt, dt, HOJE);
     g.forEach(x => {
         const o = ora[x.id], dEsp = o.comDet && o.sd !== null ? o.sd : o.un, aEsp = o.comDet && o.sa !== null ? o.sa : o.ap;
         const tx = SHC.chamadoRemessa(x);
-        l.conta(x.declaradas === dEsp && x.aptas === aEsp && inteiroNN(x.declaradas) && inteiroNN(x.aptas)
-            && (o.c > 0 ? cent(x.custo) === o.c && tx.indexOf('(coleta e/ou penalidade): ' + reais(o.c) + '.') >= 0 : x.custo === null && !/R\$/.test(tx)) && !/multa/i.test(tx) && limpo(tx),
-            { id: x.id, x: { d: x.declaradas, a: x.aptas, c: x.custo }, o });
+        // Oráculo do tipo de texto (3.3.0, regras da dona): sem detalhe ou sem número por produto → ''; detalhe incompleto (algum produto
+        // sem declaradas E aptas) ou sem diferença nem não apta lida → só o pedido de conferência; senão reclamação (diferença) ou revisão (só não aptas).
+        const ps = o.comDet ? o.ps : [], tem = k => ps.some(p => p[k] !== null), compl = p => p.declaredQuantity !== null && p.readyToFullQuantity !== null;
+        const marcados = ps.filter(p => (p.differencesQuantity || 0) !== 0 || p.notReadyToFullQuantity > 0);
+        const tipo = !ps.length || (!tem('declaredQuantity') && !tem('processedQuantity')) ? ''
+            : !marcados.length && !(tem('declaredQuantity') && tem('readyToFullQuantity')) ? ''
+            : !ps.every(compl) ? 'conferencia'
+            : !marcados.some(p => (p.differencesQuantity || 0) !== 0) && !marcados.some(p => p.notReadyToFullQuantity > 0) ? 'conferencia'
+            : marcados.some(p => (p.differencesQuantity || 0) !== 0) ? 'reclamacao' : 'revisao';
+        const tipoTx = tx === '' ? '' : /^.*Pedido de conferência da remessa do Full/.test(tx) ? 'conferencia' : /Reclamação por diferenças na remessa do Full/.test(tx) ? 'reclamacao'
+            : /Pedido de revisão de unidades não aptas/.test(tx) ? 'revisao' : '?';
+        // Números do texto = os de cada produto (nunca os totais da lista); na reclamação/revisão, cada produto marcado com as suas declaradas/processadas.
+        const nTx = v => (v === null ? '—' : String(v));
+        const porProduto = tipo !== 'reclamacao' && tipo !== 'revisao' ? true
+            : marcados.every(p => tx.indexOf('SKU ' + p.sku + ' (' + p.itemId + '): declaradas ' + nTx(p.declaredQuantity) + ', processadas ' + nTx(p.processedQuantity)) >= 0);
+        const somaOk = !ps.length || !ps.every(compl) || (x.declaradas === ps.reduce((s, p) => s + p.declaredQuantity, 0) && x.aptas === ps.reduce((s, p) => s + p.readyToFullQuantity, 0));
+        l.conta(x.declaradas === dEsp && x.aptas === aEsp && inteiroNN(x.declaradas) && inteiroNN(x.aptas) && somaOk
+            && tipoTx === tipo && porProduto && !/declaradas: |disponíveis para venda: \d+;/.test(tx)
+            && (o.c > 0 ? cent(x.custo) === o.c && (tx === '' ? !/R\$/.test(tx) : tx.indexOf('(coleta e/ou penalidade): ' + reais(o.c) + '.') >= 0) : x.custo === null && !/R\$/.test(tx))
+            && !/multa/i.test(tx) && limpo(tx),
+            { id: x.id, x: { d: x.declaradas, a: x.aptas, c: x.custo }, o: { sd: o.sd, sa: o.sa, c: o.c, un: o.un, ap: o.ap, comDet: o.comDet }, tipo, tipoTx });
     });
-    okLote(l, g.length + ' remessas com diferença geradas: declaradas/aptas = Σ dos produtos (ou a lista), o R$ do texto = total_charged, sem "multa"');
+    okLote(l, g.length + ' remessas com diferença geradas: declaradas/aptas = Σ dos produtos (ou a lista); texto só com detalhe por produto (vazio sem ele; conferência se incompleto ou sem diferença lida) e com os números de cada produto; o R$ do texto = total_charged, sem "multa"');
 }
 
 console.log('G. Próxima remessa: SHC.simulaRemessa (custo estimado da coleta) e P.skusParaSimular');

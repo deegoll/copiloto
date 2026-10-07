@@ -490,8 +490,14 @@ console.log('E. Lucro por produto e fechamento do mês');
         L.completo.conta(fe.completo === (fe.pendentes === 0) && MO.fechamentoMes({ mes, resultados: conta, tarifas: M.naoLido('fatura fora') }).completo === false, { t });
         // Produto: unidades = Σ qtd dos pedidos ok; pedidos contados uma vez; pendentes = itens de pedidos sem custo / não lidos.
         const prods = MO.lucroPorProduto(res), okRes = res.filter(x => x.status === 'ok' || x.status === 'cancelado');
-        const un = {}; res.filter(x => x.status === 'ok').forEach(x => x.por_item.forEach(it => { un[it.sku] = (un[it.sku] || 0) + it.qtd; }));
-        L.prodUn.conta(prods.every(pr => pr.unidades === (un[pr.sku] || 0) && ['receita', 'tarifas', 'custo', 'outros', 'imposto', 'ads', 'lucro_real'].every(k => emCentavos(pr[k])))
+        // 3.3.0: o grupo é SKU normalizado × canal × conta (o mesmo SKU em 2 canais = 2 linhas); a régua usa a mesma chave.
+        const chP = (canal, conta, sku) => [canal || null, conta || '', U.normalizaSku(sku)].join('|');
+        const un = {}; res.filter(x => x.status === 'ok').forEach(x => x.por_item.forEach(it => { const k = chP(x.canal, x.conta, it.sku); un[k] = (un[k] || 0) + it.qtd; }));
+        const chaves = prods.map(pr => chP(pr.canal, pr.conta, pr.sku));
+        L.prodUn.conta(prods.every(pr => pr.unidades === (un[chP(pr.canal, pr.conta, pr.sku)] || 0)
+                && ['receita', 'tarifas', 'custo', 'outros', 'imposto', 'ads', 'ads_repasse', 'lucro_antes_ads', 'lucro_real'].every(k => emCentavos(pr[k]))
+                && cent(pr.lucro_real) === cent(pr.lucro_antes_ads) - cent(pr.ads))
+            && new Set(chaves).size === chaves.length && Object.keys(un).every(k => chaves.indexOf(k) >= 0)
             && somaC(prods, pr => pr.pendentes) === somaC(res.filter(x => x.status !== 'ok' && x.status !== 'cancelado'), x => x.por_item.length), { t });
         // Σ produtos × Σ pedidos: exato, também com pedidos de 2+ itens (antes até 2 centavos por item: divergência 3, corrigida #32).
         const umItem = okRes.every(x => x.por_item.length === 1);
@@ -501,7 +507,7 @@ console.log('E. Lucro por produto e fechamento do mês');
     okLote(L.semPedido, 'tarifas SEM pedido do mês: Σ por tipo, total e estornos (os negativos); "ads" sem pedido só quando ads_rateados = false; tarifa de pedido fica fora');
     okLote(L.fech, 'fechamento: lucro do mês = lucro dos pedidos − tarifas sem pedido − Ads não rateado; receita, repasse, custo, imposto e Ads = Σ dos pedidos ok/cancelados do mês');
     okLote(L.completo, 'fechamento "completo" só sem pendentes e com as tarifas lidas (tarifas não lidas → completo = false)');
-    okLote(L.prodUn, 'por produto: unidades = Σ qtd dos pedidos ok; dinheiro em centavos; pendentes = itens de pedidos sem custo/não lidos');
+    okLote(L.prodUn, 'por produto (SKU × canal × conta): unidades = Σ qtd dos pedidos ok; dinheiro em centavos; lucro = antes do Ads − Ads; um grupo por chave; pendentes = itens de pedidos sem custo/não lidos');
     okLote(L.prodUm, 'por produto (só pedidos de 1 item): Σ lucro e Σ receita dos produtos = Σ dos pedidos, no centavo');
     okLote(L.prodSoma, 'por produto (com pedidos de 2+ itens): Σ lucro e Σ receita dos produtos = Σ dos pedidos, no centavo (#32)');
     // O caso do relatório (#32): 3 itens de R$ 10,00 e comissão de R$ 1,00 → tarifas dos itens 0,34 + 0,33 + 0,33 e Σ produtos = lucro do pedido.
@@ -511,6 +517,17 @@ console.log('E. Lucro por produto e fechamento do mês');
     const pr32 = MO.lucroPorProduto([r32]);
     ok(r32.lucro_real === 23 && r32.por_item.map(x => cent(x.tarifas)).join() === '34,33,33' && somaC(pr32, x => cent(x.lucro_real)) === 2300 && somaC(pr32, x => cent(x.tarifas)) === 100,
         '3 itens de R$ 10,00 e comissão de R$ 1,00: tarifas por item 0,34 + 0,33 + 0,33 = R$ 1,00 e Σ lucro dos produtos = R$ 23,00 do pedido (antes 0,99 e R$ 23,01) — #32');
+    // 3.3.0: linhas do mês (ML: Ads do anúncio pode ser "—"): Ads não lido em UMA linha → ads e lucro_real do SKU null (nunca 0), o
+    // lucro_antes_ads continua a soma exata; o mesmo SKU em outro canal é outra linha; porMes separa os meses.
+    const lm = (o) => Object.assign({ canal: 'ml', conta: 'x', mes: '2026-09', sku: 'sku: a-1', unidades: 1, vendas: 1, bruto: 50, tarifa: 7.35, frete: 2.1, custo: 20, outros: 0.33, imposto: 3, status: 'ok' }, o);
+    const pm = MO.lucroPorProduto([lm({ ads: 4.44, lucro_antes_ads: 17.22 }), lm({ ads: null, lucro_antes_ads: 10.01, unidades: 2, bruto: 100.01 }), lm({ canal: 'tiktok', ads: 1.11, lucro_antes_ads: 5.55 }),
+        lm({ mes: '2026-08', ads: 2.22, lucro_antes_ads: 3.33 })]);
+    const pmMes = MO.lucroPorProduto([lm({ ads: 4.44, lucro_antes_ads: 17.22 }), lm({ mes: '2026-08', ads: 2.22, lucro_antes_ads: 3.33 })], true);
+    const ml1 = pm.find(x => x.canal === 'ml'), tt1 = pm.find(x => x.canal === 'tiktok'), ago = pmMes.find(x => x.mes === '2026-08'), set = pmMes.find(x => x.mes === '2026-09');
+    ok(pm.length === 2 && ml1.ads === null && ml1.lucro_real === null && ml1.margem_pct === null && cent(ml1.lucro_antes_ads) === 1722 + 1001 + 333 && ml1.unidades === 4 && cent(ml1.receita) === 5000 + 10001 + 5000
+        && tt1.ads === 1.11 && tt1.lucro_real === 4.44 && cent(tt1.lucro_antes_ads) === 555
+        && pmMes.length === 2 && ago.lucro_real === 1.11 && set.lucro_real === 12.78 && cent(set.lucro_antes_ads) === 1722 && ago.unidades === 1 && set.unidades === 1,
+        'por produto (3.3.0): Ads "—" em uma linha → Ads e lucro do SKU "—" (nunca R$ 0,00), lucro antes do Ads = Σ no centavo; o mesmo SKU em 2 canais = 2 linhas; porMes separa os meses');
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -608,9 +625,11 @@ console.log('F. Conciliação pedido × repasse: diferença = recebido − esper
 const SKU_IDS = ['1730000000000000101', '1730000000000000102', '1730000000000000103', '1730000000000000104', '1730000000000000105', '1730000000000000106'];
 const TIPO_TT = { comissao: 'platform_commission', taxa_fixa: 'finance_statement_fee_name_br_fix_commission_fee_tooltip', programa_frete: 'sfp_service_fee',
     afiliado: 'affiliate_commission', afiliado_ads: 'affiliate_ads_commission', pagamento: 'transaction_fee' };
+// 3.3.0 (E7): o dia da venda, da entrega e da liquidação tem de estar até hoje + 7 (o relógio dos testes para em 25/09: até 02/10), senão a
+// captura é "tela mudou" e nada é gravado. Venda até 21/09 → entrega até 25/09 → liquidação (entrega + 7) até 02/10.
 function gerarTT(r, i, o) {
     o = o || {};
-    const id = '5770' + String(100000000000000 + i), dia = o.dia || '2026-09-' + String(ent(r, 1, 24)).padStart(2, '0');
+    const id = '5770' + String(100000000000000 + i), dia = o.dia || '2026-09-' + String(ent(r, 1, 21)).padStart(2, '0');
     const n = o.nsku || (r() < 0.75 ? 1 : ent(r, 2, 3)), usados = [];
     const skus = Array.from({ length: n }, () => {
         let k; do { k = ent(r, 0, SKU_IDS.length - 1); } while (usados.indexOf(k) >= 0); usados.push(k);
@@ -859,6 +878,24 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         && M.ehNaoLido(SP.transacaoDoEscrow({ response: { order_sn: 'SPX', order_income: {} } }, {})), 'Shopee: escrow sem valor → repasse não lido; frete não lido avisa; sem data/erro → não lido');
 }
 
+// 3.3.0 (E6): a captura 'pedido' (GET trade/orders/get, a tela de Pedidos de antes) saiu — nenhuma tela chama mais e o gravarCaptura recusa
+// ("formato"). Mas o det: {pedido, devolucao} que a 3.2 gravou continua guardado (até 400 dias) e o SHC.tt.resumo continua lendo. Os casos
+// "visto em Pedidos" deste teste gravam o det como a 3.2 gravava (o mesmo conversor do núcleo, a mesma chave tt:<loja>:ped:<id>, o mesmo carimbo
+// e a ligação anuncio_id → SKU no skumap) e passam pela leitura e pela conta de hoje.
+async function gravaDetalhePedidos(dados, conta, lidoEm) {
+    const r = N.pedidoDoDetalhe(N.filtroPedidoSemComprador(dados), { conta });   // o filtro passa só o que PODE (nada do comprador)
+    if (M.ehNaoLido(r.pedido)) return { ok: false, motivo: 'nao_reconhecido' };
+    const em = Number(lidoEm) > 0 ? Math.min(Number(lidoEm), Date.now()) : Date.now(), kp = 'tt:' + conta + ':ped:' + r.pedido.id, km = 'tt:' + conta + ':skumap';
+    const antes = banco[kp] || { id: r.pedido.id }, p = Object.assign({}, copia(antes), { det: { pedido: r.pedido, devolucao: r.devolucao, avisos: r.avisos, lido_em: em, tela: 'Pedidos' } });
+    // carimba (tiktok.js): dia = a mais antiga das fontes; lido_em/tela = a leitura mais nova (empate: a do Financeiro, que vem antes)
+    p.data = [antes.data, r.pedido.data_venda].filter(Boolean).sort()[0] || null;
+    if (!(antes.lido_em >= em)) { p.lido_em = em; p.tela = 'Pedidos'; }
+    const mapa = Object.assign({}, banco[km]);
+    r.pedido.itens.forEach(it => { if (it.sku && it.anuncio_id) mapa[it.anuncio_id] = it.sku; });
+    await global.chrome.storage.local.set(Object.assign({ [kp]: p }, Object.keys(mapa).length ? { [km]: mapa } : {}));
+    return { ok: true, n: 1 };
+}
+
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════
 (async () => {
     console.log('I. Extensão (tiktok.js): captura → gravado → SHC.tt.resumo — Σ por pedido = total do período');
@@ -888,7 +925,7 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         if (/det/.test(modos[g.id])) {
             const det = respDetalhe(g);
             if (modos[g.id] === 'lista_det_dev') det.data.main_order.reverse_info = { reverse_order_id: '4000000000000000009', reverse_status: 100, reverse_type: 1 };
-            await TT.gravarCaptura('pedido', det, CONTA, lidoEm);
+            await gravaDetalhePedidos(det, CONTA, lidoEm);
         }
     }
     // Extratos (nível do extrato) coerentes com TODAS as linhas; a receber; saldo.
@@ -912,6 +949,9 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
     banco['c|sku|BONE-02'] = { custo: 12.5, outros: 0.8 };
     banco['c|tiktok|' + SKU_IDS[5]] = { custo: 30.03, outros: 1.1 };
     banco.cfg = { imposto_pct: 6, margem_alvo_pct: 10 };
+    // 3.3.0 (E6): a captura 'pedido' (tela de Pedidos de antes) não existe mais: recusada como "formato", sem gravar nada.
+    const antesP = JSON.stringify(banco), rp = await TT.gravarCaptura('pedido', respDetalhe(gs[0]), CONTA, lidoEm);
+    ok(rp.ok === false && rp.motivo === 'formato' && JSON.stringify(banco) === antesP, 'captura "pedido" (saiu na 3.3.0, E6): recusada ("formato") e nada gravado');
     const d = await TT.ler(CONTA);
     const vm = TT.resumo(d, { hoje: HOJE });
     ok(respostas > 0 && d.peds.length === gs.length && vm.pedidos.length === gs.length && !vm.vazio, `captura: ${gs.length} pedidos (${linhasFin.length} linhas do Financeiro) gravados por loja e lidos de volta`);
@@ -1080,7 +1120,7 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
     {   // #33: GMV Pay no extrato do pedido (fixture de suposição) + o detalhe em Pedidos com o SKU (custo R$ 10, imposto 6% do cfg).
         const C33 = '7000000033', fx = require(path.join(RAIZ, 'copiloto-nucleo', 'testes', 'fixtures', 'tarifa_gmv_pay_suposicao.json'));
         await TT.gravarCaptura('transacao', fx, C33, lidoEm);
-        await TT.gravarCaptura('pedido', { code: 0, data: { main_order: { main_order_id: '5770000000000000900', main_order_create_time: segDia('2026-09-29'),
+        await gravaDetalhePedidos({ code: 0, data: { main_order: { main_order_id: '5770000000000000900', main_order_create_time: segDia('2026-09-29'),
             payment_info: { main_order_origin_sale_price: fp(10000), subtotal: fp(10000), seller_discount_total: fp(0), platform_discount_total: fp(0) },
             skus: [{ seller_sku_name: 'GMV-01', sku_id: '1730000000000000933', quantity: 1, product_name: 'Produto GMV', total_price: fp(10000), sku_display_status: 122 }],
             logistic_info: { title: 'Package delivered', time: segDia('2026-09-30') } } } }, C33, lidoEm);
@@ -1135,7 +1175,7 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         ext34b.data.order_record.in_come.fee_list[0].amount = a34('');
         ext34b.data.order_record.shipping_fee_detail.fee_list[0].amount = a34('-32.00');
         await TT.gravarCaptura('transacao', ext34b, C34, lidoEm);
-        await TT.gravarCaptura('pedido', { code: 0, data: { main_order: { main_order_id: id34b, main_order_create_time: segDia('2026-09-20'), payment_info: { main_order_origin_sale_price: { format_price: '' } },
+        await gravaDetalhePedidos({ code: 0, data: { main_order: { main_order_id: id34b, main_order_create_time: segDia('2026-09-20'), payment_info: { main_order_origin_sale_price: { format_price: '' } },
             skus: [{ seller_sku_name: 'SKU-34', sku_id: '1730000000000000934', quantity: 1, total_price: fp(9000), sku_display_status: 122 }] } } }, C34, lidoEm);
         const w34 = TT.resumo(await TT.ler(C34), { hoje: '2026-09-25' }), s34 = w34.pedidos.find(x => x.pedido_id === id34b), lb34 = contaTela(ABA.html(w34, { hoje: '2026-09-25' }), id34b);
         ok(s34.status === 'nao_lido' && !s34.exato && s34.repasse === null && s34.avisos.some(a => /receita sem valor/.test(a)) && valorDe(lb34, 'Preço') === null && lb34.some(l => l.rot === 'Preço')
@@ -1143,7 +1183,7 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
             'preço vazio no extrato e no detalhe do pedido (#34): "não lido" e Preço "—" na conta do pedido (nada de R$ 0,00)');
         // Visto só em Pedidos, preço de origem vazio, sem extrato nem lista (custo R$ 30): "não lido", Preço "—", fora do KPI e dos alertas.
         const C34c = '7000000134', id34c = '5770000000000000820';
-        await TT.gravarCaptura('pedido', { code: 0, data: { main_order: { main_order_id: id34c, main_order_create_time: segDia('2026-09-20'), payment_info: { main_order_origin_sale_price: { format_price: '' } },
+        await gravaDetalhePedidos({ code: 0, data: { main_order: { main_order_id: id34c, main_order_create_time: segDia('2026-09-20'), payment_info: { main_order_origin_sale_price: { format_price: '' } },
             skus: [{ seller_sku_name: 'SKU-34C', sku_id: '1730000000000000936', quantity: 1, total_price: { format_price: '' }, sku_display_status: 122 }] } } }, C34c, lidoEm);
         banco['c|sku|SKU-34C'] = { custo: 30 };
         const x34 = TT.resumo(await TT.ler(C34c), { hoje: '2026-09-25' }), t34 = x34.pedidos[0], hx34 = ABA.html(x34, { hoje: '2026-09-25' }), lx34 = contaTela(hx34, id34c);
@@ -1170,7 +1210,7 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
             skus: [{ seller_sku_name: 'SKU-34R', sku_id: '1730000000000000344', quantity: 1, total_price: fp(10000), sku_display_status: 122 }], logistic_info: { title: 'Package delivered', time: segDia('2026-09-21') } },
             rv ? { reverse_info: { reverse_order_id: '4000000000000000344', reverse_status: 100, reverse_type: 1 } } : {}) } });
         const caso = async (conta, id, capturas) => {
-            for (const c of capturas) await TT.gravarCaptura(c[0], c[1], conta, lidoEm);
+            for (const c of capturas) await (c[0] === 'pedido' ? gravaDetalhePedidos(c[1], conta, lidoEm) : TT.gravarCaptura(c[0], c[1], conta, lidoEm));   // 'pedido': o det da 3.2 (E6)
             const v = TT.resumo(await TT.ler(conta), { hoje: '2026-09-25' }), p = v.pedidos.find(x => x.pedido_id === id), h = ABA.html(v, { hoje: '2026-09-25' });
             const b = h.slice(h.indexOf('data-k="ped:' + id + '"'), h.indexOf('</details>', h.indexOf('data-k="ped:' + id + '"')));
             return { v, p, ls: contaTela(h, id), b };
@@ -1212,11 +1252,12 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
     }
 
     {   // #35: pedido cancelado com R$ 8,50 de frete que ficou + pedido ok de lucro R$ 37,00 (custo R$ 30, imposto 6%).
+        // (3.3.0, E7: os ids da tela têm 5 a 25 dígitos; id curto = "tela mudou" e nada é gravado — por isso os ids de linha/extrato longos.)
         const C35 = '7000000035', sku35 = '1730000000000000935', a35 = v => ({ amount: v });
-        const l35 = (id, sd, earning, fees, ship, settle, dia) => ({ trade_order_id: id, statement_detail_id: sd, statement_id: '9035', placed_time: msDia(dia), settlement_status: 2, settlement_time: msDia('2026-09-24'),
+        const l35 = (id, sd, earning, fees, ship, settle, dia) => ({ trade_order_id: id, statement_detail_id: sd, statement_id: '8800009035', placed_time: msDia(dia), settlement_status: 2, settlement_time: msDia('2026-09-24'),
             earning_amount: a35(earning), fees: a35(fees), shipping_amount: a35(ship), settlement_amount: a35(settle), sku_records: [{ sku_id: sku35, quantity: 1, product_name: 'Produto 35', earning_amount: a35(earning) }] });
-        await TT.gravarCaptura('pedidos_fin', { code: 0, data: { order_records: [l35('577000000000003501', '3501', '0.00', '0.00', '-8.50', '-8.50', '2026-09-20'), l35('577000000000003502', '3502', '100.00', '-22.00', '-5.00', '73.00', '2026-09-21')] } }, C35, lidoEm);
-        await TT.gravarCaptura('pedido', { code: 0, data: { main_order: { main_order_id: '577000000000003501', main_order_create_time: segDia('2026-09-20'),
+        await TT.gravarCaptura('pedidos_fin', { code: 0, data: { order_records: [l35('577000000000003501', '7700000000003501', '0.00', '0.00', '-8.50', '-8.50', '2026-09-20'), l35('577000000000003502', '7700000000003502', '100.00', '-22.00', '-5.00', '73.00', '2026-09-21')] } }, C35, lidoEm);
+        await gravaDetalhePedidos({ code: 0, data: { main_order: { main_order_id: '577000000000003501', main_order_create_time: segDia('2026-09-20'),
             payment_info: { main_order_origin_sale_price: fp(5000) }, skus: [{ seller_sku_name: 'CAMISA-35', sku_id: sku35, quantity: 1, total_price: fp(5000), sku_display_status: 140 }] } } }, C35, lidoEm);
         banco['c|sku|CAMISA-35'] = { custo: 30 };
         const v35 = TT.resumo(await TT.ler(C35), { hoje: '2026-09-25' }), h35 = ABA.html(v35, { hoje: '2026-09-25' });
@@ -1242,7 +1283,7 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         const Ca = '7000000135', Cb = '7000000235', sk = '1730000000000000935';
         const detC = (id, dia, st) => ({ code: 0, data: { main_order: { main_order_id: id, main_order_create_time: segDia(dia), payment_info: { main_order_origin_sale_price: fp(10000) },
             skus: [{ seller_sku_name: 'CAMISA-35B', sku_id: sk, quantity: 1, product_name: 'Camisa 35B', total_price: fp(10000), sku_display_status: st }] } } });
-        await TT.gravarCaptura('pedido', detC('577000000000013501', '2026-09-20', 140), Ca, lidoEm);
+        await gravaDetalhePedidos(detC('577000000000013501', '2026-09-20', 140), Ca, lidoEm);
         banco['c|sku|CAMISA-35B'] = { custo: 30 };
         const va = TT.resumo(await TT.ler(Ca), { hoje: '2026-09-25' }), ha = ABA.html(va, { hoje: '2026-09-25' }), pa = va.pedidos[0], la = contaTela(ha, pa.pedido_id);
         const kpiA = (/<div class="l">Lucro 30 dias<\/div><div class="v">([^<]*)<\/div><div class="s">([^<]*)</.exec(ha) || []), manA = (/<p class="manchete">.*?<b>([^<]*)<\/b>/.exec(ha) || [])[1];
@@ -1254,8 +1295,8 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
             && va.produtos.length === 1 && va.produtos[0].pedidos === 0 && va.produtos[0].pendentes === 1 && prodA === 'não lido',
             'cancelado visto só em Pedidos, sem Financeiro (#35, revisão 2): KPI "—", manchete "Pedidos do TikTok lidos.", sem "estimado" nem prejuízo; o pedido "cancelado · não lido" e o produto "não lido" (nunca "sem custo": o custo existe)');
         // O mesmo cancelado + um pedido ok lido na lista do Financeiro (lucro R$ 37,00, imposto 6%): KPI = Σ Produtos = R$ 37,00 (antes R$ 19,00, margem 19%).
-        await TT.gravarCaptura('pedido', detC('577000000000013502', '2026-09-20', 140), Cb, lidoEm);
-        await TT.gravarCaptura('pedidos_fin', { code: 0, data: { order_records: [{ trade_order_id: '577000000000013503', statement_detail_id: '13503', statement_id: '9135', placed_time: msDia('2026-09-21'),
+        await gravaDetalhePedidos(detC('577000000000013502', '2026-09-20', 140), Cb, lidoEm);
+        await TT.gravarCaptura('pedidos_fin', { code: 0, data: { order_records: [{ trade_order_id: '577000000000013503', statement_detail_id: '7700000000013503', statement_id: '8800009135', placed_time: msDia('2026-09-21'),
             settlement_status: 2, settlement_time: msDia('2026-09-24'), earning_amount: { amount: '100.00' }, fees: { amount: '-22.00' }, shipping_amount: { amount: '-5.00' }, settlement_amount: { amount: '73.00' },
             sku_records: [{ sku_id: sk, quantity: 1, product_name: 'Camisa 35B', earning_amount: { amount: '100.00' } }] }] } }, Cb, lidoEm);
         const vb = TT.resumo(await TT.ler(Cb), { hoje: '2026-09-25' }), hb = ABA.html(vb, { hoje: '2026-09-25' });
@@ -1293,7 +1334,7 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         const l39 = (sdid, stmt, earning, fees, ship, settle, st) => ({ trade_order_id: id39, statement_detail_id: sdid, statement_id: stmt, placed_time: msDia('2026-09-10'), delivery_time: msDia('2026-09-12'),
             settlement_status: st, settlement_time: st === 2 ? msDia('2026-09-19') : undefined, estimate_settle_time: msDia(st === 2 ? '2026-09-19' : '2026-09-30'), earning_amount: a39(earning), fees: a39(fees),
             shipping_amount: a39(ship), settlement_amount: a39(settle), sku_records: [{ sku_id: '1730000000000003901', quantity: 1, product_name: 'Produto 39', earning_amount: a39(earning) }] });
-        await TT.gravarCaptura('pedidos_fin', { code: 0, data: { order_records: [l39('3901', '391', 10000, -2200, -500, 7300, 2), l39('3902', '392', -3000, 0, 0, -3000, 1)] } }, C39, lidoEm);
+        await TT.gravarCaptura('pedidos_fin', { code: 0, data: { order_records: [l39('7700000000003901', '8800000391', 10000, -2200, -500, 7300, 2), l39('7700000000003902', '8800000392', -3000, 0, 0, -3000, 1)] } }, C39, lidoEm);
         const v39 = TT.resumo(await TT.ler(C39), { hoje: '2026-09-25' }), h39 = ABA.html(v39, { hoje: '2026-09-25' }), rec39 = (/<p class="rs">Recebido:.*?<\/p>/.exec(h39) || [''])[0].replace(/<[^>]+>/g, '');
         ok(v39.conciliacao.diferenca === 0 && v39.conciliacao.recebido === 73 && v39.conciliacao.a_liberar === -30 && v39.conciliacao.esperado === 43 && !/diferença do esperado/.test(h39)
             && rec39 === 'Recebido: R$ 73,00 · a liberar: −R$ 30,00' && JSON.stringify(v39.repasse.linha_do_tempo) === '[{"dia":"2026-09-30","valor":-30}]' && /Previsto: 30\/09 −R\$ 30,00</.test(h39),

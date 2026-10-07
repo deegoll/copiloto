@@ -360,6 +360,8 @@
         const fr = ((d.conc && d.conc.pagoAMais) || []).filter(p => p && p.diferenca > 0);
         const frIt = fr.map(p => Object.assign({ pedido: p.pedido, itemId: p.itemId, data: p.data, valor: p.cobrado, cobrado: p.cobrado, motivo: F.FRETE_CONFERIR },
             p.pedidoFrete ? { pedidoFrete: p.pedidoFrete } : {}));
+        // A contagem vem do porItem (sem o corte de 200 da lista pagoAMais), como o P.freteCobrado: acima de 200 a tela não diz 200 e a aba Frete 290.
+        const pi = d.conc && d.conc.porItem, frN = pi ? Object.keys(pi).reduce((t, k) => t + ((pi[k] && pi[k].n) || 0) + ((pi[k] && pi[k].nt) || 0), 0) : frIt.length;
         // v3.1: "para conferir" gravado pela versão anterior pode ter a tarifa de devolução: ela nunca entra no que dá para recuperar.
         // v3.3: dúvida (pode ser legítima: 1 cobrança por pagamento/envio, frete de venda cancelada já despachada) fica só no "para conferir".
         // 3.3.0 (trava do frete): o frete fora da curva também (o guardado antes da trava vem sem a dúvida: sai pela regra).
@@ -380,7 +382,7 @@
         add('devolucao', 'Tarifa de devolução para questionar', 'Tarifa de devolução × pós-venda · últimos 30 dias', dv.filter(x => x.cor === 'verde' && x.recuperar > 0).map(dvIt));
         const am = dv.filter(x => x.cor === 'amarelo' && x.recuperar > 0).map(dvIt);
         return { total: r2(parcelas.reduce((s, p) => s + p.valor, 0)), parcelas, devConferir: { valor: r2(am.reduce((s, x) => s + x.valor, 0)), itens: am },
-            freteConferir: { n: frIt.length, itens: frIt }, fullConferir: { n: fuIt.length, itens: fuIt } };
+            freteConferir: { n: Math.max(frN, frIt.length), itens: frIt }, fullConferir: { n: fuIt.length, itens: fuIt } };
     };
     /** v3.2: frete:<conta>:hist × posvenda:<conta> → SHC.devolucoesContestar (tarifas de devolução dos últimos 30 dias) | null (frete de devoluções não lido). */
     F.devolucoesDe = (fh, pv) => (fh && fh.devolucoes && Array.isArray(fh.devolucoes.lista) && SHC.devolucoesContestar
@@ -604,7 +606,12 @@
         return { ts: Date.now(), total: (cands || []).length, itens: itens.sort((a, b) => b.diferenca - a.diferenca), batem, semDetalhe, faltam, dets };
     };
     /** Lista para conferir (F.conferir, da tela ou do fundo) + as tarifas provadas (prova:<conta>). A regra 'tarifa' antiga (preço de hoje) sai. */
-    F.juntaConferir = (itens, prova) => (itens || []).filter(x => x && x.regra !== 'tarifa').concat((prova && prova.itens) || []).sort((a, b) => (b.diferenca || 0) - (a.diferenca || 0));
+    // 3.3.1 (C1 na 3.3.0, achado do teste "cada centavo"): a tarifa provada entra pela mesma regra "1 vez por cobrança" do F.recuperar — sem ela,
+    // a repetida e a tarifa da mesma cobrança somavam no "para conferir" (R$ 24,00 de R$ 20,00 cobrados) e cada uma tinha o seu chamado.
+    F.juntaConferir = (itens, prova) => umaVezPorCobranca((itens || []).filter(x => x && x.regra !== 'tarifa').concat((prova && prova.itens) || []),
+        x => x.pedido + '|' + SHC.tipoCustoFechamento(x.cobranca) + '|' + x.itemId,
+        (k, xs) => (xs.some(x => x.regra !== 'repetida') ? Math.max(...xs.filter(x => x.regra !== 'repetida').map(x => x.valor)) : null))
+        .sort((a, b) => (b.diferenca || 0) - (a.diferenca || 0));
     /** Frase do andamento da conferência das tarifas (seção "Quanto dá para recuperar"). '' = nada conferido ainda. */
     F.fraseProva = function (prova, provando) {
         if (provando) return 'Conferindo a tarifa de ' + SHC.qtd(provando, 'venda', 'vendas') + ' no detalhe de cada venda do ML…';
@@ -938,8 +945,8 @@
         const fq = rec && rec.freteConferir && rec.freteConferir.itens && rec.freteConferir.itens.length ? rec.freteConferir : null;
         const itFq = x => `<li><span><b>Pedido #${esc(x.pedido)} · ${t(x.itemId)}</b><small>frete cobrado ${esc(SHC.moeda(x.cobrado))}${x.data ? ' · ' + esc(dataBR(x.data).slice(0, 5)) : ''}</small></span><b class="num">${esc(SHC.moeda(x.cobrado))}</b>`
             + `<span class="acoes"><a class="lnk" href="${esc(F.URL.cobranca(x.pedidoFrete || x.pedido))}" target="_blank" rel="noopener">Conferir no ML</a></span></li>`;
-        const blocoFq = () => (fq ? `<div class="parc freteconf"><div class="pc-cab"><b><span class="pt at"></span>Frete: para conferir <small>fora do total</small></b><b class="num">${esc(SHC.qtd(fq.itens.length, 'pedido', 'pedidos'))}</b></div>`
-            + `<span class="mini">${esc(F.FRETE_CONFERIR)}</span>`
+        const blocoFq = () => (fq ? `<div class="parc freteconf"><div class="pc-cab"><b><span class="pt at"></span>Frete: para conferir <small>fora do total</small></b><b class="num">${esc(SHC.qtd(fq.n || fq.itens.length, 'pedido', 'pedidos'))}</b></div>`
+            + `<span class="mini">${esc(F.FRETE_CONFERIR)}${fq.n > fq.itens.length ? esc(' Na lista, os ' + fq.itens.length + ' de maior diferença.') : ''}</span>`
             + `<div data-vm-box><ul class="rec-it">${fq.itens.slice(0, 5).map(itFq).join('')}</ul>${fq.itens.length > 5 ? `<ul class="rec-it vm-x">${fq.itens.slice(5).map(itFq).join('')}</ul>` : ''}${F.vmBotao(fq.itens.length, 5)}</div></div>` : '');
         // 3.3.0: a remessa do Full com diferença, à parte e fora do total (F.FULL_CONFERIR), com o link da remessa no ML.
         const fu = rec && rec.fullConferir && rec.fullConferir.itens && rec.fullConferir.itens.length ? rec.fullConferir : null;

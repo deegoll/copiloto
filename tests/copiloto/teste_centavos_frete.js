@@ -18,6 +18,11 @@
 //   2) SHC.freteHistorico: "Comprador paga" com a taxa operacional não lida soma R$ 0 por pedido (custoOperacional R$ 0,00 inventado).
 //   3) (corrigida; caso J) fundo/03-faturamento.js gravarFreteHist: estorno parcial lido num mês depois da tarifa baixava o cobrado mas não o
 //      cheio, e a diferença aparecia como "Desconto do ML no frete" (o mesmo estorno lido junto com a tarifa, em SHC.freteDasCobrancas, baixa os dois).
+//   4) (corrigida, 3.3.1) acima do corte de 200, SHC.fech.recuperar.freteConferir conta só a lista guardada (200), e o cartão da aba Frete conta
+//      os 290 (porItem): o comentário do recuperar diz "a mesma contagem do cartão". O teste do corte (D) prova só o que a lista guarda.
+// 3.3.0 (trava do frete, 06/10): o frete de envio não é contestável. P.freteCobrado põe tudo em "para conferir" (contestar 0), SHC.fech.recuperar
+//   não tem parcela de frete (vai para freteConferir, fora do total, com o valor cobrado), F.chamadoFrete, P.chamadoFreteLote e P.textoChamado
+//   devolvem ''. As asserções de C, D e E seguem essa regra; os centavos (somas, totais iguais entre cartão, Geral e anúncio) continuam.
 // Rodar: node tests/copiloto/teste_centavos_frete.js
 'use strict';
 require('./relogio').fixar();
@@ -185,16 +190,20 @@ console.log('C. Conciliação feita à mão (SHC.conciliaFrete) e as telas que s
     ok(c.janela.de === '2026-08-27' && c.janela.ate === HOJE, 'janela dos 30 dias: 27/08 a 25/09 (hoje incluso)');
 
     const fc = P.freteCobrado(c, HOJE, 5);
-    ok(fc.total === 87.35 && fc.n === 5 && fc.contestar.v === c.totalAMais && fc.contestar.n === 2 && fc.conferir.v === c.talvez.total && fc.conferir.n === 3
-        && fc.de === '2026-08-27' && fc.ate === HOJE, 'cartão "Frete cobrado a mais": 87,35 = confirmado 16,81 + para conferir 70,54, em 5 pedidos, na mesma janela');
-    ok(JSON.stringify(fc.produtos.map(y => [y.id, y.tot, y.v, y.vt])) === JSON.stringify([[A, 77.36, 12.37, 64.99], [B, 5.55, 0, 5.55], [C, 4.44, 4.44, 0]])
-        && fc.resto === null && cent(fc.total) === somaC(fc.produtos.map(y => y.tot)), 'por anúncio: 77,36 + 5,55 + 4,44 = 87,35 (a barra fecha o total)');
+    // 3.3.0 (trava do frete): nada é "confirmado"; os 16,81 que a conciliação marcou como contestáveis somam no "para conferir".
+    ok(fc.total === 87.35 && fc.n === 5 && fc.contestar.v === 0 && fc.contestar.n === 0 && fc.conferir.v === 87.35 && fc.conferir.n === 5
+        && cent(fc.conferir.v) === cent(c.totalAMais) + cent(c.talvez.total) && fc.de === '2026-08-27' && fc.ate === HOJE,
+        'cartão "Frete": 87,35 = 16,81 (contestáveis da conciliação) + 70,54, em 5 pedidos, tudo "para conferir" (contestar 0), na mesma janela');
+    ok(JSON.stringify(fc.produtos.map(y => [y.id, y.tot, y.v, y.vt, y.n, y.nt])) === JSON.stringify([[A, 77.36, 0, 77.36, 0, 3], [B, 5.55, 0, 5.55, 0, 1], [C, 4.44, 0, 4.44, 0, 1]])
+        && fc.resto === null && cent(fc.total) === somaC(fc.produtos.map(y => y.tot)) && fc.produtos.every(y => y.pctC === 0 && !y.baixo && y.porEnvio === null),
+        'por anúncio (3.3.0, trava do frete: tudo âmbar): 77,36 + 5,55 + 4,44 = 87,35 (a barra fecha o total)');
     const fc2 = P.freteCobrado(c, HOJE, 1);
     ok(fc2.resto && fc2.resto.v === 9.99 && fc2.resto.pedidos === 2 && fc2.resto.anuncios === 2 && cent(fc2.total) === cent(fc2.produtos[0].tot) + cent(fc2.resto.v),
         'com 1 anúncio por linha: 77,36 + "9,99 em 2 pedidos nos outros anúncios" = 87,35');
     const fcc = P.freteConta({ conciliacao: c, vendasLidas: true });
-    ok(fcc.total === 87.35 && fcc.cor === 'ruim' && fcc.resumo === '8 pedidos conciliados de 11 · 2 sem conciliar · 5 pedidos cobrados a mais no frete (R$ 87,35, 3 para conferir)',
-        'Geral: o MESMO R$ 87,35 do cartão, com os 3 para conferir');
+    // 3.3.0 (trava do frete): sem vermelho e sem "cobrado a mais"; "Diferença".
+    ok(fcc.total === 87.35 && fcc.total === fc.total && fcc.cor === 'atencao' && fcc.resumo === '8 pedidos conciliados de 11 · 2 sem conciliar · 5 fretes para conferir (R$ 87,35 de diferença)'
+        && !/a mais/.test(fcc.resumo), 'Geral: o MESMO R$ 87,35 do cartão, os 5 "para conferir" (3.3.0: atenção, nunca vermelho nem "a mais")');
     const cf = P.concFrete(c);
     ok(cf.titulo === 'Pedidos conciliados: 8 de 11 dos últimos 30 dias · faltam 2' && cf.pct === 73 && cf.motivos.length === 5, 'conciliação: 8 de 11, faltam 2, e um motivo para cada pedaço que ficou fora');
     const lixo = SHC.conciliaFrete([frete('2000000501', A, '2026-09-10', undefined), frete('2000000502', A, '2026-09-10', NaN), frete('2000000503', A, '2026-09-10', null),
@@ -209,23 +218,26 @@ console.log('C. Conciliação feita à mão (SHC.conciliaFrete) e as telas que s
 
     const conferir = [
         { regra: 'frete', pedido: '9100000310', itemId: C, data: '2026-09-07', valor: 34.44, esperado: 30.5, diferenca: 3.94, cobranca: 'Tarifa do Mercado Envios (Por sua conta)', estimado: 'mediana' },
-        { regra: 'frete', pedido: '2000000399', itemId: C, data: '2026-09-08', valor: 50, esperado: 30.5, diferenca: 19.5, cobranca: 'Tarifa do Mercado Envios (Por sua conta)', estimado: 'mediana' }];
-    const rec = F.recuperar({ conc: c, conferir }), pf = rec.parcelas.find(p => p.id === 'frete'), pc = rec.parcelas.find(p => p.id === 'cobrancas');
-    ok(pf.valor === c.totalAMais && pf.itens.length === 2 && pf.itens.every(x => !ach(Number(x.pedido.slice(-2))).talvezUnidades),
-        'Dá para recuperar › Frete cobrado a mais (confirmado) = totalAMais (16,81), sem os "para conferir"');
-    ok(pc.valor === 19.5 && pc.itens.length === 1 && rec.total === 36.31 && cent(rec.total) === cent(pf.valor) + cent(pc.valor),
-        'o frete #9100000310 no "para conferir" do Fechamento NÃO conta de novo (é o pedidoFrete do contestável): total 16,81 + 19,50 = 36,31');
-    const txt1 = F.chamadoFrete(pf.itens[0], 'Bomba teste'), txt10 = F.chamadoFrete(pf.itens[1], '');
-    ok(/- Valor cobrado: R\$ 52,37\n- Valor devido: R\$ 40,00\n- Diferença: R\$ 12,37\n/.test(txt1) && /estorno da diferença de R\$ 12,37 na nossa conta/.test(txt1)
-        && /A tarifa de devolução deste pedido \(R\$ 23,90\) não está nesta conta/.test(txt1), 'chamado do pedido: cobrado 52,37 − devido 40,00 = 12,37, e a devolução fica fora da conta');
-    ok(/– Pedido: #2000000310 – Frete: #9100000310/.test(txt10) && /- Diferença: R\$ 4,44\n/.test(txt10), 'chamado do frete com outro número cita a venda E o frete, com os 4,44');
-    const lote2 = P.chamadoFreteLote(pa, () => 'Produto');
-    ok(lote2.split('\n\n----------\n\n').length === 2 && /Diferença: R\$ 12,37/.test(lote2) && /Diferença: R\$ 4,44/.test(lote2) && !/R\$ 40,00\n- Diferença: R\$ 40,00/.test(lote2) && !/24,99|5,55/.test(lote2),
-        'texto em lote: só os 2 contestáveis (16,81), nenhum "para conferir"');
+        { regra: 'frete', pedido: '2000000399', itemId: C, data: '2026-09-08', valor: 50, esperado: 30.5, diferenca: 19.5, cobranca: 'Tarifa do Mercado Envios (Por sua conta)', estimado: 'mediana' },
+        { regra: 'repetida', pedido: '2000000398', itemId: C, data: '2026-09-08', valor: 13.3, esperado: 6.65, diferenca: 6.65, cobranca: 'Tarifa de envio extra ou intermunicipal (Por sua conta)' }];
+    // 3.3.0 (trava do frete): o "Dá para recuperar" não tem parcela de frete; o frete vai para freteConferir (fora do total) com o valor COBRADO.
+    const rec = F.recuperar({ conc: c, conferir }), fq = rec.freteConferir;
+    ok(!rec.parcelas.some(p => p.id === 'frete') && fq.n === 5 && fq.itens.length === 5
+        && JSON.stringify(fq.itens.map(x => [x.pedido, x.cobrado, x.valor])) === JSON.stringify(pa.map(p => [p.pedido, p.cobrado, p.cobrado]))
+        && somaC(fq.itens.map(x => x.cobrado)) === 25735 && fq.itens.every(x => x.motivo === F.FRETE_CONFERIR && emCentavos(x.cobrado))
+        && fq.itens.find(x => x.pedido === V(10)).pedidoFrete === '9100000310'
+        && cent(fc.total) === fq.itens.reduce((t, x) => { const p = pa.find(y => y.pedido === x.pedido); return t + cent(x.cobrado) - cent(p.esperado); }, 0),
+        'Dá para recuperar (3.3.0, trava do frete): sem parcela de frete; freteConferir = os 5 pedidos do cartão com o cobrado (52,37 + 34,44 + 80,00 + 64,99 + 25,55 = 257,35), e Σ (cobrado − esperado) = 87,35 do cartão');
+    ok(!rec.parcelas.some(p => p.id === 'cobrancas') && rec.total === 0 && cent(rec.total) === somaC(rec.parcelas.map(p => p.valor)) && !/NaN|undefined/.test(JSON.stringify(rec)),
+        'frete fora da curva (regra "frete") e frete repetido no "para conferir" do Fechamento também não entram (3.3.0, trava do frete): total 0,00, nunca NaN');
+    // 3.3.0 (trava do frete): nenhum texto de chamado de frete, nem de 1 pedido nem em lote.
+    ok(fq.itens.every(x => F.chamadoFrete(x, 'Bomba teste') === '') && pa.every(p => F.chamadoFrete(p, '') === ''), 'chamado do frete (3.3.0, trava do frete): nenhum texto, em nenhum pedido');
+    ok(P.chamadoFreteLote(pa, () => 'Produto') === '', 'texto em lote (3.3.0, trava do frete): vazio, nada para copiar');
     const linhas = P.contaFretePedido(ach(1)), val = cls => linhas.filter(l => l.cls === cls).map(l => l.val);
     ok(JSON.stringify(linhas.map(l => l.val)) === JSON.stringify(['−R$ 58,02', '+R$ 5,65', 'R$ 52,37', 'R$ 40,00', '+R$ 12,37', 'R$ 23,90'])
-        && val('tot')[0] === SHC.moeda(ach(1).cobrado) && val('mais')[0] === '+' + SHC.moeda(ach(1).diferenca),
-        'conta linha a linha: −58,02 + 5,65 = 52,37 cobrado; 40,00 do anúncio; +12,37 a mais; devolução 23,90 à parte');
+        && val('tot')[0] === SHC.moeda(ach(1).cobrado) && val('mais')[0] === '+' + SHC.moeda(ach(1).diferenca)
+        && /^Diferença/.test(linhas.find(l => l.cls === 'mais').rot) && !linhas.some(l => /a mais/i.test(l.rot)),
+        'conta linha a linha: −58,02 + 5,65 = 52,37 cobrado; 40,00 do anúncio; +12,37 de "Diferença" (3.3.0: nunca "A mais"); devolução 23,90 à parte');
 }
 
 console.log('D. Conciliação em casos gerados (semente fixa): oráculo em centavos inteiros + invariantes');
@@ -308,25 +320,22 @@ console.log('D. Conciliação em casos gerados (semente fixa): oráculo em centa
         const iT = pa.findIndex(p => p.talvezUnidades);
         Ord.conta(iT < 0 || !pa.slice(iT).some(p => !p.talvezUnidades), { s, ordem: pa.map(p => p.talvezUnidades) });
         // As telas: cartão, Geral e "Dá para recuperar" com os mesmos centavos.
+        // 3.3.0 (trava do frete): contestar sempre { v: 0, n: 0 }; o "para conferir" leva tudo (totalAMais + talvez.total).
         const fc = P.freteCobrado(cc, HOJE, 3);
-        Tela.conta(fc && fc.contestar.v === cc.totalAMais && fc.conferir.v === cc.talvez.total && cent(fc.total) === cent(cc.totalAMais) + cent(cc.talvez.total)
-            && fc.n === totalN && fc.contestar.n + fc.conferir.n === fc.n && fc.conferir.n === cc.talvez.pedidos
+        Tela.conta(fc && fc.contestar.v === 0 && fc.contestar.n === 0 && fc.conferir.v === fc.total && cent(fc.total) === cent(cc.totalAMais) + cent(cc.talvez.total)
+            && fc.n === totalN && fc.conferir.n === fc.n && fc.produtos.every(y => y.v === 0 && y.n === 0)
             && cent(fc.total) === somaC(fc.produtos.map(y => y.tot)) + (fc.resto ? cent(fc.resto.v) : 0)
             && fc.n === fc.produtos.reduce((t, y) => t + y.n + y.nt, 0) + (fc.resto ? fc.resto.pedidos : 0)
             && fc.todos.every(y => cent(y.tot) === cent(y.v) + cent(y.vt)), { s, fc: fc && { total: fc.total, n: fc.n, contestar: fc.contestar, conferir: fc.conferir, resto: fc.resto } });
         const geral = P.freteConta({ conciliacao: cc, vendasLidas: true });
         Tela.conta(geral.total === fc.total && (fc.n === 0 ? !/cobrados? a mais/.test(geral.resumo) : geral.resumo.indexOf('(' + reais(cent(fc.total))) > 0), { s, resumo: geral.resumo, total: fc.total });
-        {   // também acima do corte de 200: valor = totalAMais e contagem = Σ porItem.n (antes do corte); itens = os da lista (os chamados)
-            const rec = F.recuperar({ conc: cc }), pf = rec.parcelas.find(p => p.id === 'frete'), nL = pa.filter(p => !p.talvezUnidades).length;
-            const nC = Object.keys(cc.porItem).reduce((t, k) => t + cc.porItem[k].n, 0);
-            Rec.conta(cc.totalAMais > 0 ? (pf && pf.valor === cc.totalAMais && pf.n === nC && pf.itens.length === nL && rec.total === cc.totalAMais
-                && (nC > nL ? pf.resto.n === nC - nL && cent(pf.resto.valor) === cent(cc.totalAMais) - somaC(pf.itens.map(x => x.valor)) : !pf.resto)) : (!pf && rec.total === 0),
-                { s, totalAMais: cc.totalAMais, rec: rec.total, n: pf && pf.n, nC });
-            if (pf) pf.itens.slice(0, 5).forEach(x => {
-                const t = F.chamadoFrete(x, '');
-                Txt.conta(t.indexOf('- Valor cobrado: ' + reais(cent(x.cobrado)) + '\n- Valor devido: ' + reais(cent(x.esperado)) + '\n- Diferença: ' + reais(cent(x.valor)) + '\n') > 0
-                    && t.indexOf('estorno da diferença de ' + reais(cent(x.valor)) + ' na nossa conta.') > 0, { s, x, texto: t.slice(0, 300) });
-            });
+        {   // 3.3.0 (trava do frete): "Dá para recuperar" sem parcela de frete; o frete vai para freteConferir (fora do total) com o valor
+            // COBRADO de cada pedido da lista (os mesmos do cartão; acima do corte de 200, a lista guardada) e nenhum texto de chamado.
+            const rec = F.recuperar({ conc: cc }), fq = rec.freteConferir, lst = pa.filter(p => p.diferenca > 0);
+            Rec.conta(!rec.parcelas.some(p => p.id === 'frete') && rec.total === 0 && fq.n === fc.n && fq.itens.length === lst.length
+                && fq.itens.every((x, k) => x.pedido === lst[k].pedido && x.cobrado === lst[k].cobrado && x.valor === lst[k].cobrado && emCentavos(x.cobrado) && x.motivo === F.FRETE_CONFERIR)
+                && (cortado || fq.n === lst.length), { s, totalAMais: cc.totalAMais, rec: rec.total, n: fq.n, cartao: fc.n, cortado });
+            fq.itens.slice(0, 5).forEach(x => { Txt.conta(F.chamadoFrete(x, '') === '', { s, x }); });
         }
         pa.slice(0, 5).forEach(p => {
             const l = P.contaFretePedido(p), tot = l.find(x => x.cls === 'tot'), mais = l.find(x => x.cls === 'mais');
@@ -365,33 +374,31 @@ console.log('D. Conciliação em casos gerados (semente fixa): oráculo em centa
     ok(cc.pagoAMais.length === 200 && cc.pagoAMais.every(p => !p.talvezUnidades) && cc.numsFrete.length === 290 && cent(cc.totalAMais) === esperado && cent(cc.talvez.total) === espT
         && g.n === 260 && g.nt === 30 && cent(g.v) === esperado && cent(g.vt) === espT,
         `corte de 200: a lista guarda os 200 maiores contestáveis, mas totalAMais (${SHC.moeda(cc.totalAMais)}) e porItem somam os 260 + 30`);
-    ok(fc.contestar.v === cc.totalAMais && fc.contestar.n === 260 && fc.conferir.n === 30 && cent(fc.total) === esperado + espT && fc.n === 290,
-        'cartão "Frete cobrado a mais" usa o porItem (sem o corte): confirmado = totalAMais, 290 pedidos');
+    ok(fc.contestar.v === 0 && fc.contestar.n === 0 && fc.conferir.n === 290 && cent(fc.conferir.v) === esperado + espT && cent(fc.total) === esperado + espT && fc.n === 290,
+        'cartão "Frete" usa o porItem (sem o corte): 290 pedidos, todos "para conferir" (3.3.0, trava do frete: contestar 0)');
     confere({ fretes: fs }, cc, 'corte', false);   // o caso do corte entra nas mesmas conferências abaixo
-    // "Dá para recuperar" (Fechamento e Conciliação) = a aba Frete: 260 pedidos e totalAMais (antes: só os 200 da lista). A tela fecha:
-    // 200 itens + "Mais 60 pedidos" = a parcela = o total do topo, "em 260 itens".
-    const rc = F.recuperar({ conc: cc }), pfc = rc.parcelas.find(p => p.id === 'frete'), hc = F.htmlRecuperar(rc, () => 'Produto', true);
-    const numsTela = [...hc.matchAll(/<b class="num">([^<]*)<\/b>/g)].map(m => cent(SHC.num(m[1].replace(/[R$\s.]/g, '').replace(',', '.'))));
-    ok(rc.total === cc.totalAMais && pfc.n === 260 && pfc.itens.length === 200 && pfc.resto.n === 60 && hc.indexOf('<b>' + reais(esperado) + '</b> em 260 itens') > 0
-        && hc.indexOf('Mais 60 pedidos') > 0 && numsTela[0] === esperado && numsTela.slice(1).reduce((t, v) => t + v, 0) === esperado,
-        `"Dá para recuperar" acima do corte: ${SHC.moeda(rc.total)} em 260 pedidos (= totalAMais), e na tela 200 itens + "Mais 60 pedidos" fecham com a parcela`);
-    // Frete confirmado FORA da lista (posição 250) também no "para conferir" do Fechamento (regra 'frete'): não conta 2 vezes; o de um
-    // "para conferir" da conciliação (posição 270) continua no "para conferir".
+    // 3.3.0 (trava do frete): o "Dá para recuperar" acima do corte não tem frete (total 0); a tela mostra o frete à parte, fora do total,
+    // com o valor cobrado de cada pedido da lista guardada (200) e sem botão de chamado.
+    const rc = F.recuperar({ conc: cc }), fqc = rc.freteConferir, hc = F.htmlRecuperar(rc, () => 'Produto', true);
+    const numsTela = [...hc.matchAll(/<b class="num">R\$ ([^<]*)<\/b>/g)].map(m => cent(SHC.num(m[1].replace(/\./g, '').replace(',', '.'))));
+    ok(rc.total === 0 && !rc.parcelas.length && fqc.n === 290 && fqc.n === fc.n && fqc.itens.length === 200 && hc.indexOf('290 pedidos') > 0 && hc.indexOf('Frete: para conferir') > 0 && hc.indexOf('Copiar texto do chamado') < 0
+        && numsTela.length === 200 && numsTela.reduce((t, v) => t + v, 0) === somaC(cc.pagoAMais.map(p => p.cobrado)),
+        `"Dá para recuperar" acima do corte (3.3.0, trava do frete): ${SHC.moeda(rc.total)}; o frete à parte conta 290 (como o cartão), a lista mostra 200 com o cobrado (${SHC.moeda(somaC(cc.pagoAMais.map(p => p.cobrado)) / 100)}), sem chamado`);
+    // Frete no "para conferir" do Fechamento (regra 'frete'), de dentro ou de fora da lista: 3.3.0 (trava do frete), nenhum entra no total.
     const cfx = (i, dif) => ({ regra: 'frete', pedido: cc.numsFrete[i], itemId: 'MLB9700000001', data: '2026-09-01', cobranca: 'Tarifa de envio', valor: 60, esperado: 60 - dif, diferenca: dif, motivo: 'm', estimado: 'mediana' });
-    const rx = F.recuperar({ conc: cc, conferir: [cfx(250, 7), cfx(270, 9)] }), pcx = rx.parcelas.find(p => p.id === 'cobrancas');
-    ok(cent(rx.total) === esperado + 900 && pcx && pcx.itens.length === 1 && pcx.itens[0].pedido === cc.numsFrete[270],
-        'frete confirmado fora da lista não entra de novo pelo "para conferir" (o "para conferir" da conciliação entra): ' + SHC.moeda(rx.total));
+    const rx = F.recuperar({ conc: cc, conferir: [cfx(250, 7), cfx(270, 9)] });
+    ok(rx.total === 0 && !rx.parcelas.length && rx.freteConferir.n === 290 && rx.freteConferir.itens.length === 200, 'frete do "para conferir" do Fechamento (regra "frete") fora do total, de dentro ou de fora da lista (3.3.0, trava do frete): ' + SHC.moeda(rx.total));
     okLote(Or, '60 casos com o mesmo número: contagens, cada diferença, quem é "para conferir", totalAMais e talvez.total = oráculo em centavos inteiros');
     okLote(Iv, 'Σ porItem.v = totalAMais, Σ porItem.vt = talvez.total, Σ n+nt = pedidos, e Σ diferença dos contestáveis = totalAMais (120 casos gerados + o do corte)');
     okLote(Lin, 'cada pedido a mais: 2 casas, diferença > 0, cobrado − esperado = diferença, cobrado = o frete lido (pelo pedidoFrete quando o número é outro)');
     okLote(Un, 'nada contado 2 vezes: cada venda e cada número de frete uma vez só, pedidoFrete nunca é a venda de outra linha, nada da venda de antes da janela');
     okLote(Ord, 'contestáveis sempre antes dos "para conferir" (o corte de 200 nunca tira um contestável antes de uma dúvida)');
     okLote(Tela, 'cartão (P.freteCobrado) e Geral (P.freteConta): contestar = totalAMais, conferir = talvez.total, Σ anúncios + resto = total, e o resumo mostra esse R$');
-    okLote(Rec, '"Dá para recuperar" (SHC.fech.recuperar) = totalAMais e a contagem de antes do corte, em cada caso (também no do corte de 200)');
-    okLote(Txt, 'textos dos chamados e a conta linha a linha mostram os mesmos centavos (cobrado, devido, diferença, estorno)');
+    okLote(Rec, '"Dá para recuperar" (SHC.fech.recuperar) sem frete (3.3.0, trava do frete): freteConferir = a lista com o cobrado, mesma contagem do cartão (abaixo do corte)');
+    okLote(Txt, 'nenhum texto de chamado de frete (3.3.0, trava do frete) e a conta linha a linha mostra os mesmos centavos (cobrado, diferença)');
 }
 
-console.log('E. Chamado do anúncio: P.pedidosAMais e a "Diferença somada" do P.textoChamado');
+console.log('E. Chamado do anúncio: P.pedidosAMais e a diferença somada (3.3.0, trava do frete: P.textoChamado sem texto)');
 {
     const item = { itemId: 'MLB9400000001', sku: 'TESTE-01', frete: 58.75 };
     const h = P.historicoFrete({ '2026-09-01': 45.35, '2026-09-19': 45.35, '2026-09-20': 58.75, '2026-09-25': 58.75 });
@@ -406,17 +413,15 @@ console.log('E. Chamado do anúncio: P.pedidosAMais e a "Diferença somada" do P
         '12 pedidos acima; fora: o de 117,50 (2 unidades?); não entram o de 45,35 (igual), o compartilhado e o de antes da subida');
     ok(peds.every(p => emCentavos(p.dif) && p.dif > 0 && cent(p.dif) === cent(p.f) - 4535) && peds.find(p => p.orderId === '3000000415').dif === 0.01,
         'cada diferença = frete − 45,35 em centavos (o de 45,36 entra com R$ 0,01, nunca 0 nem negativo)');
-    const t = P.textoChamado(item, h, vd, true, '');
-    const listados = [...t.matchAll(/#(\d+) de (\d\d\/\d\d\/\d{4}): (R\$ [\d.,]+) \((R\$ [\d.,]+) a mais\)/g)];
-    ok(listados.length === 10 && / e mais 2\./.test(t) && /Pedidos cobrados acima de R\$ 45,35 desde 20\/09\/2026 \(12\):/.test(t), 'o texto lista 10 pedidos, "e mais 2", e diz 12 no total');
-    ok(listados.every(m => { const p = peds.find(x => x.orderId === m[1]); return p && m[3] === reais(cent(p.f)) && m[4] === reais(cent(p.dif)) && m[2] === dataBr(p.d); }),
-        'cada pedido do texto: número, data, frete e "a mais" iguais à conta');
-    ok(/Diferença somada: R\$ 88,61\./.test(t) && /estorno da diferença cobrada nos pedidos acima \(R\$ 88,61\) na nossa conta\./.test(t)
-        && cent(88.61) === somaC(peds.map(p => p.dif)) && somaC(peds.slice(0, 10).map(p => p.dif)) + somaC(peds.slice(10).map(p => p.dif)) === 8861,
-        'Diferença somada = R$ 88,61 = os 10 listados (74,87) + os 2 de "e mais" (13,74); o estorno pede o mesmo valor');
-    ok(/Deixei de fora 1 pedido com frete bem maior/.test(t) && t.indexOf('117,50') < 0, 'o de 117,50 fica fora da soma e o texto avisa');
-    const sc = P.textoChamado(item, h, vd, false, '');
-    ok(/Diferença somada: R\$ 88,61\./.test(sc) && /e o estorno da diferença cobrada nos pedidos acima \(R\$ 88,61\)/.test(sc), 'pedido de revisão (sem a caixa marcada): o mesmo R$ 88,61');
+    // 3.3.0 (trava do frete): P.textoChamado não gera texto (nem contestação nem pedido de revisão); a conta dos pedidos (P.pedidosAMais)
+    // continua e é a que o "Frete do anúncio subiu" usa (seção F): os mesmos centavos que o texto somava.
+    ok(P.textoChamado(item, h, vd, true, '') === '' && P.textoChamado(item, h, vd, false, '') === '', 'chamado do anúncio (3.3.0, trava do frete): nenhum texto, com ou sem a caixa marcada');
+    ok(peds.every((p, k) => k === 0 || peds[k - 1].d <= p.d) && peds.every(p => emCentavos(p.f) && p.q === 1 && /^\d{4}-\d\d-\d\d$/.test(p.d) && p.d >= '2026-09-20'),
+        'cada pedido acima: data (a partir de 20/09, em ordem), frete e quantidade de 2 casas, como a conta (3.3.0: sem texto)');
+    ok(somaC(peds.map(p => p.dif)) === 8861 && somaC(peds.slice(0, 10).map(p => p.dif)) === 7487 && somaC(peds.slice(10).map(p => p.dif)) === 1374,
+        'diferença somada = R$ 88,61 = os 10 primeiros (74,87) + os 2 seguintes (13,74), em centavos inteiros (3.3.0: sem texto)');
+    ok(fora.length === 1 && fora[0].f === 117.5 && cent(fora[0].dif) === 11750 - 4535 && !peds.some(p => p.f === 117.5),
+        'o de 117,50 fica fora da soma (em "fora", com a diferença 72,15 à parte)');
     const comQ = P.pedidosAMais({ '3000000501': { d: '2026-09-21', f: 120.00, q: 2 }, '3000000502': { d: '2026-09-21', f: 90.70, q: 2 } }, 45.35, '2026-09-20');
     ok(comQ.peds.length === 1 && comQ.peds[0].dif === 29.3 && comQ.peds[0].orderId === '3000000501', 'com a quantidade: 120,00 − 2 × 45,35 = 29,30; 90,70 = 2 × 45,35 não é "a mais"');
     ok(P.textoChamado(item, null, {}, true, '') === '' && P.textoChamado(item, P.historicoFrete({ '2026-09-01': 45.35, '2026-09-25': 45.35 }), {}, true, '') === '',
@@ -435,26 +440,23 @@ console.log('E. Chamado do anúncio: P.pedidosAMais e a "Diferença somada" do P
             vd2[String(3100000000 + i * 100 + j)] = Object.assign({ d: dia(o), f: fv }, r() < 0.05 ? { pc: true } : {});
         }
         const it2 = { itemId: id, sku: 'SKU-' + i, frete: b1 }, h2 = fh ? P.historicoFrete(fh) : null, bb = P.baseChamado(h2, vd2, it2);
-        const t2 = P.textoChamado(it2, h2, vd2, r() < 0.5, '');
-        if (!Pd.conta(!!bb === !!t2, { i, base: bb, texto: !!t2 }) || !bb) continue;
+        const t2 = P.textoChamado(it2, h2, vd2, r() < 0.5, '');   // 3.3.0 (trava do frete): sempre ''
+        Tx.conta(t2 === '', { i, texto: t2.slice(0, 200) });
+        if (!bb) continue;
         if (bb.fonte === 'lista') pelaLista++; else pelasVendas++;
         const foraS = new Set(P.freteMensal(vd2).fora.map(p => p.orderId));
         const acima = Object.keys(vd2).filter(o => { const v = vd2[o]; return v.d && !v.pc && v.f > 0 && v.d >= bb.desde && v.f > bb.base + 0.009; });
         const ps = acima.filter(o => !foraS.has(o)).sort((a, c) => (vd2[a].d < vd2[c].d ? -1 : vd2[a].d > vd2[c].d ? 1 : 0));
         const difs = ps.map(o => cent(vd2[o].f) - cent(bb.base)), soma = difs.reduce((s, v) => s + v, 0);
-        const lst = [...t2.matchAll(/#(\d+) de (\d\d\/\d\d\/\d{4}): (R\$ [\d.,]+) \((R\$ [\d.,]+) a mais\)/g)];
         const r0 = P.pedidosAMais(vd2, bb.base, bb.desde);
         Pd.conta(emCentavos(bb.base) && JSON.stringify(r0.peds.map(p => p.orderId)) === JSON.stringify(ps) && r0.peds.every((p, k) => cent(p.dif) === difs[k] && p.dif > 0), { i, base: bb.base, ps, peds: r0.peds });
         if (ps.length) comTexto++;
         if (ps.length > 10) comMais10++;
-        Tx.conta(ps.length ? (t2.indexOf(`Diferença somada: ${reais(soma)}.`) > 0 && t2.indexOf(`nos pedidos acima (${reais(soma)}) na nossa conta.`) > 0
-            && t2.indexOf(`(${ps.length}): `) > 0 && lst.length === Math.min(10, ps.length) && lst.every((m, k) => m[1] === ps[k] && m[3] === reais(cent(vd2[ps[k]].f)) && m[4] === reais(difs[k]))
-            && (ps.length > 10 ? t2.indexOf(` e mais ${ps.length - 10}.`) > 0 : !/ e mais \d+\./.test(t2)))
-            : !/Diferença somada|a mais\)/.test(t2), { i, soma, n: ps.length, texto: t2.slice(0, 400) });
+        Tx.conta(cent(r0.peds.reduce((t, p) => r2(t + p.dif), 0)) === soma && r0.peds.length === ps.length, { i, soma, n: ps.length });   // a soma com r2 = a régua
     }
     okLote(Pd, 'P.pedidosAMais nos gerados: os mesmos pedidos e as mesmas diferenças (centavos inteiros) que a régua independente');
-    okLote(Tx, '"Diferença somada", o estorno pedido e cada "(R$ X a mais)" do texto = a conta em centavos inteiros (até 10 listados + "e mais N")');
-    ok(comTexto > 60 && comMais10 > 5 && pelaLista > 30 && pelasVendas > 10, `os gerados cobrem texto com pedidos (${comTexto}), mais de 10 (${comMais10}), régua da lista (${pelaLista}) e das vendas (${pelasVendas})`);
+    okLote(Tx, 'nenhum texto de chamado do anúncio (3.3.0, trava do frete) e a diferença somada com r2 = a conta em centavos inteiros');
+    ok(comTexto > 60 && comMais10 > 5 && pelaLista > 30 && pelasVendas > 10, `os gerados cobrem anúncio com pedidos acima (${comTexto}), mais de 10 (${comMais10}), régua da lista (${pelaLista}) e das vendas (${pelasVendas})`);
 }
 
 console.log('F. "Frete do anúncio subiu" sem contar 2 vezes o que já está em "Frete cobrado a mais" (P.freteSubidaJanela)');

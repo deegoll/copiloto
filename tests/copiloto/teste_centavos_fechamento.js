@@ -15,6 +15,10 @@
 //   5. (corrigida) F.conferirFatura no modo exato (pela fatura) aceitava R$ 0,01 de diferença como "✓ bate" (tela: ML R$ 100,01 · Copiloto R$ 100,00 ✓);
 //   6. (corrigida) F.motivoTotal só citava o resto que passa de R$ 1: total ✗ por R$ 0,50 com o motivo "Diferença nos custos (+R$ 0,00).";
 //   7. Rateio (SHC.rateioFaturas → F.htmlRateio): "✓ bate com o total da fatura" com até R$ 1,00 de diferença (partes por mês ≠ total mostrado).
+//   8. (3.3.0, em aberto — a asserção falha) F.juntaConferir junta a tarifa provada ao F.conferir sem o umaVezPorCobranca: a repetida e a
+//      tarifa da MESMA cobrança somam R$ 24,00 de R$ 20,00 cobrados no "para conferir" (o "Dá para recuperar" fica certo, R$ 14,00);
+//   9. (3.3.0, em aberto — as 2 asserções do concTopo falham) a Conciliação mostra só 1 linha "Fora do total: N remessas do Full…"; o itFull
+//      (lista com o prazo e o "Reclamar no ML") ficou definido e sem uso no painel-lateral.js.
 // Rodar: node tests/copiloto/teste_centavos_fechamento.js
 'use strict';
 require('./relogio').fixar();
@@ -373,12 +377,15 @@ console.log('F.recuperar: "Quanto dá para recuperar" = Σ das parcelas = Σ dos
 function basesRecuperar(rnd) {
     let ped = 3000000000 + inteiro(rnd, 0, 1000000);
     const prox = () => String(++ped);
-    const conc = { pagoAMais: [] }, conferir = [], inconformes = [], dev = { itens: [] }, esp = { frete: 0, cobrancas: 0, estorno: 0, devolucao: 0, amarelo: 0 }, n = { frete: 0, cobrancas: 0, estorno: 0, devolucao: 0 };
+    const conc = { pagoAMais: [] }, conferir = [], inconformes = [], dev = { itens: [] }, esp = { cobrancas: 0, estorno: 0, devolucao: 0, amarelo: 0 }, n = { cobrancas: 0, estorno: 0, devolucao: 0 };
     let nFull = 0;   // remessas do Full com diferença: "para conferir", fora do total e sem valor (a cobrança é coleta e/ou penalidade)
+    // 3.3.0 (trava do frete): o frete cobrado acima da régua (com ou sem a dúvida de 2+ unidades) fica em freteConferir, fora do total,
+    // com o valor COBRADO (nunca a diferença): fecha à parte em Σ cobrado.
+    const frete = { n: 0, cobrado: 0 };
     for (let i = inteiro(rnd, 0, 30); i > 0; i--) {
         const esperado = inteiro(rnd, 500, 9000), dif = inteiro(rnd, -300, 4000), talvez = rnd() < 0.25;
         conc.pagoAMais.push({ pedido: prox(), itemId: 'MLB9' + inteiro(rnd, 1e8, 9e8), data: '2026-09-' + String(inteiro(rnd, 10, 28)), cobrado: R(esperado + dif), esperado: R(esperado), diferenca: R(dif), talvezUnidades: talvez });
-        if (dif > 0 && !talvez) { esp.frete += dif; n.frete++; }
+        if (dif > 0) { frete.n++; frete.cobrado += esperado + dif; }
     }
     for (let i = inteiro(rnd, 0, 30); i > 0; i--) {
         const regra = escolhe(rnd, ['repetida', 'tarifa', 'frete', 'sem_estorno']), valor = inteiro(rnd, 100, 20000), dif = inteiro(rnd, 0, valor), duvida = rnd() < 0.2, devol = rnd() < 0.1;
@@ -386,12 +393,13 @@ function basesRecuperar(rnd) {
             valor: R(valor), esperado: R(valor - dif), diferenca: R(dif), motivo: 'Motivo de teste.', regra };
         if (duvida) x.duvida = 'Pergunta de teste?';
         conferir.push(x);
-        if (!duvida && dif > 0 && !devol) { if (regra === 'sem_estorno') { esp.estorno += dif; n.estorno++; } else { esp.cobrancas += dif; n.cobrancas++; } }
+        // 3.3.0 (trava do frete): o item de regra 'frete' nunca entra no total (F.freteSemChamado)
+        if (!duvida && dif > 0 && !devol && regra !== 'frete') { if (regra === 'sem_estorno') { esp.estorno += dif; n.estorno++; } else { esp.cobrancas += dif; n.cobrancas++; } }
     }
     for (let i = inteiro(rnd, 0, 6); i > 0; i--) {
         const custo = rnd() < 0.2 ? null : inteiro(rnd, 0, 30000), pode = rnd() < 0.8, aberta = rnd() < 0.15;
         inconformes.push({ id: '6' + inteiro(rnd, 1e7, 9e7), quando: '2026-09-20', prazo: '2026-10-20', motivos: ['unidades diferentes das declaradas'], link: 'https://www.mercadolivre.com.br/x', custo: custo === null ? null : R(custo), podeReclamar: pode, reclamacaoAberta: aberta });
-        if (custo > 0 && pode && !aberta) nFull++;
+        if (pode && !aberta) nFull++;   // 3.3.0: toda remessa pendente com diferença, mesmo sem custo (SHC.remessaPendente)
     }
     for (let i = inteiro(rnd, 0, 12); i > 0; i--) {
         const cor = escolhe(rnd, ['verde', 'amarelo', 'cinza']), valor = inteiro(rnd, 500, 9000), rec = cor === 'cinza' ? 0 : inteiro(rnd, 0, valor);
@@ -399,7 +407,7 @@ function basesRecuperar(rnd) {
         if (cor === 'verde' && rec > 0) { esp.devolucao += rec; n.devolucao++; }
         if (cor === 'amarelo' && rec > 0) esp.amarelo += rec;
     }
-    return { d: { conc, conferir, inconformes, devolucoes: dev }, esp, n, nFull };
+    return { d: { conc, conferir, inconformes, devolucoes: dev }, esp, n, nFull, frete };
 }
 {
     const rnd = lcg(1717);
@@ -414,9 +422,12 @@ function basesRecuperar(rnd) {
         const tot = soma(Object.keys(x.n).map(k => x.esp[k]));
         if (C(r.total) !== tot || soma(r.parcelas.map(p => C(p.valor))) !== C(r.total)) return 'total ' + r.total + ' × ' + R(tot);
         if (C(r.devConferir.valor) !== x.esp.amarelo) return '🟡 ' + r.devConferir.valor;
-        if (r.parcelas.some(p => p.id === 'full') || r.fullConferir.itens.length !== x.nFull || r.fullConferir.itens.some(i => 'valor' in i)) return 'remessas do Full: ' + JSON.stringify(r.fullConferir);
+        if (r.parcelas.some(p => p.id === 'full') || r.fullConferir.n !== x.nFull || r.fullConferir.itens.length !== x.nFull || r.fullConferir.itens.some(i => 'valor' in i)) return 'remessas do Full: ' + JSON.stringify(r.fullConferir);
+        // 3.3.0 (trava do frete): sem parcela de frete; freteConferir à parte, cada item com o valor cobrado (Σ = Σ cobrado), sem NaN
+        if (r.parcelas.some(p => p.id === 'frete') || r.freteConferir.n !== x.frete.n || r.freteConferir.itens.length !== x.frete.n) return 'frete: ' + r.freteConferir.n + ' × ' + x.frete.n;
+        if (r.freteConferir.itens.some(i => !(i.valor > 0) || C(i.valor) !== C(i.cobrado) || i.motivo !== F.FRETE_CONFERIR) || soma(r.freteConferir.itens.map(i => C(i.valor))) !== x.frete.cobrado) return 'frete para conferir: Σ cobrado ' + R(x.frete.cobrado);
         return true;
-    }, 'total = Σ parcelas = Σ itens (só diferença > 0; dúvida, "para conferir", devolução no Faturamento, remessa do Full, já reclamada ou não, e 🟡/⚪ fora)');
+    }, 'total = Σ parcelas = Σ itens (só diferença > 0; dúvida, "para conferir", frete (3.3.0, trava do frete: à parte com o cobrado), devolução no Faturamento, remessa do Full, já reclamada ou não, e 🟡/⚪ fora)');
     todos(300, () => basesRecuperar(rnd), x => {
         const r = F.recuperar(x.d), h = F.htmlRecuperar(r, id => 'Título ' + id, true);
         if (!semLixo(h)) return 'lixo no HTML';
@@ -424,7 +435,7 @@ function basesRecuperar(rnd) {
         const tot = /<p class="rec-tot"><b>([^<]*)<\/b> em ([\d.]+) (itens|item)<\/p>/.exec(h);
         if (!tot || lerMoeda(tot[1]) !== C(r.total) || +tot[2].replace(/\./g, '') !== soma(r.parcelas.map(p => p.itens.length))) return 'cabeçalho ' + (tot && tot[0]);
         const blocos = h.split('<div class="parc ').slice(1);
-        const daParcela = blocos.filter(b => !/^(devconf|fullconf)/.test(b));
+        const daParcela = blocos.filter(b => !/^(devconf|fullconf|freteconf)/.test(b));
         if (daParcela.length !== r.parcelas.length) return daParcela.length + ' blocos';
         let somaTela = 0;
         for (let i = 0; i < daParcela.length; i++) {
@@ -436,15 +447,27 @@ function basesRecuperar(rnd) {
         const dc = blocos.find(b => /^devconf/.test(b));
         if (dc) { const nums = [...dc.matchAll(/<b class="num">([^<]*)<\/b>/g)].map(m => lerMoeda(m[1])); if (nums[0] !== C(r.devConferir.valor) || soma(nums.slice(1)) !== nums[0]) return '🟡 na tela'; }
         const fl = blocos.find(b => /^fullconf/.test(b));
-        if (!!fl !== x.nFull > 0 || (fl && (/R\$/.test(tiraTags(fl)) || (fl.match(/>Reclamar no ML</g) || []).length !== x.nFull))) return 'remessas do Full na tela';
+        // 3.3.0: cada remessa com o "Conferir no ML" (para conferir, sem R$)
+        if (!!fl !== x.nFull > 0 || (fl && (/R\$/.test(tiraTags(fl)) || (fl.match(/>Conferir no ML</g) || []).length !== x.nFull))) return 'remessas do Full na tela';
+        // 3.3.0 (trava do frete): o frete fecha à parte, fora do total: o cabeçalho conta os pedidos (sem R$), cada um com o valor cobrado
+        // (Σ da tela = Σ cobrado), sem botão de chamado.
+        const fq = blocos.find(b => /^freteconf/.test(b));
+        if (!!fq !== x.frete.n > 0) return 'frete para conferir na tela';
+        if (fq) {
+            const cab = /<b class="num">([^<]*)<\/b>/.exec(fq), nums = [...fq.matchAll(/<b class="num">([^<]*)<\/b>/g)].slice(1).map(m => lerMoeda(m[1]));
+            if (cab[1] !== SHC.qtd(x.frete.n, 'pedido', 'pedidos') || nums.length !== x.frete.n || soma(nums) !== x.frete.cobrado || /Copiar texto do chamado|data-copiar/.test(fq)) return 'frete na tela: ' + cab[1] + ' · ' + soma(nums);
+        }
         return true;
-    }, 'tela: o total do topo = Σ dos valores das parcelas = Σ de cada item (também os escondidos no "Ver mais"); o 🟡 fecha à parte, fora do total');
+    }, 'tela: o total do topo = Σ dos valores das parcelas = Σ de cada item (também os escondidos no "Ver mais"); o 🟡 e o frete (3.3.0, trava do frete) fecham à parte, fora do total');
     // O texto do chamado de cada item pede o mesmo valor que a tela mostra (cobrado − devido = diferença = o item).
     todos(300, () => basesRecuperar(rnd), x => {
         const r = F.recuperar(x.d);
+        // 3.3.0 (trava do frete): o frete para conferir não tem texto de chamado; e o item 'frete' do "para conferir" também não.
+        if (r.freteConferir.itens.some(it => F.chamadoFrete(it, 'Produto') !== '')) return 'frete com texto de chamado';
+        if (x.d.conferir.some(it => it.regra === 'frete' && F.textoChamado(it) !== '')) return 'item de regra frete com texto de chamado';
         for (const p of r.parcelas) for (const it of p.itens) {
             if (p.id === 'devolucao') continue;
-            const t = p.id === 'frete' ? F.chamadoFrete(it, 'Produto') : F.textoChamado(F.itemDoChamado(it));
+            const t = F.textoChamado(F.itemDoChamado(it));
             const cob = /Valor cobrado: (\S+ [\d.,]+)/.exec(t), dev = /Valor (?:devido|esperado \(estimativa nossa\)): (\S+ [\d.,]+)/.exec(t), dif = /Diferença: (\S+ [\d.,]+)/.exec(t);
             if (!cob || !dev || !dif) return p.id + ': texto sem os 3 valores';
             const [a, b, c] = [cob[1], dev[1], dif[1]].map(lerMoeda);
@@ -452,15 +475,19 @@ function basesRecuperar(rnd) {
             if (moedasDe(t.slice(t.indexOf('Solicitamos'))).some(v => v !== c)) return p.id + ': o pedido de estorno cita outro valor';
         }
         return true;
-    }, 'texto do chamado: cobrado − devido = diferença = o valor do item na tela, e o estorno pedido é esse mesmo valor');
+    }, 'texto do chamado: cobrado − devido = diferença = o valor do item na tela, e o estorno pedido é esse mesmo valor (3.3.0, trava do frete: frete sem texto)');
     // Sem contar 2 vezes o mesmo frete: na conciliação (frete do anúncio) e no "para conferir" (regra 'frete').
+    // 3.3.0 (trava do frete): nenhum dos dois entra no total; o da conciliação vai 1 vez para freteConferir (o cobrado), o 'frete' do
+    // "para conferir" fica só lá (sem chamado). O total é só a tarifa de R$ 5,00.
     const conc = { pagoAMais: [{ pedido: '2000000019', pedidoFrete: '9100000003', itemId: 'MLB8000000001', data: '2026-09-23', cobrado: 58.75, esperado: 45.35, diferenca: 13.4 },
         { pedido: '2000000020', itemId: 'MLB8000000002', data: '2026-09-24', cobrado: 30, esperado: 20, diferenca: 10 }] };
     const conferir = [{ pedido: '9100000003', itemId: 'MLB8000000001', data: '2026-09-23', cobranca: 'Tarifa de envio', valor: 58.75, esperado: 40, diferenca: 18.75, regra: 'frete', motivo: 'm' },
         { pedido: '9100000777', itemId: 'MLB8000000002', data: '2026-09-24', cobranca: 'Tarifa de envio', valor: 30, esperado: 22, diferenca: 8, regra: 'frete', motivo: 'm' },
         { pedido: '9100000888', itemId: 'MLB8000000009', data: '2026-09-24', cobranca: 'Custo por vender', valor: 30, esperado: 25, diferenca: 5, regra: 'tarifa', motivo: 'm' }];
     const r = F.recuperar({ conc, conferir });
-    ok(r.total === 13.4 + 10 + 5 && r.parcelas.find(p => p.id === 'cobrancas').itens.length === 1, 'o frete já na conciliação (pelo número do frete ou por anúncio + data + valor) não entra de novo no "para conferir": ' + SHC.moeda(r.total));
+    ok(r.total === 5 && r.parcelas.length === 1 && r.parcelas[0].id === 'cobrancas' && r.parcelas[0].itens.length === 1 && r.parcelas[0].itens[0].regra === 'tarifa'
+        && r.freteConferir.n === 2 && r.freteConferir.itens.map(i => C(i.valor)).join() === '5875,3000' && r.freteConferir.itens[0].pedidoFrete === '9100000003',
+        'o frete da conciliação e o do "para conferir" (o mesmo frete) não entram no total nem contam 2 vezes: R$ 5,00 (só a tarifa) e 2 fretes para conferir com o cobrado (R$ 58,75 e R$ 30,00): ' + SHC.moeda(r.total));
     ok(F.recuperar({}).total === 0 && F.recuperar({}).parcelas.length === 0 && /Aparece depois/.test(F.htmlRecuperar(F.recuperar({}), null, false)), 'nada lido: total 0 sem parcelas e a tela diz que ainda não leu (não mostra "R$ 0,00 para recuperar")');
     // Remessa do Full: 6 unidades faltando e R$ 27,00 cobrados (coleta e/ou penalidade). O chamado só pede o estorno "se a diferença se
     // confirmar", sem valor; a tela não pode pôr os R$ 27,00 como "dá para recuperar" (antes: total R$ 27,00).
@@ -472,19 +499,31 @@ function basesRecuperar(rnd) {
         'remessa do Full com R$ 27,00 cobrados: fora do "dá para recuperar" (total R$ 0,00), listada "para conferir" sem valor e com o prazo; a já reclamada não aparece');
     // F.conferir → F.recuperar, cada pedido com UMA regra só: o que dá para recuperar nunca passa do que foi cobrado a mais.
     const cobs = [], porId = { MLB9100000001: { tarifa: 8, preco: 60, titulo: 'Bomba' } };
-    const c = (o, it, texto, v, op, extra) => cobs.push(Object.assign({ orderId: o, itemId: it, data: '2026-09-1' + (cobs.length % 9), texto, valor: v, id: o + '|' + op + '|C' }, extra || {}));
+    // id com o código do ML (CVVML, CVVPRC; B… no cancelamento): é por ele que F.tarifasParaConferir acha a tarifa de venda
+    const COD = { 'Custo por vender': 'VVML', 'Custo por cobrar': 'VVPRC' };
+    const c = (o, it, texto, v, op, extra) => cobs.push(Object.assign({ orderId: o, itemId: it, data: '2026-09-1' + (cobs.length % 9), texto, valor: v,
+        id: o + '|' + op + '|' + (extra && extra.estorno ? 'B' : 'C') + COD[texto.replace(/^Cancelamento do /, '')] }, extra || {}));
     c('2000000101', 'MLB9100000001', 'Custo por vender', 14.5, 'P101');                                                 // tarifa acima (8 esperado)
     c('2000000102', 'MLB9100000002', 'Custo por vender', 7.25, 'P102'); c('2000000102', 'MLB9100000002', 'Custo por vender', 7.25, 'P102');   // repetida
     c('2000000103', 'MLB9100000003', 'Custo por vender', 9.9, 'P103'); c('2000000103', 'MLB9100000003', 'Cancelamento do Custo por vender', 9.9, 'P103', { estorno: true });
     c('2000000103', 'MLB9100000003', 'Custo por cobrar', 3.33, 'PAG103');                                               // cancelada sem estorno
-    const cf = F.conferir(cobs, porId), rr = F.recuperar({ conferir: cf });
-    ok(cf.length === 3 && C(rr.total) === 650 + 725 + 333 && cf.every(x => x.diferenca <= x.valor && C(x.valor) - C(x.esperado) === C(x.diferenca)),
-        'F.conferir → F.recuperar (1 regra por pedido): 6,50 + 7,25 + 3,33 = ' + SHC.moeda(rr.total) + ', e cada item tem cobrado − esperado = diferença ≤ cobrado');
+    // 3.3.0 (chamado só com prova): a tarifa acima não sai mais do F.conferir (preço de hoje); vem do detalhe da venda (F.tarifasParaConferir
+    // → F.provaTarifa: tarifa de R$ 8,00 na venda) e entra pela F.juntaConferir, como na página.
+    const cf0 = F.conferir(cobs, porId), cand = F.tarifasParaConferir(cobs, porId);
+    const prova = cand.length === 1 ? F.provaTarifa(cand[0], { tarifa: 8, preco: 60, tarifaPct: 13.33, unidades: 1 }) : null;
+    const cf = F.juntaConferir(cf0, { itens: prova ? [prova] : [] }), rr = F.recuperar({ conferir: cf });
+    ok(cf0.length === 2 && !cf0.some(x => x.regra === 'tarifa') && cf.length === 3 && C(rr.total) === 650 + 725 + 333 && cf.every(x => x.diferenca <= x.valor && C(x.valor) - C(x.esperado) === C(x.diferenca)),
+        'F.conferir + tarifa provada → F.recuperar (1 regra por pedido): 6,50 + 7,25 + 3,33 = ' + SHC.moeda(rr.total) + ', e cada item tem cobrado − esperado = diferença ≤ cobrado');
     const textos = rr.parcelas.reduce((l, p) => l.concat(p.itens), []).map(x => [x, F.textoChamado(F.itemDoChamado(x))]);
     ok(textos.length === 3 && textos.every(([x, t]) => { const v = moedasDe(t.slice(t.indexOf('Dados do meu painel'), t.indexOf('Como estimamos') > 0 ? t.indexOf('Como estimamos') : t.indexOf('Por quê')));
         return v.length === 3 && v[0] - v[1] === v[2] && v[2] === C(x.valor) && moedasDe(t.slice(t.indexOf('Solicitamos'))).every(y => y === C(x.valor)); })
-        && /Valor esperado \(estimativa nossa\): R\$ 8,00/.test(textos.find(([x]) => x.regra === 'tarifa')[1]),
-        'chamados dessas 3 (inclusive o da tarifa "esperado = estimativa"): cobrado − esperado = diferença = o valor do item, e o estorno pedido é ele');
+        && /- Valor devido: R\$ 8,00\n/.test(textos.find(([x]) => x.regra === 'tarifa')[1]),
+        'chamados dessas 3 (inclusive o da tarifa, devido = R$ 8,00 do detalhe da venda): cobrado − devido = diferença = o valor do item, e o estorno pedido é ele');
+    // 3.3.0 (chamado só com prova): a mesma tarifa com o esperado ESTIMADO (ou "pode estar certo", lista guardada) não tem texto de chamado.
+    const tProv = textos.find(([x]) => x.regra === 'tarifa')[0];
+    ok(F.textoChamado(F.itemDoChamado(Object.assign({}, tProv, { estimado: true }))) === ''
+        && F.textoChamado(F.itemDoChamado(Object.assign({}, tProv, { motivo: 'Pode estar certo: estimativa pelo preço de hoje.' }))) === '',
+        'tarifa com o esperado estimado (x.estimado ou "pode estar certo"), sem cobrança repetida: sem texto de chamado');
 }
 
 console.log('F.conferir: cada cobrança para conferir fecha (cobrado − esperado = diferença) e a tabela mostra os mesmos números');
@@ -513,15 +552,18 @@ console.log('F.conferir: cada cobrança para conferir fecha (cobrado − esperad
             const net = soma(x.cobs.filter(c => c.orderId === it.pedido && c.itemId === it.itemId && SHC.tipoCustoFechamento(c.texto) === SHC.tipoCustoFechamento(it.cobranca)).map(c => (c.estorno ? -1 : 1) * C(c.valor)));
             if (C(it.valor) - C(it.esperado) !== C(it.diferenca) || !(it.diferenca > 0) || C(it.diferenca) > net) return it.regra + ' #' + it.pedido + ': ' + [it.valor, it.esperado, it.diferenca, R(net)].join(' ');
         }
-        const h = F.htmlConferir(cf), rows = [...h.matchAll(/<td class="num">([^<]*)<\/td>(?:<td class="num">([^<]*)<\/td><td class="num"><b>([^<]*)<\/b><\/td>|<td class="num">—<\/td><td class="num">pode estar certo<\/td>)/g)];
+        const h = F.htmlConferir(cf);
+        if ((h.match(/data-copiar=/g) || []).length !== cf.filter(i => !F.freteSemChamado(i)).length) return 'botão de chamado em frete (ou faltando)';
+        const rows = [...h.matchAll(/<td class="num">([^<]*)<\/td>(?:<td class="num">([^<]*)<\/td><td class="num"><b>([^<]*)<\/b><\/td>|<td class="num">—<\/td><td class="num">pode estar certo<\/td>)/g)];
         if (rows.length !== cf.length || !semLixo(h)) return 'tabela com ' + rows.length + ' linhas';
         for (let i = 0; i < rows.length; i++) {
             if (lerMoeda(rows[i][1]) !== C(cf[i].valor)) return 'cobrado na tela';
-            if (cf[i].duvida) { if (rows[i][2] !== undefined) return 'dúvida com número na tela'; continue; }
+            // 3.3.0 (trava do frete): o frete (F.freteSemChamado) também é "pode estar certo", sem número e sem botão de chamado
+            if (cf[i].duvida || F.freteSemChamado(cf[i])) { if (rows[i][2] !== undefined) return 'dúvida com número na tela'; continue; }
             if (lerMoeda(rows[i][1]) - lerMoeda(rows[i][2]) !== lerMoeda(rows[i][3]) || lerMoeda(rows[i][3]) !== C(cf[i].diferenca)) return 'linha ' + i + ' na tela';
         }
         return true;
-    }, 'cada item: cobrado − esperado = diferença > 0 e nunca mais que o cobrado (líquido) daquele tipo no pedido; na tabela, Cobrado − Esperado = Diferença (dúvida: "pode estar certo", sem número)');
+    }, 'cada item: cobrado − esperado = diferença > 0 e nunca mais que o cobrado (líquido) daquele tipo no pedido; na tabela, Cobrado − Esperado = Diferença (dúvida e frete: "pode estar certo", sem número; frete sem botão de chamado)');
 }
 
 console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tarifa acima): conta 1 vez só, nunca acima do cobrado');
@@ -546,11 +588,14 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
     const pedido = t => moedasDe(t.slice(t.indexOf('Solicitamos')))[0] || 0;   // o estorno que o texto do chamado pede (dúvida: nenhum)
     const netDe = cobs => { const net = {}; cobs.forEach(c => { const k = c.orderId + '|' + SHC.tipoCustoFechamento(c.texto) + '|' + c.itemId; net[k] = (net[k] || 0) + (c.estorno ? -1 : 1) * C(c.valor); }); return net; };
     const confere = (x, cf, rec) => {
-        const net = netDe(x.cobs), dif = {}, txt = {}, dRec = {}, tRec = {};
-        cf.filter(i => !i.duvida).forEach(i => { const k = chave(i); dif[k] = (dif[k] || 0) + C(i.diferenca); txt[k] = (txt[k] || 0) + pedido(F.textoChamado(i)); });
+        const net = netDe(x.cobs), dif = {}, txt = {}, dRec = {}, tRec = {}, fr = new Set();
+        // 3.3.0 (trava do frete): o frete fica no "para conferir" (≤ o cobrado, como o resto), sem texto de chamado e fora do "Dá para recuperar"
+        if (cf.some(i => F.freteSemChamado(i) && F.textoChamado(i) !== '')) return 'frete com texto de chamado';
+        cf.filter(i => !i.duvida).forEach(i => { const k = chave(i); if (F.freteSemChamado(i)) fr.add(k); dif[k] = (dif[k] || 0) + C(i.diferenca); txt[k] = (txt[k] || 0) + pedido(F.textoChamado(i)); });
         rec.parcelas.forEach(p => p.itens.forEach(i => { const k = chave(i); dRec[k] = (dRec[k] || 0) + C(i.valor); tRec[k] = (tRec[k] || 0) + pedido(F.textoChamado(F.itemDoChamado(i))); }));
         for (const k of Object.keys(dif)) {
             if (dif[k] > net[k] || txt[k] > net[k]) return k + ': para conferir pede ' + dif[k] + ' (textos ' + txt[k] + ') de ' + net[k] + ' cobrados';
+            if (fr.has(k)) { if (dRec[k] || txt[k]) return k + ': frete no "Dá para recuperar" (' + dRec[k] + ') ou com texto'; continue; }
             if (dRec[k] !== dif[k] || tRec[k] !== dif[k]) return k + ': recuperar ' + dRec[k] + ' (textos ' + tRec[k] + ') × para conferir ' + dif[k];
         }
         if (cf.some(i => C(i.valor) - C(i.esperado) !== C(i.diferenca))) return 'cobrado − esperado ≠ diferença';
@@ -633,7 +678,7 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
             if (dv && !lidos[k].has(lerMoeda(dv[1]))) return k + ': "Valor devido" ' + dv[1] + ' não foi lido em nenhuma cobrança';
             if (i.regra === 'repetida') { pede[kx] = (pede[kx] || 0) + C(i.diferenca); pedeTipo[k] = (pedeTipo[k] || 0) + C(i.diferenca); if (sob[kx].net !== net[k]) nFirme2++; }
             if (i.repetidaMin > 0) pedeTipo[k] = (pedeTipo[k] || 0) + C(i.repetidaMin);   // "pedimos ao menos o estorno da cobrança lançada em duplicidade"
-            if (i.repetida) { nAbs++; if (t.indexOf(i.repetida) < 0) return k + ': o texto não cita a repetição (' + i.repetida + ')'; }
+            if (i.repetida) { nAbs++; if (F.freteSemChamado(i) ? t !== '' : t.indexOf(i.repetida) < 0) return k + ': o texto não cita a repetição (' + i.repetida + ')'; }   // 3.3.0: frete sem texto
         }
         // Nada firme pede mais do que sobrou acima do legítimo na própria cobrança (nem, somando, no tipo).
         for (const kx of Object.keys(pede)) if (pede[kx] > sob[kx].sobra) return kx + ': a repetida pede ' + R(pede[kx]) + ' firmes e '
@@ -652,8 +697,15 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
     ok(a.length === 1 && a[0].regra === 'sem_estorno' && a[0].diferenca === 10 && F.recuperar({ conferir: a }).total === 10 && pedido(F.textoChamado(a[0])) === 1000
         && /mas esta cobrança não\. Também aparece repetida neste pedido: R\$ 5,00 × 2\.$/.test(a[0].motivo),
         'cancelada + "Custo por cobrar" 2× de R$ 5: 1 item de R$ 10,00 (o cobrado; antes R$ 15,00), e o motivo diz que também veio repetida');
-    ok(b.length === 1 && b[0].regra === 'tarifa' && b[0].diferenca === 14 && F.recuperar({ conferir: b }).total === 14 && pedido(F.textoChamado(b[0])) === 1400,
-        'tarifa de R$ 10 lançada 2× e R$ 6 no anúncio: 1 item de R$ 14,00 (20 − 6; antes R$ 24,00)');
+    // 3.3.0 (chamado só com prova): o F.conferir dá só a repetida (a tarifa pelo preço de hoje saiu); a tarifa vem provada pelo detalhe da
+    // venda (R$ 6,00 na venda) e entra pela F.juntaConferir, como na página. Na mesma cobrança: 1 item só no "Dá para recuperar".
+    const provada = (cobs1, det) => { const cd = F.tarifasParaConferir(cobs1, { MLB1000000001: { tarifa: 6, preco: 50, titulo: 'X' } }); return cd.length === 1 ? F.provaTarifa(cd[0], det) : null; };
+    const DET6 = { tarifa: 6, preco: 50, tarifaPct: 12, unidades: 1 };
+    const pb = provada([cob('9000000002', 'Custo por vender', 10, '9000000002|9000000002|CVVML'), cob('9000000002', 'Custo por vender', 10, '9000000002|9000000002|CVVML')], DET6);
+    const jb = F.juntaConferir(b, { itens: pb ? [pb] : [] }), rb = F.recuperar({ conferir: jb }), ib = rb.parcelas.length ? rb.parcelas[0].itens : [];
+    ok(b.length === 1 && b[0].regra === 'repetida' && b[0].diferenca === 10 && pb && pb.diferenca === 14 && rb.total === 14 && ib.length === 1 && ib[0].regra === 'tarifa'
+        && ib[0].repetidaMin === 10 && pedido(F.textoChamado(F.itemDoChamado(ib[0]))) === 1400 && /Também aparece repetida neste pedido: R\$ 10,00 × 2\./.test(F.textoChamado(F.itemDoChamado(ib[0]))),
+        'tarifa de R$ 10 lançada 2× e R$ 6 na venda (provada): 1 item de R$ 14,00 (20 − 6; antes R$ 24,00), o texto cita a repetição e pede R$ 14,00');
     const c2 = F.conferir([cob('9000000003', 'Custo por vender', 20, '1|9000000003|CVVML'), cob('9000000003', 'Custo por vender', 20, '2|9000000003|CVVML')], { MLB1000000001: { tarifa: 25, preco: 200 } });
     ok(c2.length === 1 && c2[0].regra === 'repetida' && c2[0].diferenca === 20, 'repetida maior que a "tarifa acima" (R$ 20 × R$ 15): fica a repetida, 1 vez só');
     // Lista guardada pela versão anterior (conferir:<conta>) com as 2 regras no mesmo pedido: o "Dá para recuperar" conta 1 vez só.
@@ -684,9 +736,10 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
     const f1 = F.conferir([cob('9000000011', 'Tarifa de envio', 20, 'F1|ENV1|CXENV'), cob('9000000011', 'Tarifa de envio', 20, 'F2|ENV1|CXENV'),
         cob('9000000011', 'Tarifa por envio extra ou intermunicipal', 15, 'F3|ENV1|CXEXT'), cob('9000000011', 'Cancelamento da tarifa de envio', 12, 'F4|ENV1|BXENV', { estorno: true })], {});
     const tf1 = f1.length === 1 ? F.textoChamado(f1[0]) : '';
-    ok(f1.length === 1 && f1[0].regra === 'repetida' && !!f1[0].duvida && F.recuperar({ conferir: f1 }).total === 0 && /^Olá! Tenho uma dúvida/.test(tf1) && !/Valor devido|Diferença|Solicitamos/.test(tf1)
-        && /R\$ 20,00 × 2/.test(tf1) && /ficaram R\$ 28,00 cobrados em “Tarifa de envio” no pedido/.test(f1[0].motivo),
-        'frete R$ 20 × 2 + "Tarifa por envio extra" R$ 15 + estorno de R$ 12 da tarifa de envio: dúvida, R$ 0,00 no "Dá para recuperar" e "ficaram R$ 28,00" da própria cobrança (antes: pedia R$ 20,00 firmes; sobravam R$ 8)');
+    // 3.3.0 (trava do frete): frete não tem texto de chamado, nem o da dúvida (tf1 === '')
+    ok(f1.length === 1 && f1[0].regra === 'repetida' && !!f1[0].duvida && F.recuperar({ conferir: f1 }).total === 0 && tf1 === '' && F.freteSemChamado(f1[0])
+        && /R\$ 20,00 × 2/.test(f1[0].duvida) && /ficaram R\$ 28,00 cobrados em “Tarifa de envio” no pedido/.test(f1[0].motivo),
+        'frete R$ 20 × 2 + "Tarifa por envio extra" R$ 15 + estorno de R$ 12 da tarifa de envio: dúvida (sem texto de chamado: trava do frete), R$ 0,00 no "Dá para recuperar" e "ficaram R$ 28,00" da própria cobrança (antes: pedia R$ 20,00 firmes; sobravam R$ 8)');
     const f2 = F.conferir([cob('9000000012', 'Custo por cobrar', 5, 'G1|PAG1|CVVPRC'), cob('9000000012', 'Custo por cobrar', 5, 'G2|PAG1|CVVPRC'),
         cob('9000000012', 'Tarifa de processamento', 6, 'G3|PAG1|CXPROC'), cob('9000000012', 'Cancelamento do Custo por cobrar', 4, 'G4|PAG1|BVVPRC', { estorno: true })], {});
     ok(f2.length === 1 && f2[0].regra === 'repetida' && !!f2[0].duvida && F.recuperar({ conferir: f2 }).total === 0 && /ficaram R\$ 6,00 cobrados em “Custo por cobrar”/.test(f2[0].motivo),
@@ -700,9 +753,10 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
         cob('9000000014', 'Tarifa por envio extra ou intermunicipal', 15, 'I3|ENV1|CXEXT'), cob('9000000014', 'Cancelamento da Tarifa por envio extra ou intermunicipal', 15, 'I4|ENV1|BXEXT', { estorno: true })], {});
     const f5 = F.conferir([cob('9000000015', 'Custo por cobrar', 5, 'J1|PAG1|CVVPRC'), cob('9000000015', 'Custo por cobrar', 5, 'J2|PAG1|CVVPRC'),
         cob('9000000015', 'Tarifa de processamento', 6, 'J3|PAG1|CXPROC'), cob('9000000015', 'Cancelamento da Tarifa de processamento', 2, 'J4|PAG1|BXPROC', { estorno: true })], {});
-    ok(f4.length === 1 && !f4[0].duvida && f4[0].diferenca === 20 && /- Valor devido: R\$ 20,00\n/.test(F.textoChamado(f4[0])) && F.recuperar({ conferir: f4 }).total === 20
-        && f5.length === 1 && !f5[0].duvida && f5[0].diferenca === 5 && F.recuperar({ conferir: f5 }).total === 5,
-        'controle: estorno do frete extra (mesmo texto e valor) ou da tarifa de processamento (pelo nome): a repetida da outra cobrança continua pedindo R$ 20,00 e R$ 5,00');
+    // 3.3.0 (trava do frete): a repetida do frete continua firme no "para conferir" (devido = R$ 20,00, 1 cobrança lida), mas sem texto e fora do total
+    ok(f4.length === 1 && !f4[0].duvida && f4[0].diferenca === 20 && f4[0].esperado === 20 && F.textoChamado(f4[0]) === '' && F.recuperar({ conferir: f4 }).total === 0
+        && f5.length === 1 && !f5[0].duvida && f5[0].diferenca === 5 && /- Valor devido: R\$ 5,00\n/.test(F.textoChamado(f5[0])) && F.recuperar({ conferir: f5 }).total === 5,
+        'controle: estorno do frete extra (mesmo texto e valor) ou da tarifa de processamento (pelo nome): a repetida da outra cobrança continua firme (R$ 20,00 do frete para conferir, sem chamado; R$ 5,00 pedidos)');
     // Estorno de um texto sem cobrança no pedido (órfão): pode ser de qualquer cobrança do tipo → dúvida, sem citar "ficaram" (não se sabe de qual).
     const f6 = F.conferir([cob('9000000016', 'Custo por cobrar', 5, 'K1|PAG1|CVVPRC'), cob('9000000016', 'Custo por cobrar', 5, 'K2|PAG1|CVVPRC'),
         cob('9000000016', 'Cancelamento do Custo por cobrar no Mercado Pago', 3, 'K3|PAG1|BVVPRC', { estorno: true })], {});
@@ -713,14 +767,27 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
         && f7.length === 1 && !!f7[0].duvida && F.recuperar({ conferir: f7 }).total === 0,
         'estorno de outro valor com um nome que não casa com cobrança do pedido (do mesmo tipo, ou que nem diz o tipo): dúvida, e o motivo não inventa quanto ficou');
     // A "tarifa acima" (estimativa pelo preço de hoje) ganha da repetida (fato): o texto que fica cita a cobrança em dobro e pede ao menos a cópia.
-    const e1 = F.conferir([cob('9000000008', 'Custo por vender', 7.25, 'E5|9000000008|CVVML'), cob('9000000008', 'Custo por vender', 7.25, 'E6|9000000008|CVVML')],
-        { MLB1000000001: { tarifa: 6, preco: 50, titulo: 'X' } });
-    const te = e1.length === 1 ? F.textoChamado(e1[0]) : '', re = F.recuperar({ conferir: e1 }), tre = re.parcelas.length ? F.textoChamado(F.itemDoChamado(re.parcelas[0].itens[0])) : '';
-    ok(e1.length === 1 && e1[0].regra === 'tarifa' && e1[0].diferenca === 8.5 && /^Assunto: Pedido de revisão de cobrança/.test(te) && te === tre && re.total === 8.5
-        && /- Como estimamos: [^\n]*\n- A mesma cobrança foi lançada mais de uma vez neste pedido: R\$ 7,25 × 2\n/.test(te) && pedido(te) === 850
-        && /se a diferença se confirmar, o estorno de R\$ 8,50 na nossa conta\. Se não se confirmar, pedimos ao menos o estorno da cobrança lançada em duplicidade \(R\$ 7,25\)\./.test(te),
-        'tarifa de R$ 7,25 lançada 2× e R$ 6 no anúncio: 1 item (R$ 8,50, estimativa) e o texto cita a cobrança em dobro e pede ao menos R$ 7,25 (antes: a repetição ficava fora do texto)');
-    ok(/- A mesma cobrança foi lançada mais de uma vez neste pedido: R\$ 10,00 × 2\n/.test(F.textoChamado(b[0])), 'o mesmo no caso de R$ 10 × 2 com R$ 6 no anúncio');
+    const e1c = [cob('9000000008', 'Custo por vender', 7.25, 'E5|9000000008|CVVML'), cob('9000000008', 'Custo por vender', 7.25, 'E6|9000000008|CVVML')];
+    const e1 = F.conferir(e1c, { MLB1000000001: { tarifa: 6, preco: 50, titulo: 'X' } }), pe = provada(e1c, DET6);
+    const je = F.juntaConferir(e1, { itens: pe ? [pe] : [] }), re = F.recuperar({ conferir: je }), ie = re.parcelas.length ? re.parcelas[0].itens : [];
+    const tre = ie.length ? F.textoChamado(F.itemDoChamado(ie[0])) : '';
+    ok(e1.length === 1 && e1[0].regra === 'repetida' && ie.length === 1 && ie[0].regra === 'tarifa' && ie[0].valor === 8.5 && ie[0].repetidaMin === 7.25 && re.total === 8.5
+        && /^Assunto: Contestação de cobrança indevida/.test(tre) && /- Valor devido: R\$ 6,00\n/.test(tre) && /Também aparece repetida neste pedido: R\$ 7,25 × 2\./.test(tre) && pedido(tre) === 850,
+        'tarifa de R$ 7,25 lançada 2× e R$ 6 na venda (provada): 1 item de R$ 8,50, o texto cita a cobrança em dobro e pede R$ 8,50');
+    // 3.3.0 (chamado só com prova): se o esperado for ESTIMADO, a diferença estimada não vira chamado; com a cobrança repetida provada
+    // (repetidaMin) o texto é a contestação da duplicidade e pede só a cópia a mais (R$ 7,25 e R$ 10,00), nunca a diferença estimada.
+    const est = (it, extra) => F.textoChamado(F.itemDoChamado(Object.assign({}, it, extra)));
+    const te = ie.length ? est(ie[0], { estimado: true }) : '', tb = ib.length ? est(ib[0], { estimado: true }) : '';
+    ok(/^Assunto: Contestação de cobrança em duplicidade/.test(te) && /- A mesma cobrança foi lançada mais de uma vez neste pedido: R\$ 7,25 × 2\n- Valor lançado em duplicidade: R\$ 7,25\n/.test(te)
+        && pedido(te) === 725 && moedasDe(te.slice(te.indexOf('Solicitamos'))).every(v => v === 725) && !/Valor devido|Diferença|8,50/.test(te)
+        && ie.length && est(ie[0], { estimado: true, repetidaMin: undefined }) === '' && est(ie[0], { motivo: 'Pode estar certo: estimativa.' }) === te,
+        'tarifa de R$ 7,25 lançada 2× com o esperado estimado: "Contestação de cobrança em duplicidade" que pede só R$ 7,25 (a cópia a mais); sem a repetida provada, nenhum texto');
+    ok(/- A mesma cobrança foi lançada mais de uma vez neste pedido: R\$ 10,00 × 2\n/.test(tb) && pedido(tb) === 1000 && !/14,00/.test(tb), 'o mesmo no caso de R$ 10 × 2 com R$ 6 estimados (pede só R$ 10,00)');
+    // Regra 4 (cada cobrança conta 1 vez só, nunca acima do cobrado) também no "para conferir" da página (F.juntaConferir: F.conferir + a
+    // tarifa provada), que a tabela e o painel (cfJ, painel-lateral.js) somam: a repetida e a tarifa provada da MESMA cobrança.
+    const somaJ = j => soma(j.filter(x => !x.duvida && !F.freteSemChamado(x)).map(x => C(x.diferenca)));
+    ok(somaJ(jb) <= 2000 && somaJ(je) <= 1450,
+        '"para conferir" com a tarifa provada (F.juntaConferir): a repetida e a tarifa da mesma cobrança contam 1 vez só, ≤ o cobrado (R$ 20,00 e R$ 14,50): somam ' + SHC.moeda(R(somaJ(jb))) + ' e ' + SHC.moeda(R(somaJ(je))));
 }
 
 console.log('F.comparaRepasse: o que entrou no Mercado Pago × o líquido estimado');
@@ -909,22 +976,21 @@ console.log('Conciliação (concTopo): a remessa do Full pendente aparece "para 
     const rem = { id: 'R123', quando: '2026-09-28', prazo: '2026-10-12', motivos: ['Faltaram 3 unidades'], custo: 27, link: 'https://www.mercadolivre.com.br/x', status: 'closed_with_changes' };
     const kpi = h => (/<div class="kpi kn (\w*)"><div class="l">Dá para recuperar<\/div><div class="v">([^<]*)<\/div><div class="s">([^<]*)<\/div>/.exec(h) || []).slice(1);
     const card = h => { const a = h.indexOf('id="concRec"'); return a < 0 ? '' : h.slice(a, h.indexOf('id="concCustos"')); };
-    const blocoFull = h => { const c = card(h), a = c.indexOf('Remessas do Full com diferença'); return a < 0 ? '' : c.slice(a, c.indexOf('Quem decide o que devolve')); };
     const h1 = roda([rem], null)(x), k1 = kpi(h1), c1 = card(h1);
     ok(SHC.remessaPendente(rem) && k1.join(' · ') === 'at · nada · 1 remessa para conferir',
         'só 1 remessa pendente (R$ 27,00 cobrados): KPI "Dá para recuperar" âmbar, "nada · 1 remessa para conferir", sem R$ (antes: verde, "nada · nas cobranças lidas"): ' + k1.join(' · '));
-    ok(/Remessa R123/.test(c1) && /Faltaram 3 unidades · até 12\/10/.test(c1) && /Reclamar no ML/.test(c1) && /para conferir<\/span>/.test(c1) && /coleta e\/ou penalidade/.test(c1)
+    ok(/Fora do total: 1 remessa do Full com diferença para conferir \(aba Full\)/.test(c1) && /para conferir<\/span>/.test(c1) && /coleta e\/ou penalidade/.test(c1)
         && !/R\$/.test(c1.replace(/<[^>]*>/g, '')) && !/multa/i.test(h1),
-        '"Como pedir de volta" lista a remessa com o motivo, o prazo e o "Reclamar no ML"; "coleta e/ou penalidade", sem R$ e sem "multa" (antes: o cartão sumia)');
+        '"Como pedir de volta" cita a remessa fora do total ("aba Full"), "coleta e/ou penalidade", sem R$ e sem "multa" (antes: o cartão sumia)');
     const h0 = roda([], null)(x);
     ok(!card(h0) && kpi(h0).join(' · ') === 'ok · nada · nas cobranças lidas', 'sem remessa: sem cartão e KPI verde (como antes)');
     // Com cobrança a recuperar e 4 remessas: o total é só o da cobrança; as remessas ficam à parte (3 à vista + "Ver mais"), sem R$.
     const conf = { itens: [{ pedido: '9100000888', itemId: 'MLB8000000009', data: '2026-09-24', cobranca: 'Custo por vender', valor: 30, esperado: 25, diferenca: 5, regra: 'tarifa', motivo: 'm' }] };
     const rems = ['R1', 'R2', 'R3', 'R4'].map((id, i) => Object.assign({}, rem, { id, custo: 10 + i }));
-    const h2 = roda(rems, conf)(x), k2 = kpi(h2), b2 = blocoFull(h2);
-    ok(k2.join(' · ') === 'at · R$ 5,00 · estimativa' && /Remessa R1/.test(b2) && /Remessa R3/.test(b2) && !/Remessa R4/.test(b2) && /Ver mais \(1\)/.test(b2) && /fora do total/.test(b2)
-        && !/R\$/.test(b2.replace(/<[^>]*>/g, '')) && moedasDe(card(h2).replace(/<[^>]*>/g, '')).every(v => v === 500),
-        'cobrança de R$ 5,00 + 4 remessas: KPI R$ 5,00 (as remessas fora do total), o bloco das remessas mostra 3 + "Ver mais (1)" e nenhum R$ (o cartão só cita os R$ 5,00)');
+    const h2 = roda(rems, conf)(x), k2 = kpi(h2), c2 = card(h2);
+    ok(k2.join(' · ') === 'at · R$ 5,00 · estimativa' && /Fora do total: 4 remessas do Full com diferença/.test(c2) && !/Remessa R\d/.test(c2)
+        && moedasDe(c2.replace(/<[^>]*>/g, '')).every(v => v === 500),
+        'cobrança de R$ 5,00 + 4 remessas: KPI R$ 5,00 (as remessas fora do total), as remessas numa linha "Fora do total" sem R$ (o cartão só cita os R$ 5,00)');
 }
 
 console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK');
