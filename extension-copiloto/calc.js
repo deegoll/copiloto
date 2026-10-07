@@ -187,6 +187,8 @@
     /**
      * Quanto sobra vendendo a `preco`.
      * canal: 'ml' | 'sp' · item: {custo, outros, frete, tipo:'classico'|'premium', full, comissao_pct}
+     * frete_desconhecido (frete grátis do ML sem valor informado): o frete entra 0 e a sobra é um TETO ("até R$ X", antes do frete) →
+     * classe 'semfrete' (como o SHC.telaChipVenda com freteFalta); prejuízo continua 'prejuizo' (o frete só aumenta a perda).
      */
     SHC.calcular = function (canal, preco, item, cfg) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
@@ -214,7 +216,7 @@
 
         // #9: a classe sai da sobra e da margem SEM arredondar (como SHC.sobraAnuncio/sobraProposta): −R$ 0,07 é prejuízo e 9,98% não bate 10%.
         let classe = 'sem_custo';
-        if (sobraRs !== null) classe = sobraRs < 0 ? 'prejuizo' : (sobraRs / preco * 100 < alvo ? 'apertado' : 'lucrativo');
+        if (sobraRs !== null) classe = sobraRs < 0 ? 'prejuizo' : fr.desconhecido ? 'semfrete' : (sobraRs / preco * 100 < alvo ? 'apertado' : 'lucrativo');
 
         return {
             canal, preco: r2(preco),
@@ -232,6 +234,7 @@
      * Menor preço que ainda deixa `alvoPct`% de sobra (0 = empatar). A conta é linear dentro de cada
      * faixa de tarifa do ML (a taxa fixa e o frete mudam de degrau), então resolve faixa a faixa e
      * confere o resultado no centavo com o próprio calcular().
+     * null = sem custo, meta impossível ou (#14) o preço cai onde o frete grátis é do seller e ele não foi informado (não é número firme).
      */
     SHC.precoMinimo = function (canal, item, cfg, alvoPct) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
@@ -251,16 +254,16 @@
         const imp = (num(cfg.imposto_pct) || 0) / 100;
         const com = comissaoPct(canal, item, cfg) / 100;
 
-        // Faixas: [inicio, fim, fatorVariavelExtra, fixoReais]
+        // Faixas: [inicio, fim, fatorVariavelExtra, fixoReais, freteDesconhecido]
         const faixas = [];
         if (canal === 'ml') {
-            const freteAcima = (() => { const f = freteSeller(canal, 100, item, cfg); return f.rs; })();
-            const freteAbaixo = item.full ? freteAcima : 0;
-            faixas.push([0.01, 12.5, 0.5, freteAbaixo]);
-            faixas.push([12.5, 19, 0, 6.0 + freteAbaixo]);
-            faixas.push([19, 49, 0, 7.5 + freteAbaixo]);
-            faixas.push([49, 79, 0, 9.5 + freteAbaixo]);
-            faixas.push([79, 1e7, 0, freteAcima]);
+            const fa = freteSeller(canal, 100, item, cfg), freteAcima = fa.rs;
+            const freteAbaixo = item.full ? freteAcima : 0, semAbaixo = !!item.full && fa.desconhecido;
+            faixas.push([0.01, 12.5, 0.5, freteAbaixo, semAbaixo]);
+            faixas.push([12.5, 19, 0, 6.0 + freteAbaixo, semAbaixo]);
+            faixas.push([19, 49, 0, 7.5 + freteAbaixo, semAbaixo]);
+            faixas.push([49, 79, 0, 9.5 + freteAbaixo, semAbaixo]);
+            faixas.push([79, 1e7, 0, freteAcima, fa.desconhecido]);
         } else {
             const f = freteSeller(canal, 100, item, cfg).rs;
             faixas.push([0.01, 1e7, 0, (num(cfg.sp_taxa_fixa) || 0) + f]);
@@ -269,13 +272,15 @@
         // #10: busca centavo a centavo com o próprio calcular(), sempre em preços já em centavos (r2), entre um piso e um teto honestos:
         // cada r2 (comissão, taxa, imposto, meta) erra no máximo meio centavo → abaixo de (base − 0,03) ÷ den nenhum preço bate a meta e de
         // (base + 0,03) ÷ den para cima todos batem. Antes o 1º preço não passava por r2 (163,2999… batia e voltava 163,30, que não bate)
-        // e a busca começava só 2 centavos antes (pulava 273,40).
+        // e a busca começava só 2 centavos antes (podia pular o menor).
         const ok = p => { const c = SHC.calcular(canal, p, item, cfg); return c && c.sobra_rs !== null && c.sobra_rs >= r2(alvo * p) - 0.0001; };
-        for (const [ini, fim, extra, fixo] of faixas) {
+        for (const [ini, fim, extra, fixo, semFrete] of faixas) {
             const den = 1 - com - imp - alvo - extra;
             if (den <= 0) continue;
             const base = custo + outros + fixo, teto = Math.max(ini, (base + 0.03) / den + 0.01);   // faixa que já começa acima do teto: o início dela
             let p = r2(Math.max(ini, Math.floor((base - 0.03) / den * 100) / 100));
+            // #14: nenhum preço abaixo desta faixa bateu e nela o frete grátis é do seller sem valor: o mínimo depende do frete → sem número.
+            if (semFrete && p < fim) return null;
             for (let i = 0; i < 20000 && p < fim && p <= teto; i++, p = r2(p + 0.01)) if (ok(p)) return p;
         }
         return null;
