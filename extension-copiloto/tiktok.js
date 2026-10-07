@@ -383,7 +383,8 @@
         const hoje = U.dia(opts.hoje) || U.hoje(), desde = U.somaDias(hoje, -29);
         const ctx = { conta: d.conta, custos: d.custos || {}, cfg: d.cfg || {}, skumap: d.skumap || {} };
         const pedidos = (d.peds || []).map(p => TT.lucroDoPedido(p, ctx)).sort((a, b) => String(b.dia || '').localeCompare(String(a.dia || '')));
-        const mes = pedidos.filter(r => r.dia && r.dia >= desde && r.dia <= hoje), ok = mes.filter(r => r.status === 'ok');
+        // KPI com os mesmos pedidos da aba Produtos e do fechamento (motor): 'ok' e 'cancelado' (o frete/tarifa que ficou no cancelado é prejuízo).
+        const mes = pedidos.filter(r => r.dia && r.dia >= desde && r.dia <= hoje), ok = mes.filter(r => r.status === 'ok' || r.status === 'cancelado');
         const lucro = ok.length ? U.soma(ok, r => r.lucro_real) : null, receita = U.soma(ok, r => r.receita_liquida);
         const margem = lucro !== null && receita > 0 ? Math.round(lucro / receita * 10000) / 100 : null, alvo = num(ctx.cfg.margem_alvo_pct) || 0;
         const sau = d.saude || {}, prazo = (sau.indicadores || []).find(x => x.indicador === 'prazo_repasse_dias') || null;
