@@ -909,6 +909,8 @@
         const k = SHC.chave(canal, id);
         const atual = (await area().get(k))[k] || {};
         const novo = Object.assign(atual, dados, { atualizado: Date.now() });
+        // #11: custo, outros e frete do anúncio sem SKU (painel, Agenda do Canal, TikTok) também em centavos, como no salvarCustoSku: "1,005" → 1,01
+        ['custo', 'outros', 'frete'].forEach(c => { if (dados && SHC.num(dados[c]) !== null) novo[c] = SHC.r2(SHC.num(dados[c])); });
         await area().set({ [k]: novo });
         return novo;
     };
