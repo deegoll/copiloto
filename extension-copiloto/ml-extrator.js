@@ -2202,6 +2202,16 @@
         };
     }
     SHC.adsMetricas = metricasAds;
+    /**
+     * Lucro depois do Ads de UM anúncio (a mesma conta em ads.html e no painel): sobra antes do Ads = margem antes do Ads (% do preço de hoje,
+     * SHC.sobraAnuncio) × receita do Ads; depois = antes − gasto, em centavos; acima = gastou e o lucro ficou negativo (= ACOS acima da margem,
+     * decidido no centavo: Ads = sobra não passa; gasto sem venda passa). Sem margem (sem custo) → null.
+     */
+    SHC.adsLucro = function (margem, receita, gasto) {
+        if (margem === null || margem === undefined || !isFinite(margem)) return null;
+        const g = SHC.r2(SHC.num(gasto) || 0), antes = SHC.r2((SHC.num(receita) || 0) * margem / 100), depois = SHC.r2(antes - g);
+        return { antes, depois, acima: g > 0 && depois < 0 };
+    };
     const listaResultados = j => (j && Array.isArray(j.results)) ? j.results : [];
     // F21: sem paging.total → null (quem lê segue até vir uma página menor que o limite). Antes devolvia o nº lido: 50 de 120 virava "completo".
     const totalPaging = j => { const t = j && j.paging && j.paging.total; return typeof t === 'number' ? t : null; };

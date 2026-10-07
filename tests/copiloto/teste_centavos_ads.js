@@ -20,16 +20,17 @@
 //      ("sobra R$ 30,00 − Ads R$ 32,50 = −R$ 2,50").
 //   2) [corrigida, #23] ads.js: SKU com lucro depois do Ads de R$ 0,00 (Ads = sobra, no centavo) ganhava o selo "Acima do equilíbrio" e a ação
 //      "Ajustar" por ruído de ponto flutuante (ACOS 23,791193949216638 > margem 23,791193949216634). Agora o selo segue o lucro em centavos.
-//   3) ads.js: SKU com gasto e sem venda entra na contagem da manchete ("1 produto passa do equilíbrio", A.resultado.acima) mas não no
-//      filtro "Acima do equilíbrio (0)" (selo só 'semVenda').
+//   3) [corrigida junto com a 6, #26] ads.js: SKU com gasto e sem venda entrava na contagem da manchete ("1 produto passa do equilíbrio")
+//      mas não no filtro "Acima do equilíbrio (0)". Agora ganha o selo "acima", como no painel.
 //   4) [corrigida, #24] ads.js A.metricas: TACOS sem as vendas orgânicas lidas virava o próprio ACOS, e A.soma/A.kpis transformavam orgânicas
 //      ausentes em "0 un. · R$ 0,00". Agora sem as orgânicas (e sem o tacos do ML) TACOS e "Vendas orgânicas" = "—", como o painel.
 //   5) [corrigida, #25] ACOS/ROAS arredondados duas vezes: o fundo gravava r2(custo ÷ receita × 100) e r2(receita ÷ custo) e a tabela por SKU
 //      e o painel calculavam de novo → "43,2%" × "43,1%"; ROAS 201 ÷ 200 = "1,01x" × "1x". Agora o fundo grava cru, ads.html calcula da base
 //      (o do ML só sem a base) e o texto arredonda uma vez só (SHC.pctTxt; ROAS com SHC.r2, como o painel).
-//   6) Lucro depois do Ads do MESMO anúncio difere entre ads.html (margem % × receita do Ads, todos os anúncios do SKU) e o painel (sobra
-//      de hoje × unidades, só anúncio com gasto): vendido abaixo do preço de hoje → "Prejuízo R$ 3,00" × "Lucro R$ 3,00"; e a venda atribuída a
-//      um anúncio com gasto R$ 0 (outra campanha) entra só em ads.html → "Lucro R$ 50,00" × "Prejuízo R$ 10,00".
+//   6) [corrigida em parte, #26] Lucro depois do Ads do MESMO anúncio diferia entre ads.html (margem % × receita do Ads) e o painel (sobra de
+//      hoje × unidades): vendido abaixo do preço de hoje → "Prejuízo R$ 3,00" × "Lucro R$ 3,00". Agora as duas telas usam SHC.adsLucro (margem ×
+//      receita, por anúncio, no centavo). Fica de fora: a venda atribuída a um anúncio com gasto R$ 0 (outra campanha) entra só em ads.html
+//      (o painel lista só anúncio com gasto) → "Lucro R$ 50,00" × "Prejuízo R$ 10,00"; e o aviso do fundo (SHC.alertasDe) ainda usa sobra × unidades.
 //   7) Sem o resumo do ML (falha da chamada campaigns/metrics): ads.html soma as campanhas e o painel soma os anúncios lidos → Investimento
 //      R$ 100,00 × R$ 60,00 com a lista de anúncios em parte, e a linha "Total" do painel (R$ 60,00) ≠ soma das linhas (R$ 100,00).
 //   8) P.adsDoFechamento e A.modelos usam Math.abs: mês com estorno de Product Ads maior que a cobrança (porTipo.ads = −15) aparece como
@@ -315,10 +316,10 @@ console.log('D. Σ por SKU = Σ anúncios = resumo do ML = Σ campanhas (ads.js 
 console.log('E. Montante por SKU e resultado da conta (A.montante, A.resultado)');
 {
     const grupos = contas.flatMap(c => c.an.grupos.map(g => ({ c, g })));
-    prop('SKU com custo: sobra antes do Ads = margem × receita do Ads (±½ centavo), lucro = sobra − Ads no centavo, Ads = investimento', grupos.filter(x => x.g.margem !== null), ({ c, g }) => {
-        const sobraExata = g.m.receita * 100 * g.margem / 100;   // em centavos, sem arredondar
+    prop('SKU com custo: sobra antes do Ads = margem × receita de cada anúncio, somada (±½ centavo por anúncio, #26), lucro = sobra − Ads no centavo, Ads = investimento', grupos.filter(x => x.g.margem !== null), ({ c, g }) => {
+        const sobraExata = g.ads.reduce((t, a) => t + cent(a.m.receita || 0) * g.margem / 100, 0);   // em centavos, sem arredondar
         return (emCentavos(g.sobraRs) && emCentavos(g.lucroRs) && emCentavos(g.adsRs) && cent(g.adsRs) === cent(g.m.investimento)
-            && Math.abs(cent(g.sobraRs) - sobraExata) <= 0.5 + 1e-6 && cent(g.lucroRs) === cent(g.sobraRs) - cent(g.adsRs)) || `conta ${c.k} ${g.chave}: ${g.sobraRs} − ${g.adsRs} = ${g.lucroRs}`;
+            && Math.abs(cent(g.sobraRs) - sobraExata) <= 0.5 * g.ads.length + 1e-6 && cent(g.lucroRs) === cent(g.sobraRs) - cent(g.adsRs)) || `conta ${c.k} ${g.chave}: ${g.sobraRs} − ${g.adsRs} = ${g.lucroRs}`;
     });
     prop('SKU sem custo ou fora da lista: sobra e lucro null (nunca R$ 0,00), Ads continua o investimento', grupos.filter(x => x.g.margem === null), ({ c, g }) =>
         (g.sobraRs === null && g.lucroRs === null && cent(g.adsRs) === cent(g.m.investimento) && (g.selos.includes('semCusto') || g.selos.includes('semAnuncio'))) || `conta ${c.k} ${g.chave}`);
@@ -335,7 +336,7 @@ console.log('E. Montante por SKU e resultado da conta (A.montante, A.resultado)'
             && (rec ? Math.abs(r.equilibrio - s / rec * 100) < 1e-9 : r.equilibrio === null) && r.acima === cc.filter(g => g.lucroRs < 0).length
             && r.semCusto === c.an.grupos.filter(g => g.m.investimento > 0 && g.selos.includes('semCusto')).length) || `conta ${c.k}: ${JSON.stringify(r)}`;
     });
-    prop('selo "Acima do equilíbrio" ⇔ lucro depois do Ads < 0 (SKU com custo, gasto e venda; lucro R$ 0,00 incluso, #23)', grupos.filter(x => x.g.margem !== null && x.g.m.investimento > 0 && x.g.m.receita > 0),
+    prop('selo "Acima do equilíbrio" ⇔ lucro depois do Ads < 0 (SKU com custo e gasto; lucro R$ 0,00 incluso, #23; gasto sem venda passa, como o painel, #26)', grupos.filter(x => x.g.margem !== null && x.g.m.investimento > 0),
         ({ c, g }) => (g.selos.includes('acima') === (g.lucroRs < 0)) || `conta ${c.k} ${g.chave}: lucro ${g.lucroRs}, selos ${g.selos}`);
     prop('texto do montante (A.textoMontante) = os números: "Ads R$ X · Lucro R$ Y" | "Prejuízo R$ Y" (positivo) | "sem custo"', grupos, ({ c, g }) => {
         const m = /^Ads (.+?) · (?:(Lucro|Prejuízo) (.+)|sem custo)$/.exec(A.textoMontante(g));
@@ -450,11 +451,12 @@ console.log('G. Painel lateral (aba Ads) e o cruzamento com ads.html');
         const solto = c.ads.filter(a => a.catalogo === 'solto').reduce((t, a) => t + a.costC, 0), lig = c.ads.filter(a => a.catalogo === 'ligado').length;
         return (emCentavos(c.snapP.catalogoSemLigacao) && cent(c.snapP.catalogoSemLigacao) === solto && c.snapP.catalogoLigados === lig) || `conta ${c.k}: ${c.snapP.catalogoSemLigacao}`;
     });
-    prop('P.adsEquilibrio: sobra antes do Ads = sobra de 1 un. × vendas, depois = antes − Ads (no centavo), acima ⇔ depois < 0; sem custo = null', contas.flatMap(c => c.lista.map(x => ({ c, x }))), ({ c, x }) => {
+    prop('P.adsEquilibrio: sobra antes do Ads = margem (sobra de 1 un. ÷ preço) × receita do Ads (±½ centavo, #26), depois = antes − Ads (no centavo), acima ⇔ depois < 0 ⇔ ACOS acima do equilíbrio; sem custo = null', contas.flatMap(c => c.lista.map(x => ({ c, x }))), ({ c, x }) => {
         if (x.semCusto) return (x.antes === null && x.depois === null && x.margem === null && x.acima === false) || `conta ${c.k} ${x.a.itemId}: sem custo com número`;
-        const s = c.sobraDe(x.it);
-        return (emCentavos(x.antes) && emCentavos(x.depois) && cent(x.antes) === cent(s.sobra) * x.a.vendas && cent(x.depois) === cent(x.antes) - cent(x.a.gasto)
-            && x.acima === (cent(x.depois) < 0) && (x.a.receita > 0 ? Math.abs(x.acos - x.a.gasto / x.a.receita * 100) < 1e-9 : x.acos === null)) || `conta ${c.k} ${x.a.itemId}: ${JSON.stringify([x.antes, x.depois, x.acima])}`;
+        const s = c.sobraDe(x.it), exata = cent(x.a.receita) * s.sobra / x.it.preco;   // centavos, sem arredondar
+        return (emCentavos(x.antes) && emCentavos(x.depois) && Math.abs(cent(x.antes) - exata) <= 0.5 + 1e-6 && cent(x.depois) === cent(x.antes) - cent(x.a.gasto)
+            && x.acima === (cent(x.depois) < 0) && (cent(x.depois) === 0 || x.acima === (x.acos === null || x.acos > x.margem))
+            && (x.a.receita > 0 ? Math.abs(x.acos - x.a.gasto / x.a.receita * 100) < 1e-9 : x.acos === null)) || `conta ${c.k} ${x.a.itemId}: ${JSON.stringify([x.antes, x.depois, x.acima, x.acos, x.margem])}`;
     });
     prop('"Por produto" do painel: Σ gasto dos anúncios + catálogo sem ligação = investimento da conta = Σ SKUs de ads.html', contas, c => {
         const lista = c.lista.reduce((t, x) => t + cent(x.a.gasto), 0), skus = c.an.grupos.reduce((t, g) => t + cent(g.m.investimento), 0);
@@ -508,14 +510,16 @@ console.log('G. Painel lateral (aba Ads) e o cruzamento com ads.html');
         const m = /Veredito sobre (−?R\$ [\d.]+,\d\d) de (R\$ [\d.]+,\d\d) \((R\$ [\d.]+,\d\d) de catálogo/.exec(t);
         return (!!m && deMoeda(m[1]) + deMoeda(m[3]) === deMoeda(m[2]) && deMoeda(m[2]) === c.tot.costC) || `conta ${c.k}: ${t}`;
     });
-    // Cruzamento: mesmo snapshot, SKU de 1 anúncio, receita = preço de hoje × vendas → ads.html e painel dão o MESMO lucro.
-    const cruz = contas.filter(c => c.coerente && !c.multi);
-    prop('SKU de 1 anúncio (receita = preço × vendas): lucro depois do Ads de ads.html = Σ "depois" do painel para o anúncio, no centavo', cruz.flatMap(c => c.an.grupos.filter(g => g.lucroRs !== null && g.itens.length === 1).map(g => ({ c, g }))), ({ c, g }) => {
+    // Cruzamento: mesmo snapshot, SKU de 1 anúncio (MLB) → ads.html e painel dão o MESMO lucro e o mesmo selo, com ou sem venda abaixo do
+    // preço de hoje no período (#26: as duas telas usam SHC.adsLucro, margem × receita do Ads, somada por anúncio no centavo).
+    const cruz = contas.filter(c => !c.multi);
+    prop('SKU de 1 anúncio (com ou sem promoção no período, #26): lucro e sobra de ads.html = Σ "depois"/"antes" do painel para o anúncio, no centavo, e o mesmo selo "acima"', contas.flatMap(c => c.an.grupos.filter(g => g.lucroRs !== null && g.itens.length === 1 && g.m.investimento > 0).map(g => ({ c, g }))), ({ c, g }) => {
         const xs = c.lista.filter(x => x.a.itemId === g.itens[0].itemId);
         const dep = xs.reduce((t, x) => t + (x.depois === null ? NaN : cent(x.depois)), 0), ant = xs.reduce((t, x) => t + cent(x.antes), 0);
-        return (dep === cent(g.lucroRs) && ant === cent(g.sobraRs)) || `conta ${c.k} ${g.chave}: ads.html ${A.textoMontante(g)} × painel ${reais(dep)}`;
+        return (dep === cent(g.lucroRs) && ant === cent(g.sobraRs) && g.selos.includes('acima') === dep < 0 && (xs.length !== 1 || xs[0].acima === g.selos.includes('acima')))
+            || `conta ${c.k} ${g.chave}: ads.html ${A.textoMontante(g)} (${g.selos}) × painel ${reais(dep)} (${xs.map(x => x.acima)})`;
     });
-    prop('conta (receita = preço × vendas, SKU de 1 anúncio): lucro depois do Ads de ads.html = Σ "depois" do painel ("lucro/prejuízo R$ X depois do Ads")', cruz.filter(c => c.an.res.lucro !== null), c => {
+    prop('conta (SKU de 1 anúncio, com ou sem promoção no período, #26): lucro depois do Ads de ads.html = Σ "depois" do painel ("lucro/prejuízo R$ X depois do Ads")', cruz.filter(c => c.an.res.lucro !== null), c => {
         const dep = SHC.r2(c.lista.filter(x => x.depois !== null).reduce((t, x) => t + x.depois, 0));
         return (cent(dep) === cent(c.an.res.lucro) && SHC.moeda(Math.abs(dep)) === SHC.moeda(Math.abs(c.an.res.lucro))) || `conta ${c.k}: ${c.an.res.lucro} × ${dep}`;
     });
@@ -666,6 +670,25 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
     prop('#25 pares custo × receita em centavos: o texto do ACOS e do ROAS é o mesmo no KPI, na campanha, no SKU e no painel', vezes(300), () => {
         const cC = I(rnd, 1, 500000), rC = I(rnd, 1, 2000000), t = tela(cC / 100, rC / 100);
         return (igual(t.acos) && igual(t.roas) && Math.abs(dePct(t.acos[0]) - cC / rC * 100) <= 0.05 + 1e-9 && Math.abs(deX(t.roas[0]) - rC / cC) <= 0.005 + 1e-9) || `${cC} ÷ ${rC}: ${t.acos.join(' | ')} · ${t.roas.join(' | ')}`;
+    });
+}
+{   // #26: o mesmo lucro depois do Ads e o mesmo selo do anúncio em ads.html e no painel (SHC.adsLucro nas duas telas)
+    const cfg = { imposto_pct: 0, margem_alvo_pct: 10 }, custo = () => ({ custo: 50 }), sobraDe = it => SHC.sobraAnuncio(it, custo(), cfg);
+    const it = [{ itemId: 'MLB9000000002', sku: 'TST-F', titulo: 'Produto F', preco: 100, recebe: 80 }];   // sobra hoje R$ 30/un. (30%)
+    const duas = rows => { const snap = P.adsLigaCatalogo(contaFixa(rows, { semResumo: true }), it), an = A.analisa(snap, it, custo, cfg, []), l = P.adsEquilibrio(snap, it, sobraDe); return { g: an.grupos[0], l, an }; };
+    const a = duas([{ id: 'MLB9000000002', title: 'Produto F', campaignId: 7, cost: 57, totalAmount: 180, prints: 500, clicks: 12, unitsQuantity: 2 }]);   // 2 vendas a R$ 90
+    ok(A.textoMontante(a.g) === 'Ads R$ 57,00 · Prejuízo R$ 3,00' && a.g.selos.includes('acima') && a.l.length === 1 && a.l[0].depois === -3 && a.l[0].antes === 54 && a.l[0].acima === true
+        && a.l[0].acos > a.l[0].margem, `#26 vendido a R$ 90 com o preço de hoje R$ 100 (Ads R$ 57): "Prejuízo R$ 3,00" e "acima" nas duas telas, e o painel coerente com ACOS 31,7% > equilíbrio 30% (obtido: ${A.textoMontante(a.g)} × painel ${a.l[0].depois} ${a.l[0].acima})`);
+    const sv = duas([{ id: 'MLB9000000002', title: 'Produto F', campaignId: 7, cost: 12, totalAmount: 0, prints: 500, clicks: 12, unitsQuantity: 0 }]);
+    ok(sv.g.selos.includes('acima') && sv.g.selos.includes('semVenda') && sv.l[0].acima === true && sv.g.acao.tipo === 'tirar' && sv.an.res.acima === 1
+        && A.htmlSkus(sv.an.grupos, 'todos').indexOf('Acima do equilíbrio (1)') > 0 && /^1 produto passa do equilíbrio/.test(sv.an.manchete.acao),
+        `#26 gastou sem venda: "acima" nas duas telas (o painel já marcava) e a contagem da manchete = o filtro "Acima do equilíbrio (1)" (obtido: selos ${sv.g.selos} · ${sv.an.manchete.acao})`);
+    const rnd = semente(726);
+    prop('#26 preço do período ≠ preço de hoje (promoção): o lucro e o selo do anúncio são os mesmos nas duas telas, no centavo', vezes(400), () => {
+        const v = I(rnd, 1, 8), recC = I(rnd, 1, 12000) * v, costC = I(rnd, 1, recC);
+        const r = duas([{ id: 'MLB9000000002', title: 'Produto F', campaignId: 7, cost: costC / 100, totalAmount: recC / 100, prints: 500, clicks: 12, unitsQuantity: v }]);
+        return (r.l.length === 1 && cent(r.g.lucroRs) === cent(r.l[0].depois) && cent(r.g.sobraRs) === cent(r.l[0].antes) && r.g.selos.includes('acima') === r.l[0].acima
+            && Math.abs(cent(r.l[0].antes) - recC * 0.3) <= 0.5 + 1e-6) || `${v} vendas · receita ${recC} · Ads ${costC}: ${A.textoMontante(r.g)} × painel ${r.l[0].depois}`;
     });
 }
 

@@ -273,18 +273,18 @@
         const parte = 'Veredito sobre ' + SHC.moeda(SHC.r2(gastoTotal - semLig)) + ' de ' + SHC.moeda(gastoTotal) + ' (' + SHC.moeda(semLig) + ' de catálogo sem ligação a um anúncio seu).';
         return tipo === 'compensa' && semLig > gastoTotal - semLig ? 'Ads: sem veredito da conta toda. ' + parte : fato + ' ' + parte;
     };
-    // Ponto de equilíbrio por anúncio: sobra antes do Ads = sobra por unidade (preço de hoje) × vendas do Ads; acima = o Ads custou
-    // mais que essa sobra. ACOS = Ads ÷ receita do Ads; equilíbrio = margem antes do Ads (sobra ÷ preço). Sem custo → sem selo.
+    // Ponto de equilíbrio por anúncio: sobra antes do Ads = margem antes do Ads (sobra ÷ preço de hoje) × receita do Ads e lucro depois =
+    // antes − Ads, no centavo (SHC.adsLucro: a mesma conta de ads.html, A.montante); acima = o Ads custou mais que essa sobra (= ACOS acima
+    // do equilíbrio). Vendido abaixo do preço de hoje (promoção) a sobra cai junto. ACOS = Ads ÷ receita do Ads. Sem custo → sem selo.
     // → [{a, it, sobraUn, margem, acos, antes, depois, acima, semCusto}] (acima primeiro, depois maior gasto); só anúncio com gasto.
     P.adsEquilibrio = function (snap, itens, sobraDe) {
         const porId = {};
         (itens || []).forEach(it => { porId[it.itemId] = it; });
         return ((snap && snap.anuncios) || []).map(P.adsDoAnuncio).filter(a => a && a.gasto > 0).map(a => {
             const it = porId[a.itemId] || null, s = it ? sobraDe(it) : null, semCusto = !(s && s.sobra !== null);
-            const antes = semCusto ? null : SHC.r2(s.sobra * a.vendas);
+            const l = semCusto ? null : SHC.adsLucro(s.pct, a.receita, a.gasto);
             return { a, it, semCusto, sobraUn: semCusto ? null : s.sobra, margem: semCusto ? null : s.pct,
-                acos: a.receita > 0 ? a.gasto / a.receita * 100 : null, antes, depois: antes === null ? null : SHC.r2(antes - a.gasto),
-                acima: !semCusto && a.gasto > antes + 0.004 };
+                acos: a.receita > 0 ? a.gasto / a.receita * 100 : null, antes: l ? l.antes : null, depois: l ? l.depois : null, acima: !!l && l.acima };
         }).sort((x, y) => (y.acima - x.acima) || (y.a.gasto - x.a.gasto));
     };
     // Ads da conta no mês pelo Faturamento (fech:<conta>:<AAAA-MM>.porTipo): Product Ads e Publicidade de Seguidores.
