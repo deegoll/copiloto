@@ -438,6 +438,24 @@ console.log('Pedido de exclusão (rastreio 07/10, R10): os pedidos certos, o SKU
         const g4 = grupo(vazia, pad, itens), r4 = await clique(vazia, pad), x4 = r4.copiado || '';
         ok(g4 && g4.contaAgora === 1 && /^Assunto: .* – SKU: BOMBA-12V – Pedido: #2000000403\n/.test(x4) && !/2000000401|2000000402/.test(x4),
             'botão: pedido sem a situação lida (401) e o da mediação em 1ª pessoa (402) ficam fora; o caso sem situação não conta');
+        // Revisão 3: lista fechada do que é seguro. Qualquer outra situação (as do revisor, sem retrato real da tela) fica fora do pedido.
+        const segura = SHC.situacaoSegura || (() => null);
+        ok(['Aguardando sua resposta', 'Aguardando a devolução', 'Devolução em andamento', 'Reclamação encerrada', 'Reclamação resolvida', 'Reclamação fechada', 'Aguardando sua resposta até 10/10']
+            .every(m => segura(m) === true), 'situações seguras da lista fechada entram ("Aguardando sua resposta", "Aguardando a devolução", "Devolução em andamento", reclamação encerrada/resolvida/fechada)');
+        const naoSeguras = ['Vamos revisar o caso', 'O Mercado Livre está revisando o caso', 'Revisaremos o caso até 12/10', 'Em avaliação', 'Caso em avaliação pelo Mercado Livre', 'Aguardando a avaliação do Mercado Livre',
+            'Esperando a resposta do Mercado Livre', 'Aguardando o Mercado Livre', 'Estamos verificando o caso', 'Vamos verificar o caso', 'O Mercado Livre vai resolver', 'Vamos resolver até 12/10', 'Resolveremos até 12/10',
+            'O comprador acionou o Mercado Livre', 'Aguardando a análise', 'Analisando o caso', 'Revisando o caso', 'Mediação em andamento', 'Aguardando sua resposta. Pediram nossa ajuda', 'Reclamação encerrada com mediação', '', 'Situação desconhecida'];
+        ok(naoSeguras.every(m => segura(m) === false), 'qualquer outra situação fica fora (as 17 do revisor, mediação, mistura com mediação, vazia, desconhecida)');
+        const rev = { casos: [{ titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: aguarda }],
+            porPedido: { '2000000901': { motivo: pad, afetouReputacao: true, situacao: 'O Mercado Livre está revisando o caso', titulo: 'Bomba d’água 12V' },
+                '2000000902': { motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' },
+                '2000000903': { motivo: pad, afetouReputacao: true, situacao: 'Em avaliação', titulo: 'Bomba d’água 12V' },
+                '2000000904': { motivo: pad, afetouReputacao: true, situacao: 'Devolução em andamento', titulo: 'Bomba d’água 12V' } } };
+        const g9 = grupo(rev, pad, itens), r9 = await clique(rev, pad), x9 = r9.copiado || '';
+        ok(g9 && JSON.stringify(g9.pedidos) === '["2000000902","2000000904"]' && /- Pedidos: #2000000902, #2000000904\./.test(x9) && !/2000000901|2000000903/.test(x9),
+            'botão: "O Mercado Livre está revisando o caso" (901) e "Em avaliação" (903) ficam fora; só as situações seguras entram (antes: o 901 entrava)');
+        const todasFora = { casos: [{ titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: 'Vamos revisar o caso' }], porPedido: {} };
+        ok(!grupo(todasFora, pad, itens) && !((await clique(todasFora, pad)).copiado), 'caso só com situação fora da lista: nenhum grupo, nada copiado');
     })();
     espera.then(() => pendentes.reduce((p, fn) => p.then(fn), Promise.resolve())).then(() => { console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK'); process.exit(f ? 1 : 0); }, e => { console.error(e); process.exit(1); });
 }

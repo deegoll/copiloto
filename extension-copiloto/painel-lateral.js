@@ -1675,7 +1675,8 @@
      */
     P.grupoExclusao = function (pv, mot, itens) {
         if (!pv || !SHC.motivoExcluivel(mot)) return null;
-        const fora = s => !!String(s || '').trim() && !SHC.emMediacao(s);
+        // Revisão 3: só a situação da lista fechada do que é seguro (SHC.situacaoSegura, com o SHC.emMediacao como veto extra); o resto fica fora.
+        const fora = s => SHC.situacaoSegura(s);
         const cs = (pv.casos || []).filter(c => c && c.motivo === mot && fora(c.situacao));
         const pp = SHC.posvendaPorPedido(pv) || {};
         const pedidos = Object.keys(pp).filter(n => pp[n] && pp[n].motivo === mot && pp[n].afetouReputacao !== false && fora(pp[n].situacao));
