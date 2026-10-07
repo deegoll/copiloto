@@ -6193,8 +6193,10 @@
                 if (n >= 0) concNoRec.add(n);
                 return `<li class="acao at"><div class="tx"><b>Pedido ${esc(y.pedido)}</b><span>${esc(curtoTxt(y.cobranca, 34))} · ${SHC.moeda(y.valor)} a mais</span></div><button class="bt leve pq" data-conc-copiar="${n}">${concCopiado === n ? '✓ Copiado' : 'Copiar chamado'}</button></li>`;
             };
+            // Remessa do Full pendente (rec.fullConferir; não é mais parcela): o motivo, o prazo e o "Reclamar no ML", sem R$.
+            const itFull = y => `<li class="acao ${y.prazo ? 'pr' : 'at'}"><div class="tx"><b>Remessa ${esc(y.id)}</b><span>${esc([(y.motivos || [])[0], y.prazo ? 'até ' + P.dataBr(y.prazo).slice(0, 5) : ''].filter(Boolean).join(' · '))}</span></div><a class="bt ml pq" href="${esc(y.link)}" target="_blank" rel="noopener">Reclamar no ML</a></li>`;
             // v3.2.0: "Dá para recuperar" aparece 1 vez só (no KPI); o cartão diz o que fazer.
-            h += `<div class="card" id="concRec"><div class="ch"><h3>Como pedir de volta</h3><span class="selo at">${rec.parcelas.length ? 'estimativa' : 'vale conferir'}</span></div>`
+            h += `<div class="card" id="concRec"><div class="ch"><h3>Como pedir de volta</h3><span class="selo at">${rec.parcelas.length ? 'estimativa' : devConf ? 'vale conferir' : 'para conferir'}</span></div>`
                 + rec.parcelas.map(p => `<p class="rs" style="margin:8px 0 2px"><b>${esc(p.rotulo)}</b> · ${SHC.moeda(p.valor)}${p.curta ? ` · <span title="${esc('Origem: ' + p.origem)}">${esc(p.curta)}</span>` : ''}</p><ul class="acoes">${vmLista('conc:rec:' + p.id, p.itens, 3)[0].map(y => it(p, y)).join('')}</ul>`
                     + (p.itens.length > 3 ? `<p class="rs">${vmLista('conc:rec:' + p.id, p.itens, 3)[1]}</p>` : '')).join('')
                 + (devConf ? `<p class="det"><span class="pt at"></span>Fora do total: ${SHC.moeda(rec.devConferir.valor)} em tarifas de devolução que valem conferir (aba Frete).</p>` : '')
