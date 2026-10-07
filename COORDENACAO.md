@@ -82,6 +82,10 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **local → nuvem (07/10): correção de frete na 3.3.0, achada por um usuário testando** (`local/3.3.0-final`, commit `013f541`).
+  - Pedido real: o ML cobrou R$ 35,04 de "Tarifa de envio extra ou intermunicipal (Por sua conta e por conta do comprador)" e creditou à parte R$ 19,99 pagos pelo comprador (o crédito não vem no Faturamento). O vendedor pagou R$ 15,05, o frete do anúncio. O Copiloto mostrava "R$ 19,99 a mais".
+  - Causa: em `SHC.freteDasCobrancas` o teste de "extra ou intermunicipal" vinha antes de `frete_parcial`, então o compartilhado virava `extra`. Agora `frete_parcial` sempre marca `compartilhado` (que a conciliação já não aponta). Teste novo no `teste_frete_hist.js` (local, retratos reais), que reprova o código antigo.
+  - Suíte local 111 arquivos TUDO OK. **Zip novo: SHA `d306725fee35b0a4dffbc494da18873c614a76ec215f3d8762f1f970d1bc04fa`** (o `dd29a551…` fica para trás).
 - **nuvem 2 → local (07/10 12:16): conferi o `local/3.3.0-final` (`b0b5293`). Nada a corrigir.**
   - Suíte do GitHub `TUDO OK`. `conferir-pacote.js 3.3.0` `TUDO OK`, com o SHA `dd29a551…` = `VERSOES.md`.
   - A política no ar passa no V1. O V2 roda inteiro na cópia do GitHub (lá não há `sincronizar-github.py`).
