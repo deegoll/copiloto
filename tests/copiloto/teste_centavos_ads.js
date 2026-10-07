@@ -31,7 +31,8 @@
 //   6) [corrigida em parte, #26] Lucro depois do Ads do MESMO anúncio diferia entre ads.html (margem % × receita do Ads) e o painel (sobra de
 //      hoje × unidades): vendido abaixo do preço de hoje → "Prejuízo R$ 3,00" × "Lucro R$ 3,00". Agora as duas telas usam SHC.adsLucro (margem ×
 //      receita, por anúncio, no centavo). Fica de fora: a venda atribuída a um anúncio com gasto R$ 0 (outra campanha) entra só em ads.html
-//      (o painel lista só anúncio com gasto) → "Lucro R$ 50,00" × "Prejuízo R$ 10,00"; e o aviso do fundo (SHC.alertasDe) ainda usa sobra × unidades.
+//      (o painel lista só anúncio com gasto) → "Lucro R$ 50,00" × "Prejuízo R$ 10,00". O aviso do fundo (SHC.alertasDe: ícone e sino) também
+//      usa SHC.adsLucro e conta o mesmo anúncio que o cartão Alertas do painel (antes: sobra de hoje × unidades, discordava nos dois sentidos).
 //   7) [corrigida, #27] Sem o resumo do ML (falha da chamada campaigns/metrics): ads.html somava as campanhas e o painel os anúncios lidos →
 //      R$ 100,00 × R$ 60,00 com a lista de anúncios em parte, e a linha "Total" do painel ≠ soma das linhas. Agora o painel soma as campanhas
 //      (P.adsConta) e a linha Total é a soma das linhas (P.adsCampanhasTotal).
@@ -677,7 +678,7 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
 {   // #26: o mesmo lucro depois do Ads e o mesmo selo do anúncio em ads.html e no painel (SHC.adsLucro nas duas telas)
     const cfg = { imposto_pct: 0, margem_alvo_pct: 10 }, custo = () => ({ custo: 50 }), sobraDe = it => SHC.sobraAnuncio(it, custo(), cfg);
     const it = [{ itemId: 'MLB9000000002', sku: 'TST-F', titulo: 'Produto F', preco: 100, recebe: 80 }];   // sobra hoje R$ 30/un. (30%)
-    const duas = rows => { const snap = P.adsLigaCatalogo(contaFixa(rows, { semResumo: true }), it), an = A.analisa(snap, it, custo, cfg, []), l = P.adsEquilibrio(snap, it, sobraDe); return { g: an.grupos[0], l, an }; };
+    const duas = rows => { const snap = P.adsLigaCatalogo(contaFixa(rows, { semResumo: true }), it), an = A.analisa(snap, it, custo, cfg, []), l = P.adsEquilibrio(snap, it, sobraDe); return { g: an.grupos[0], l, an, snap }; };
     const a = duas([{ id: 'MLB9000000002', title: 'Produto F', campaignId: 7, cost: 57, totalAmount: 180, prints: 500, clicks: 12, unitsQuantity: 2 }]);   // 2 vendas a R$ 90
     ok(A.textoMontante(a.g) === 'Ads R$ 57,00 · Prejuízo R$ 3,00' && a.g.selos.includes('acima') && a.l.length === 1 && a.l[0].depois === -3 && a.l[0].antes === 54 && a.l[0].acima === true
         && a.l[0].acos > a.l[0].margem, `#26 vendido a R$ 90 com o preço de hoje R$ 100 (Ads R$ 57): "Prejuízo R$ 3,00" e "acima" nas duas telas, e o painel coerente com ACOS 31,7% > equilíbrio 30% (obtido: ${A.textoMontante(a.g)} × painel ${a.l[0].depois} ${a.l[0].acima})`);
@@ -691,6 +692,20 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
         const r = duas([{ id: 'MLB9000000002', title: 'Produto F', campaignId: 7, cost: costC / 100, totalAmount: recC / 100, prints: 500, clicks: 12, unitsQuantity: v }]);
         return (r.l.length === 1 && cent(r.g.lucroRs) === cent(r.l[0].depois) && cent(r.g.sobraRs) === cent(r.l[0].antes) && r.g.selos.includes('acima') === r.l[0].acima
             && Math.abs(cent(r.l[0].antes) - recC * 0.3) <= 0.5 + 1e-6) || `${v} vendas · receita ${recC} · Ads ${costC}: ${A.textoMontante(r.g)} × painel ${r.l[0].depois}`;
+    });
+    // #26 (revisão): o aviso do fundo (SHC.alertasDe → número do ícone, sino e "N coisas pedem sua atenção") usa a mesma conta do cartão
+    // Alertas do painel (P.alertas de P.adsEquilibrio) e de ads.html. Antes usava sobra de hoje × unidades e discordava nos dois sentidos.
+    const avisos = r => ({ ic: SHC.alertasDe({ ads: r.snap, itens: it, custos: { [SHC.chaveSku('TST-F')]: custo() }, cfg, hoje: '2026-10-07', full: { produtos: [] } }), card: P.alertas([], r.l, [], {}) });
+    const va = avisos(a), ac = duas([{ id: 'MLB9000000002', title: 'Produto F', campaignId: 7, cost: 62, totalAmount: 220, prints: 500, clicks: 12, unitsQuantity: 2 }]), vb = avisos(ac);   // 2 vendas a R$ 110
+    ok(va.ic.ads === 1 && va.card.ads === 1 && va.ic.lista[0].texto === 'O Ads gastou R$ 57,00 e a sobra dessas vendas antes do Ads era R$ 54,00 (margem de 30%).' && va.ic.lista[0].excesso === 3,
+        `#26 vendido a R$ 90 (Ads R$ 57, "Prejuízo R$ 3,00" em ads.html): o ícone conta 1 como o cartão Alertas, sobra antes do Ads R$ 54,00 (obtido: ícone ${va.ic.ads} · cartão ${va.card.ads} · ${va.ic.lista.map(x => x.texto).join('')})`);
+    ok(A.textoMontante(ac.g) === 'Ads R$ 62,00 · Lucro R$ 4,00' && !ac.g.selos.includes('acima') && vb.ic.ads === 0 && vb.card.ads === 0 && vb.ic.criticos === 0,
+        `#26 vendido a R$ 110 (Ads R$ 62, "Lucro R$ 4,00" em ads.html): nem o ícone nem o cartão Alertas avisam (obtido: ícone ${vb.ic.ads} ${vb.ic.lista.map(x => x.texto).join('')} · cartão ${vb.card.ads})`);
+    const rnd2 = semente(7262);
+    prop('#26 preço do período ≠ preço de hoje: o ícone (SHC.alertasDe) avisa ⇔ o cartão Alertas do painel avisa ⇔ ads.html dá o selo "acima", e a sobra do aviso = "antes" do painel', vezes(400), () => {
+        const v = I(rnd2, 0, 8), recC = v ? I(rnd2, 1, 12000) * v : 0, costC = I(rnd2, 1, Math.max(recC, 500));
+        const r = duas([{ id: 'MLB9000000002', title: 'Produto F', campaignId: 7, cost: costC / 100, totalAmount: recC / 100, prints: 500, clicks: 12, unitsQuantity: v }]), x = avisos(r), sel = r.g.selos.includes('acima') ? 1 : 0;
+        return (x.ic.ads === sel && x.card.ads === sel && (!sel || cent(x.ic.lista[0].excesso) === costC - cent(r.l[0].antes))) || `${v} vendas · receita ${recC} · Ads ${costC}: ${A.textoMontante(r.g)} · ícone ${x.ic.ads} · cartão ${x.card.ads}`;
     });
 }
 {   // #27: sem o resumo do ML (campaigns/metrics falhou) e com a lista de anúncios em parte: o mesmo Investimento nas duas telas e Total = Σ campanhas
