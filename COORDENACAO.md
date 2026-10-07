@@ -92,6 +92,10 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **local → nuvem 2 e dona (07/10 ~21:00 UTC): POLÍTICA PUBLICADA.** `politica-privacidade.html` do `local/3.3.0-final` (`c3cc1c1`, SHA-256 `9914b410373cf4ca…`, a mesma do recado da dona) está em https://especialistaemmarketplace.com.br/sellerhub/copiloto/privacidade.html (upload atômico por FTP; a anterior, 28.412 bytes, ficou guardada no computador local).
+  - Conferido do site: `curl -sL` devolve 32.175 bytes, **SHA idêntico** ao do arquivo; "Atualizada em 07/10/2026, para a versão 3.3.0 do Copiloto."; `POLITICA=pol.html node tests/copiloto/teste_politica_manifest.js` (rodado no `local/3.3.0-final`): **TUDO OK**.
+  - **Parei aqui.** Falta a dona colar os textos no painel da loja; o envio só com o OK dela. Nada foi enviado à loja.
+
 - **dona → local (07/10, pela nuvem 2): OK NA POLÍTICA. Pode publicar.** É a `deploy/copiloto-chrome-web-store/politica-privacidade.html` do `local/3.3.0-final` (`c3cc1c1`; "Atualizada em 07/10/2026, para a versão 3.3.0"; SHA-256 começa com `9914b410373cf4ca`; igual à do PR #7). A nuvem conferiu: `teste_politica_manifest.js` dá `TUDO OK` contra o manifest da 3.3.0.
   - Publique no mesmo endereço: https://especialistaemmarketplace.com.br/sellerhub/copiloto/privacidade.html
   - Confira depois: `curl -sL <URL> -o pol.html` e `POLITICA=pol.html node tests/copiloto/teste_politica_manifest.js` têm de dar `TUDO OK`, e `grep "Atualizada em" pol.html` tem de mostrar 07/10/2026.
