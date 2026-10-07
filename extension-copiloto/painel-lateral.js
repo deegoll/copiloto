@@ -1751,6 +1751,19 @@
         const ap = id && cfg && cfg.apelidos && cfg.apelidos[id] ? String(cfg.apelidos[id]).trim().slice(0, 40) : '';
         return { nome: ap, temNome: !!ap, idTxt: id ? 'ID ' + String(id) : '', iniciais: P.iniciais(ap) };
     };
+    // v3.3 multi-empresa (bloqueio 5): opção do seletor de contas do topo — a conta marcada "Outra empresa" em Ajustes diz isso.
+    P.contaOpcao = (c, cfg) => {
+        const q = P.contaTopo(c.sellerId, cfg), sep = (cfg && cfg.empresaSeparada) || {};
+        return (q.nome || 'Sem nome') + ' · ' + q.idTxt + (c.atual ? ' (aberta no ML)' : '') + (sep[c.sellerId] === true ? ' (outra empresa)' : '');
+    };
+    // "Todas as contas" por EMPRESA: c = SHC.consolidado; vista = 'todas' | sellerId; nomeDe(sellerId) = nome da conta separada.
+    // → [{ empresa, titulo, linhas, total }] — cada empresa com as contas e o total DELA (empresas diferentes nunca se somam); uma conta só, sem total.
+    P.contasJuntasGrupos = (c, vista, nomeDe) => {
+        if (!c) return [];
+        if (vista !== 'todas') return [{ empresa: null, titulo: '', linhas: c.contas.filter(x => x.sellerId === vista), total: null }];
+        return (c.empresas || []).map(g => ({ empresa: g.empresa, titulo: !c.variasEmpresas ? '' : g.empresa ? 'Outra empresa · ' + (nomeDe ? nomeDe(g.empresa) : 'ID ' + g.empresa) : 'Empresa principal',
+            linhas: c.contas.filter(x => (x.empresa || '') === g.empresa), total: g.total }));
+    };
 
     // ── v2.7: remessas do Full (lista + detalhe), próxima remessa, perguntas, reputação, apelidos das contas ──
     P.remessaLink = id => 'https://vendedores.mercadolivre.com.br/shipping/inbounds/' + encodeURIComponent(String(id)) + '/details';
@@ -3248,7 +3261,7 @@
             const p = vista === 'todas' ? null : P.contaTopo(vid, cfg);
             const vis = p ? pilula(p.iniciais, p.temNome ? p.nome : DAR_NOME, p.temNome, p.idTxt) : pilula(String(contasLista.length), 'Todas as contas', true, contasLista.length + ' contas');
             el.innerHTML = `<span class="conta-in" aria-hidden="true">${vis}${chev}</span><select id="selConta" aria-label="Conta: ${esc(p ? (p.nome || 'sem nome') + ', ' + p.idTxt : 'Todas as contas')}. Trocar de conta">`
-                + contasLista.map(c => { const q = P.contaTopo(c.sellerId, cfg); return `<option value="${esc(c.sellerId)}"${(vista === 'atual' && c.atual) || vista === c.sellerId ? ' selected' : ''}>${esc((q.nome || 'Sem nome') + ' · ' + q.idTxt)}${c.atual ? ' (aberta no ML)' : ''}</option>`; }).join('')
+                + contasLista.map(c => `<option value="${esc(c.sellerId)}"${(vista === 'atual' && c.atual) || vista === c.sellerId ? ' selected' : ''}>${esc(P.contaOpcao(c, cfg))}</option>`).join('')
                 + `<option value="todas"${vista === 'todas' ? ' selected' : ''}>Todas as contas</option><option value="nomes">Dar nome às contas…</option></select>`;
             el.title = p ? `${p.nome || 'Sem nome'} · ${p.idTxt}` : 'Todas as contas';
         } else if (conta) {
@@ -3268,19 +3281,22 @@
         }, 60);
     }
     // Cartão do topo da Geral quando a vista não é a conta aberta: "Todas as contas" (SHC.consolidado) ou outra conta (linha dela + como trocar no ML).
+    // v3.3 multi-empresa (bloqueio 5): "Todas as contas" por EMPRESA (P.contasJuntasGrupos): cada uma com o total dela, nunca somadas.
     function cardContasJuntas() {
         if (vista === 'atual' || contasLista.length < 2) return '';
         const mes = SHC.hoje().slice(0, 7), c = SHC.consolidado(dadosC, mes), hoje = SHC.hoje();
-        const m = v => (v === null || v === undefined ? '—' : SHC.moeda(v)), linhas = vista === 'todas' ? c.contas : c.contas.filter(x => x.sellerId === vista);
-        const outra = vista !== 'todas' ? contasLista.find(x => x.sellerId === vista) : null;
+        const m = v => (v === null || v === undefined ? '—' : SHC.moeda(v)), grupos = P.contasJuntasGrupos(c, vista, id => (contasLista.find(x => x.sellerId === id) || {}).nome || 'ID ' + id);
+        const linhas = [].concat(...grupos.map(g => g.linhas)), outra = vista !== 'todas' ? contasLista.find(x => x.sellerId === vista) : null;
+        const tabela = g => `${g.titulo ? `<p class="rs" style="margin:10px 0 2px"><b>${esc(g.titulo)}</b></p>` : ''}<table class="tabf"><thead><tr><th>Conta</th><th>Vendas brutas</th><th>Líquido</th><th>Alertas</th></tr></thead><tbody>
+          ${g.linhas.map(x => `<tr><td>${esc(x.nome)}${x.parcial ? ' <span class="det">(parcial)</span>' : ''}</td><td>${m(x.vendasBrutas)}</td><td>${m(x.liquido)}</td><td>${x.alertas === null ? '—' : x.alertas}</td></tr>`
+            + (x.motivo ? `<tr><td colspan="4" class="det" style="padding-top:0">${esc(x.motivo)}</td></tr>` : '')).join('')}</tbody>
+          ${g.total ? `<tfoot><tr><td>Total${c.variasEmpresas ? ' desta empresa' : ''} (${g.total.contasComVendas} de ${g.linhas.length} contas)</td><td>${m(g.total.vendasBrutas)}</td><td>${m(g.total.liquido)}</td><td>${g.total.alertas === null ? '—' : g.total.alertas}</td></tr></tfoot>` : ''}</table>`;
         // v3.3 (E2): com 2 canais, as contas aqui são só do ML (etiqueta); com 1 canal, nada muda
         return `<div class="card" id="cardContasJuntas"><b style="font-size:13px">${outra ? esc(outra.nome) : 'Todas as contas'} · ${esc(P.mesLongo(mes))} até ${esc(P.dataBr(hoje))}</b>${canaisAgora().length > 1 ? ' <span class="so-ml">só Mercado Livre</span>' : ''}
           ${outra ? `<p class="recnota neutra" style="margin:6px 0 0">Você está com outra conta aberta no Mercado Livre. Para ver os detalhes desta, troque de conta lá e sincronize. Abaixo, o que já foi lido dela.</p>` : ''}
-          ${linhas.length > 3 ? `<p class="rs">${esc(SHC.qtd(linhas.length, 'conta', 'contas'))} · ${m(c.total.vendasBrutas)} bruto · ${m(c.total.liquido)} líquido ${btVer('geral:contas', `Ver mais (${linhas.length})`)}</p>` : ''}
-          ${linhas.length > 3 && !aberto('geral:contas') ? '' : `<table class="tabf"><thead><tr><th>Conta</th><th>Vendas brutas</th><th>Líquido</th><th>Alertas</th></tr></thead><tbody>
-          ${linhas.map(x => `<tr><td>${esc(x.nome)}${x.parcial ? ' <span class="det">(parcial)</span>' : ''}</td><td>${m(x.vendasBrutas)}</td><td>${m(x.liquido)}</td><td>${x.alertas === null ? '—' : x.alertas}</td></tr>`
-            + (x.motivo ? `<tr><td colspan="4" class="det" style="padding-top:0">${esc(x.motivo)}</td></tr>` : '')).join('')}</tbody>
-          ${vista === 'todas' ? `<tfoot><tr><td>Total (${c.total.contasComVendas} de ${c.contas.length} contas)</td><td>${m(c.total.vendasBrutas)}</td><td>${m(c.total.liquido)}</td><td>${c.total.alertas === null ? '—' : c.total.alertas}</td></tr></tfoot>` : ''}</table>
+          ${linhas.length > 3 ? `<p class="rs">${esc(SHC.qtd(linhas.length, 'conta', 'contas'))} · ${c.total ? m(c.total.vendasBrutas) + ' bruto · ' + m(c.total.liquido) + ' líquido' : esc(SHC.qtd(grupos.length, 'empresa', 'empresas')) + ', cada uma com o total dela'} ${btVer('geral:contas', `Ver mais (${linhas.length})`)}</p>` : ''}
+          ${linhas.length > 3 && !aberto('geral:contas') ? '' : `${grupos.map(tabela).join('')}
+          ${vista === 'todas' && c.variasEmpresas ? '<p class="det">As contas marcadas como “Outra empresa” em Ajustes têm o total delas: o faturamento de empresas diferentes não se soma.</p>' : ''}
           <p class="det">Líquido = vendas brutas − canceladas e devolvidas − tudo o que o Mercado Livre cobrou no mês (a mesma conta do Fechamento). Só entram as contas em que você já entrou neste Chrome; os dados de cada uma são da última sincronização feita nela.</p>`}
           <div class="acoes" style="justify-content:flex-start;flex-wrap:wrap"><button class="bt leve" data-trocar-conta>Trocar de conta no Mercado Livre</button><button class="lnk" data-ir-aba="ajustes">Dar apelidos às contas</button></div></div>`;
     }

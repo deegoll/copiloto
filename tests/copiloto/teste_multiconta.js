@@ -341,8 +341,14 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         mem['ml:conta'] = A; await espera();
         ok((await S.lerCfg()).configurado !== true && mem.cfg.configurado === undefined, 'salvar o imposto da outra empresa não marca a primeira como configurada');
         // Empresa forçada: a importação que começou na primeira empresa grava nela mesmo com a outra aberta agora.
+        // Bloqueio 5: com a lista de contas preenchida (vazia, qualquer filtro passava): 3 contas, a OUTRA separada.
+        mem['ml:conta'] = OUTRA; mem['ml:contas'] = { [A]: { visto: 3 }, '900000003': { visto: 2 }, [OUTRA]: { visto: 1 } }; await espera();
+        const idsDe = l => l.map(x => x.sellerId).sort().join(',');
+        ok(idsDe(await S.contasDaEmpresa('')) === A + ',900000003' && idsDe(await S.contasDaEmpresa(OUTRA)) === OUTRA && idsDe(await S.contasDaEmpresa()) === OUTRA,
+            'contasDaEmpresa(empresa) devolve exatamente as contas da empresa pedida (principal: A e a 3ª; separada e aberta: só ela)');
+        mem['ml:conta'] = A; await espera();
+        ok(idsDe(await S.contasDaEmpresa()) === A + ',900000003', 'com a principal aberta: as duas contas dela, nunca a separada');
         mem['ml:conta'] = OUTRA; await espera();
-        ok((await S.contasDaEmpresa('')).every(x => x.sellerId !== OUTRA) && (await S.contasDaEmpresa(OUTRA)).every(x => x.sellerId === OUTRA), 'contasDaEmpresa(empresa) devolve as contas da empresa pedida');
         require(path.join(EXT, 'tiny.js'));
         await S.tinyGravar([{ sku: 'IMP-01', custo: 33 }], 'tiny', { empresa: '' });
         ok(mem['c|sku|IMP-01'] && mem['c|sku|IMP-01'].custo === 33 && !mem['c|sku@' + OUTRA + '|IMP-01'], 'tinyGravar com a empresa do começo: grava nela, mesmo com a outra aberta');
@@ -396,6 +402,30 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         const dA = await TT.ler();
         ok(dA && dA.conta === LA && dA.custos['c|sku|KIT-01'].custo === 10 && !Object.keys(dA.custos).some(x => /@/.test(x)), 'de volta à principal: a loja dela, com os custos dela (KIT-01 = R$ 10)');
         ok(await TT.apagarDados() >= 4 && !Object.keys(mem).some(k => /^tt[:@]/.test(k)), '"Apagar dados do TikTok" apaga a loja das 2 empresas');
+        console.log('l) bloqueio 5: "Todas as contas" nunca soma o faturamento de empresas diferentes');
+        require(path.join(EXT, 'ml-extrator.js')); require(path.join(EXT, 'painel-lateral.js'));
+        const C3 = '900000003', P = Object.assign({ contasJuntasGrupos: () => [], contaOpcao: () => '' }, S.pl), vbDe = v => ({ dias: { '2026-09-01': { bruto: v, unidades: 1, vendas: 1, cancelado: 0, devolvido: 0 } }, mesesLidos: ['2026-09'] });
+        Object.assign(mem, { 'ml:conta': A, 'ml:contas': { [A]: { visto: 3 }, [C3]: { visto: 2 }, [OUTRA]: { visto: 1 } },
+            ['vb:' + A]: vbDe(1000), ['vb:' + C3]: vbDe(2000), ['vb:' + OUTRA]: vbDe(5000),
+            ['fech:' + A + ':2026-09']: { total: 100 }, ['fech:' + C3 + ':2026-09']: { total: 200 }, ['fech:' + OUTRA + ':2026-09']: { total: 500 },
+            ['shc:anomalias:' + A]: { total: 1 }, ['shc:anomalias:' + C3]: { total: 2 }, ['shc:anomalias:' + OUTRA]: { total: 7 } });
+        mem.cfg = Object.assign({}, mem.cfg, { empresaSeparada: { [OUTRA]: true }, apelidos: { [A]: 'Loja A', [C3]: 'Loja C', [OUTRA]: 'Empresa 2' } });
+        await espera();
+        const dc = await S.dadosContas('2026-09'), cj = S.consolidado(dc, '2026-09'), emp = id => (dc.find(x => x.sellerId === id) || {}).empresa;
+        ok(emp(A) === '' && emp(C3) === '' && emp(OUTRA) === OUTRA, 'dadosContas diz a empresa de cada conta ("" = principal; a separada, o id dela)');
+        const tot = e => (cj.empresas.find(g => g.empresa === e) || {}).total || {};
+        ok(cj.total === null && cj.variasEmpresas && cj.empresas.length === 2 && tot('').vendasBrutas === 3000 && tot('').liquido === 2700 && tot('').alertas === 3
+            && tot(OUTRA).vendasBrutas === 5000 && tot(OUTRA).liquido === 4500 && tot(OUTRA).alertas === 7,
+            'total por empresa (principal 3.000 / outra 5.000) e nenhum total geral somando as duas (nunca 8.000)');
+        const grupos = P.contasJuntasGrupos(cj, 'todas', id => (id === OUTRA ? 'Empresa 2' : id));
+        ok(grupos.length === 2 && grupos[0].titulo === 'Empresa principal' && grupos[0].linhas.map(x => x.sellerId).sort().join(',') === A + ',' + C3 && grupos[0].total.vendasBrutas === 3000
+            && grupos[1].titulo === 'Outra empresa · Empresa 2' && grupos[1].linhas.length === 1 && grupos[1].total.vendasBrutas === 5000, 'o cartão mostra um bloco por empresa, cada um com o total dele');
+        const cfgP = await S.lerCfg();
+        ok(/\(outra empresa\)$/.test(P.contaOpcao({ sellerId: OUTRA }, cfgP)) && !/outra empresa/.test(P.contaOpcao({ sellerId: C3 }, cfgP)) && /\(aberta no ML\)$/.test(P.contaOpcao({ sellerId: A, atual: true }, cfgP)),
+            'no seletor do topo, a conta separada aparece com "(outra empresa)"');
+        const um = S.consolidado(dc.map(x => Object.assign({}, x, { empresa: '' })), '2026-09');
+        ok(!um.variasEmpresas && um.total && um.total.vendasBrutas === 8000 && P.contasJuntasGrupos(um, 'todas').length === 1 && P.contasJuntasGrupos(um, 'todas')[0].titulo === '',
+            'sem conta separada (uma empresa só): o total de todas as contas continua (8.000)');
     }
 
     // Importação pelo fundo: o ML troca para a conta da OUTRA empresa no meio da leitura do Tiny → tudo vai para a empresa do começo.
