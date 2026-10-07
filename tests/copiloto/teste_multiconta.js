@@ -14,6 +14,17 @@ require('./relogio').fixar();
 const montaFundo = require('./fundo_falso'), { B, paginaAnuncios, html } = montaFundo;
 // Ordem das etapas da sincronização (SHC.SYNC_ETAPAS do fundo).
 const SHC_ETAPAS = F => F.ctx.SHC.SYNC_ETAPAS.map(e => e.id);
+// O código de verdade de uma tela, tirado do arquivo: de src[ini] até a chave que fecha o 1º bloco (pula textos entre aspas). → texto | ''.
+function trecho(src, ini) {
+    if (!(ini >= 0)) return '';
+    for (let k = src.indexOf('{', ini), prof = 0; k >= 0 && k < src.length; k++) {
+        const c = src[k];
+        if (c === "'" || c === '"' || c === '`') { for (k++; k < src.length && src[k] !== c; k++) if (src[k] === '\\') k++; continue; }
+        if (c === '{') prof++;
+        else if (c === '}' && --prof === 0) return src.slice(ini, k + 1);
+    }
+    return '';
+}
 // ml-tela.js (a parte do navegador: etiquetas na página do ML) num vm com um DOM mínimo de mentira. op = { dados, url, script (texto do
 // __NORDIC_RENDERING_CTX__) }. querySelector de um elemento devolve sempre o mesmo filho por seletor (o '.outra' do aviso, o '.pop input').
 function montaTela(op) {
@@ -51,7 +62,7 @@ function montaTela(op) {
     ['calc.js', 'store.js', 'ml-extrator.js', 'ml-tela.js'].forEach(a => vm.runInContext(fs.readFileSync(path.join(EXT, a), 'utf8'), ctx, { filename: a }));
     const sr = () => criados.find(e => e.tagName === '#SHADOW'), aviso = () => (sr() ? sr().querySelector('.outra') : null);
     return { criados, enviados, mem, aviso,
-        espera: ms => new Promise(r => setTimeout(r, ms || 400)),
+        espera: ms => new Promise(r => setTimeout(r, ms || 300)),
         trocaConta: c => { const v = mem['ml:conta']; mem['ml:conta'] = c; ouvStorage.forEach(f => f({ 'ml:conta': { oldValue: v, newValue: c } }, 'local')); },
         // "＋ Informar custo" da etiqueta → digita o valor → "Salvar" (o popover do host). → o texto de erro do popover ('' = salvou).
         salva: async (bt, valor) => {
@@ -325,17 +336,17 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
     {
         const pag = paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20, sku: 'KIT-01' }], A), script = /<script id="__NORDIC_RENDERING_CTX__">([\s\S]*?)<\/script>/.exec(pag)[1];
         const T = montaTela({ dados: { 'ml:conta': A, cfg: { empresaSeparada: { [OUTRA]: true } } }, url: B + '/anuncios/lista', script });
-        await T.espera(800);
+        await T.espera(300);
         const botoes = () => T.criados.filter(e => e.textContent === '＋ Informar custo'), bt = botoes()[0];
         ok(bt && (!T.aviso() || T.aviso().style.display !== 'block'), 'página da A com o Copiloto na A: a etiqueta aparece, sem aviso');
         T.trocaConta(OUTRA);   // a sincronização da OUTRA (outra empresa) gravou ml:conta com esta aba aberta
-        await T.espera(800);
+        await T.espera(300);
         ok(T.aviso() && T.aviso().style.display === 'block' && /final 0001/.test(T.aviso().querySelector('.t').textContent) && botoes().length === 1,
             'a conta da página é conferida de novo: aviso "outra conta" e nenhuma etiqueta nova com os números da OUTRA');
         const erro = await T.salva(bt, '25');
         ok(/outra conta/.test(erro) && !Object.keys(T.mem).some(k => /^c\|/.test(k)), 'custo digitado na etiqueta que já estava na tela: não grava (nem na empresa da OUTRA, nem na da A)');
         T.trocaConta(A);
-        await T.espera(800);
+        await T.espera(300);
         ok(T.aviso().style.display === 'none', 'a conta volta a bater: o aviso some sozinho');
         const erro2 = await T.salva(bt, '25');
         ok(!erro2 && T.mem['c|sku|KIT-01'] && T.mem['c|sku|KIT-01'].custo === 25 && !T.mem['c|sku@' + OUTRA + '|KIT-01'], 'controle: com a conta certa o custo grava na empresa da página (a A)');
@@ -344,15 +355,16 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
     console.log('e) empresa separada: custos por SKU, números da empresa e ERP só da conta marcada');
     {
         const path = require('path'), EXT = path.join(__dirname, '../../extension-copiloto');
-        const mem = {}, cp = v => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+        const mem = {}, cp = v => (v === undefined ? undefined : JSON.parse(JSON.stringify(v))), ouvStore = [];
         global.chrome = { storage: { local: {
             get: async k => { const o = {}; (k === null ? Object.keys(mem) : [].concat(k)).forEach(x => { if (x in mem) o[x] = cp(mem[x]); }); return o; },
             set: async o => { Object.keys(o).forEach(x => { mem[x] = cp(o[x]); }); },
             remove: async k => { [].concat(k).forEach(x => delete mem[x]); },
-        } }, runtime: { sendMessage: async () => ({}) } };
+        }, onChanged: { addListener: f => ouvStore.push(f) } }, runtime: { sendMessage: async () => ({}) } };
         const S = require(path.join(EXT, 'calc.js'));
         require(path.join(EXT, 'store.js'));
-        const espera = () => new Promise(r => setTimeout(r, 1600));   // o cache da empresa vale 1,5 s
+        // O cache da empresa (1,5 s) sai quando ml:conta ou cfg mudam (store.js ouve o chrome.storage.onChanged): o teste avisa a mudança.
+        const espera = async () => { await new Promise(r => setImmediate(r)); ouvStore.forEach(f => f({ 'ml:conta': {}, cfg: {} }, 'local')); };
         mem['ml:conta'] = A;
         await S.salvarCustoSku('KIT-01', { custo: 10 });
         await S.salvarCfg({ imposto_pct: 6, margem_alvo_pct: 12 });
@@ -480,6 +492,54 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
             ok(lidos.length === n && !mem['c|sku@' + OUTRA + '|PECA-01'] && !mem['erp@' + OUTRA + ':tiny'] && $('#tinyBox').hidden === false, 'empresa sem Tiny: nada lido com o token da outra; o campo do token dela aparece');
             mem['ml:conta'] = A; await espera();
         }
+
+        console.log('o) as correções multi-empresa que já existiam, com o código de verdade das telas (o teste falha se cada uma for desfeita)');
+        {
+            const fs = require('fs'), PJ = fs.readFileSync(path.join(EXT, 'painel.js'), 'utf8'), PL = fs.readFileSync(path.join(EXT, 'painel-lateral.js'), 'utf8');
+            const el = () => ({ style: {}, hidden: true, disabled: false, textContent: '', value: '', className: '', innerHTML: '', focus() {} });
+            const dom = () => { const els = {}; return s => els[s] || (els[s] = el()); };
+            const cfg0 = JSON.parse(JSON.stringify(mem.cfg || {})), C3 = '900000003';
+            mem['ml:contas'] = { [A]: { visto: 3 }, [C3]: { visto: 2 }, [OUTRA]: { visto: 1 } };
+            // o1) "Esquecer" o ERP (painel.js esquecerErp): só a credencial da empresa aberta; a permissão do Chrome só sai sem outra empresa usando.
+            const removidas = [];
+            const esquecer = new Function('SHC', 'chrome', 'return ' + trecho(PJ, PJ.indexOf('async function esquecerErp(')))(S, { storage: global.chrome.storage, permissions: { remove: async p => { removidas.push(p); return true; } } });
+            mem.cfg = Object.assign({}, cfg0, { empresaSeparada: { [OUTRA]: true } });
+            mem['erp:tiny'] = { token: 'TOKEN-A' }; mem['erp@' + OUTRA + ':tiny'] = { token: 'TOKEN-B' };
+            mem['ml:conta'] = OUTRA; await espera();
+            await esquecer('erp:tiny', { origins: ['https://api.tiny.com.br/*'] });
+            ok(mem['erp:tiny'] && mem['erp:tiny'].token === 'TOKEN-A' && !mem['erp@' + OUTRA + ':tiny'] && !removidas.length, 'painel.js "Esquecer" com a OUTRA aberta: some só o Tiny dela; o da A e a permissão do Chrome ficam');
+            mem['ml:conta'] = A; await espera();
+            await esquecer('erp:tiny', { origins: ['https://api.tiny.com.br/*'] });
+            ok(!mem['erp:tiny'] && removidas.length === 1, 'e com a A aberta (nenhuma outra empresa com o Tiny): a credencial e a permissão saem');
+            // o2) seletor de conta da tabela de custos (painel.js contasTab/desenhaContaTab): só as contas da mesma empresa, com a nota.
+            const tab = PJ.slice(PJ.indexOf('    let contaVer = '), PJ.indexOf('    async function lerDados()')), $t = dom();
+            const T = new Function('SHC', '$', 'esc', tab + '\nreturn { desenhaContaTab };')(S, $t, s => String(s));
+            mem['ml:conta'] = A; await espera(); await T.desenhaContaTab();
+            const opc = () => ($t('#contaEsc').innerHTML.match(/value="(\d+)"/g) || []).map(x => x.slice(7, -1)).sort().join(',');
+            ok(opc() === A + ',' + C3 && /outra empresa/.test($t('#contaTabNota').textContent), 'tabela de custos com a A aberta: só A e a 3ª (nunca a separada), com a nota das outras empresas');
+            mem['ml:conta'] = OUTRA; await espera(); await T.desenhaContaTab();
+            ok(opc() === OUTRA && $t('#contaEsc').disabled === true, 'com a separada aberta: só ela');
+            // o3) "Salvar contas" (painel lateral e painel): marcar "Outra empresa" ou dar apelido não marca o imposto como informado (semMarcar).
+            const caixas = [{ dataset: { apelido: A }, value: 'Loja A' }], marcas = [{ checked: true, dataset: { empresa: OUTRA } }, { checked: false, dataset: { empresa: A } }];
+            const docC = { querySelectorAll: s => (/apelido/.test(s) ? caixas : marcas), querySelector: () => marcas[0] };
+            const salvaL = new Function('SHC', 'P', '$', 'document', 'falhaGravar', 'desenhaConta', 'setTimeout', 'let cfg = null; return (' + trecho(PL, PL.indexOf('async () =>', PL.indexOf("$('#salvarApelidos').addEventListener('click'"))) + ');')(S, S.pl, dom(), docC, e => { throw e; }, () => {}, () => 0);
+            const salvaP = new Function('SHC', '$', 'document', 'FALHA', 'setTimeout', 'let cfg = null; return (' + trecho(PJ, PJ.indexOf('async () =>', PJ.indexOf("$('#salvarApelidos').addEventListener('click'"))) + ');')(S, dom(), docC, 'falhou', () => 0);
+            for (const [onde, salva] of [['painel lateral', salvaL], ['painel', salvaP]]) {
+                mem.cfg = {}; mem['ml:conta'] = A; await espera();
+                await salva();
+                ok(mem.cfg.empresaSeparada && mem.cfg.empresaSeparada[OUTRA] === true && mem.cfg.apelidos[A] === 'Loja A' && mem.cfg.configurado === undefined && (await S.lerCfg()).configurado !== true,
+                    onde + ': "Salvar contas" grava a outra empresa e o apelido sem marcar o imposto como informado');
+            }
+            // o4) Omie (painel.js puxarOmie): a chave que o Omie recusou sai da empresa do clique — nunca a credencial da outra empresa aberta no meio.
+            mem.cfg = Object.assign({}, cfg0, { empresaSeparada: { [OUTRA]: true } }); mem['ml:conta'] = A; await espera();
+            delete mem['erp:omie']; mem['erp@' + OUTRA + ':omie'] = { appKey: 'KEY-B-00000', appSecret: 'SEC-B-00000' };
+            const omie = new Function('SHC', '$', 'tinyMsg', 'impBarra', 'chrome', 'lerDados', 'desenhaTabela', 'txtPrincipais', 'impResumo', 'FALHA', 'desenhaOmie',
+                'let omieRodando = false; return ' + trecho(PJ, PJ.indexOf('async function puxarOmie(')))(S, dom(), () => {}, () => {},
+                { runtime: { sendMessage: async () => { mem['ml:conta'] = OUTRA; await espera(); return { ok: false, msg: 'O Omie recusou a chave.' }; } } }, async () => {}, () => {}, () => '', () => {}, 'falhou', async () => {});
+            await omie(Promise.resolve(true), { appKey: 'KEY-A-NOVA0', appSecret: 'SEC-A-NOVA0' });
+            ok(!mem['erp:omie'] && mem['erp@' + OUTRA + ':omie'] && mem['erp@' + OUTRA + ':omie'].appKey === 'KEY-B-00000', 'Omie recusou a chave da A com a OUTRA aberta no meio: sai a chave da A; a credencial da OUTRA fica');
+            mem.cfg = cfg0; mem['ml:conta'] = A; await espera();
+        }
     }
 
     // Importação pelo fundo: o ML troca para a conta da OUTRA empresa no meio da leitura do Tiny → tudo vai para a empresa do começo.
@@ -501,19 +561,59 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         await new Promise(r => setTimeout(r, 1600));
         const ro = await I.envia({ acao: 'sincronizar_custos', erp: 'omie', empresa: '' });
         ok(ro && ro.ok && fd['c|sku|OMIE-01'] && fd['c|sku|OMIE-01'].custo === 7 && !fd['c|sku@' + OUTRA + '|OMIE-01'], 'importação pedida pela tela com a empresa do clique: grava nela mesmo com a outra aberta');
+        // Bling (fundo/09 conectarBling): o code do login do Bling vira tokens na empresa do CLIQUE (a principal), mesmo com a OUTRA aberta.
+        fd['erp:bling'] = { clientId: 'CLI-A-00000', clientSecret: 'SEC-A-00000' }; delete fd['erp@' + OUTRA + ':bling'];
+        I.ctx.SHC.blingTrocarCodigo = async () => ({ access: 'AC-A', refresh: 'RF-A', expira: Date.now() + 3600e3 });
+        I.ctx.SHC.blingPuxar = async () => [{ sku: 'BL-01', custo: 5 }];
+        const rb = await I.envia({ acao: 'bling_conectar', code: 'CODE-0001', empresa: '' });
+        ok(rb && rb.ok && fd['erp:bling'].refresh === 'RF-A' && fd['c|sku|BL-01'] && !fd['erp@' + OUTRA + ':bling'] && !fd['c|sku@' + OUTRA + '|BL-01'],
+            'Bling conectado na empresa do clique (a principal) com a OUTRA aberta: tokens e custos vão para a principal');
     }
 
     // Nenhuma tela lê custos, cfg ou ERP cru (sem a camada da empresa): as leituras que a revisão achou não voltam.
+    // Bloqueio 5: a varredura passa também por fundo/ e nucleo/ e pega get('cfg'), get(['c|sku|…']), get([...chaves]), getKeys() e lerChave('cfg').
     {
         const fs = require('fs'), path = require('path'), EXT = path.join(__dirname, '../../extension-copiloto');
-        const cru = [];
-        fs.readdirSync(EXT).filter(a => /\.js$/.test(a) && a !== 'store.js').forEach(a => {
-            const t = fs.readFileSync(path.join(EXT, a), 'utf8');
-            if (/chrome\.storage\.local\.get\(null\)/.test(t)) cru.push(a + ': get(null)');
-            if (/chrome\.storage\.local\.remove\(SHC\.(TINY|OMIE|BLING)_CHAVE/.test(t)) cru.push(a + ': remove do ERP');
-            if (/mud\.cfg\.newValue\s*\|\|\s*\{\}\)\s*;?\s*repinta/.test(t) || /Object\.assign\(\{\}, SHC\.PADRAO, mud\.cfg/.test(t)) cru.push(a + ': cfg cru');
-        });
+        const CRU = [
+            ['get(null)', /chrome\.storage\.local\.get\(\s*null\s*\)/],
+            ['get do cfg', /chrome\.storage\.local\.get\(\s*\[?\s*['"`]cfg['"`]/],
+            ['get de custo/ERP', /chrome\.storage\.local\.get\(\s*\[?\s*['"`](c\||erp[:@])/],
+            ['get das chaves de custo', /chrome\.storage\.local\.get\(\s*\[\s*\.\.\.\s*chaves/],
+            ['getKeys', /chrome\.storage\.local\.getKeys\(/],
+            ['lerChave do cfg', /lerChave\(\s*['"`]cfg['"`]\s*\)/],
+            ['remove do ERP', /chrome\.storage\.local\.remove\(\s*(SHC\.(TINY|OMIE|BLING)_CHAVE|\[?\s*['"`]erp[:@])/],
+            ['cfg cru', /mud\.cfg\.newValue\s*\|\|\s*\{\}\)\s*;?\s*repinta|Object\.assign\(\{\}, SHC\.PADRAO, (mud|tudo|r|t)\.cfg/],
+        ];
+        // Leituras cruas conferidas que não são de números de empresa (cada uma diz por quê). Nova leitura crua → passa pela camada ou entra aqui.
+        const PODE = {
+            'fundo/01-carga-e-eventos.js|get(null)': 'limparVersaoAntiga: só apaga ad|ml| e o retrato "atual" e limpa o apelido de ml:contas',
+            'fundo/09-custos-erp.js|get do cfg': 'empresaDoPedido: só lê cfg.empresaSeparada (qual conta é outra empresa), que é de todas',
+            'painel-lateral.js|lerChave do cfg': 'robô de promoções (cfg.robopromo): ainda é um só para todas as empresas',
+        };
+        const varre = (arqs, ler) => {
+            const cru = [];
+            arqs.forEach(a => { const t = ler(a); CRU.forEach(([nome, rx]) => { if (rx.test(t) && !PODE[a + '|' + nome]) cru.push(a + ': ' + nome); }); });
+            return cru;
+        };
+        // O detector acusa cada padrão (as leituras que escapavam da trava antiga: rastreio cego_estatico.js).
+        const amostras = { 'x.js': "chrome.storage.local.get('cfg')", 'y.js': "chrome.storage.local.get(['c|sku|KIT-01'])", 'z.js': 'chrome.storage.local.getKeys()', 'w.js': "SHC.lerChave('cfg')",
+            'v.js': 'chrome.storage.local.get([...chaves])', 'u.js': "chrome.storage.local.remove('erp:tiny')", 'fundo/q.js': 'chrome.storage.local.get(null)', 's.js': 'cfg: Object.assign({}, SHC.PADRAO, tudo.cfg || {})' };
+        ok(varre(Object.keys(amostras), a => amostras[a]).length === Object.keys(amostras).length && !varre(['ok.js'], () => "SHC.lerCfg(); SHC.areaEmpresa().get([...chaves]); chrome.storage.local.get('shc:ret:1')").length,
+            'a trava acusa get("cfg"), get(["c|sku|…"]), getKeys(), lerChave("cfg"), get([...chaves]), remove("erp:…") e o cfg cru (e não acusa a leitura pela camada)');
+        const lista = d => fs.readdirSync(path.join(EXT, d), { withFileTypes: true }).flatMap(x => (x.isDirectory() ? lista(path.join(d, x.name)) : /\.js$/.test(x.name) ? [path.join(d, x.name).replace(/\\/g, '/')] : []));
+        const arqs = lista('.').map(a => a.replace(/^\.\//, '')).filter(a => a !== 'store.js');
+        ok(arqs.some(a => /^fundo\//.test(a)) && arqs.some(a => /^nucleo\//.test(a)), 'a varredura passa pela raiz, por fundo/ e por nucleo/ (' + arqs.length + ' arquivos)');
+        const cru = varre(arqs, a => fs.readFileSync(path.join(EXT, a), 'utf8'));
         ok(!cru.length, 'nenhuma leitura crua de custos/cfg/ERP fora do store.js' + (cru.length ? ' (' + cru.join('; ') + ')' : ''));
+        // Correções das telas que só dá para conferir no texto (o rastreio desfez cada uma e a suíte continuava verde):
+        const le = a => fs.readFileSync(path.join(EXT, a), 'utf8');
+        ok(/cfg:\s*await SHC\.lerCfg\(\)/.test(le('fechamento.js')), 'Fechamento lê imposto/margem pela camada da empresa (SHC.lerCfg), não o cfg cru');
+        ok(/cfg:\s*SHC\.lerCfg \? await SHC\.lerCfg\(\)/.test(le('tiktok.js')), 'TikTok lê o cfg pela camada da empresa (SHC.lerCfg)');
+        ok(/\[desenhaTiny, desenhaOmie, desenhaBling\]\.forEach/.test(le('painel.js').slice(le('painel.js').indexOf('contasMudou'))), 'painel: os cartões do ERP se redesenham quando a conta/empresa aberta muda');
+        const sinc = ['painel.js', 'painel-lateral.js'].flatMap(a => le(a).split('\n').filter(l => /acao: 'sincronizar_custos'/.test(l)).map(l => [a, l]));
+        ok(sinc.length >= 4 && sinc.every(([, l]) => /empresa/.test(l)), 'toda importação do ERP pedida pelas telas leva a empresa do clique (' + sinc.length + ' pedidos)');
+        ok(/Envie só se \$\{esc\(SHC\.confereExclusao\(/.test(le('painel-lateral.js')), 'pós-venda: o pedido de exclusão diz "Envie só se …" (o que conferir antes de enviar)');
+        ok(/textoChamado\(\s*F\.itemDoChamado\(/.test(le('fechamento.js')), 'Fechamento: o texto do chamado copiado sai de F.itemDoChamado (cobrado × esperado do pedido)');
     }
 
     console.log(falhas ? '\n' + falhas + ' FALHA(S)' : '\nTUDO OK');
