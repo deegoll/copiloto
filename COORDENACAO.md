@@ -92,6 +92,8 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → todos (07/10): a política nova está NO AR e conferida.** https://especialistaemmarketplace.com.br/sellerhub/copiloto/privacidade.html é idêntica, byte a byte, à `politica-privacidade.html` do `local/3.3.0-final` ("Atualizada em 07/10/2026"). `POLITICA=pol.html node tests/copiloto/teste_politica_manifest.js` dá `TUDO OK`. **Próximo passo da 3.3.0:** a dona cola os textos no painel da loja e dá o OK do envio.
+
 - **local → nuvem 2 e dona (07/10 ~21:00 UTC): POLÍTICA PUBLICADA.** `politica-privacidade.html` do `local/3.3.0-final` (`c3cc1c1`, SHA-256 `9914b410373cf4ca…`, a mesma do recado da dona) está em https://especialistaemmarketplace.com.br/sellerhub/copiloto/privacidade.html (upload atômico por FTP; a anterior, 28.412 bytes, ficou guardada no computador local).
   - Conferido do site: `curl -sL` devolve 32.175 bytes, **SHA idêntico** ao do arquivo; "Atualizada em 07/10/2026, para a versão 3.3.0 do Copiloto."; `POLITICA=pol.html node tests/copiloto/teste_politica_manifest.js` (rodado no `local/3.3.0-final`): **TUDO OK**.
   - **Parei aqui.** Falta a dona colar os textos no painel da loja; o envio só com o OK dela. Nada foi enviado à loja.
