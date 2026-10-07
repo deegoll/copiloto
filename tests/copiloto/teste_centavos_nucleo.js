@@ -1197,6 +1197,17 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
             ['pedido', det('5770000000000003431', true)]]);
         ok(t4.p.status === 'nao_lido' && t4.p.reembolso === 100 && t4.p.imposto_rs === 0 && valorDe(t4.ls, 'Reembolso ao cliente') === -10000 && !t4.ls.some(l => /^Imposto/.test(l.rot)),
             'reembolso vazio no extrato e o detalhe devolvido (#34, revisão 2): Reembolso −R$ 100,00 (o do detalhe) e sem imposto');
+        // Subtotal vazio e o reembolso de R$ 30,00 legível, com o detalhe entregue: o reembolso lido aparece; o imposto "—" (a receita do extrato não fecha).
+        const t5 = await caso('7000000734', '5770000000000003441', [['transacao', ext('5770000000000003441', '5770000000000003442', [{ type: 'subtotal_before_discount', amount: a('') }, { type: 'subtotal_after_discount_refund', amount: a('-30.00') }], SFP, '58.00')],
+            ['pedido', det('5770000000000003441', false)]]);
+        ok(t5.p.status === 'nao_lido' && t5.p.reembolso === 30 && t5.p.imposto_rs === null && valorDe(t5.ls, 'Preço') === 10000 && valorDe(t5.ls, 'Reembolso ao cliente') === -3000
+            && valorDe(t5.ls, 'Imposto (6%)') === null && t5.ls.some(l => l.rot === 'Imposto (6%)'),
+            'subtotal vazio e reembolso de R$ 30,00 legível no extrato, detalhe entregue (#34, revisão 2): "Reembolso ao cliente −R$ 30,00" (o lido não some) e Imposto "—"');
+        // O mesmo sem o detalhe do pedido (preço não lido): Preço "—", o reembolso lido aparece, Imposto "—" e nada de R$ 0,00.
+        const t6 = await caso('7000000834', '5770000000000003451', [['transacao', ext('5770000000000003451', '5770000000000003452', [{ type: 'subtotal_before_discount', amount: a('') }, { type: 'subtotal_after_discount_refund', amount: a('-30.00') }], SFP, '58.00')]]);
+        ok(t6.p.status === 'nao_lido' && t6.p.reembolso === 30 && t6.p.receita_liquida === null && t6.p.imposto_rs === null && valorDe(t6.ls, 'Preço') === null && t6.ls.some(l => l.rot === 'Preço')
+            && valorDe(t6.ls, 'Reembolso ao cliente') === -3000 && valorDe(t6.ls, 'Imposto (6%)') === null && !t6.ls.some(l => l.c === 0) && !/R\$ 0,00/.test(t6.b),
+            'subtotal vazio e reembolso de R$ 30,00 legível, sem o detalhe (#34, revisão 2): Preço "—", "Reembolso ao cliente −R$ 30,00" (antes sumia) e Imposto "—"');
         if (cfg0 === undefined) delete banco.cfg; else banco.cfg = cfg0;
     }
 
