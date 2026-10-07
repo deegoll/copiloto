@@ -516,12 +516,13 @@
         const soma = (ls, ks) => (ls.some(o => v(o, ks) !== null) ? r2(ls.reduce((t, o) => t + (v(o, ks) || 0), 0)) : null);
         const acosDe = ls => {
             const g = soma(ls, ['custo', 'cost']), rec = soma(ls, ['receita', 'totalAmount', 'amountTotal']);
-            return rec > 0 ? (g !== null ? g / rec * 100 : (ls.map(o => SHC.num(o.acos)).find(x => x > 0) || null)) : null;
+            // Sem o par Ads × receita (retrato antigo ou o ML só mandou o acos), vale o acos gravado: sem ele a etiqueta perdia o "Ads ~R$ X".
+            return rec > 0 && g !== null ? g / rec * 100 : (ls.map(o => SHC.num(o.acos)).find(x => x > 0) || null);
         };
         const doAd = (ads.anuncios || []).filter(x => x && x.itemId && x.itemId === itemId), a = doAd.length ? acosDe(doAd) : null;
         if (a > 0) return { pct: a, base: 'ACOS do anúncio (' + pct(a) + ')' };
         const t = ads.resumo && (ads.resumo.total || ads.resumo), cm = (ads.campanhas || []).map(c => c && (c.metricas || c.metrics)).filter(Boolean);
-        const c = acosDe(t && v(t, ['custo', 'cost']) !== null ? [t] : cm.length ? cm : (ads.anuncios || []).filter(Boolean));
+        const c = acosDe(t && (v(t, ['custo', 'cost']) !== null || SHC.num(t.acos) > 0) ? [t] : cm.length ? cm : (ads.anuncios || []).filter(Boolean));
         return c > 0 ? { pct: c, base: 'ACOS da conta (' + pct(c) + ')' } : null;
     };
     /**

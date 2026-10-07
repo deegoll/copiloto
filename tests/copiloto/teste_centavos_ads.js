@@ -753,6 +753,11 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
     const c = tela([ml, Object.assign({}, ml, { id: 'MLB9000000042', campaignId: 6, cost: 20, totalAmount: 0, unitsQuantity: 0, acos: 0 })], { semResumo: true });
     ok(c.kpi === '63,1%' && c.conta === '63,1%' && etq(c.snap, 'MLB9000000042') === 'ACOS da conta (63,1%)',
         `#25 sem o resumo do ML: o ACOS da conta na etiqueta é a soma das campanhas (R$ 63,21 ÷ R$ 100,14), o mesmo de ads.html e do painel (antes: nenhum) (obtido: ${etq(c.snap, 'MLB9000000042')} · ads.html ${c.kpi})`);
+    // Achado da local (07/10 20:27): retrato só com o acos gravado (sem custo e receita) no anúncio e no resumo da conta: a etiqueta usa o acos
+    // gravado; antes devolvia null e a venda perdia o "Ads ~R$ X".
+    const so = { anuncios: [{ itemId: 'MLB9000000051', acos: 12.5 }], resumo: { total: { acos: 20 } } };
+    ok(etq(so, 'MLB9000000051') === 'ACOS do anúncio (12,5%)' && etq(so, 'MLB9000000052') === 'ACOS da conta (20%)' && SHC.adsAcosDe(so, 'MLB9000000051').pct === 12.5,
+        `só o acos gravado (sem custo e receita): a etiqueta usa 12,5% do anúncio e 20% da conta (antes: nenhum) (obtido: ${etq(so, 'MLB9000000051')} · ${etq(so, 'MLB9000000052')})`);
     const rnd = semente(7251);
     prop('#25 pares custo × receita em centavos com o acos do ML (2 casas) gravado: a etiqueta da venda (anúncio e conta) = o KPI e o SKU de ads.html = o painel', vezes(400), () => {
         const cC = I(rnd, 1, 500000), rC = I(rnd, 1, 2000000), mlA = SHC.r2(cC / rC * 100);
