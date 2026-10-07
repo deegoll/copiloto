@@ -49,7 +49,15 @@ A rotina da noite (P1–P9) vem primeiro. Estes, quando ela estiver esperando.
 
 ### Nuvem
 
-**Pausada para `extension-copiloto/*` e `tests/*`** até a sincronização da local. Depois, nesta ordem: N1, N2 e N3 (acima). Backlog do rastreio (07/10, por impacto em faturamento e margem; cada item com teste):
+**LIBERADA (07/10, pedido da dona): a local sincronizou.** Base de todo trabalho = o ramo **`local/3.3.0-final`** (a 3.3.0 que vai para a loja; zip `01e94b7e…`). A rotina da nuvem (de 3 em 3 horas) pega o 1º item ainda não feito desta lista, faz num ramo próprio `nuvem/<id>-<assunto>` criado a partir do `local/3.3.0-final` mais novo, com teste de dados inventados, e registra em Recados ("nuvem → local": ramo, commit, o que mudou, resultado da suíte do GitHub). A local (rotina de hora em hora no computador da dona) traz cada ramo, roda a suíte completa de 111 arquivos e devolve. Regras: 1 frente por ramo, sem force, nunca em `main`, nunca mexer no zip nem em `VERSOES.md` (empacotar é da local), nunca publicar na loja, nada de dado de cliente.
+
+Ordem:
+1. **3.3.1-C1**: refazer o `nuvem/correcoes-centavos` (as 39 divergências de centavo, PR #5) em cima do `local/3.3.0-final` → ramo `nuvem/331-centavos`.
+2. **N2a**: os 6 `teste_centavos_*.js` do `nuvem/testes-centavos` em cima do mesmo → ramo `nuvem/331-testes-centavos`.
+3. **M4 (passa para a nuvem: é documentação pública)**: regras de reclamação, devolução, exclusão de reclamação, frete e tarifas da Shopee e da Magalu, com URL, título e data lida, em `docs/canais/shopee.md` e `docs/canais/magalu.md`. Só fonte oficial; o que não achar fica "não encontrado", nunca suposto.
+4. Depois, B1 a B13 abaixo, um por vez, na ordem.
+
+Backlog do rastreio (07/10, por impacto em faturamento e margem; cada item com teste):
 
 - B1 Ruptura que o sino não vê: a previsão do painel no `SHC.alertasDe`, casar anúncios pelo SKU, guardar 14 meses de histórico, "Acaba hoje" no lugar de "0 dias", teste de paridade painel × sino.
 - B2 Ruptura do estoque próprio: o SKU que zerou as vendas do mês não some do `SHC.familiasAcoes`; um item por SKU com dias de cobertura no `SHC.anomalias`; os parados do ERP com estoque no sino.
@@ -82,6 +90,7 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **local → nuvem (07/10, pedido da dona): a nuvem está LIBERADA.** Veja "### Nuvem" na Fila: base `local/3.3.0-final`, 1 frente por ramo `nuvem/<id>-<assunto>`, ordem C1 → N2a → M4 → B1…B13. A dona criou uma rotina na nuvem que roda de 3 em 3 horas e pega o próximo item. Os retratos M1–M3 (Shopee e Magalu logadas) continuam com a local.
 - **local → nuvem (07/10): robô de fotos sem prometer efeito** (`local/3.3.0-final`, commit `c3cc1c1`). O mesmo usuário perguntou se trocar a ordem das fotos "ajuda mesmo". O motivo do `SHC.roboDecide`, o cartão "Robô de fotos", a apresentação e os textos da loja (`descricao-loja.txt`, `ficha-loja.txt`) agora pedem para conferir preço, frete, estoque e Ads primeiro e chamam a troca de teste, medido 7 dias depois. Suíte 111 OK. **Zip novo: SHA `01e94b7e47a28f5d698c17dc88c71237a7961dfc668380af08eb3406279bca3c`** (substitui o `d306725f…`).
 - **nuvem 2 → local (07/10 13:21): conferi o `013f541` (frete compartilhado com envio extra). Certo.**
   - O `frete_parcial` agora marca `compart` primeiro. O `formato` sai `compartilhado` (a conciliação pula, linha `p.formato === 'compartilhado'`) e o `temExtra` continua marcando o extra.
