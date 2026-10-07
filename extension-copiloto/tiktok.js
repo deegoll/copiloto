@@ -444,7 +444,8 @@
         const lista = !j && !!f && f.receita !== null && f.repasse !== null, avisos = [];
         // Receita que o detalhe do pedido mostra (preço de origem − desconto do vendedor): com ela, a lista revela o reembolso.
         const detIt = det ? det.pedido.itens : [];
-        const detReceita = detIt.length && detIt.every(it => typeof it.total === 'number') ? U.r2(U.soma(detIt, it => it.total) - (det.pedido.desconto_vendedor || 0)) : null;
+        const detBruto = detIt.length && detIt.every(it => typeof it.total === 'number') ? U.soma(detIt, it => it.total) : null;   // null = preço não lido
+        const detReceita = detBruto !== null ? U.r2(detBruto - (det.pedido.desconto_vendedor || 0)) : null;
         let bruto = null, desconto = 0, reembolso = 0, tarifas, estimar = false, devolveu = false;
         if (j) {
             bruto = j.receita.bruto; desconto = j.receita.desconto_vendedor; reembolso = j.receita.reembolso;
@@ -460,9 +461,9 @@
             if (cob.ilegivel) avisos.push(AVISO_ILEGIVEL + ': vale a lista do Financeiro (tarifas estimadas)');
         } else if (cob.ilegivel) {
             // Só o detalhe do extrato, com valor ilegível ou sem fechar: "não lido" (nada de frete/tarifa R$ 0,00 inventado nem repasse a mais).
-            const recLida = !j0.avisos.some(a => /receita sem valor/.test(a));
-            bruto = det ? U.soma(det.pedido.itens, it => it.total) : (recLida ? j0.receita.bruto : null);
-            desconto = det ? det.pedido.desconto_vendedor || 0 : (recLida ? j0.receita.desconto_vendedor : 0);
+            const recLida = !j0.avisos.some(a => /receita sem valor/.test(a)), doDet = detBruto !== null;
+            bruto = doDet ? detBruto : (recLida ? j0.receita.bruto : null);
+            desconto = doDet ? det.pedido.desconto_vendedor || 0 : (recLida ? j0.receita.desconto_vendedor : 0);
             tarifas = M.naoLido(AVISO_ILEGIVEL);
             avisos.push(AVISO_ILEGIVEL); avisos.push.apply(avisos, j0.avisos);
         } else if (det) {

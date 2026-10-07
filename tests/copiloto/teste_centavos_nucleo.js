@@ -1111,6 +1111,18 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         const q34 = TT.resumo(await TT.ler(C34), { hoje: '2026-09-25' }), r34 = q34.pedidos[0];
         ok(!r34.exato && r34.estimado && r34.repasse === 80 && r34.tarifas_por_tipo.frete_venda === 8 && r34.avisos.some(a => /ilegível/.test(a)) && q34.conciliacao.diferenca === 0 && q34.conciliacao.por_status.ok === 1,
             'o mesmo pedido com a lista do Financeiro (#34): vale a lista — repasse R$ 80,00 = o do TikTok, frete R$ 8,00, "estimado", conciliação ok');
+        // Preço vazio no extrato E no detalhe do pedido (sem a lista): "não lido" com o Preço "—" (nunca "Preço R$ 0,00").
+        const ext34b = JSON.parse(JSON.stringify(ext34)), id34b = '5770000000000000810';
+        Object.assign(ext34b.data.order_record, { trade_order_id: id34b, statement_detail_id: '5770000000000000811' });
+        ext34b.data.order_record.in_come.fee_list[0].amount = a34('');
+        ext34b.data.order_record.shipping_fee_detail.fee_list[0].amount = a34('-32.00');
+        await TT.gravarCaptura('transacao', ext34b, C34, lidoEm);
+        await TT.gravarCaptura('pedido', { code: 0, data: { main_order: { main_order_id: id34b, main_order_create_time: segDia('2026-09-20'), payment_info: { main_order_origin_sale_price: { format_price: '' } },
+            skus: [{ seller_sku_name: 'SKU-34', sku_id: '1730000000000000934', quantity: 1, total_price: fp(9000), sku_display_status: 122 }] } } }, C34, lidoEm);
+        const w34 = TT.resumo(await TT.ler(C34), { hoje: '2026-09-25' }), s34 = w34.pedidos.find(x => x.pedido_id === id34b), lb34 = contaTela(ABA.html(w34, { hoje: '2026-09-25' }), id34b);
+        ok(s34.status === 'nao_lido' && !s34.exato && s34.repasse === null && s34.avisos.some(a => /receita sem valor/.test(a)) && valorDe(lb34, 'Preço') === null && lb34.some(l => l.rot === 'Preço')
+            && !lb34.some(l => l.c === 0),
+            'preço vazio no extrato e no detalhe do pedido (#34): "não lido" e Preço "—" na conta do pedido (nada de R$ 0,00)');
     }
 
     {   // #35: pedido cancelado com R$ 8,50 de frete que ficou + pedido ok de lucro R$ 37,00 (custo R$ 30, imposto 6%).
