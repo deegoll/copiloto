@@ -54,16 +54,22 @@
         out.cpc = cli > 0 && inv !== null ? inv / cli : (cli === 0 ? null : n(m, 'cpc'));
         out.roas = inv > 0 ? (n(m, 'roas') ?? (rec !== null ? rec / inv : null)) : null;
         out.acos = rec > 0 ? (n(m, 'acos') ?? (inv !== null ? inv / rec * 100 : null)) : null;
-        const total = (rec || 0) + (out.organicasValor || 0);
-        out.tacos = total > 0 ? (n(m, 'tacos') ?? (inv !== null ? inv / total * 100 : null)) : null;
+        // TACOS = Ads ÷ TODAS as vendas: o do ML; senão só com as orgânicas lidas. Sem elas fica null ("—"), nunca o próprio ACOS.
+        const org = out.organicasValor, total = org === null ? null : (rec || 0) + org;
+        out.tacos = ((rec || 0) + (org || 0) > 0 ? n(m, 'tacos') : null) ?? (total > 0 && inv !== null ? inv / total * 100 : null);
         return out;
     };
-    // Soma métricas-base (para SKU e para o total sem resumo) e recalcula as razões.
+    // Soma métricas-base (para SKU e para o total sem resumo) e recalcula as razões. Campo que nenhum trouxe fica null (não 0);
+    // orgânicas só com todas lidas (a soma de uma parte seria menos venda inventada e um TACOS inflado).
+    const ORGANICAS = ['organicasUn', 'organicasValor'];
     A.soma = function (lst) {
-        const s = {}; let algum = false;
-        Object.keys(BASE).forEach(k => { s[k] = 0; });
-        lst.filter(Boolean).forEach(m => { algum = true; Object.keys(BASE).forEach(k => { s[k] = SHC.r2(s[k] + (m[k] || 0)); }); });
-        return algum ? A.metricas(s) : null;
+        const ms = lst.filter(Boolean), s = {};
+        if (!ms.length) return null;
+        Object.keys(BASE).forEach(k => {
+            const tem = ms.filter(m => m[k] !== null && m[k] !== undefined);
+            s[k] = !tem.length || (ORGANICAS.indexOf(k) >= 0 && tem.length < ms.length) ? null : tem.reduce((t, m) => SHC.r2(t + m[k]), 0);
+        });
+        return A.metricas(s);
     };
 
     /** "Desempenho ao competir por impressões" → {ganhas, orcamento, classificacao, topo} em %. Aceita fração (0,03) ou % (3). */

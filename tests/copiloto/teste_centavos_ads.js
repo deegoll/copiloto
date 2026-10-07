@@ -22,8 +22,8 @@
 //      "Ajustar" por ruído de ponto flutuante (ACOS 23,791193949216638 > margem 23,791193949216634). Agora o selo segue o lucro em centavos.
 //   3) ads.js: SKU com gasto e sem venda entra na contagem da manchete ("1 produto passa do equilíbrio", A.resultado.acima) mas não no
 //      filtro "Acima do equilíbrio (0)" (selo só 'semVenda').
-//   4) ads.js A.metricas: TACOS sem as vendas orgânicas lidas (o ML não mandou tacos nem organicUnitsAmount) vira o próprio ACOS; o painel
-//      não mostra TACOS. E A.soma/A.kpis transformam orgânicas ausentes em "0 un. · R$ 0,00" (sem o resumo do ML, e "0 un." com ele).
+//   4) [corrigida, #24] ads.js A.metricas: TACOS sem as vendas orgânicas lidas virava o próprio ACOS, e A.soma/A.kpis transformavam orgânicas
+//      ausentes em "0 un. · R$ 0,00". Agora sem as orgânicas (e sem o tacos do ML) TACOS e "Vendas orgânicas" = "—", como o painel.
 //   5) ACOS/ROAS arredondados duas vezes: o fundo grava r2(custo ÷ receita × 100) e r2(receita ÷ custo); a tabela por SKU e o painel
 //      calculam de novo → a mesma conta aparece "43,2%" (KPI e campanhas) e "43,1%" (SKU e painel); ROAS 201 ÷ 200 = "1,01x" × "1x".
 //   6) Lucro depois do Ads do MESMO anúncio difere entre ads.html (margem % × receita do Ads, todos os anúncios do SKU) e o painel (sobra
@@ -619,6 +619,27 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
         const g1 = A.analisa(contaFixa([{ id: 'MLB9000000032', title: 'Produto G', campaignId: 4, cost: (adsC + 1) / 100, totalAmount: precoC * v / 100, prints: 900, clicks: 9, unitsQuantity: v }]), its, () => ({ custo: custoC / 100 }), cfg, []).grupos[0];
         return (g0.lucroRs === 0 && !g0.selos.includes('acima') && g0.acao === null && g1.lucroRs === -0.01 && g1.selos.includes('acima') && g1.acao.tipo === 'ajustar')
             || `preço ${precoC} recebe ${recebeC} custo ${custoC} × ${v}: ${A.textoMontante(g0)} ${g0.selos} | ${A.textoMontante(g1)} ${g1.selos}`;
+    });
+}
+{   // #24: sem as orgânicas lidas (e sem o tacos do ML), TACOS e "Vendas orgânicas" = "—"; nunca o ACOS nem "0 un. · R$ 0,00"
+    const kp = (h, nome) => (new RegExp('<span class="kn">' + nome + '</span><b>(.*?)</b>').exec(h) || [])[1];
+    const met = { cost: 50, totalAmount: 200, prints: 1000, clicks: 10, unitsQuantity: 2 };
+    const res = SHC.adsResumo({ summary: { metricsSummary: met } }), m = A.metricas(res);
+    const camps = SHC.adsCampanhas({ results: [{ id: 1, name: 'C1', status: 'A', dailyBudget: 10, metrics: met }] }).campanhas;
+    const semRes = { temAds: true, campanhas: camps, anuncios: [], resumo: null, anterior: { campanhas: {}, total: null } }, hb = A.htmlKpis(A.kpis(semRes, A.campanhas(semRes)));
+    const comRes = Object.assign({}, semRes, { resumo: res }), kc = A.kpis(comRes, A.campanhas(comRes)), hc = A.htmlKpis(kc);
+    ok(m.acos === 25 && m.tacos === null && kp(hb, 'TACOS') === '—' && kp(hb, 'Vendas orgânicas') === '—' && kc.atual.organicasUn === null && kp(hc, 'Vendas orgânicas') === '—' && kp(hc, 'TACOS') === '—'
+        && P.adsConta(comRes).tacos === null, `#24 resumo sem orgânicas, sem resumo e sem organicUnitsQuantity: TACOS "—" (como o painel) e "Vendas orgânicas —" (obtido: TACOS ${m.tacos}; ${kp(hb, 'Vendas orgânicas')} · ${kp(hb, 'TACOS')}; ${kp(hc, 'Vendas orgânicas')})`);
+    const comOrg = A.metricas(SHC.adsResumo({ summary: { metricsSummary: Object.assign({ organicUnitsQuantity: 3, organicUnitsAmount: 300 }, met) } })), comTacos = A.metricas(SHC.adsResumo({ summary: { metricsSummary: Object.assign({ tacos: 9.87 }, met) } }));
+    ok(comOrg.tacos === 10 && comOrg.organicasUn === 3 && comOrg.organicasValor === 300 && comTacos.tacos === 9.87,
+        '#24 com as orgânicas lidas: TACOS = Ads ÷ (receita + orgânicas) = 50 ÷ 500 = 10%; com o tacos do ML: o do ML');
+    const parte = A.soma([A.metricas({ cost: 10, totalAmount: 40, organicUnitsQuantity: 2, organicUnitsAmount: 60 }), A.metricas({ cost: 10, totalAmount: 40 })]);
+    ok(parte.organicasUn === null && parte.organicasValor === null && parte.tacos === null && parte.investimento === 20 && parte.receita === 80,
+        '#24 A.soma: orgânicas de só uma parte das campanhas ficam null (não a soma parcial), os outros campos somam');
+    prop('#24 contas geradas sem as orgânicas do ML: TACOS e "Vendas orgânicas" = "—" na conta e em cada campanha', contas.filter(c => !c.comOrganicas), c => {
+        const a = c.an.kpis.atual, h = A.htmlKpis(c.an.kpis);
+        return (a.tacos === null && a.organicasUn === null && a.organicasValor === null && kp(h, 'TACOS') === '—' && kp(h, 'Vendas orgânicas') === '—' && c.an.camps.every(k => !k.m || k.m.tacos === null))
+            || `conta ${c.k}: TACOS ${a.tacos} · ${kp(h, 'Vendas orgânicas')}`;
     });
 }
 
