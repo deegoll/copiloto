@@ -87,22 +87,24 @@ Tarifa estimada pela tabela só entra com `estimar_tarifas: true` e sai marcada 
 lucro = vendas − tarifas do canal − frete a seu cargo − afiliados − Ads − devoluções − imposto − custo
 ```
 
-- **Imposto** sobre a receita líquida de canceladas e devoluções: `(vendas − canceladas − reembolsos) × imposto%`. É a regra da `F.cascata` do fechamento do ML (`extension-copiloto/fechamento.js:160`) e o motor já faz assim (`motor.js:135`). Não trocar por "imposto sobre a venda cheia".
+- **Imposto** sobre a receita líquida de canceladas e devoluções: `(vendas − canceladas − reembolsos) × imposto%`. É a regra da `F.cascata` do fechamento do ML (`extension-copiloto/fechamento.js:160`) e o motor já faz assim (`motor.js:159`). Não trocar por "imposto sobre a venda cheia".
 - Canal novo entra só com o adaptador (o que vendeu e o que foi cobrado). A conta é esta, a mesma para todos.
-- **Pendente da 3.3.0: "Ads não lido nunca vira zero".** Hoje Ads ausente conta como 0 (`motor.js:137-140`), e o TikTok, que não informa o Ads, sai "sem Ads" sem aviso. Na 3.3.0 o Ads não lido vira "≈" e o canal sai do "melhor".
+- **Pendente da 3.3.0: "Ads não lido nunca vira zero".** Hoje Ads ausente conta como 0 (`motor.js:161-164`), e o TikTok, que não informa o Ads, sai "sem Ads" sem aviso. Na 3.3.0 o Ads não lido vira "≈" e o canal sai do "melhor".
 
 ## Fórmula
 
 ```
 receita         = Σ(preço × qtd) − desconto do vendedor      (o cupom da plataforma não entra: quem paga é o canal)
 receita_liquida = receita − reembolso
-repasse         = receita_liquida − Σ tarifas do pedido       (estorno com sinal −; 'ads' fica fora)
-lucro_antes_ads = repasse − custo × qtd − receita_liquida × imposto% − outros
-lucro_real      = lucro_antes_ads − Ads rateado (por anúncio e dia)
+repasse         = receita_liquida − Σ tarifas do pedido       (estorno com sinal −; 'ads' fica fora, SALVO o Ads com
+                  − Ads tirado do repasse                       origem_pagamento 'venda': esse sai do repasse)
+lucro_antes_ads = repasse + Ads tirado do repasse − custo × qtd − receita_liquida × imposto% − outros
+lucro_real      = lucro_antes_ads − Ads do pedido (o tirado do repasse + o rateado por anúncio e dia)
 margem          = lucro_real / receita_liquida
 ```
 
 Como a fórmula se aplica em cada caso:
+- **Ads tirado do repasse:** a tarifa `ads` com `origem_pagamento: 'venda'` é o Ads que o canal descontou do repasse da própria venda. O adaptador marca assim o que veio no extrato ou no escrow do pedido: o GMV Pay no extrato do TikTok e o `ads_escrow_top_up_fee_or_technical_support_fee` da Shopee. Esse Ads sai do repasse (o repasse do motor fica igual ao que o canal pagou, e a conciliação não acusa "a menor" falso) e entra uma vez só no lucro, junto com o Ads rateado. A conta do pedido mostra a linha "Ads pago com o repasse". A tarifa `ads` com origem `'fatura'` (o Ads do ML cobrado na fatura) fica fora do repasse. Atenção: o padrão do modelo para tarifa é `'venda'`, então o adaptador que lê Ads de fatura tem de marcar `'fatura'`, como o do ML faz.
 - **Por produto:** use `lucroPorProduto(resultados)`. O custo de cada SKU é exato. O resto é dividido pela participação do item na receita, e o Ads do anúncio fica com o item daquele anúncio.
 - **Mês:** use `fechamentoMes({ mes, resultados, tarifas, adsNaoRateado })`. O fechamento soma as tarifas sem pedido (fatura, Full, assinatura) e o Ads que não teve venda para ratear. Com `ads_rateados` (o padrão), a tarifa 'ads' da fatura não entra de novo.
 - **Devolução:** o reembolso sai da receita. O custo do produto é contado, a não ser que `produto_voltou: true`. No TikTok, `reverse_type 2` quer dizer reembolso sem devolução: o vendedor perde o produto.
