@@ -5048,7 +5048,8 @@
      * Inconformidades, multas e unidades faltando: só das remessas abertas ou fechadas nos últimos 90 dias (a mesma janela do detalhe).
      * custoMes = o que o ML cobrou (total_charged) nas remessas do mês, de qualquer status (vencida, cancelada ou aberta também): a MESMA conta de
      * SHC.remessasPorMes (linha da sincronização) e = Σ do "o ML cobrou" das linhas do cartão (P.linhasRemessas). Nada cobrado no mês = null (não "R$ 0,00").
-     * custoPorUnidade/unidadesMes: só remessas RECEBIDAS (closed_ok/closed_with_changes) com cobrança > 0 — o mesmo filtro de SHC.simulaRemessa.
+     * custoPorUnidade = cobrança ÷ unidades das remessas RECEBIDAS (closed_ok/closed_with_changes) com cobrança > 0 e units_count > 0 (unidadesMes
+     * = as unidades delas) — o mesmo filtro de SHC.simulaRemessa; remessa sem unidades não entra no custo (antes inflava o R$/un.).
      * O total_charged já inclui a coleta e as multas; as multas saem à parte em multasMes.
      */
     SHC.remessasResumo = function (lista, detalhes, mes, hoje) {
@@ -5056,7 +5057,7 @@
         const lim30 = diaMenosX(h, 30), lim90 = diaMenosX(h, 90), quando = r => r.recebida || r.agendada || r.atualizada || '';
         const out = { abertas: 0, fechadas30d: 0, comInconformidade: [], comMulta: [], unidadesFaltando: 0, custoMes: null, multasMes: 0, unidadesMes: 0, custoPorUnidade: null,
             custoMotivo: '', semDetalhe: 0, total: lista && typeof lista.total === 'number' ? lista.total : rs.length, lidas: rs.length };
-        let custoRec = 0;   // cobrança das recebidas do mês: base do custo por unidade
+        let custoRec = 0;   // cobrança das recebidas do mês com unidades: base do custo por unidade
         rs.forEach(r => {
             if (!r || !r.id) return;
             const d = porId[r.id] || null, st = String(r.status || ''), fechada = REM_FECHADA.test(st), recente = !fechada || quando(r) >= lim90;
@@ -5073,7 +5074,7 @@
             }
             if (mes && quando(r).slice(0, 7) === mes) {
                 out.multasMes = SHC.r2(out.multasMes + (valor || 0));
-                if (/^closed_(ok|with_changes)$/.test(st) && r.custo > 0) { custoRec = SHC.r2(custoRec + r.custo); out.unidadesMes += r.unidades || 0; }
+                if (/^closed_(ok|with_changes)$/.test(st) && r.custo > 0 && r.unidades > 0) { custoRec = SHC.r2(custoRec + r.custo); out.unidadesMes += r.unidades; }
             }
         });
         // Gasto do mês: uma definição só (SHC.remessasPorMes), para o cabeçalho do cartão, as linhas e a sincronização baterem.

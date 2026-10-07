@@ -22,7 +22,8 @@
 //      remessa vencida, cancelada ou aberta já cobrada (antes: R$ 120,50 no cartão × R$ 200,50 na sincronização) — seção O;
 //   2) SHC.simulaRemessa usa REM_FECHADA (inclui cancelada e vencida) na média do custo da coleta: a penalidade de uma remessa que nem foi
 //      coletada vira "custo da coleta" (R$ 1,60/un. na simulação × R$ 1,21/un. no cartão de remessas);
-//   3) SHC.remessasResumo.custoPorUnidade soma o custo da remessa sem units_count e não soma as unidades dela (R$ 2,00/un. em vez de R$ 1,00);
+//   3) #18 CORRIGIDA: custo por unidade do mês = cobrança ÷ unidades só das remessas recebidas COM unidades (antes R$ 2,00/un. em vez de
+//      R$ 1,00: somava o custo da remessa sem units_count e não as unidades dela) — seção D;
 //   4) SHC.alertasDe (número do ícone e sino) recalcula a previsão sem o índice sazonal da v3.3 (P.previsaoFull): o painel diz "Crítico,
 //      acaba em 4 dias" e o ícone não conta o produto;
 //   5) cobertura/esgota em dias = floor(aptas ÷ (previsão ÷ 30)) perde 1 dia quando a conta é exata (23 aptas, 23 vendas → 29 dias, não 30);
@@ -229,15 +230,16 @@ console.log('D. Resumo do mês das remessas (SHC.remessasResumo + P.remessasResu
     const lim90 = dia(90), meses = [...new Set(LISTA.remessas.map(x => (ORA[x.id].quando || '').slice(0, 7)).filter(Boolean))].concat(['2026-10', '2025-01']);
     meses.forEach(mes => {
         const rr = SHC.remessasResumo(SO_REC, null, mes, HOJE), rt = SHC.remessasResumo(SNAP, null, mes, HOJE);
-        let cC = 0, nC = 0, uC = 0, mC = 0;
+        let cC = 0, nC = 0, cU = 0, uC = 0, mC = 0;
         REC.forEach(x => {
             const o = ORA[x.id];
             if ((o.quando || '').slice(0, 7) !== mes || !(o.custoC > 0)) return;
-            cC += o.custoC; nC++; uC += o.unidades || 0;
+            cC += o.custoC; nC++;
+            if (o.unidades > 0) { cU += o.custoC; uC += o.unidades; }   // #18: R$/un. só das remessas com unidades
         });
         LISTA.remessas.forEach(x => { const o = ORA[x.id]; if ((o.quando || '').slice(0, 7) === mes) mC += o.multaC || 0; });
         l.conta((nC ? emCentavos(rr.custoMes) && cent(rr.custoMes) === cC : rr.custoMes === null) && rr.unidadesMes === uC && emCentavos(rt.multasMes) && cent(rt.multasMes) === mC
-            && (nC && uC > 0 ? emCentavos(rr.custoPorUnidade) && bateMeio(cent(rr.custoPorUnidade), cC, uC) : rr.custoPorUnidade === null),
+            && (uC > 0 ? emCentavos(rr.custoPorUnidade) && bateMeio(cent(rr.custoPorUnidade), cU, uC) : rr.custoPorUnidade === null),
             { mes, custoMes: rr.custoMes, oraculo: cC, un: rr.unidadesMes, uC, cpu: rr.custoPorUnidade, multas: rt.multasMes, mC });
         const tx = P.remessasResumoTxt(rr);
         t.conta(limpo(tx) && (nC ? tx.indexOf(reais(cC) + ' gastos em remessas este mês') >= 0 : !/R\$/.test(tx)), { mes, tx });
@@ -251,6 +253,22 @@ console.log('D. Resumo do mês das remessas (SHC.remessasResumo + P.remessasResu
     okLote(l, REC.length + ' remessas recebidas ou sem cobrança, por mês: custo do mês, unidades, custo por unidade e multas = oráculo em centavos (nada cobrado = null)');
     okLote(t, 'texto da tela: o mesmo R$ do custo do mês (ou "ainda não cobrou", sem R$)');
     okLote(mu, 'multas: só com penalidade do ML; valor = with_penalties; total_charged nunca vira multa');
+    // #18: custo por unidade = cobrança ÷ unidades só das recebidas COM unidades (a remessa sem units_count somava R$ sem somar unidade: R$ 2,00/un.).
+    const u18 = SHC.remessasResumo([{ id: '8400011', status: 'closed_ok', recebida: '2026-09-10', unidades: 100, custo: 100 }, { id: '8400012', status: 'closed_ok', recebida: '2026-09-12', unidades: null, custo: 100 },
+        { id: '8400013', status: 'closed_with_changes', recebida: '2026-09-13', unidades: 0, custo: 50 }], null, '2026-09', HOJE);
+    ok(u18.custoMes === 250 && u18.unidadesMes === 100 && u18.custoPorUnidade === 1 && SHC.moeda(u18.custoPorUnidade) === 'R$ 1,00' && /R\$ 250,00 gastos em remessas este mês$/.test(P.remessasResumoTxt(u18)),
+        'R$ 100,00 com 100 un. + R$ 100,00 sem unidades + R$ 50,00 com 0 un.: gasto do mês R$ 250,00; R$ 1,00 por unidade (só a que tem unidades), não R$ 2,50');
+    const r18 = lcg(1818), g18 = lote();
+    let semUn = 0;
+    for (let k = 0; k < 400; k++) {
+        const rs = Array.from({ length: ent(r18, 1, 7) }, (_, j) => ({ id: String(8410000 + k * 10 + j), status: pega(r18, ['closed_ok', 'closed_with_changes', 'expired', 'in_transit']),
+            recebida: dia(ent(r18, 0, 40)), unidades: pega(r18, [null, 0, ent(r18, 1, 500), ent(r18, 1, 500)]), custo: ent(r18, 0, 4) ? ent(r18, 1, 150000) / 100 : null }));
+        const rr = SHC.remessasResumo(rs, null, '2026-09', HOJE), base = rs.filter(x => x.recebida.slice(0, 7) === '2026-09' && /^closed_/.test(x.status) && x.custo > 0);
+        const com = base.filter(x => x.unidades > 0), cU = com.reduce((s, x) => s + cent(x.custo), 0), uU = com.reduce((s, x) => s + x.unidades, 0);
+        if (base.length > com.length) semUn++;
+        g18.conta(rr.unidadesMes === uU && (uU > 0 ? emCentavos(rr.custoPorUnidade) && bateMeio(cent(rr.custoPorUnidade), cU, uU) : rr.custoPorUnidade === null), { k, rs, cpu: rr.custoPorUnidade, cU, uU });
+    }
+    okLote(g18, `#18 custo por unidade (${semUn} meses com remessa recebida sem unidades): Σ cobrança ÷ Σ unidades só das recebidas com unidades (meio centavo)`);
 }
 
 console.log('E. Detalhe da remessa (SHC.mlRemessaDetalheDoEstado): multa = Σ das penalidades; o que não veio = null');
