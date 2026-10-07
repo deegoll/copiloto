@@ -79,7 +79,7 @@
     const pede = tela => `<p class="det">Abra ${esc(tela)} do TikTok Shop para o Copiloto ler.</p>`;
     T.lidoTxt = lidoTxt; T.pede = pede;   // 3.3.0 (E16): peças que a aba Afiliados usa no filtro TikTok (painel-lateral.js, P.afilTikTok)
     const sobraCls = r => (COR[r.classe] ? r.classe : 'sem_custo');
-    const sobraTxt = r => r.status === 'nao_lido' ? 'não lido' : r.lucro_real === null || r.lucro_real === undefined ? 'sem custo'
+    const sobraTxt = r => r.status === 'nao_lido' ? (r.cancelado ? 'cancelado · não lido' : 'não lido') : r.lucro_real === null || r.lucro_real === undefined ? 'sem custo'
         : (r.lucro_real < 0 ? 'Prejuízo ' + moeda(-r.lucro_real) : 'Lucro ' + moeda(r.lucro_real)) + (n(r.margem_pct) !== null ? ' (' + pct(r.margem_pct) + ')' : '');
     const cl = (rot, v, cls, est) => `<div class="cl${cls ? ' ' + cls : ''}"><span>${esc(rot)}${est ? ' <span class="selo cz">estimado</span>' : ''}</span><b>${v}</b></div>`;
     const menos = v => (n(v) === null ? '—' : v < 0 ? '+' + moeda(-v) : '−' + moeda(v));
@@ -90,7 +90,7 @@
         if (r.reembolso) h += cl('Reembolso ao cliente', menos(r.reembolso), 'mais');
         const pt = r.tarifas_por_tipo || {}, est = !!r.tarifas_estimadas || !!r.estimado;
         Object.keys(pt).filter(k => pt[k]).forEach(k => { h += cl(T.ROT_TARIFA[k] || k, menos(pt[k]), '', est); });
-        if (!Object.keys(pt).length && r.status === 'nao_lido') h += `<div class="cl fora"><span>Tarifas: abra o pedido no Financeiro do TikTok</span><b>—</b></div>`;
+        if (!Object.keys(pt).length && r.status === 'nao_lido') h += `<div class="cl fora"><span>${r.cancelado ? 'O que sobrou do cancelamento' : 'Tarifas'}: abra o pedido no Financeiro do TikTok</span><b>—</b></div>`;
         if (n(r.ads_no_repasse)) h += cl('Ads pago com o repasse', menos(r.ads_no_repasse), '', est);   // GMV Pay: o TikTok tira do repasse
         h += cl('Repasse do TikTok', moeda(r.repasse), 'tot', !!r.estimado);
         h += r.custo_rs === null || r.custo_rs === undefined ? `<div class="cl fora"><span>Custo do produto: informe no Catálogo</span><b>—</b></div>` : cl('Custo do produto', menos(r.custo_rs));
@@ -109,11 +109,12 @@
     }
     T.linhaPedido = linhaPedido;   // 3.3.0 (revisão): o lucro de cada pedido na Conciliação do filtro TikTok (painel-lateral.js, concTtHtml)
     function linhaProduto(p, sem) {
-        const cs = Object.keys(p.canais || {}).map(c => canal(c) + ' ' + p.canais[c]).join(', '), falta = sem.has(p.sku);
+        const cs = Object.keys(p.canais || {}).map(c => canal(c) + ' ' + p.canais[c]).join(', '), falta = sem.has(p.sku || '(sem SKU)');   // a chave do motor sem SKU
         const sub = [p.sku_vendedor ? 'SKU ' + p.sku_vendedor : 'sem SKU ligado'].concat(p.pedidos ? [qtd(p.unidades || 0, 'unidade', 'unidades'), 'receita ' + moeda(p.receita), 'repasse ' + moeda(p.repasse),
             n(p.afiliado_pct) !== null ? 'afiliado ' + pct(p.afiliado_pct) : ''] : [], [cs]).filter(Boolean).join(' · ');
         const cls = p.pedidos ? (p.lucro_real < 0 ? 'prejuizo' : 'lucrativo') : 'sem_custo';
-        const res = p.pedidos ? (p.lucro_real < 0 ? 'Prejuízo ' + moeda(-p.lucro_real) : 'Lucro ' + moeda(p.lucro_real)) + (n(p.margem_pct) !== null ? ' (' + pct(p.margem_pct) + ')' : '') : 'sem custo';
+        // Sem pedido na conta: "sem custo" só quando falta o custo; com custo, os pedidos dele não foram lidos (ex.: cancelado sem tarifa lida).
+        const res = p.pedidos ? (p.lucro_real < 0 ? 'Prejuízo ' + moeda(-p.lucro_real) : 'Lucro ' + moeda(p.lucro_real)) + (n(p.margem_pct) !== null ? ' (' + pct(p.margem_pct) + ')' : '') : (falta ? 'sem custo' : 'não lido');
         const campo = falta && p.sku_id ? `<div class="sim"><label for="ttc-${esc(p.sku_id)}">Custo por unidade</label><input class="inp" id="ttc-${esc(p.sku_id)}" data-tt-custo="${esc(p.sku_id)}" inputmode="decimal" placeholder="R$"><button class="bt pq" data-tt-salvar="${esc(p.sku_id)}">Salvar</button></div>` : '';
         return `<div class="linha-comp"><span class="rlt"><b>${esc(p.titulo || p.sku_vendedor || 'Produto')}</b><span class="sobra ${cls}">${esc(res)}</span></span><small>${esc(sub)}</small>`
             + (p.pendentes ? `<small>${esc(qtd(p.pendentes, 'pedido fora da conta (sem custo ou não lido)', 'pedidos fora da conta (sem custo ou não lidos)'))}</small>` : '') + campo + '</div>';

@@ -77,7 +77,7 @@ Algumas regras de formato:
 
 Quando uma leitura falha, o adaptador devolve `M.naoLido(motivo)`. O motor então responde `status: 'nao_lido'`, informa em `faltando` o que faltou e deixa `repasse` e `lucro_real` em `null`. Custo não informado dá `status: 'sem_custo'`. O mesmo vale para um kit com um componente sem custo: o núcleo nunca soma um custo parcial.
 
-Tarifa estimada pela tabela só entra com `estimar_tarifas: true` e sai marcada (`tarifas_estimadas`). Um canal sem tabela na data continua "não lido".
+Tarifa estimada pela tabela só entra com `estimar_tarifas: true` e sai marcada (`tarifas_estimadas`). Um canal sem tabela na data continua "não lido". O pedido cancelado nunca é estimado (ver **Cancelado** abaixo).
 
 ---
 
@@ -109,7 +109,7 @@ Como a fórmula se aplica em cada caso:
 - **Mês do ML (3.3.0):** use `adaptadores.ml.mesDaCascata({ mes, vb, fech, produtos, imposto_pct, despesas, afil, conta })`. Recebe as **mesmas entradas** da `F.cascata` do Fechamento (`extension-copiloto/fechamento.js`) e faz a mesma conta, linha a linha: vendas brutas, canceladas e devolvidas, cobranças por tipo menos os estornos (tipos do `RENOMEIA`), líquido, custo dos produtos, imposto, lucro, despesas fixas e sobra. Ads e Full vêm só das cobranças da fatura (`fech.porTipo`), uma vez. O afiliado é só informativo. O "não lido" fica `null` nos mesmos lugares, e `faltando` diz o que deixou o lucro em "—". A trava do `ml.test.js` compara as duas contas ao centavo em 27 meses (com imposto 0% e centavos quebrados): mudar uma sem a outra derruba a suíte.
 - **Soma dos canais ("Todos"):** use `motor.somaCanais(meses, campo)` (campo padrão `'lucro'`). Dá o total e o % de cada canal numa conta só (valor ÷ total, 1 casa; sem % quando o total não é positivo). Canal com `aprox` põe "≈" no total; canal sem número fica fora da soma e entra em `motivos`. Nenhum número dá total `null`, nunca 0.
 - **Devolução:** o reembolso sai da receita. O custo do produto é contado, a não ser que `produto_voltou: true`. No TikTok, `reverse_type 2` quer dizer reembolso sem devolução: o vendedor perde o produto.
-- **Cancelado:** receita, custo e imposto ficam em 0. Só conta a tarifa que sobrou depois do estorno.
+- **Cancelado:** receita, custo e imposto ficam em 0. Só conta a tarifa que sobrou depois do estorno, e só se foi **lida** (lista ou extrato do canal). Sem tarifa lida, o motor não estima pela tabela (a venda foi estornada): o pedido sai `nao_lido`, com o aviso "cancelado sem tarifa lida", e fica fora do lucro por produto e do fechamento.
 
 ---
 

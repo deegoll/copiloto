@@ -498,8 +498,9 @@
         r.avisos = (r.avisos || []).concat(avisos);
         if (devolveu && voltou === undefined && r.avisos.indexOf(AVISO_VOLTOU) < 0) r.avisos.push(AVISO_VOLTOU);
         return Object.assign(r, {
-            dia: data, canal_venda: pedido.canal_venda || null,
-            estimado: !!((f && f.estimado) || (j && j.repasses.some(x => x.estimado)) || estimar || r.tarifas_estimadas || cob.parcial),
+            dia: data, canal_venda: pedido.canal_venda || null, cancelado: pedido.status === 'cancelado',
+            // "estimado" só quando algo foi estimado (preço não lido ou cancelado sem tarifa lida: o motor não estima → não é "estimado").
+            estimado: !!((f && f.estimado) || (j && j.repasses.some(x => x.estimado)) || r.tarifas_estimadas || cob.parcial),
             exato: !!j, lido_em: ped.lido_em || null, tela: j || (cob.ilegivel && !lista) ? maisNova(ped.trans, TT.TELA.transacao).tela : (f ? maisNova(ped.linhas, TT.TELA.pedidos_fin).tela : 'Pedidos'),
             // Situação e data prevista do repasse: da lista do Financeiro; sem ela, do detalhe do extrato (o "Est." lido só lá entra no "Previsto").
             extratos: f ? f.extratos : [], data_prevista: (f && f.data_prevista) || (j && j.repasses.map(x => x.data_prevista).filter(Boolean).sort().pop()) || null,
@@ -580,7 +581,8 @@
         const hoje = U.dia(opts.hoje) || U.hoje(), desde = U.somaDias(hoje, -29);
         const ctx = { conta: d.conta, custos: d.custos || {}, cfg: d.cfg || {}, skumap: d.skumap || {} };
         const pedidos = (d.peds || []).map(p => TT.lucroDoPedido(p, ctx)).sort((a, b) => String(b.dia || '').localeCompare(String(a.dia || '')));
-        // KPI com os mesmos pedidos da aba Produtos e do fechamento (motor): 'ok' e 'cancelado' (o frete/tarifa que ficou no cancelado é prejuízo).
+        // KPI com os mesmos pedidos da aba Produtos e do fechamento (motor): 'ok' e 'cancelado' (o frete/tarifa LIDO que ficou no cancelado é
+        // prejuízo; o cancelado sem tarifa lida o motor não estima: sai 'nao_lido', fora do KPI e de Produtos).
         const mes = pedidos.filter(r => r.dia && r.dia >= desde && r.dia <= hoje), ok = mes.filter(r => r.status === 'ok' || r.status === 'cancelado');
         const lucro = ok.length ? U.soma(ok, r => r.lucro_real) : null, receita = U.soma(ok, r => r.receita_liquida);
         const margem = lucro !== null && receita > 0 ? Math.round(lucro / receita * 10000) / 100 : null, alvo = num(ctx.cfg.margem_alvo_pct) || 0;
