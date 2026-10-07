@@ -7430,7 +7430,8 @@
         const rc = t.closest('[data-rem-copiar]');   // v3.3: texto da reclamação da remessa do Full (SHC.chamadoRemessa)
         if (rc) {
             const r = incRemessas().find(x => String(x.id) === rc.dataset.remCopiar);
-            try { await navigator.clipboard.writeText(SHC.chamadoRemessa(r)); remCopiada = r ? r.id : ''; } catch (e) { remCopiada = ''; }
+            const txt = SHC.chamadoRemessa(r);
+            try { if (!txt) throw new Error('sem detalhe'); await navigator.clipboard.writeText(txt); remCopiada = r.id; } catch (e) { remCopiada = ''; }
             if (aba === 'full') desenhaFull();
             return;
         }
