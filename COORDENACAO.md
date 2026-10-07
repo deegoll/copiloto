@@ -20,7 +20,6 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 |---|---|---|---|
 | nuvem 2 | **Item 1 da fila: 3.3.1-C1**, refazer o `nuvem/correcoes-centavos` (PR #5) em cima do `local/3.3.0-final` | ramo `nuvem/331-centavos` (a rotina de 3 h pula este item e vai para o 2) | 07/10 15:34 |
 | nuvem 2 | **3.4.0 · etiquetas de sobra na Shopee e na Magalu** (pedido da dona, 07/10 11:05): na lista de produtos do Seller Center da Shopee e do painel da Magalu, a etiqueta "Sobra R$ X · margem Y%" por produto, com o custo cadastrado no Copiloto. A Shopee já tem a tabela oficial no núcleo (`tarifas.js`). A Magalu precisa da tabela oficial (M4). **Espera os retratos M2, M3 e M4 da local** | ramo `nuvem2/etiquetas-shopee-magalu` (a criar), só depois dos retratos | 07/10 11:05 |
-| nuvem (rotina 3 h) | **Item 2 da fila: N2a**, os 6 `teste_centavos_*.js` do `nuvem/testes-centavos` em cima do `local/3.3.0-final` | ramo `nuvem/331-testes-centavos` (só arquivos novos em `tests/copiloto/`) | 07/10 15:35 |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
 ## Fila
@@ -91,6 +90,11 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 - **Para a local (do rastreio da nuvem, 07/10):** retratos que dão confiança ao que já existe, todos anonimizados: resposta de `/anuncios/api/tasks`; pós-venda (o product-id é o número do pedido?); tabela do Full com produto sem vendas ("0" ou "—"); promoção ativa preenchida; paginação `?page=N` das Vendas; se o Faturador traz o id da conta; bloco "Custos por estoque antigo" e cobranças de remessa; código da restrição "em revisão"; `/anuncios/lista/precos?task=PRICE_SUGGESTION`; opiniões do produto (só nota média e contagem de 1 e 2 estrelas); se "Alterar anúncio" traz a descrição.
 
 ## Recados
+
+- **nuvem → dona (07/10 15:40): o N2a travou; não forcei.** Trouxe os 6 `teste_centavos_*.js` do `nuvem/testes-centavos` para cima do `local/3.3.0-final` (sem push). Passam inteiros só `ads` e `lucro`. Falham `fechamento` (6), `full` (2), `frete` e `nucleo` (param no meio).
+  - Parte das falhas são as divergências que o C1 corrige; outra parte é mudança de propósito do C2 e da local (remessa do Full sem detalhe não gera texto, frete compartilhado, captura do TikTok). Separar uma da outra é o trabalho do C1.
+  - O ramo do C1 (`nuvem/correcoes-centavos`) já carrega estes mesmos 6 arquivos, revisados (1.636 linhas a mais). O C1 está reservado agora pela nuvem 2 (`nuvem/331-centavos`). Um ramo N2a separado com a versão antiga daria conflito de arquivo com o dela.
+  - **Dúvida:** posso marcar o N2a como absorvido pelo C1 (a nuvem 2 traz os testes junto) e a rotina seguir para o M4? Até a resposta, a próxima rotina pula o N2a e pega o M4.
 
 - **local → nuvem (07/10, pedido da dona): a nuvem está LIBERADA.** Veja "### Nuvem" na Fila: base `local/3.3.0-final`, 1 frente por ramo `nuvem/<id>-<assunto>`, ordem C1 → N2a → M4 → B1…B13. A dona criou uma rotina na nuvem que roda de 3 em 3 horas e pega o próximo item. Os retratos M1–M3 (Shopee e Magalu logadas) continuam com a local.
 - **local → nuvem (07/10): robô de fotos sem prometer efeito** (`local/3.3.0-final`, commit `c3cc1c1`). O mesmo usuário perguntou se trocar a ordem das fotos "ajuda mesmo". O motivo do `SHC.roboDecide`, o cartão "Robô de fotos", a apresentação e os textos da loja (`descricao-loja.txt`, `ficha-loja.txt`) agora pedem para conferir preço, frete, estoque e Ads primeiro e chamam a troca de teste, medido 7 dias depois. Suíte 111 OK. **Zip novo: SHA `01e94b7e47a28f5d698c17dc88c71237a7961dfc668380af08eb3406279bca3c`** (substitui o `d306725f…`).
