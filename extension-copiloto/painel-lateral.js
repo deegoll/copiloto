@@ -397,7 +397,7 @@
         // O plano cobre os dias escolhidos na tela; se ele não chega ao mínimo, vale o mínimo.
         const envia = l.qtd > 0 && l.qtd >= falta ? ` Sugestão: enviar ${l.qtd} un.` : (falta > 0 ? ` Envie pelo menos ${falta} un. para chegar ao mínimo.` : '');
         if (s.classe === 'sem_estoque') return `Sem estoque no Full${P.un(p.vendas30) > 0 ? ` e você vendeu ${P.un(p.vendas30)} nos últimos 30 dias` : ''}.${cam ? ` ${cam} un. a caminho.` : ''}${envia}`;
-        const acaba = s.dias !== null && s.dias <= 7 ? `Acaba em ${P.dias(s.dias)}.` : '';
+        const acaba = s.dias !== null && s.dias <= 7 ? (s.dias <= 0 ? 'Acaba hoje.' : `Acaba em ${P.dias(s.dias)}.`) : '';
         const min = s.abaixoMin ? ` Abaixo do estoque mínimo: mínimo ${s.minUn} un.; você tem ${Math.max(0, P.un(p.aptas))} aptas${cam ? ' + ' + cam + ' a caminho' : ''}.` : '';
         return (acaba + min + envia).trim();
     };

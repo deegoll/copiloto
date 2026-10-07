@@ -2961,7 +2961,7 @@
             const texto = fm.abaixo ? 'Estoque no Full abaixo do mínimo: mínimo ' + fm.minUn + ' un.; você tem ' + SHC.qtd(tem, 'apta', 'aptas')
                     + (cam ? ' (+ ' + cam + ' a caminho)' : '') + '. Envie pelo menos ' + fm.faltam + ' un.'
                 : semEstoque ? 'Sem estoque no Full' + (v30 > 0 ? ' e você vendeu ' + v30 + ' nos últimos 30 dias.' : '.')
-                : 'Acaba no Full em ' + dias + (dias === 1 ? ' dia.' : ' dias.');
+                : dias <= 0 ? 'Acaba no Full hoje.' : 'Acaba no Full em ' + dias + (dias === 1 ? ' dia.' : ' dias.');
             lista.push({ tipo: 'full', nivel: 'critico', chave: 'full|' + (p.itemId || p.produtoId) + '|' + (p.variacao || ''), itemId: p.itemId || '', sku: p.sku || '',
                 titulo: p.titulo || '', texto, dias, aptas: tem, aCaminho: cam, vendas30: v30, minUn: fm.minUn, abaixoMin: fm.abaixo, faltam: fm.faltam, sugerido: fm.sugerido });
         });
