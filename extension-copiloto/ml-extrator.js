@@ -1562,7 +1562,7 @@
     const EXCL_AGENTE = /vendedor|lojista|\bloja\b|\bvcs\b|\bvoces\b|\bsepar|despach|fatur|embal|\bcobr|tabela|descri|\bfotos?\b|titulo|anunci/i;
     // Ambíguo (na dúvida, sem regra): "foi engano no/do pedido" costuma ser o pedido que veio errado; o engano no produto, item, envio também.
     const EXCL_DUVIDA = /\bengano (?:n[oa]s?|d[oa]s?|de) (?:pedidos?|produtos?|itens|item|pe[cç]as?|mercadorias?|encomendas?|pacotes?|envio|entrega)\b/i;
-    // Decisão da local (07/10, zero risco): "demorou demais/muito" sem dizer quem atrasou (Correios, transportadora, Mercado Envios) pode ser o
+    // Decisão da local (07/10, zero risco): demora ou atraso sem dizer quem atrasou (Correios, transportadora, Mercado Envios) pode ser o
     // despacho; o Copiloto não sabe se foi no prazo, então não vira pedido de exclusão.
     const DEMORA_VAGA = /\bdemor\w*(?: \w+){0,2} (?:demais|muito)\b|\b(?:muito|demais|super) demor\w*/i;
     const QUEM_TRANSPORTA = /correio|transportador|mercado envios|entregador|logistic/i;
@@ -1584,6 +1584,8 @@
             const sobra = s.replace(x[4], ' ').replace(x[3], ' ').split(' ').filter(p => p && !LIGACAO.has(p));
             if (sobra.length) continue;   // sobrou oração que não é desta regra: na dúvida, não marca
             const semC = s.replace(x[3], ' '), sc = semComprador(semC);   // os vetos olham o núcleo e o que não é complemento neutro
+            // Demora do transporte só com quem transporta no motivo (decisão da local, 07/10): "chegou atrasado" sozinho pode ser o despacho.
+            if (/demora do transporte/.test(x[1]) && !QUEM_TRANSPORTA.test(s)) return null;
             return EXCL_AGENTE.test(semC) || DEV_CULPA.test(sc) || EXCL_CULPA.test(sc) || EXCL_VETO.test(semC) ? null : x;
         }
         return null;
