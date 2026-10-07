@@ -31,7 +31,8 @@
 //      adaptador diz que veio no extrato/escrow do pedido) sai do repasse; a conta na tela mostra "Ads pago com o repasse" (seções G e K).
 //   5) CORRIGIDA (#34): frete ilegível virava 0 e {amount:""} virava 0 (Number("") = 0); a extensão usava o detalhe como "exato" assim mesmo
 //      (Repasse R$ 100 × R$ 80 pagos, "a menor" falso). Agora vazio → null, frete ilegível = frete não lido com aviso, e o detalhe que não fecha
-//      (ou com valor ilegível) nunca é exato: vale a lista do Financeiro, ou o pedido fica "não lido" (seções A, G e K).
+//      (ou com valor ilegível) nunca é exato: vale a lista do Financeiro, ou o pedido fica "não lido" (seções A, G e K). Preço não lido
+//      (extrato, detalhe do pedido ou os dois) aparece "—", fora do KPI: nunca "Preço R$ 0,00" nem prejuízo inventado (seção K).
 //   6) CORRIGIDA (#35): o KPI "Lucro 30 dias" somava só 'ok' e deixava de fora o prejuízo do CANCELADO (frete que ficou), que Produtos e a
 //      conciliação contam (KPI R$ 37,00 × produto R$ 28,50). Agora o KPI soma 'ok' e 'cancelado', como Produtos e o fechamento (seções I e K).
 //   7) tarifas.simular: classe pela margem JÁ arredondada a 1 casa: prejuízo de −R$ 0,01 em R$ 300 (margem −0,003% → −0) sai "lucrativo".
@@ -1123,6 +1124,16 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         ok(s34.status === 'nao_lido' && !s34.exato && s34.repasse === null && s34.avisos.some(a => /receita sem valor/.test(a)) && valorDe(lb34, 'Preço') === null && lb34.some(l => l.rot === 'Preço')
             && !lb34.some(l => l.c === 0),
             'preço vazio no extrato e no detalhe do pedido (#34): "não lido" e Preço "—" na conta do pedido (nada de R$ 0,00)');
+        // Visto só em Pedidos, preço de origem vazio, sem extrato nem lista (custo R$ 30): "não lido", Preço "—", fora do KPI e dos alertas.
+        const C34c = '7000000134', id34c = '5770000000000000820';
+        await TT.gravarCaptura('pedido', { code: 0, data: { main_order: { main_order_id: id34c, main_order_create_time: segDia('2026-09-20'), payment_info: { main_order_origin_sale_price: { format_price: '' } },
+            skus: [{ seller_sku_name: 'SKU-34C', sku_id: '1730000000000000936', quantity: 1, total_price: { format_price: '' }, sku_display_status: 122 }] } } }, C34c, lidoEm);
+        banco['c|sku|SKU-34C'] = { custo: 30 };
+        const x34 = TT.resumo(await TT.ler(C34c), { hoje: '2026-09-25' }), t34 = x34.pedidos[0], hx34 = ABA.html(x34, { hoje: '2026-09-25' }), lx34 = contaTela(hx34, id34c);
+        const kx34 = (/<div class="l">Lucro 30 dias<\/div><div class="v">([^<]*)<\/div>/.exec(hx34) || [])[1];
+        ok(t34.status === 'nao_lido' && t34.faltando.indexOf('preco') >= 0 && t34.repasse === null && t34.lucro_real === null && x34.kpis.lucro_30d === null && kx34 === '—'
+            && valorDe(lx34, 'Preço') === null && lx34.some(l => l.rot === 'Preço') && !lx34.some(l => l.c === 0) && !/prejuízo/i.test(hx34),
+            'visto só em Pedidos com o preço de origem vazio (#34): "não lido", Preço "—", fora do KPI e dos alertas (antes Preço R$ 0,00, tarifa −R$ 4,00 e "Prejuízo de R$ 34,00")');
     }
 
     {   // #35: pedido cancelado com R$ 8,50 de frete que ficou + pedido ok de lucro R$ 37,00 (custo R$ 30, imposto 6%).
