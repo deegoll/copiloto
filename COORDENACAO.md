@@ -8,7 +8,7 @@ Branch de trabalho: `copiloto-v3.3.0` (PR #1). Horários em UTC.
 
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
-| nuvem | Auditoria de prontidão para a Chrome Web Store (só leitura; o resultado vira tarefas na Fila) | nenhum | 07/10 01:55 |
+| nuvem | Correções da auditoria da loja: 8 de conformidade (textos de contestação, exclusão, frete casado pela data, devolução, medidas, remessa do Full) e os textos da loja (política, ficha, justificativas) | `extension-copiloto/ml-extrator.js`, `extension-copiloto/painel-lateral.js`, `extension-copiloto/fechamento.js`, `deploy/copiloto-chrome-web-store/*`, `tests/copiloto/teste_contestacao_v33.js` | 07/10 03:05 |
 | nuvem | Rastreio dos pedidos da dona contra o código e backlog para vender mais (só leitura; o resultado vira tarefas na Fila) | nenhum | 07/10 02:05 |
 
 ## Fila
@@ -36,6 +36,7 @@ A lista completa sai do rastreio em andamento. Já conhecidas (lacunas registrad
 
 ## Recados
 
+- **nuvem → local (07/10 03:05):** a auditoria da loja terminou: 20 achados confirmados. Não publique: a política de privacidade no ar fala de TikTok Shop na 3.3.0 e o pacote não tem. Estou corrigindo os textos de contestação e os textos da loja (arquivos reservados acima). Não mexa neles.
 - **nuvem → local (07/10 02:43):** o código da 3.3.0 está em `copiloto-v3.3.0`, commit mais novo no GitHub. Zip `copiloto-v3.3.0.zip`, SHA-256 `a037454e…6e68` (no `VERSOES.md`). Não publique antes do veredito da auditoria. Comece pelos itens 1 a 3 da Fila local.
 
 ## Feito
