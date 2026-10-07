@@ -20,6 +20,7 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 |---|---|---|---|
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 | nuvem | Rastreio dos pedidos da dona contra o código e backlog para vender mais (só leitura; o resultado vira tarefas na Fila) | nenhum | 07/10 02:05 |
+| nuvem | N2a "cada centavo" (pedido da dona 00:35 BRT): testes de invariantes de dinheiro (Σ das partes = total, arredondamento em centavos, sinal, sem NaN) em fechamento, conciliação, frete, Full, lucro por anúncio, Ads e o motor do núcleo. Divergência real vira recado para a local | só arquivos NOVOS `tests/copiloto/teste_centavos_*.js`, no ramo `nuvem/testes-centavos` (PR depois da sua sincronização). Não toca em `extension-copiloto/*` | 07/10 03:40 |
 
 ## Fila
 
@@ -32,6 +33,20 @@ A rotina da noite (P1–P9) vem primeiro. Estes, quando ela estiver esperando.
 2. **M2 · Shopee Seller Center:** pedidos, renda/financeiro, produtos (preço e estoque), desempenho da loja e devoluções. Salvar as respostas JSON que as telas recebem (como a captura passiva do TikTok), sem nome, endereço, CPF ou telefone do comprador, em `tests/copiloto/fixtures/shopee_<tela>_<data>.json`, e anotar a URL de cada tela e da resposta.
 3. **M3 · Magalu (painel do vendedor):** as mesmas telas (pedidos, financeiro/repasse, produtos, indicadores de reputação e devoluções), no mesmo formato, em `tests/copiloto/fixtures/magalu_<tela>_<data>.json`.
 4. **M4 · Documentação oficial de cada canal:** regras de reclamação, devolução, exclusão de reclamação, frete e tarifas da Shopee e da Magalu (central do vendedor), com a URL, o título e a data em que foi lida, num resumo por canal (`docs/canais/shopee.md` e `docs/canais/magalu.md`). É o que os textos de contestação desses canais vão citar.
+
+**Conferência ao vivo "tela bate 100%" (P5 da rotina; pedido da dona 00:35 BRT).** Para cada linha, o número do Copiloto tem de ser igual ao centavo ao da tela do ML; diferença vai para Recados com a tela, o valor dos dois lados e o id (anonimizado no GitHub):
+
+| Copiloto | Tela do ML que confere |
+|---|---|
+| Fechamento › vendas brutas do mês | Métricas › vendas brutas do mesmo mês |
+| Fechamento › cada tarifa, frete, Ads e estorno | Faturamento › detalhe da fatura do mês |
+| Conciliação › líquido × repasse | Mercado Pago › Atividade do mês |
+| Etiqueta "você recebe" de um anúncio | Simulador de custos do ML no mesmo preço |
+| Frete do anúncio e "frete cobrado a mais" | Faturamento › cobrança de envio do pedido |
+| Full › aptas, a caminho, armazenagem | Full › Estoque e Custos do Full |
+| Ads › investimento, receita, ACOS | Mercado Ads › resumo do mesmo período |
+| Remessa do Full › total cobrado | Full › detalhe da remessa (coleta e/ou penalidade) |
+| TikTok › repasse do pedido | TikTok Seller Center › Financeiro do pedido |
 
 ### Nuvem
 
