@@ -266,16 +266,17 @@
             faixas.push([0.01, 1e7, 0, (num(cfg.sp_taxa_fixa) || 0) + f]);
         }
 
+        // #10: busca centavo a centavo com o próprio calcular(), sempre em preços já em centavos (r2), entre um piso e um teto honestos:
+        // cada r2 (comissão, taxa, imposto, meta) erra no máximo meio centavo → abaixo de (base − 0,03) ÷ den nenhum preço bate a meta e de
+        // (base + 0,03) ÷ den para cima todos batem. Antes o 1º preço não passava por r2 (163,2999… batia e voltava 163,30, que não bate)
+        // e a busca começava só 2 centavos antes (pulava 273,40).
         const ok = p => { const c = SHC.calcular(canal, p, item, cfg); return c && c.sobra_rs !== null && c.sobra_rs >= r2(alvo * p) - 0.0001; };
         for (const [ini, fim, extra, fixo] of faixas) {
             const den = 1 - com - imp - alvo - extra;
             if (den <= 0) continue;
-            let p = Math.max(ini, (custo + outros + fixo) / den);
-            if (p >= fim) continue;
-            p = Math.max(ini, Math.ceil(p * 100 - 1e-6) / 100 - 0.02);   // 2 centavos antes: o arredondamento das tarifas pode empatar antes
-            for (let i = 0; i < 300 && p < fim; i++, p = r2(p + 0.01)) {
-                if (ok(p)) return r2(p);
-            }
+            const base = custo + outros + fixo, teto = Math.max(ini, (base + 0.03) / den + 0.01);   // faixa que já começa acima do teto: o início dela
+            let p = r2(Math.max(ini, Math.floor((base - 0.03) / den * 100) / 100));
+            for (let i = 0; i < 20000 && p < fim && p <= teto; i++, p = r2(p + 0.01)) if (ok(p)) return p;
         }
         return null;
     };

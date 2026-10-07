@@ -208,7 +208,7 @@
      * 'ideal'      = entre as que batem a meta, a de MENOR preço (maior desconto → mais venda sem perder a meta);
      * 'aproximada' = nenhuma bate a meta: a de maior % que ainda dá lucro;
      * 'nenhuma'    = todas dão prejuízo.
-     * precoMeta = menor preço que ainda entrega a meta, com a mesma tarifa (%) e o mesmo frete da proposta.
+     * precoMeta = menor preço que ainda entrega a meta, com a mesma tarifa (%) e o mesmo frete da proposta. null = sem custo ou sem a tarifa.
      */
     SHC.recomendaPromo = function (linhas, cfg, custoFam) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
@@ -220,12 +220,24 @@
         if (atingem.length) { escolha = atingem.reduce((a, b) => (b.p.preco < a.p.preco ? b : a)); tipo = 'ideal'; }
         else { escolha = com.reduce((a, b) => (b.pct > a.pct ? b : a)); tipo = escolha.sobra >= 0 ? 'aproximada' : 'nenhuma'; }
         const p = escolha.p;
-        const custo = custoFam ? SHC.num(custoFam.custo) : null;
-        const outros = custoFam ? (SHC.num(custoFam.outros) || 0) : 0;
-        const r = p.preco ? p.tarifa / p.preco : 0;
+        const custo = custoFam ? SHC.r2(SHC.num(custoFam.custo)) : null;
+        const outros = custoFam ? SHC.r2(SHC.num(custoFam.outros) || 0) : 0;
+        const envio = SHC.r2(SHC.num(p.envio) || 0);
+        // #12: sem a tarifa lida (sale_fee) ela NÃO é 0%: sai da conta do próprio ML (preço − frete − você recebe); sem esses números, sem preço.
+        const tarifa = SHC.num(p.tarifa) !== null ? SHC.num(p.tarifa)
+            : (SHC.num(p.envio) !== null && SHC.num(p.recebe) !== null ? SHC.r2(p.preco - SHC.num(p.envio) - SHC.num(p.recebe)) : null);
+        const r = p.preco > 0 && tarifa !== null && tarifa >= 0 ? tarifa / p.preco : null;
         const imp = (SHC.num(cfg.imposto_pct) || 0) / 100;
-        const den = 1 - r - imp - meta / 100;
-        const precoMeta = (custo > 0 && den > 0) ? Math.ceil(((p.envio || 0) + custo + outros) / den * 100) / 100 : null;
+        const den = r === null ? 0 : 1 - r - imp - meta / 100;
+        // #12: o MENOR preço em centavos que bate a meta com a MESMA conta da proposta (tarifa = r2(preço × %), SHC.sobraProposta e a margem
+        // sem arredondar, como o selo), buscado centavo a centavo entre um piso e um teto honestos (cada r2 erra ≤ meio centavo). Antes a
+        // fórmula fechada ficava 1 centavo abaixo da meta em ~12% dos casos (R$ 184,64 com margem de 4,9989% para a meta de 5%).
+        let precoMeta = null;
+        if (custo > 0 && den > 0) {
+            const bate = q => { const s = SHC.sobraProposta({ preco: q, recebe: SHC.r2(q - SHC.r2(q * r) - envio) }, { custo, outros }, cfg); return s.sobra !== null && s.sobra / q * 100 >= meta; };
+            const base = envio + custo + outros, teto = (base + 0.03) / den + 0.01;
+            for (let q = SHC.r2(Math.max(0.01, Math.floor((base - 0.03) / den * 100) / 100)), i = 0; i < 20000 && q <= teto; i++, q = SHC.r2(q + 0.01)) if (bate(q)) { precoMeta = q; break; }
+        }
         return { tipo, escolha, precoMeta, atingem: atingem.length };
     };
 
