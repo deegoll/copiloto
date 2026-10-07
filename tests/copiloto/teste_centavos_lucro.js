@@ -31,7 +31,8 @@
 //      tarifa sai de preço − frete − você recebe, e sem esses números não há preço (I).
 //   6) Balão da lista de Anúncios: "Você recebe" maior que preço − tarifa (aporte do ML) → frete deduzido 0 e a conta não fecha; tarifa não
 //      lida → "Frete por sua conta − R$ 0,00" inventado.
-//   7) SHC.calcular: frete grátis sem valor (≥ R$ 79 ou Full) entra como R$ 0,00 e a sobra sai como número firme (só com "⚠").
+//   7) [corrigida, #14] SHC.calcular: frete grátis sem valor (≥ R$ 79 ou Full) entrava como R$ 0,00 e a sobra saía como número firme (só com "⚠").
+//      Agora a classe é 'semfrete' (a sobra é um teto), o SHC.precoMinimo não dá número que dependa desse frete e o popup mostra "Lucro até" (B, C, E, K).
 //   8) SHC.valorRS/dinheiro tiram o sinal: "Você recebe −R$ 63,00" (frete grátis maior que preço − tarifa) é lido +63 e a etiqueta diz "Dá lucro".
 //   9) painel.js: "✓ Kit salvo: R$ X" mostra o custo SEM embalagem/outros; a tabela de kits mostra custo + outros.
 //  10) Abaixo de R$ 79: SHC.calcular (popup) usa a taxa fixa por faixa (9,50) e SHC.canalLucro a % + o custo operacional do anúncio.
@@ -144,8 +145,10 @@ console.log('B. SHC.calcular (Mercado Livre) — casos feitos à mão');
     ok(c5.preco === 1234.56 && c5.comissao_rs === 160.49 && c5.frete_rs === 45.35 && c5.recebe_rs === 1028.72 && c5.imposto_rs === 74.07 && c5.sobra_rs === 454.65,
         'preço, custo e frete no jeito brasileiro ("1.234,56", "R$ 45,35"): 1.234,56 − 160,49 − 45,35 = 1.028,72; − 500 − 74,07 = 454,65');
     const c6 = SHC.calcular('ml', 150, { custo: 50 }, cfg), c7 = SHC.calcular('ml', 150, { custo: 50 }, Object.assign({ ml_frete_padrao: 22.9 }, cfg));
-    ok(c6.frete_desconhecido === true && /informe/i.test(c6.frete_regra) && c7.frete_desconhecido === false && c7.frete_rs === 22.9 && c7.recebe_rs === 107.6,
-        'frete grátis sem valor: marcado como desconhecido (a tela avisa "⚠"); com o frete médio das configurações (22,90) ele entra na conta');
+    const c6b = SHC.calcular('ml', 150, { custo: 140 }, cfg), c6c = SHC.calcular('ml', 60, { custo: 20, full: true }, cfg);
+    ok(c6.frete_desconhecido === true && /informe/i.test(c6.frete_regra) && c6.classe === 'semfrete' && c6.sobra_rs === 71.5 && c6b.classe === 'prejuizo' && c6c.classe === 'semfrete'
+        && c7.frete_desconhecido === false && c7.frete_rs === 22.9 && c7.recebe_rs === 107.6 && c7.classe === 'lucrativo',
+        'frete grátis sem valor (≥ R$ 79 ou Full): a sobra (71,50) é um teto, classe "semfrete" (nunca "Dá lucro" firme); prejuízo continua prejuízo; com o frete médio (22,90) ele entra na conta');
     const c8 = SHC.calcular('ml', 200, { custo: 50, frete: 30, comissao_pct: 11.5 }, cfg), c9 = SHC.calcular('ml', 200, { custo: 50, frete: 30, comissao_pct: 0 }, cfg),
         c10 = SHC.calcular('ml', 200, { custo: 50, frete: 30, comissao_pct: -3 }, cfg);
     ok(c8.comissao_rs === 23 && c8.recebe_rs === 147 && c9.comissao_rs === 0 && c9.recebe_rs === 170 && c10.comissao_pct === 13 && c10.comissao_rs === 26,
@@ -191,7 +194,7 @@ console.log('C. SHC.calcular (Mercado Livre) — casos gerados: as contas em cen
         if (c.sobra_rs !== null) {
             const m = c.sobra_rs / preco * 100;
             K.conta(c.sobra_pct === Math.round(m * 10) / 10 && !Object.is(c.sobra_pct, -0)
-                && c.classe === (c.sobra_rs < 0 ? 'prejuizo' : m < cfg.margem_alvo_pct ? 'apertado' : 'lucrativo'), { preco, item, cfg, sobra: c.sobra_rs, pct: c.sobra_pct, classe: c.classe });
+                && c.classe === (c.sobra_rs < 0 ? 'prejuizo' : c.frete_desconhecido ? 'semfrete' : m < cfg.margem_alvo_pct ? 'apertado' : 'lucrativo'), { preco, item, cfg, sobra: c.sobra_rs, pct: c.sobra_pct, classe: c.classe });
             // Calculadora do popup: "Sobra no final R$ X (p%)" + "Comissão R$ · taxa fixa R$ · frete R$ · imposto R$" e o custo digitado.
             const txt = { sobra: SHC.moeda(c.sobra_rs), com: SHC.moeda(c.comissao_rs), fixa: c.taxa_fixa_rs ? SHC.moeda(c.taxa_fixa_rs) : 'R$ 0,00',
                 frete: SHC.moeda(c.frete_rs), imp: c.imposto_rs ? SHC.moeda(c.imposto_rs) : 'R$ 0,00', custo: SHC.moeda(c.custo_rs), outros: SHC.moeda(c.outros_rs) };
@@ -201,7 +204,7 @@ console.log('C. SHC.calcular (Mercado Livre) — casos gerados: as contas em cen
     }
     okLote(L, 'recebe = preço − comissão − taxa fixa − frete e sobra = recebe − custo − outros − imposto, em centavos inteiros (tudo com 2 casas)');
     okLote(M, 'comissão e imposto a no máximo meio centavo do % exato; taxa fixa da faixa; frete do comprador abaixo de R$ 79; frete sem valor marcado');
-    okLote(K, 'margem da tela = sobra ÷ preço (1 casa, nunca −0); classe pela sobra e pela margem SEM arredondar (sobra < 0 = prejuízo; abaixo da meta = apertado)');
+    okLote(K, 'margem da tela = sobra ÷ preço (1 casa, nunca −0); classe pela sobra e pela margem SEM arredondar (sobra < 0 = prejuízo; frete sem valor = semfrete; abaixo da meta = apertado)');
     okLote(T, 'popup: os R$ da tela (comissão, taxa fixa, frete, imposto, custo, outros) somam exatamente a "Sobra no final"');
     okLote(S, 'sem custo: sobra, custo e % ficam null (a tela mostra "—"/"＋ custo"), o "você recebe" continua em centavos');
     // #11 gerados: custo, outros e frete com 3 ou 4 casas (planilha do ERP, custo de caixa ÷ unidades).
@@ -267,7 +270,9 @@ console.log('E. SHC.precoMinimo: o menor preço que deixa a meta (busca centavo 
         N.conta(menor !== null && pn === menor, { item, cfg, alvo, nucleo: pn, menor });
         const pm = SHC.precoMinimo('ml', item, cfg, alvo);
         // #10: o calc.js (popup) dá exatamente o menor preço em centavos que bate a meta (antes: até 1 centavo abaixo ou alguns acima).
-        C.conta(pm === menor && falta('ml', pm, item, cfg, alvo) <= 0 && falta('ml', r2(pm - 0.01), item, cfg, alvo) > 0, { item, cfg, alvo, pm, menor });
+        // #14: se o menor cai onde o frete grátis é do seller e ele não foi informado, não há número firme (null).
+        const semFrete = menor !== null && SHC.calcular('ml', menor, item, cfg).frete_desconhecido;
+        C.conta(semFrete ? pm === null : pm === menor && falta('ml', pm, item, cfg, alvo) <= 0 && falta('ml', r2(pm - 0.01), item, cfg, alvo) > 0, { item, cfg, alvo, pm, menor, semFrete });
     }
     for (let i = 0; i < 60; i++) {
         const item = { custo: din(r, 1, 250), outros: r() < 0.3 ? din(r, 0, 8) : 0, frete: r() < 0.3 ? din(r, 0, 30) : null };
@@ -276,7 +281,11 @@ console.log('E. SHC.precoMinimo: o menor preço que deixa a meta (busca centavo 
         S.conta(menor !== null && SHC.precoMinimo('sp', item, cfg, alvo) === menor, { item, cfg, alvo, menor, pm: SHC.precoMinimo('sp', item, cfg, alvo) });
     }
     okLote(N, 'ML pelo núcleo (tarifas.precoMinimo): exatamente o menor preço em centavos que deixa a meta');
-    okLote(C, 'ML pelo calc.js (popup): exatamente o menor preço em centavos que deixa a meta (1 centavo abaixo já não deixa)');
+    okLote(C, 'ML pelo calc.js (popup): exatamente o menor preço em centavos que deixa a meta (1 centavo abaixo já não deixa); null se ele depende do frete sem valor');
+    ok(SHC.precoMinimo('ml', { custo: 80 }, {}, 0) === null && SHC.precoMinimo('ml', { custo: 80, frete: 30 }, {}, 0) === 126.44 && SHC.precoMinimo('ml', { custo: 50 }, {}, 0) === 68.39
+        && SHC.precoMinimo('ml', { custo: 20, full: true }, {}, 0) === null && SHC.precoMinimo('ml', { custo: 20, full: true, frete: 10 }, {}, 0) === 43.1
+        && SHC.precoMinimo('ml', { custo: 80 }, { ml_frete_padrao: 30 }, 0) === 126.44,
+        '#14: custo 80 sem frete → sem preço mínimo (antes R$ 91,95 com frete 0; com frete 30 é R$ 126,44); custo 50 → R$ 68,39 (abaixo de R$ 79 o frete é do comprador); Full sem frete → sem preço');
     // #10: os casos do relatório. A R$ 273,40 a meta de 17,5% é 47,845 → R$ 47,85 (meio centavo para cima, #4) e sobram 47,84: o menor é 273,41.
     const i1 = { custo: 77.9, outros: 5.38, tipo: 'premium' }, f1 = { imposto_pct: 13.33, ml_frete_padrao: 23.15 }, i2 = { custo: 167.78, frete: 22.24 };
     const p1 = SHC.precoMinimo('ml', i1, f1, 5), p2 = SHC.precoMinimo('ml', i2, {}, 17.5);
@@ -560,6 +569,25 @@ console.log('E. SHC.precoMinimo: o menor preço que deixa a meta (busca centavo 
             'resultado do SKU no painel: pior e melhor anúncio com as mesmas sobras; sem custo, custo null');
         const eq = SHC.adsEquilibrio(it, { custo: 50, outros: 1.5 }, cfg);
         ok(eq.sobraAntes === s1.sobra && eq.equilibrio === s1.pct && SHC.adsEquilibrio(it, null, cfg) === null, 'Ads: ACOS de equilíbrio = a margem da etiqueta; sobra antes do Ads = a sobra da etiqueta; sem custo, null');
+    }
+
+    console.log('K. Calculadora rápida (popup.js, com um DOM de mentira): frete grátis sem valor vira teto ("até"), nunca frete R$ 0,00 firme');
+    {
+        const els = {}, el = s => els[s] || (els[s] = { value: '', innerHTML: '', textContent: '', className: '', ouv: {},
+            classList: { add: c => { el(s).className += ' ' + c; }, toggle: () => {} }, addEventListener(t, fn) { this.ouv[t] = fn; }, focus() {}, click() {}, getAttribute: () => null });
+        global.document = { querySelector: el, querySelectorAll: () => [] };
+        require(path.join(EXT, 'popup.js'));
+        await new Promise(r => setTimeout(r, 20));   // SHC.lerTudo (chrome.storage de mentira) → cfg → calcula()
+        const tela = (preco, custo, frete) => { el('#preco').value = preco; el('#custo').value = custo; el('#frete').value = frete; el('#preco').ouv.input(); return { h: el('#res').innerHTML, cls: el('#res').className.trim() }; };
+        const a = tela('150', '50', ''), b = tela('150', '80', ''), c = tela('150', '50', '30'), d = tela('150', '140', '');
+        delete global.document;
+        ok(a.cls === 'res semfrete' && a.h.indexOf('Lucro até (antes do frete)<div class="v">R$ 80,50 <span style="font-size:13px">(até 53,7%)</span>') === 0 && a.h.indexOf('frete: falta o valor') > 0
+            && a.h.indexOf('frete R$ 0,00') < 0 && a.h.indexOf('Preço mínimo sem prejuízo: <b>R$ 68,39</b>') > 0 && a.h.indexOf('⚠ Acima de R$ 79 o frete é seu') > 0,
+            'R$ 150, custo 50, frete vazio: "Lucro até (antes do frete) R$ 80,50 (até 53,7%)", "frete: falta o valor" (nunca R$ 0,00); preço mínimo R$ 68,39 (abaixo de R$ 79 o frete é do comprador)');
+        ok(b.cls === 'res semfrete' && b.h.indexOf('Preço mínimo sem prejuízo: informe o frete para calcular.') > 0 && b.h.indexOf('91,95') < 0
+            && c.cls === 'res lucrativo' && c.h.indexOf('Sobra no final<div class="v">R$ 50,50') === 0 && c.h.indexOf('frete R$ 30,00') > 0 && c.h.indexOf('até') < 0 && c.h.indexOf('⚠') < 0
+            && d.cls === 'res prejuizo' && d.h.indexOf('Prejuízo já antes do frete<div class="v">−R$ 9,50') === 0,
+            'custo 80 sem frete: "informe o frete" (não R$ 91,95); frete 30 informado: "Sobra no final R$ 50,50" firme; custo 140 sem frete: "Prejuízo já antes do frete −R$ 9,50"');
     }
 
     console.log(f ? `\n${f} FALHA(S) em ${nChecks} conferências` : `\n${nChecks} conferências de centavos.\nTUDO OK`);
