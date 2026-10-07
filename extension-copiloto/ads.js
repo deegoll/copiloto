@@ -248,17 +248,19 @@
         const out = [];
         const porEstr = {};
         camps.forEach(c => { porEstr[c.estrategiaTxt] = (porEstr[c.estrategiaTxt] || 0) + 1; });
-        const fat = k => (fechs || []).filter(f => f && f.porTipo && Math.abs(SHC.num(f.porTipo[k]) || 0) > 0).map(f => ({ mes: f.mes, valor: Math.abs(SHC.num(f.porTipo[k])) }));
+        // porTipo é LÍQUIDO (cobrado − estornado): negativo = os estornos passaram das cobranças no mês → mostra com o sinal −, nunca como gasto.
+        const fat = k => (fechs || []).filter(f => f && f.porTipo && Math.abs(SHC.num(f.porTipo[k]) || 0) > 0).map(f => ({ mes: f.mes, valor: SHC.r2(SHC.num(f.porTipo[k])) }));
+        const noFat = x => `No Faturamento de ${x.mes}: ${SHC.moeda(x.valor)}${x.valor < 0 ? ' (estornos maiores que as cobranças no mês)' : ''}.`;
         const pa = fat('ads'), seg = fat('ads_seguidores');
         if (camps.length || pa.length) out.push({
             nome: 'Product Ads (Aumentar suas vendas)',
             detalhe: (camps.length ? SHC.qtd(camps.length, 'campanha', 'campanhas') + ': ' + Object.keys(porEstr).map(k => porEstr[k] + ' em ' + k).join(', ') + '.' : 'Nenhuma campanha lida no Mercado Ads.')
-                + pa.map(x => ` No Faturamento de ${x.mes}: ${SHC.moeda(x.valor)}.`).join(''),
+                + pa.map(x => ' ' + noFat(x)).join(''),
             acompanha: 'Investimento, receita, ROAS, ACOS, TACOS, impressões perdidas, resultado por SKU e ponto de equilíbrio.',
         });
         if (seg.length) out.push({
             nome: 'Publicidade de Seguidores (Aumentar os seguidores)',
-            detalhe: seg.map(x => `No Faturamento de ${x.mes}: ${SHC.moeda(x.valor)}.`).join(' '),
+            detalhe: seg.map(noFat).join(' '),
             acompanha: 'Só o gasto, que vem do Faturamento. O resultado (seguidores) fica no Mercado Ads.',
         });
         return out;
