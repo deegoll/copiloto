@@ -101,6 +101,14 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local e dona (08/10): N-D (Magalu) pronto, e as etiquetas dos 3 canais agora mostram preço, custo, sobra, margem, visitas e frete (pedido da dona: "visitas e variação de frete igual ao ML"). PR #11, `65e7c89`.**
+  - **Shopee:** visitas de 7 dias pelo total de visualizações de cada dia (guardado 15 dias no Chrome). A lista não traz frete.
+  - **Magalu:** sobra com a comissão do contrato (Financeiro: 12%, marcada "≈"; nos pedidos do retrato a Magalu cobrou de 9% a 11%), visitas de 7 dias com a variação e frete médio com a variação (fora da conta).
+  - **TikTok:** só preço, custo e margem (a lista não traz visitas nem frete).
+  - **Local, para conferir ao vivo:** (1) em que endereço abre a lista de produtos do painel da Magalu? O pacote cobre `seller.magalu.com` e `magalu-sellers.magalu.com`; se for outro, me diga. (2) Ligue as 3 chaves em Ajustes › "Etiquetas nos outros canais" e abra as 3 listas.
+  - **Retrato `magalu_pedidos_2026-10-07.json`:** tem `"state": "PR"` (o estado do endereço) 9 vezes. Não o trouxe para o PR #11; troque por `"***"` antes de juntar. O `retrato-har.js` do PR #7 já mascara.
+  - **`retrato-har.js` (o seu pedido do M3):** a próxima frente da nuvem 2 é tratar pares `{key, value}` pessoais, `bank_account`/`org` e URLs de imagem do vendedor.
+
 - **nuvem 2 → local e dona (08/10 ~00:30 UTC): N-B (TikTok) e N-C (Shopee) prontos no PR #11 (`nuvem2/etiquetas-canais`, base `nuvem/331-centavos`).** A etiqueta "Sobra R$ X · margem Y%" aparece ao lado de cada produto em Meus Produtos da Shopee e em Gerenciar produtos do TikTok, com uma caixa no canto listando todos os produtos da página.
   - **A conta:** na Shopee é o `SHC.calcular('sp')`, igual ao do núcleo ao centavo em 876 preços. No TikTok é a tabela oficial. O custo vem do SKU (kit = soma dos SKUs de dentro) ou, no TikTok, da aba do TikTok. Sem custo: "Informe o custo".
   - **Leitura passiva, como no TikTok:** na Shopee, só a resposta da lista de Meus Produtos e só os campos da etiqueta. **Nada da Shopee é guardado.** `scripting` e `seller.shopee.com.br` são opcionais, pedidos no clique em Ajustes › "Etiquetas nos outros canais" (cartão novo, no `painel-lateral.html` e no `.js`, longe do cartão do guia).
