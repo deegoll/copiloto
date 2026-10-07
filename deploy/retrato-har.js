@@ -15,7 +15,7 @@
 'use strict';
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 
-const PESSOAL = /^(buyer|receiver|recipient|comprador|destinatario|cliente|customer|shipping|consignee)?_?(name|nome|first_?name|last_?name|full_?name|nick_?name|user_?name|apelido|email|e_?mail|phone|telefone|celular|mobile|cpf|cnpj|doc_?number|document|documento|tax_?id|street|street_?name|street_?number|rua|logradouro|endereco|address|address_?line\d?|full_?address|zip_?code|zip|cep|postal_?code|neighborhood|bairro|city|cidade|district|complement|complemento|avatar|portrait)$/i;
+const PESSOAL = /^(buyer|receiver|recipient|comprador|destinatario|cliente|customer|shipping|consignee)?_?(name|nome|first_?name|last_?name|full_?name|nick_?name|user_?name|apelido|email|e_?mail|phone|telefone|celular|mobile|cpf|cnpj|doc_?number|document|documento|tax_?id|street|street_?name|street_?number|rua|logradouro|endereco|address|address_?line\d?|full_?address|zip_?code|zip|cep|postal_?code|neighborhood|bairro|city|cidade|district|complement|complemento|state|estado|uf|province|region|avatar|portrait)$/i;
 const DONO = /buyer|receiver|recipient|comprador|destinat|client|customer|shipping|address|endereco|contact|contato|consignee|seller|vendedor|shop_?name|loja/i;
 const TITULO = /^(title|titulo|name|nome|item_?name|product_?name|model_?name|variation_?name|description|descricao|shop_?name|store_?name)$/i;
 const SKU = /sku|seller_?code|codigo|item_?code|model_?sku|ean|gtin|barcode/i;
@@ -49,7 +49,7 @@ function criaAnonimo(semente) {
         }
         const k = String(chave || ''), kk = k.replace(/[-\s]/g, '_');
         if (v === null || typeof v === 'boolean') return v;
-        if (PESSOAL.test(kk) && (DONO.test(caminho) || /cpf|cnpj|email|phone|telefone|celular|mobile|cep|zip|postal|doc_?number|street|address/i.test(kk))) return typeof v === 'number' ? 0 : (v === '' ? '' : '***');
+        if (PESSOAL.test(kk) && (DONO.test(caminho) || /cpf|cnpj|email|phone|telefone|celular|mobile|cep|zip|postal|doc_?number|street|address/i.test(kk))) return typeof v === 'number' ? 0 : (v === '' ? '' : '***');   // endereço do comprador E do vendedor (seller_address.state: retrato M2)
         if (typeof v === 'number') {
             if (/time|date|data|_at$|ts$/i.test(k) && v > 1e9) return v;   // timestamp: fica (não é dado pessoal e o código lê datas)
             if (ID_CHAVE.test(k) || (Number.isInteger(v) && Math.abs(v) >= 1e5 && !VALOR.test(k))) return +novoId(v) || v;

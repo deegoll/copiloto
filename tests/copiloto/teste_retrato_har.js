@@ -11,7 +11,8 @@ const produtos = { code: 0, data: { page_info: { total: 2, page: 1 }, list: [
     { id: 22334455667, name: 'Kit Panela Antiaderente Marca Real 5 Peças', parent_sku: 'PAN-REAL-05', status: 'NORMAL', price_info: { normal_price: '189.90', promotion_price: '159.90' }, stock_detail: { total_available_stock: 42 }, create_time: 1759000000 },
     { id: 22334455668, name: 'Jogo de Facas Inox Marca Real', parent_sku: 'FAC-REAL-06', status: 'UNLIST', price_info: { normal_price: '99.00', promotion_price: '99.00' }, stock_detail: { total_available_stock: 0 }, create_time: 1759100000 }] } };
 const pedido = { order_sn: '2510077ABCDEF', buyer_user: { user_name: 'maria.silva77', email: 'maria@gmail.com', phone: '(44) 99912-1785' },
-    recipient_address: { name: 'Maria da Silva', full_address: 'Rua das Flores, 123, Maringá', zipcode: '87010-120' },
+    recipient_address: { name: 'Maria da Silva', full_address: 'Rua das Flores, 123, Maringá', zipcode: '87010-120', state: 'Paraná' },
+    seller_address: { name: 'Loja Real', state: 'Paraná', city: 'Maringá' },
     item_list: [{ item_id: 22334455667, item_name: 'Kit Panela Antiaderente Marca Real 5 Peças', model_sku: 'PAN-REAL-05', quantity: 2, item_price: 159.9 }],
     order_status: 'READY_TO_SHIP', note: 'cpf 529.982.247-25, ligar antes', total_amount: 319.8, commission_fee: 44.77 };
 const ent = (url, corpo, b64) => ({ request: { method: 'GET', url }, response: { status: 200, content: { mimeType: 'application/json', text: b64 ? Buffer.from(JSON.stringify(corpo)).toString('base64') : JSON.stringify(corpo), encoding: b64 ? 'base64' : undefined } } });
@@ -27,7 +28,7 @@ ok(out[0].url === 'https://seller.shopee.com.br/api/v3/product/list' && out[0].p
 ok(doHar(har, 'order', criaAnonimo(1)).length === 1, 'o filtro de URL escolhe as respostas');
 
 console.log('b) nada real sobra');
-['maria', 'Maria', 'gmail', '99912', '87010', 'Flores', 'Maringá', '529.982.247-25', 'Marca Real', 'PAN-REAL', 'FAC-REAL', '22334455667', '998877665', '2510077ABCDEF', '189.9', '159.9', '319.8', 'abc']
+['maria', 'Maria', 'gmail', '99912', '87010', 'Flores', 'Maringá', 'Paraná', 'Loja Real', '529.982.247-25', 'Marca Real', 'PAN-REAL', 'FAC-REAL', '22334455667', '998877665', '2510077ABCDEF', '189.9', '159.9', '319.8', 'abc']
     .forEach(s => ok(txt.indexOf(s) < 0, '"' + s + '" não aparece'));
 
 console.log('c) a estrutura fica');
