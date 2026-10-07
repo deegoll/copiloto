@@ -592,6 +592,17 @@ console.log('H. Frete pago a mais por mês e por SKU (P.pagoAMaisPorMes, P.ranki
         const b = monta(60), b1 = await b.ctx.gravarFreteHist(CONTA, [est], ['2026-09']), pb = ped(b), b2 = await b.ctx.gravarFreteHist(CONTA, [est], ['2026-09']);
         ok(pb.cobrado === 40 && pb.cheio === 50 && junto(60).cheio === 50 && b1.conta.ult30.descontoML === 10 && ped(b).cheio === 50 && b2.conta.ult30.descontoML === 10 && b2.conta.ult30.total === 40,
             'com desconto do ML (cheio 60, cobrado 50) e estorno de 10: cobrado 40, cheio 50, desconto R$ 10,00 (antes R$ 20,00) — também na releitura');
+        // Tarifa e estorno lidos JUNTOS em 04/09 (agosto e setembro); em 05/09 só setembro é relido e traz o mesmo estorno sem a tarifa:
+        // não desconta de novo (antes: cobrado 40 → 30 e o frete dos 30 dias R$ 10,00 menor).
+        const tarifa = cheio => ({ tipo: 'frete', orderId: PED, itemId: MLB, data: '2026-08-31', valor: 50, cheio, texto: TX, id: 'tar-1' });
+        for (const cheio of [50, 60]) {
+            const c = montaFundo({ hoje: '2026-09-04', dados: { 'ml:conta': CONTA, ['ml:anuncios:' + CONTA]: { itens: [{ itemId: MLB, frete: 50 }] }, ['ml:cobrancas:' + CONTA]: { mesesLidos: ['2026-07', '2026-08', '2026-09'] } } });
+            await c.ctx.gravarFreteHist(CONTA, [tarifa(cheio), est], ['2026-08', '2026-09']);
+            const p1 = ped(c), c2 = montaFundo({ hoje: '2026-09-05', dados: c.dados }), s2 = await c2.ctx.gravarFreteHist(CONTA, [est], ['2026-09']), p2 = ped(c2);
+            ok(p1.cobrado === 40 && p1.cheio === cheio - 10 && p2.cobrado === 40 && p2.cheio === cheio - 10 && s2.conta.ult30.total === 40 && s2.conta.ult30.descontoML === cheio - 50
+                && p2.linhas.filter(l => l.e).length === 1,
+                'tarifa + estorno lidos juntos (cheio ' + cheio + ') e o estorno relido sozinho no dia seguinte: cobrado 40, cheio ' + (cheio - 10) + ', 1 linha de estorno (antes cobrado 30)');
+        }
     }
     console.log(f ? `\n${f} FALHA(S) em ${nChecks} conferências` : `\n${nChecks} conferências de centavos.\nTUDO OK`);
     process.exit(f ? 1 : 0);
