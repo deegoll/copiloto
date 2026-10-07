@@ -339,6 +339,31 @@ console.log('Exclusão (revisão do grupo g): só o núcleo da regra + complemen
     ok(!d1.length, msg('dúvida (erro do comprador com o veículo, "tamanho errado", "cheiro"): não marca', d1));
 }
 
+console.log('Exclusão (revisão 3): entre o verbo do comprador e "errado/por engano" só a lista fechada; agente e anúncio vetam antes de tirar o trecho');
+{
+    const ex = SHC.motivoExcluivel;
+    const culpa = ['Comprei certo, separaram errado', 'Comprei, o vendedor separou errado', 'Pedi, a loja separou errado', 'Comprei certo, embalaram errado', 'Comprei certo, despacharam errado',
+        'Comprei certo, faturaram errado', 'Pedi certo, separaram errado', 'Comprei 1, separaram 2 por engano', 'Comprei preto, despacharam branco por engano', 'Comprei 40, separaram 42 por engano',
+        'Comprei azul, separaram errado', 'Escolhi, vendedor separou errado', 'Comprei, o vendedor colocou errado', 'Comprei, botaram o modelo errado', 'Comprei, trocaram por engano',
+        'Comprei, a loja trocou por engano', 'Comprei um, cobraram dois por engano', 'Comprei, o vendedor errado', 'Comprei, etiquetaram errado', 'Comprei com a descrição errada', 'Comprei pela foto errada',
+        'Comprei pela tabela errada', 'Comprei com a informação errada', 'Comprei com a medida errada', 'Escolhi pela tabela errada', 'Comprei pelo anúncio errado', 'Comprei pela ficha errada',
+        'Selecionei pela descrição errada', 'Comprei, a loja mandou errado', 'Comprei, o vendedor despachou errado', 'Comprei e o vendedor separou errado', 'Pedi pela foto errada',
+        'Escolhi pela foto errada do anúncio', 'Comprei, vendedor cobrou por engano', 'Comprei 1 unidade, faturaram 2 por engano', 'Comprei pelo título errado', 'Comprei com o título errado',
+        'Selecionei com a voltagem errada da descrição', 'Comprei o anúncio errado', 'Comprei de vendedor errado', 'comprei certo vcs separaram errado', 'comprei certinho loja separou errado',
+        'pedi certo separaram errado', 'Comprei na loja errada', 'Me arrependi, vcs demoraram', 'Desisti, o vendedor demorou', 'Comprei o tamanho certo, separaram errado'];
+    const vazou = culpa.filter(m => ex(m));
+    ok(!vazou.length, culpa.length + ' frases com vendedor, loja, preparo, envio, cobrança ou anúncio entre o verbo e "errado/por engano": nenhuma é excluível' + (vazou.length ? ' — vazou: ' + vazou.join(' | ') : ''));
+    const duvida = ['Foi engano no pedido', 'Foi engano do pedido', 'Engano no pedido', 'Foi engano no produto', 'Engano no envio'];
+    ok(duvida.every(m => !ex(m)), '"foi engano no/do pedido" é ambíguo (costuma ser o pedido que veio errado): sem regra');
+    const legit = ['Reclamação aberta por engano', 'Desisti, comprei em outro lugar', 'Me arrependi, vou comprar outro', 'Desisti, comprei na loja física', 'Desisti, comprei em outra loja',
+        'Comprei por engano', 'Comprei errado', 'Comprei a cor errada', 'Comprei o tamanho errado', 'Escolhi a voltagem errada', 'Comprei o número errado', 'Comprei o modelo errado', 'Comprei o produto errado',
+        'Comprei a peça errada', 'Pedi a quantidade errada', 'Comprei 3 por engano', 'Comprei duas vezes por engano', 'Comprei 2 vezes por engano', 'Comprei em dobro por engano', 'Comprei duplicado por engano',
+        'Comprei isso por engano', 'Pedi errado', 'Engano na compra', 'Foi engano', 'Me arrependi da compra', 'Desisti, achei em outro anúncio mais barato'];
+    const travou = legit.filter(m => !ex(m));
+    ok(!travou.length, legit.length + ' motivos legítimos continuam excluíveis (os 4 que o revisor viu travar voltaram)' + (travou.length ? ' — travou: ' + travou.join(' | ') : ''));
+    ok(ex('Reclamação aberta por engano') === 'o comprador iniciou a reclamação por engano' && /arrependeu/.test(ex('Desisti, comprei na loja física')), 'cada legítimo cai na regra certa');
+}
+
 console.log('Caso incerto: pede a conferência, nunca afirma cobrança indevida');
 {
     const dv = SHC.devolucoesContestar([{ pedido: '2000000999', itemId: 'MLB1', data: '2026-09-10', valor: 23.9, linhas: [{ v: 23.9 }] }], null, false).itens[0];
@@ -460,6 +485,11 @@ console.log('Pedido de exclusão (rastreio 07/10, R10): os pedidos certos, o SKU
             'botão: "O Mercado Livre está revisando o caso" (901) e "Em avaliação" (903) ficam fora; só as situações seguras entram (antes: o 901 entrava)');
         const todasFora = { casos: [{ titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: 'Vamos revisar o caso' }], porPedido: {} };
         ok(!grupo(todasFora, pad, itens) && !((await clique(todasFora, pad)).copiado), 'caso só com situação fora da lista: nenhum grupo, nada copiado');
+        // Revisão 3: "Comprei, o vendedor separou errado" mostrava o botão e copiava "o comprador se arrependeu… perfeitas condições" com o SKU.
+        const sep = 'Comprei, o vendedor separou errado';
+        const vend = { casos: [{ titulo: 'Bomba d’água 12V', motivo: sep, afetouReputacao: true, situacao: aguarda }], porPedido: { '2000000951': { motivo: sep, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' } } };
+        const rv = await clique(vend, sep);
+        ok(!SHC.motivoExcluivel(sep) && !SHC.confereExclusao(sep) && !grupo(vend, sep, itens) && !rv.copiado, 'botão: "Comprei, o vendedor separou errado" não tem regra, não mostra o botão nem copia nada');
     })();
     espera.then(() => pendentes.reduce((p, fn) => p.then(fn), Promise.resolve())).then(() => { console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK'); process.exit(f ? 1 : 0); }, e => { console.error(e); process.exit(1); });
 }
