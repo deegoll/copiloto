@@ -26,7 +26,8 @@ async function atualizarAlertas(conta) {
     const itens = ((an && an.itens) || []).filter(i => comAds.has(i.itemId)), chaves = new Set(), ids = new Set();
     // F2: o custo de TODAS as variações (antes só o 1º SKU: o alerta lia o lucro inflado).
     itens.forEach(i => { SHC.skusDoAnuncio(i).forEach(s => chaves.add(SHC.chaveSku(s))); chaves.add(SHC.chave('ml', i.itemId)); if (i.familia) chaves.add(SHC.chave('ml', i.familia)); });
-    ((full && full.produtos) || []).forEach(p => { if (p.sku) chaves.add(SHC.chaveSku(p.sku)); (p.itemIds && p.itemIds.length ? p.itemIds : [p.itemId]).forEach(id => { if (id) ids.add(id); }); });
+    // B1 (3.3.1): os MLB do produto como no painel (do retrato do Full + os anúncios casados pelo SKU): sem eles o sino não via a sazonalidade.
+    ((full && full.produtos) || []).forEach(p => { if (p.sku) chaves.add(SHC.chaveSku(p.sku)); SHC.idsVendasDoFull(p, (an && an.itens) || []).forEach(id => ids.add(id)); });
     chaves.delete('');
     const [custos, vm] = await Promise.all([SHC.lerCustos([...chaves]), ids.size ? SHC.lerVendasMes([...ids]) : {}]);
     // Restrição fiscal / penalidade do Full: campos fiscal (fiscal_restriction_name) e penalidade (active_penalty_by_uwsd) que a leitura
@@ -40,7 +41,7 @@ async function atualizarAlertas(conta) {
     const perdendo = [...new Set(((an && an.itens) || []).filter(i => i && SHC.anuncioAtivo(i) && pv[i.itemId]).map(i => i.itemId))]
         .filter(id => SHC.radarVisitas(pv[id].dias, hoje, cfg.radar_queda_pct).classe === 'caindo').length;
     const saude = { semFiscal: fiscal && typeof fiscal.total === 'number' ? fiscal.total : 0, perdendo };
-    const r = SHC.alertasDe({ full, ads, itens, custos, cfg, vm, mesesLidos: lidos, hoje, conta: naConta, saude, sellerId: c });   // sellerId: mínimo do Full por conta (F23)
+    const r = SHC.alertasDe({ full, ads, itens, anuncios: (an && an.itens) || [], custos, cfg, vm, mesesLidos: lidos, hoje, conta: naConta, saude, sellerId: c });   // sellerId: mínimo do Full por conta (F23)
     await SHC.salvarAlertas({ ts: Date.now(), conta: c, criticos: r.criticos, full: r.full, ads: r.ads, contaFull: r.contaFull, saude: r.saude, lista: r.lista.slice(0, 200) });
     // v2.5.3: TODAS as anomalias (Full, estoque, frete, pagamento excedente, pós-venda, Ads, fiscal/certificado, visitas, medidas) → shc:anomalias e o ícone.
     // Certificado vencido numa remessa do Full (FF_SHIPPING_EXPIRED_CERTIFICATE) vira cert:<conta> quando o Faturador não disse nada mais novo.
