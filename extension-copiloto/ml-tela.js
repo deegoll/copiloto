@@ -794,7 +794,9 @@
       .tour .balao b{font-size:13px}.tour .balao p{margin:6px 0 10px}
       .tour .balao .acoes{display:flex;justify-content:space-between;align-items:center}
       .pausa{position:fixed;right:16px;bottom:16px;display:none;max-width:330px;background:#0F172A;color:#E2E8F0;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.45;box-shadow:0 10px 30px rgba(0,0,0,.35)}
-      .pausa button{margin-top:8px;background:#fff;color:#0F172A;border-color:#fff}`;
+      .pausa button{margin-top:8px;background:#fff;color:#0F172A;border-color:#fff}
+      .outra{position:fixed;right:16px;bottom:16px;display:none;max-width:340px;background:#7C2D12;color:#FFF7ED;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.45;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+      .outra button{margin-top:8px;background:#fff;color:#7C2D12;border-color:#fff}`;
 
     function host() {
         if (H && H.isConnected) return SR;
@@ -810,7 +812,8 @@
             + '<div class="acoes"><button type="button" class="pri" data-a="ir"></button><button type="button" class="lnk" data-a="depois">depois</button></div></div>'
             + '<div class="tour"><div class="buraco"></div><div class="balao" role="dialog"><i class="seta"></i><div><span class="n"></span><b class="t"></b></div><p class="x"></p>'
             + '<div class="acoes"><button type="button" class="sec" data-a="pular">Pular tour</button><button type="button" class="pri" data-a="proximo">Próximo</button></div></div></div>'
-            + '<div class="pausa" role="status"><div>Copiloto pausado nesta tela — o Mercado Livre mudou a página. Os números continuam no painel do Copiloto.</div><button type="button" data-a="tentar">Tentar de novo</button></div>';
+            + '<div class="pausa" role="status"><div>Copiloto pausado nesta tela — o Mercado Livre mudou a página. Os números continuam no painel do Copiloto.</div><button type="button" data-a="tentar">Tentar de novo</button></div>'
+            + '<div class="outra" role="status"><div class="t"></div><button type="button" data-a="outra-ok">Entendi</button></div>';
         tipEl = SR.querySelector('.tip');
         // Teclas e cliques dentro do host não vazam para os atalhos do ML.
         // 3.2.1: input/beforeinput também (o e.data do custo digitado não sobe para a página na fase de bolha; a captura a página ainda vê).
@@ -824,6 +827,7 @@
             else if (acao === 'pular') fimTour('pulou');
             else if (acao === 'proximo') passoTour(tour.i + 1);
             else if (acao === 'tentar') retomar();
+            else if (acao === 'outra-ok') SR.querySelector('.outra').style.display = 'none';
             else if (acao === 'ir' && /^https:\/\/vendedores\.mercadolivre\.com\.br\//.test(a.dataset.url || '')) location.assign(a.dataset.url);
             else if (acao === 'depois') { cartao.atual = null; desenhaCartao(); try { SHC.salvarGuia({ cartaoAte: Date.now() + 864e5 }).catch(() => {}); } catch (e) { /* extensão recarregada */ } }
         });
@@ -1561,8 +1565,26 @@
         if (r) lidoEm = Math.round((typeof performance !== 'undefined' && performance.timeOrigin) || cargaEm);
         else r = await buscaEstado();
         if (!r) return false;
+        if (!(await mesmaConta(r))) return false;   // v3.3: página de outra empresa não ganha os números desta
         usaEstado(tela, r, lidoEm);
         return true;
+    }
+    // v3.3 (multi-empresa, auditoria 07/10/2026): com o login do ML trocado, a página era de uma empresa e as etiquetas (custo, lucro, frete,
+    // alertas) eram de outra. Página de OUTRA conta (o dono que ela diz ≠ ml:conta) não ganha etiqueta nenhuma e avisa 1 vez por página.
+    // Página que não diz o dono, ou Copiloto que ainda não leu conta nenhuma: segue como antes.
+    let avisoConta = '';
+    async function mesmaConta(r) {
+        let id = '', atual = '';
+        try { const c = SHC.mlContaDoEstado(r); id = String((c && typeof c === 'object' ? c.sellerId : c) || ''); atual = String(await SHC.contaAtual()); } catch (e) { return true; }
+        if (!/^\d{6,15}$/.test(id) || !atual || atual === 'atual' || id === atual) return true;
+        if (avisoConta !== location.href) {
+            avisoConta = location.href;
+            const sr = host(), el = sr.querySelector('.outra');
+            el.querySelector('.t').textContent = 'Esta página é de outra conta do Mercado Livre (final ' + id.slice(-4) + '). Os números do Copiloto são da conta final '
+                + atual.slice(-4) + ': não mostro aqui para não misturar as empresas. Sincronize com esta conta aberta para ver os números dela.';
+            el.style.display = 'block';
+        }
+        return false;
     }
     // A tela mostra MLB que não está nos dados (troca de página/busca sem recarregar) → busca de novo.
     const semSolucao = new Set();              // URL em que buscar de novo não trouxe os MLB da tela

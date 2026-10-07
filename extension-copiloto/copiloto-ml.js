@@ -20,6 +20,15 @@
         try { chrome.runtime.sendMessage({ acao: 'promos_pagina', dados, conta: SHC.mlContaDoEstado(estado) }); } catch (e) { /* extensão recarregada */ }
     }
 
+    // v3.3: experiência de compra que a tela trouxer no estado (o "Analisar desempenho" do anúncio) → o fundo guarda em exp:<conta> (conta conferida).
+    function enviaExperiencia() {
+        const s = document.getElementById('__NORDIC_RENDERING_CTX__');
+        const estado = s ? SHC.mlExtraiEstado(s.textContent || '') : null;
+        const lista = estado && SHC.mlExperienciasDoEstado ? SHC.mlExperienciasDoEstado(estado) : [];
+        if (!lista.length) return;
+        try { chrome.runtime.sendMessage({ acao: 'experiencia_anuncios', lista, conta: SHC.mlContaDoEstado(estado) }); } catch (e) { /* extensão recarregada */ }
+    }
+
     const espera = ms => new Promise(ok => setTimeout(ok, ms));
     // JSON de uma rota de leitura do painel (só GET, com a sessão desta aba) → objeto | null.
     const getJson = url => fetch(url, Object.assign({ method: 'GET', credentials: 'include', cache: 'no-store', headers: { accept: 'application/json' } },
@@ -93,5 +102,6 @@
     }
 
     enviaPaginaAtual();
+    try { enviaExperiencia(); } catch (e) { /* tela desconhecida: nada a enviar */ }
     lerEditor().catch(() => {});
 })();

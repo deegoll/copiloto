@@ -1365,16 +1365,110 @@
         Object.keys(novo).concat(velhos).slice(0, 300).forEach(k => { out[k] = novo[k] || ant[k]; });
         return Object.keys(out).length ? out : null;
     };
-    /** Texto do chamado de uma tarifa de devolução (educado, com pedido, data e valor; só pede a revisão). */
+    // ── v3.3 Textos de contestação (pedido da dona 07/10/2026: "usar os termos técnicos para brigar com a IA do Mercado Livre e ser mais
+    // efetivo nas respostas para remoção"). O atendimento do ML (e a IA que faz a triagem) resolve mais rápido quando o texto tem: assunto,
+    // identificação (anúncio, SKU, pedidos), FATOS com números do próprio painel, a REGRA do ML que se aplica (título + link da Central) e um
+    // PEDIDO explícito. Só fatos que o Copiloto leu; nada inventado, nada de "pode ser" virando certeza — a dúvida continua só perguntando.
+    // Regras conferidas em 07/10/2026 (título e descrição oficiais; as páginas da Central pedem o aceite de cookies para mostrar o texto).
+    SHC.REGRAS_ML = {
+        frete_tabela: { titulo: 'Central de Ajuda, "Custos dos Envios no Mercado Livre": o custo é calculado pelo peso e pelas medidas do produto na embalagem final e pelo preço', url: 'https://www.mercadolivre.com.br/ajuda/40538' },
+        frete_calculo: { titulo: 'Central de Ajuda, "Como calcular o custo de envio": peso físico × peso volumétrico da embalagem', url: 'https://www.mercadolivre.com.br/ajuda/Como-calcular-o-custo-dos-seus_4413' },
+        devolucao: { titulo: 'Central de Ajuda, "Como funciona a devolução da minha venda?": condições de devolução, tarifa de devolução e impacto na reputação', url: 'https://www.mercadolivre.com.br/ajuda/devolucoes_3285' },
+        exclusao: { titulo: 'Central de Vendedores, "Conheça as regras de exclusão de reclamações"', url: 'https://vendedores.mercadolivre.com.br/aprender/nota/conheca-as-regras-de-exclusao-de-reclamacoes-nuevo' },
+        experiencia: { titulo: 'Central de Ajuda, "O que é a experiência de compra?": conta só os problemas de responsabilidade do vendedor', url: 'https://www.mercadolivre.com.br/ajuda/experiencia-de-compra_31968' },
+        full_custos: { titulo: 'Central de Vendedores, "Quanto custa vender pelo Full"', url: 'https://vendedores.mercadolivre.com.br/nota/quanto-custa-vender-pelo-full' },
+        full_antigo: { titulo: 'Central de Ajuda, "Quais são os custos por estoque antigo" (a partir de 4 meses no Full; 2 em Supermercado)', url: 'https://www.mercadolivre.com.br/ajuda/15731' },
+    };
+    /**
+     * Modelo de contestação da dona (07/10/2026): "Assunto: Contestação de Cobrança Indevida de Frete – SKU – Pedido / Prezada equipe de suporte /
+     * os dados / Solicitamos a revisão da cubagem, a correção para envios futuros e o estorno / Seguem em anexo as especificações e a nota fiscal".
+     * o = { canal ('ml' padrão | 'shopee' | 'magalu'), assunto, ids:[[rótulo, valor]] (vão no assunto), intro, fatos:[frase], regras:[chave de SHC.REGRAS_ML],
+     *       pedido (o que se solicita, sem o "Solicitamos"), anexos?:[o que anexar] } → texto. Sem emoji nem markdown: cola igual no chat, no e-mail e no WhatsApp.
+     */
+    const SUPORTE = { ml: 'do Mercado Livre', shopee: 'da Shopee', magalu: 'da Magalu' };
+    SHC.textoContestacao = function (o) {
+        const ids = (o.ids || []).filter(x => x && x[1] !== undefined && x[1] !== null && String(x[1]) !== '').map(x => x[0] + ': ' + x[1]);
+        const l = ['Assunto: ' + o.assunto + (ids.length ? ' – ' + ids.join(' – ') : ''), '', 'Prezada equipe de suporte ' + (SUPORTE[o.canal] || SUPORTE.ml) + ','];
+        if (o.intro) l.push('', o.intro);
+        const fatos = (o.fatos || []).filter(Boolean);
+        if (fatos.length) l.push('', 'Dados do meu painel:', ...fatos.map(f => '- ' + f));
+        // Regras só do ML (as da Shopee e da Magalu entram quando houver a página oficial conferida).
+        const regras = (!o.canal || o.canal === 'ml' ? o.regras || [] : []).map(k => SHC.REGRAS_ML[k]).filter(Boolean);
+        if (regras.length) l.push('', 'Regra aplicável:', ...regras.map(r => '- ' + r.titulo + ' (' + r.url + ')'));
+        l.push('', 'Solicitamos ' + o.pedido);
+        if (o.anexos && o.anexos.length) l.push('', 'Seguem em anexo: ' + o.anexos.join(', ') + '.');
+        l.push('', 'Atenciosamente.');
+        return l.join('\n');
+    };
+    /** Texto do chamado de uma tarifa de devolução (pedido, data, valor, o motivo e a regra; pede o estorno do que não é do vendedor). */
     SHC.chamadoDevolucao = function (x) {
         const d = /^\d{4}-\d{2}-\d{2}/.test(x.data || '') ? x.data.slice(8, 10) + '/' + x.data.slice(5, 7) + '/' + x.data.slice(0, 4) : '—';
-        return ['Olá! Peço, por favor, a revisão de uma tarifa de devolução do meu Faturamento.', '',
-            'Pedido: #' + x.pedido,
-            'Data da cobrança: ' + d,
-            'Cobrança: Tarifa de devolução (frete de volta do produto)',
-            'Valor cobrado: ' + SHC.moeda(x.valor) + (x.recuperar > 0 && x.recuperar < x.valor ? ' (valor repetido: ' + SHC.moeda(x.recuperar) + ')' : ''),
-            'Por quê: ' + x.porque, '',
-            'Podem conferir se esta tarifa está correta? Obrigado.'].join('\n');
+        const rep = x.recuperar > 0 && x.recuperar < x.valor;
+        return SHC.textoContestacao({ assunto: 'Contestação de tarifa de devolução', ids: [['Pedido', '#' + x.pedido]],
+            intro: 'Identificamos uma tarifa de devolução (frete de volta do produto) que não deveria ter sido cobrada de nós.',
+            fatos: ['Data da cobrança: ' + d, 'Valor cobrado: ' + SHC.moeda(x.valor) + (rep ? ' (valor repetido: ' + SHC.moeda(x.recuperar) + ')' : ''), 'Por quê: ' + x.porque],
+            regras: ['devolucao'], pedido: 'a revisão desta tarifa e o estorno de ' + SHC.moeda(x.recuperar > 0 ? x.recuperar : x.valor) + ' na nossa conta, por não ser de nossa responsabilidade.' });
+    };
+    // v3.3 Exclusão de reclamação: só os casos que as regras do ML aceitam analisar (Central de Vendedores, "Conheça as regras de exclusão de
+    // reclamações", lida em 07/10/2026). Defeito, produto diferente, faltando peça, despacho atrasado por nós, falta de estoque, mensagem sem
+    // resposta no prazo NÃO entram — o Copiloto nunca pede a retirada do que é responsabilidade do vendedor (black hat, nunca).
+    const EXCLUIVEL = [
+        [/arrepend|desist|n[ãa]o (quer|quero) mais|mudou de ideia/i, 'o comprador se arrependeu da compra e o produto está em perfeitas condições'],
+        [/por engano|comprou errado|engano/i, 'o comprador iniciou a reclamação por engano'],
+        [/n[ãa]o reconhe[cç]/i, 'o comprador não reconhece a compra'],
+        [/(aparece|consta|marcad[oa]) como entregue/i, 'o comprador não recebeu o produto, mas o envio aparece como entregue'],
+        [/correios|transportadora|mercado envios|demora (na|da) entrega|atraso (na|da) entrega/i, 'a reclamação foi aberta pela demora do transporte, com o envio dentro do prazo estabelecido'],
+        [/trocar? (de |o |por outro )?(tamanho|modelo|numera)|tamanho errado|n[ãa]o serviu/i, 'o comprador quer trocar por outro tamanho ou modelo (autopeças, vestuário, bolsas e calçados)'],
+        [/meio de contato|s[óo] queria (falar|perguntar)|d[úu]vida sobre/i, 'o comprador usou a reclamação como meio de contato'],
+    ];
+    /** Motivo do comprador → a regra de exclusão do ML em que ele se encaixa ('' = não é excluível: corrija a causa). */
+    SHC.motivoExcluivel = t => { const x = EXCLUIVEL.find(([re]) => re.test(String(t || ''))); return x ? x[1] : ''; };
+    /**
+     * Pedido de exclusão (reputação e experiência de compra) para os casos com um motivo excluível. g = { motivo, casos, naReputacao, produtos?:[título/SKU], pedidos?:[nº] }.
+     * '' quando o motivo não está nas regras de exclusão.
+     */
+    SHC.chamadoExclusao = function (g) {
+        const regra = g && SHC.motivoExcluivel(g.motivo);
+        if (!regra) return '';
+        const peds = (g.pedidos || []).filter(Boolean).slice(0, 20);
+        return SHC.textoContestacao({ assunto: 'Pedido de exclusão de reclamações da reputação', ids: peds.length === 1 ? [['Pedido', '#' + peds[0]]] : [],
+            intro: 'Recebemos reclamações que se enquadram nas regras de exclusão do Mercado Livre e não deveriam afetar a nossa reputação nem a experiência de compra dos anúncios.',
+            fatos: ['Motivo informado pelo comprador: “' + String(g.motivo).slice(0, 120) + '” (' + SHC.qtd(g.casos || 0, 'caso', 'casos') + (g.naReputacao ? ', ' + g.naReputacao + ' contando na reputação' : '') + ').',
+                'Regra de exclusão em que se enquadra: ' + regra + '.', (g.produtos || []).length ? 'Anúncios: ' + g.produtos.slice(0, 5).join('; ') + '.' : '',
+                peds.length > 1 ? 'Pedidos: ' + peds.map(n => '#' + n).join(', ') + '.' : '', 'As reclamações já foram respondidas/resolvidas por nós.'],
+            regras: ['exclusao', 'experiencia'],
+            pedido: 'a análise e a exclusão destas reclamações do cálculo da nossa reputação e da experiência de compra dos anúncios (Métricas › Atendimento aos seus compradores › Vendas com problemas).' });
+    };
+    /** v3.3 Remessa do Full com inconformidade (SHC.remessasInconformes) → texto da reclamação por diferenças, produto a produto. */
+    SHC.chamadoRemessa = function (r) {
+        if (!r || !r.id) return '';
+        const n = v => (typeof v === 'number' ? String(v) : '—'), dt = x => (/^\d{4}-\d{2}-\d{2}/.test(String(x || '')) ? x.slice(8, 10) + '/' + x.slice(5, 7) + '/' + x.slice(0, 4) : '');
+        const ps = (r.produtos || []).filter(p => p && ((p.diferencas || 0) !== 0 || (p.naoAptas || 0) > 0));
+        const fatos = ps.slice(0, 15).map(p => (p.sku ? 'SKU ' + p.sku : p.itemId || 'produto') + (p.itemId && p.sku ? ' (' + p.itemId + ')' : '') + ': declaradas ' + n(p.declaradas)
+            + ', processadas ' + n(p.processadas) + (p.naoAptas ? ', não aptas ' + p.naoAptas : '') + (p.resultado ? ' — ' + p.resultado : '') + '.');
+        if (!ps.length) fatos.push('Unidades declaradas: ' + n(r.declaradas) + '; disponíveis para venda: ' + n(r.aptas) + '.');
+        if (r.custo) fatos.push('Valor cobrado pelo Mercado Livre por esta inconformidade: ' + SHC.moeda(r.custo) + '.');
+        if (r.prazo) fatos.push('Prazo para reclamar informado pelo ML: ' + dt(r.prazo) + '.');
+        return SHC.textoContestacao({ assunto: 'Reclamação por diferenças na remessa do Full', ids: [['Remessa', '#' + r.id]],
+            intro: 'A remessa foi recebida com diferença entre as unidades que declaramos e as que o centro de distribuição processou' + (r.quando ? ' (' + dt(r.quando) + ')' : '') + '.',
+            fatos, regras: ['full_custos'], anexos: ['nota fiscal da remessa', 'etiquetas e romaneio das caixas', 'fotos das caixas fechadas antes da coleta'],
+            pedido: 'a recontagem e a conferência das unidades desta remessa, o ajuste do estoque disponível para venda' + (r.custo ? ' e o cancelamento da cobrança de ' + SHC.moeda(r.custo) : '') + '.' });
+    };
+    /**
+     * v3.3 Experiência de compra (SHC.mlExperienciaCompra) → pedido de revisão, SÓ com casos excluíveis (casos = [{pedido, motivo}]).
+     * Sem caso excluível: '' (o caminho é corrigir a causa; o alerta já diz qual).
+     */
+    SHC.chamadoExperiencia = function (x, casos) {
+        const ok = (casos || []).filter(c => c && SHC.motivoExcluivel(c.motivo));
+        if (!x || !ok.length) return '';
+        const p0 = (x.problemas || [])[0];
+        return SHC.textoContestacao({ assunto: 'Revisão da experiência de compra do anúncio', ids: [[x.up ? 'Produto' : 'Anúncio', x.id]],
+            intro: 'A experiência de compra deste anúncio caiu por casos que se enquadram nas regras de exclusão do Mercado Livre, e o anúncio está perdendo exposição.',
+            fatos: ['Nota atual: ' + (x.nota === null ? '—' : x.nota + ' de 100') + ' (' + x.faixa + ')' + (x.de && x.ate ? ', período de ' + x.de.split('-').reverse().join('/') + ' a ' + x.ate.split('-').reverse().join('/') : '') + '.',
+                p0 && p0.titulo ? 'Problema principal apontado: ' + p0.titulo + (p0.qtd ? ' (' + SHC.qtd(p0.qtd, 'caso', 'casos') + ')' : '') + '.' : '',
+                ...ok.slice(0, 15).map(c => 'Pedido #' + c.pedido + ': ' + SHC.motivoExcluivel(c.motivo) + '.')],
+            regras: ['experiencia', 'exclusao'],
+            pedido: 'a análise dos pedidos acima, a retirada deles do cálculo da experiência de compra e da reputação e a reavaliação da exposição do anúncio.' });
     };
     /**
      * devs = lista de SHC.devolucoesResumo (ou SHC.devolucoesDasCobrancas): [{pedido, itemId, data, valor, linhas?, ida?, freteEstornado?}];
@@ -2677,11 +2771,12 @@
 
     // ── v2.5.3: TODAS as anomalias da conta (número do ícone e "N coisas pedem sua atenção" do painel) ──
     // v2.7: + 'perguntas' (perguntas:<conta>) e 'reputacao' (reputacao:<conta>); remessas do Full com inconformidade/multa entram em 'full'.
-    const ANOM_TIPOS = ['full', 'estoque', 'frete', 'pagamento', 'custo', 'posvenda', 'ads', 'fiscal', 'visitas', 'medidas', 'perguntas', 'reputacao', 'familia', 'prejuizo', 'promo'];
+    const ANOM_TIPOS = ['full', 'estoque', 'frete', 'pagamento', 'custo', 'posvenda', 'ads', 'fiscal', 'visitas', 'medidas', 'perguntas', 'reputacao', 'familia', 'prejuizo', 'promo', 'experiencia'];
     const ANOM_ABA = { full: 'full', estoque: 'full', frete: 'frete', pagamento: 'conciliacao', custo: 'conciliacao', posvenda: 'posvenda',   // v2.9: aba Pós-venda; v3.1: custo novo na fatura
         ads: 'ads', fiscal: 'saude', visitas: 'saude', medidas: 'saude', perguntas: 'saude', reputacao: 'saude', familia: 'geral',
         prejuizo: 'conciliacao',   // v3.2: venda nova no prejuízo (módulo do Fechamento: desligado → não conta)   // v2.9: perguntas e reputação na aba Saúde; v3.1: família na Geral
-        promo: 'promo' };   // v3.2.0: saiu da promoção / promoção que termina em N dias (SHC.promoAlertas)
+        promo: 'promo',   // v3.2.0: saiu da promoção / promoção que termina em N dias (SHC.promoAlertas)
+        experiencia: 'saude' };   // v3.3: experiência de compra do anúncio (SHC.experienciaAlertas) e os avisos do ML sobre exposição
     /**
      * conta = sellerId; dados = { alertas (SHC.alertasDe), posvenda (posvenda:<conta>), frete (frete:<conta>:hist), conferir (conferir:<conta>),
      *   rateio (fech:<conta>:rateio), cert (cert:<conta>), medidas (medidas:<conta>), nfe? ([nfe:<conta>:<mês>…], v2.8), fatura? (fat:<conta>, custo novo, v3.1), titulos? ({MLB: título}, para o texto), promo? (SHC.promoAlertas, v3.2.0), agora? (ms) }.
@@ -2786,18 +2881,26 @@
         if (d.prejuizo && SHC.prejuizoAlertas) SHC.prejuizoAlertas(d.prejuizo, agora).forEach(a => add('prejuizo', a.texto, a));
         // v3.2.0: avisos de promoção já montados (SHC.promoAlertas): 1 por anúncio que saiu da promoção e 1 por promoção que está acabando.
         (d.promo || []).forEach(a => add('promo', a.texto, a));
+        // v3.3 (pedido da dona 07/10/2026): experiência de compra de cada anúncio (exp:<conta>, SHC.experienciaAlertas): 1 por anúncio/produto,
+        // vermelho com pausa/moderação ou nota ruim. + os avisos da lista de Anúncios (fiscal:<conta>.tarefas) que falam de experiência,
+        // exposição, moderação ou qualidade — o texto e o link são os do próprio ML.
+        if (d.experiencia && SHC.experienciaAlertas) SHC.experienciaAlertas(d.experiencia, { itens: d.itens || [], antes: d.experiencia.antes })
+            .forEach(a => add('experiencia', a.texto + ' ' + a.acao, { chave: 'anom|exp|' + a.id, itemId: a.itemId, vermelho: a.vermelho }));
+        (d.tarefas || []).filter(t => t && t.qtd > 0 && /experi|exposi|moder|reputa|qualidad|PURCHASE_EXPERIENCE|EXPOSURE|MODERAT|QUALITY/i.test([t.id, t.titulo, t.texto].join(' ')))
+            .forEach(t => add('experiencia', [t.titulo, t.texto].filter(Boolean).join(': ') + ' (' + SHC.qtd(t.qtd, 'anúncio', 'anúncios') + ')', { chave: 'anom|tarefa|' + t.id, qtd: t.qtd, link: t.link || '' }));
         // v2.8: módulo desligado pelo seller (Ajustes) → a anomalia dele não conta nem aparece ("N coisas pedem sua atenção" e o ícone).
         const itensVis = itens.filter(i => SHC.moduloLigado(cfg, i.aba));
         const porTipo = {};
         ANOM_TIPOS.forEach(t => { porTipo[t] = 0; });
         itensVis.forEach(i => { porTipo[i.tipo] += i.tipo === 'posvenda' || i.tipo === 'prejuizo' ? i.qtd : 1; });   // v3.2: prejuízo conta cada venda
         const total = ANOM_TIPOS.reduce((s, t) => s + porTipo[t], 0);
-        return { conta: conta || '', total, porTipo, vermelho: porTipo.pagamento > 0 || itensVis.some(i => (i.tipo === 'posvenda' || i.tipo === 'perguntas' || i.tipo === 'reputacao' || i.tipo === 'prejuizo') && i.vermelho), itens: itensVis };
+        return { conta: conta || '', total, porTipo, vermelho: porTipo.pagamento > 0 || itensVis.some(i => (i.tipo === 'posvenda' || i.tipo === 'perguntas' || i.tipo === 'reputacao' || i.tipo === 'prejuizo' || i.tipo === 'experiencia') && i.vermelho), itens: itensVis };
     };
     const ANOM_NOMES = { full: ['no Full', 'no Full'], estoque: ['sem estoque no Full', 'sem estoque no Full'], frete: ['de frete', 'de frete'],
         pagamento: ['cobrança a conferir', 'cobranças a conferir'], custo: ['custo novo na fatura', 'custos novos na fatura'], posvenda: ['no pós-venda', 'no pós-venda'], ads: ['de Ads', 'de Ads'],
         fiscal: ['fiscal', 'fiscais'], visitas: ['de visitas', 'de visitas'], medidas: ['de medidas', 'de medidas'], perguntas: ['de perguntas', 'de perguntas'], reputacao: ['de reputação', 'de reputação'],
-        familia: ['de estoque × venda', 'de estoque × venda'], prejuizo: ['venda no prejuízo', 'vendas no prejuízo'], promo: ['de promoção', 'de promoção'] };
+        familia: ['de estoque × venda', 'de estoque × venda'], prejuizo: ['venda no prejuízo', 'vendas no prejuízo'], promo: ['de promoção', 'de promoção'],
+        experiencia: ['de experiência de compra', 'de experiência de compra'] };
     /** Título do ícone: "Copiloto: 5 pontos de atenção — 2 no Full, 1 de frete, 2 no pós-venda" (sem nada: "Abrir o Copiloto"). */
     SHC.anomaliasTitulo = function (a) {
         if (!a || !(a.total > 0)) return 'Abrir o Copiloto';
@@ -3784,6 +3887,7 @@
             prazo: edTxt(c.manufacturing_time && c.manufacturing_time.data && c.manufacturing_time.data.value && c.manufacturing_time.data.value.number, 30),
             garantia: edTxt([w.text, typeof w.comment === 'string' ? w.comment : ''].filter(Boolean).join(' · '), 60),
             qualidade: edTxt((q.find(x => x && /^(GOOD|MEDIUM|BAD)$/.test(x.type)) || {}).text, 30),
+            qNivel: ((q.find(x => x && /^(GOOD|MEDIUM|BAD)$/.test(x.type)) || {}).type) || '',   // v3.3: o nível (o texto muda com o idioma)
             dicas: q.filter(x => x && /^(REASON|EMPTY)$/.test(x.type) && x.text).map(x => edTxt(x.text, 80)).slice(0, 4),
         };
         if (vq > 0) o.nVar = vq;
@@ -3995,11 +4099,14 @@
      * Texto pronto do chamado (sem dado pessoal). A medida certa só entra quando se sabe qual é: a do ERP (corretaDe 'erp') ou a última
      * que o seller confirmou (corretaDe 'seller'). O frete é revisto desde a última conferência igual.
      */
-    SHC.medidasChamado = (mu) => 'O anúncio ' + mu.itemId + (mu.sku ? ' (SKU ' + mu.sku + ')' : '') + ' teve as medidas da embalagem alteradas de ' + SHC.medidaTxt(mu.antes)
-        + ' para ' + SHC.medidaTxt(mu.depois) + ' ' + SHC.medidasQuando(mu) + '. Não fui eu que alterei. '
-        + (mu.correta ? 'As medidas corretas são ' + (mu.corretaDe === 'erp' ? 'as do meu cadastro' : 'as que eu tinha deixado no anúncio') + ' (' + SHC.medidaTxt(mu.correta) + '); peço a correção'
-            : 'Peço a conferência das medidas deste anúncio')
-        + ' e a revisão do frete cobrado desde ' + ddmm(mu.vistoAte || mu.em) + '.';
+    // v3.3: com a regra do ML (o frete sai do peso e das medidas da embalagem) e o pedido explícito: corrigir a medida E rever o frete cobrado.
+    SHC.medidasChamado = (mu) => SHC.textoContestacao({ assunto: 'Contestação de cubagem alterada no anúncio', ids: [['SKU', mu.sku || ''], ['Anúncio', mu.itemId]],
+        intro: 'As medidas da embalagem deste anúncio foram alteradas sem que nós mexêssemos, e isso aumenta o custo de envio cobrado.',
+        fatos: ['Medidas da embalagem: de ' + SHC.medidaTxt(mu.antes) + ' para ' + SHC.medidaTxt(mu.depois) + ' ' + SHC.medidasQuando(mu) + '. A alteração não foi feita por nós.',
+            mu.correta ? 'Medidas corretas (' + (mu.corretaDe === 'erp' ? 'do nosso cadastro' : 'as que deixamos no anúncio') + '): ' + SHC.medidaTxt(mu.correta) + '.' : ''],
+        regras: ['frete_tabela', 'frete_calculo'], anexos: ['especificações técnicas do fabricante (medidas e peso)', 'foto da embalagem com trena e balança', 'nota fiscal do item'],
+        pedido: 'a revisão da cubagem do anúncio' + (mu.correta ? ', a correção das medidas para ' + SHC.medidaTxt(mu.correta) + ' nos envios futuros' : '')
+            + ' e o estorno do custo de envio cobrado a mais desde ' + ddmm(mu.vistoAte || mu.em) + '.' });
     SHC.MEDIDAS_SELLER_MS = 48 * 36e5;   // mudança vista até 48 h depois de um clique em "Alterar no ML" = provavelmente do seller
     /**
      * Mudanças de medida desde `desde` (ms), tiradas do histórico de cada anúncio → [{ itemId, sku, antes, depois, em, vistoAte, fonte,
@@ -5102,6 +5209,110 @@
             out.push({ id: v.id, rotulo: v.rotulo, texto, pct: v.pct, limitePct: v.limitePct, usoPct: uso === null ? null : Math.round(uso), vermelho: ruim || (uso !== null && uso >= 90), link: v.link || '' });
         });
         return out;
+    };
+
+    // ── v3.3 Experiência de compra do anúncio (pedido da dona 07/10/2026: "anúncio no vermelho ou abaixo da média não sai mais, empaca no Full
+    // e começa a girar custo de armazenamento") ──
+    // Formato oficial (developers.mercadolivre.com.br/pt_br/experiencia-de-compra, lido em 07/10/2026):
+    //   anúncio: /reputation/items/<MLB>/purchase_experience/integrators → { item_id, reputation:{color, text, value}, status:{id, assigned_by, text},
+    //     freeze:{text, placeholders}, metrics_details:{ problems:[{key, tag, claims, cancellations, quantity, level_two:{key, title},
+    //     level_three:{key, title, remedy}}], distribution:{from, to} } };
+    //   produto (UP, modelo novo com IA e sem o arrependimento do comprador): /reputation/user_products/<MLBU>/purchase_experience/integrators →
+    //     { up_id, reputation, status, freeze, consequence, reasoning, recommendations, principal_actionable }. Sem vendas para calcular: {color 'gray', value -1}.
+    // Central de Ajuda (experiencia-de-compra_31968): boa 75–100; mediana 50–74 (perde exposição e corre risco de pausa); ruim ≤ 30 (quase sem
+    // exposição, risco de cancelamento). A Central de promoções exige 50 ou mais. Entre 31 e 49 a tabela não classifica: vale a cor que o ML mostra.
+    // freeze (Benefício de reputação, verde-claro, acordo comercial…): a nota continua, mas o anúncio não perde exposição nem é pausado por ela.
+    // ATENÇÃO (como o SHC.skusDoItemML): o leitor fica pronto para a tela que trouxer este formato; ele mesmo não faz GET nenhum.
+    const COR_EXP = { green: 'boa', light_green: 'boa', yellow: 'mediana', orange: 'mediana', red: 'ruim' };
+    SHC.EXP_PROMO_MIN = 50;
+    SHC.faixaExperiencia = (cor, nota) => {
+        const c = String(cor || '').toLowerCase();
+        return c === 'gray' || nota === null || nota === undefined ? 'sem' : COR_EXP[c] || (nota >= 75 ? 'boa' : nota >= 50 ? 'mediana' : 'ruim');
+    };
+    const expTxt = o => String((o && typeof o === 'object' ? o.text : o) || '').replace(/\{\d+\}|\[\d+\]/g, '').replace(/\s+/g, ' ').trim();
+    const expLista = o => ((o && Array.isArray(o.subtitles)) ? o.subtitles : []).filter(x => x && typeof x === 'object')
+        .sort((a, b) => (+a.order || 0) - (+b.order || 0)).map(expTxt).filter(Boolean);
+    /**
+     * JSON da experiência de compra (anúncio ou produto) → { id, up, nota (0–100 | null), faixa: boa|mediana|ruim|sem, cor, status: active|paused|moderated|'',
+     *   pelaExperiencia (pausa/moderação por causa da nota), congelado, congeladoTxt, problemas:[{chave, grupo, titulo, qtd, reclamacoes, cancelamentos,
+     *   principal, remedio}], de, ate, consequencia, motivos:[…], recomendacoes:[…], acaoPrincipal, ts } | null (formato desconhecido).
+     * Nada do comprador vem nesse JSON (só contagens e textos do ML).
+     */
+    SHC.mlExperienciaCompra = function (j) {
+        if (!j || typeof j !== 'object') return null;
+        const id = String(j.item_id || j.up_id || ''), rp = j.reputation;
+        if (!/^[A-Z]{3}U?\d{4,20}$/.test(id) || !rp || typeof rp !== 'object') return null;
+        const v = numF(typeof rp.value === 'string' ? Number(rp.value) : rp.value), nota = v !== null && v >= 0 && v <= 100 ? Math.round(v) : null;
+        const cor = String(rp.color || '').toLowerCase().slice(0, 20), faixa = SHC.faixaExperiencia(cor, nota);
+        const st = j.status || {}, status = /^(active|paused|moderated)$/.test(String(st.id || '')) ? String(st.id) : '';
+        const md = j.metrics_details || {}, dist = md.distribution || {}, fz = expTxt(j.freeze);
+        const problemas = (Array.isArray(md.problems) ? md.problems : []).filter(p => p && typeof p === 'object').slice(0, 10).map(p => {
+            const l2 = p.level_two || {}, l3 = p.level_three || {}, rc = inteiro(p.claims) || 0, cc = inteiro(p.cancellations) || 0;
+            return { chave: String(l3.key || l2.key || p.key || '').slice(0, 40), grupo: String(p.key || '').slice(0, 20), titulo: edTxt(expTxt(l3.title) || expTxt(l2.title), 90),
+                qtd: rc + cc || inteiro(p.quantity) || 0, reclamacoes: rc, cancelamentos: cc, principal: /principal/i.test(String(p.tag || '')), remedio: edTxt(expTxt(l3.remedy), 160) };
+        }).sort((a, b) => (b.principal - a.principal) || (b.qtd - a.qtd));
+        const dia = s => (/^\d{4}-\d{2}-\d{2}/.test(String(s || '')) ? String(s).slice(0, 10) : '');
+        return { id, up: /^[A-Z]{3}U\d/.test(id), nota, faixa, cor, status,
+            // Pausa/moderação por causa da nota: o ML marca assigned_by 'reputation'; sem o campo (formato do produto), pausado com nota abaixo de boa.
+            pelaExperiencia: (status === 'paused' || status === 'moderated') && (st.assigned_by ? st.assigned_by === 'reputation' : faixa === 'mediana' || faixa === 'ruim'),
+            congelado: !!fz, congeladoTxt: edTxt(fz, 200), problemas, de: dia(dist.from), ate: dia(dist.to),
+            consequencia: edTxt(expTxt(j.consequence && j.consequence.title), 200), motivos: expLista(j.reasoning).map(t => edTxt(t, 300)).slice(0, 3),
+            recomendacoes: expLista(j.recommendations).map(t => edTxt(t, 160)).slice(0, 3), acaoPrincipal: edTxt(expTxt(j.principal_actionable), 160), ts: Date.now() };
+    };
+    /**
+     * Estado de uma tela do ML → [SHC.mlExperienciaCompra] de todo objeto no formato da experiência de compra (anúncio ou produto) que vier nele
+     * (o "Analisar desempenho" do anúncio). Largura primeiro, no máximo 40 níveis e 200 registros. Nenhum GET: só o que a tela já trouxe.
+     */
+    SHC.mlExperienciasDoEstado = function (r) {
+        const out = [], vistos = new Set(), fila = r && typeof r === 'object' ? [[r, 0]] : [];
+        let passos = 0;
+        while (fila.length && out.length < 200 && passos++ < 200000) {
+            const [o, n] = fila.shift();
+            if (!o || typeof o !== 'object' || vistos.has(o)) continue;
+            vistos.add(o);
+            if (!Array.isArray(o) && o.reputation && (o.item_id || o.up_id)) { const x = SHC.mlExperienciaCompra(o); if (x) { out.push(x); continue; } }
+            if (n < 40) (Array.isArray(o) ? o : Object.values(o)).forEach(v => { if (v && typeof v === 'object') fila.push([v, n + 1]); });
+        }
+        return out;
+    };
+    /**
+     * exp:<conta> = { porItem:{MLB: SHC.mlExperienciaCompra}, porUp:{MLBU: …} } → alertas [{id, itemId, nota, faixa, texto, acao, vermelho, cor}], do pior para o melhor.
+     * opc = { itens (retrato: título, user product, estoque no Full), antes (exp:<conta> da leitura anterior: queda de nota) }.
+     * Vermelho: pausado/moderado pela experiência ou nota ruim. Atenção: mediana, nota que caiu 10 pontos ou mais, protegido pelo benefício.
+     * Com estoque no Full e nota abaixo de boa: diz que o estoque vai empacar (sem exposição não vende e o ML cobra a armazenagem e o estoque antigo).
+     */
+    SHC.experienciaAlertas = function (exp, opc) {
+        const o = opc || {}, porItem = (exp && exp.porItem) || {}, porUp = (exp && exp.porUp) || {}, out = [];
+        const ant = (o.antes && o.antes.porItem) || {}, antUp = (o.antes && o.antes.porUp) || {}, itens = Array.isArray(o.itens) ? o.itens : [];
+        const doItem = id => itens.find(i => i && i.itemId === id) || null;
+        const ver = (x, it, velho) => {
+            if (!x || x.faixa === 'sem' || x.nota === null) return;
+            const caiu = velho && velho.nota !== null && velho.nota !== undefined && velho.nota - x.nota >= 10 ? velho.nota - x.nota : 0;
+            if (x.faixa === 'boa' && !caiu && !x.pelaExperiencia) return;
+            const full = it && SHC.noFull(it), nome = it && it.titulo ? nomeCurto(it.titulo) : x.id, p0 = x.problemas[0];
+            const motivo = p0 && p0.titulo ? ' Problema principal: ' + p0.titulo + (p0.qtd ? ' (' + SHC.qtd(p0.qtd, 'caso', 'casos') + ')' : '') + '.' : x.acaoPrincipal ? ' ' + x.acaoPrincipal : '';
+            let texto, vermelho = false, cor = 'at';
+            if (x.pelaExperiencia) { texto = nome + ': ' + (x.status === 'moderated' ? 'moderado' : 'pausado') + ' pelo ML por experiência de compra (nota ' + x.nota + ').'; vermelho = true; }
+            else if (x.faixa === 'ruim') { texto = nome + ': experiência de compra ruim (nota ' + x.nota + '). Quase sem exposição e com risco de o ML cancelar o anúncio.'; vermelho = !x.congelado; }
+            else if (x.faixa === 'mediana') texto = nome + ': experiência de compra mediana (nota ' + x.nota + '). Está perdendo exposição e corre risco de pausa.';
+            else texto = nome + ': experiência de compra caiu ' + caiu + ' pontos (nota ' + x.nota + ').';
+            if (caiu && x.faixa !== 'boa') texto += ' Caiu ' + caiu + ' pontos desde a última leitura.';
+            if (x.nota < SHC.EXP_PROMO_MIN) texto += ' Fora das promoções (a Central de promoções pede nota 50 ou mais).';
+            if (x.congelado) { texto += ' Protegido por um benefício do ML por enquanto: corrija antes que a proteção acabe.'; cor = vermelho ? 'pr' : 'at'; }
+            if (vermelho) cor = 'pr';
+            const acao = (full && x.faixa !== 'boa' ? 'Não mande mais unidades ao Full: sem exposição o estoque empaca e o ML cobra a armazenagem e, depois de 4 meses, o estoque antigo. ' : '')
+                + (x.pelaExperiencia ? 'Corrija a causa e reative pela lista de anúncios.' : 'Abra "Analisar desempenho" no anúncio e ataque o problema principal.') + motivo;
+            out.push({ id: x.id, itemId: it ? it.itemId : (x.up ? '' : x.id), nota: x.nota, faixa: x.faixa, texto, acao: acao.trim(), vermelho, cor, full: !!full });
+        };
+        Object.keys(porItem).forEach(id => ver(porItem[id], doItem(id), ant[id]));
+        // Produto (UP): um alerta por UP que nenhum anúncio já acusou; o retrato dá o anúncio do UP para o título e o Full.
+        Object.keys(porUp).forEach(up => {
+            const its = itens.filter(i => i && i.userProductId === up);
+            if (its.some(i => porItem[i.itemId])) return;
+            ver(porUp[up], its.find(i => SHC.noFull(i)) || its[0] || null, antUp[up]);
+        });
+        const peso = a => (a.vermelho ? 0 : 1) * 1000 + a.nota;
+        return out.sort((a, b) => peso(a) - peso(b));
     };
 
     const dBR = d => d.slice(8, 10) + '/' + d.slice(5, 7);

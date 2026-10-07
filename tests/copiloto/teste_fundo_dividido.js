@@ -9,6 +9,14 @@ const fs = require('fs'), path = require('path'), vm = require('vm'), { execFile
 const montaFundo = require('./fundo_falso');
 const EXT = path.join(__dirname, '../../extension-copiloto'), FUNDO = path.join(EXT, 'fundo');
 const COMMIT = '7f7f312', REF = path.join(__dirname, '_referencia_divisao', 'background.js.orig');
+// Funções de topo NOVAS no fundo depois da divisão (o resto continua igual ao background.js de 7f7f312). Função nova no fundo entra aqui,
+// com a versão: assim o teste ainda pega função perdida ou criada por engano, e a divisão (a) continua provada pela cópia de referência.
+const NOVAS = {
+    contaSegue: 'v3.3 multi-empresa: a sessão do ML ainda é da conta da sincronização (fundo/10)',
+    marcaReler: 'v3.3 multi-empresa: meses lidos depois de uma troca de conta voltam para a fila (fundo/10)',
+    experienciaNaFaixa: 'v3.3 experiência de compra vinda da aba: tipos e tamanhos conferidos (fundo/13)',
+    juntarExperiencia: 'v3.3 experiência de compra: grava exp:<conta> com a nota anterior (fundo/13)',
+};
 let falhas = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) falhas++; };
 
@@ -148,7 +156,13 @@ function cargaTardia(partes) {
     const partes = fs.readdirSync(FUNDO).sort(), textos = partes.map(f => fs.readFileSync(path.join(FUNDO, f)));
     ok(partes.length >= 2 && partes.every((f, i) => f.startsWith(String(i + 1).padStart(2, '0') + '-') && /^\d\d-[a-z0-9-]+\.js$/.test(f)),
         partes.length + ' partes em fundo/, numeradas 01..' + String(partes.length).padStart(2, '0') + ' e só .js');
-    ok(Buffer.concat(textos).equals(orig), 'junção das partes, na ordem = background.js do ' + COMMIT + ', byte a byte');
+    // Depois da divisão o fundo evolui: a junção é a de 7f7f312 + as funções de NOVAS (e mudanças dentro das que já existiam).
+    const junta = Buffer.concat(textos).toString('utf8'), declaradas = src => new Set((src.match(/^(?:async )?function\s+([\w$]+)/gm) || []).map(x => x.replace(/^(async )?function\s+/, '')));
+    const antes = declaradas(orig.toString('utf8')), agora = declaradas(junta);
+    const perdidas = [...antes].filter(n => !agora.has(n)), sobra = [...agora].filter(n => !antes.has(n) && !NOVAS[n]), faltam = Object.keys(NOVAS).filter(n => !agora.has(n));
+    ok(Buffer.concat(textos).equals(orig) || (!perdidas.length && !sobra.length && !faltam.length),
+        'junção das partes = background.js do ' + COMMIT + ' + ' + Object.keys(NOVAS).length + ' funções novas listadas (nenhuma antiga perdida)'
+        + (perdidas.length ? ' · perdidas: ' + perdidas.join(', ') : '') + (sobra.length ? ' · novas fora da lista: ' + sobra.join(', ') : '') + (faltam.length ? ' · listadas e não achadas: ' + faltam.join(', ') : ''));
     const compila = partes.filter((f, i) => { try { new vm.Script(textos[i].toString('utf8'), { filename: f }); return false; } catch (e) { return true; } });
     ok(!compila.length && textos.every(b => b[b.length - 1] === 10), 'cada parte compila sozinha e termina em fim de linha' + (compila.length ? ' (não compila: ' + compila.join(', ') + ')' : ''));
 
@@ -164,7 +178,8 @@ function cargaTardia(partes) {
     const qtd = f => Object.keys(f.registros).map(k => k + ' ' + f.registros[k].length).join(', ');
     ok(qtd(novo) === qtd(velho) && Object.keys(novo.registros).every(k => novo.registros[k].length >= 1), 'listeners do Chrome registrados na carga: ' + qtd(novo));
     const funcoes = f => Object.keys(f.ctx).filter(k => typeof f.ctx[k] === 'function').sort().join();
-    ok(funcoes(novo) === funcoes(velho) && funcoes(novo).split(',').length > 100, 'mesmas funções de topo no fundo (' + funcoes(novo).split(',').length + ')');
+    const comNovas = f => funcoes(f).split(',').concat(f === velho ? Object.keys(NOVAS) : []).sort().join();
+    ok(comNovas(novo) === comNovas(velho) && funcoes(novo).split(',').length > 100, 'mesmas funções de topo no fundo, mais as novas listadas (' + funcoes(novo).split(',').length + ')');
     ok(Object.keys(novo.ctx.SHC).sort().join() === Object.keys(velho.ctx.SHC).sort().join(), 'mesmo SHC (' + Object.keys(novo.ctx.SHC).length + ' nomes, com o Object.assign do robô)');
     for (const motivo of ['install', 'update']) { velho.instala(motivo); novo.instala(motivo); }
     velho.alarme('shc-resumo'); novo.alarme('shc-resumo');
@@ -181,7 +196,7 @@ function cargaTardia(partes) {
     ok(c(['x.addListener(() => g());', 'function g() {}']) === 0 && c(['const a = () => b();', 'function b() {}']) === 0 && c(['p.then(() => z()); setTimeout(() => z(), 0);', 'function z() {}']) === 0
         && c(['g(); function g() {}', 'function h() {}']) === 0, 'e não acusa o que só roda depois (listener, função não chamada, then/setTimeout) nem içamento dentro da mesma parte');
     const r = cargaTardia(partes.map((f, i) => [f, textos[i].toString('utf8')]));
-    const decl = (orig.toString('utf8').match(/^(async )?function\b/gm) || []).length;
+    const decl = (orig.toString('utf8').match(/^(async )?function\b/gm) || []).length + Object.keys(NOVAS).length;
     ok(r.nDecl === decl, 'achou as ' + decl + ' funções declaradas no topo (as fichas não se perderam)');
     ok(['retomarInterrompida', 'emFilaStatus'].every(x => r.chamadas.has(x)), 'viu o que roda na carga: ' + [...r.chamadas].join(', '));
     ok(!r.erros.length, 'nenhuma parte usa na carga função/const de parte posterior' + (r.erros.length ? ': ' + r.erros.join('; ') : ''));

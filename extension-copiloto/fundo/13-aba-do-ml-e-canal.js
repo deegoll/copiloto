@@ -35,6 +35,7 @@ function editorNaFaixa(o) {
     const r = Object.assign({}, o);
     ['estoque', 'estoqueFlex', 'estoqueFull'].forEach(k => { if (k in r) r[k] = qtdOk(r[k]); });
     if ('nVar' in r && !(Number.isInteger(r.nVar) && r.nVar > 0 && r.nVar <= 5000)) delete r.nVar;
+    if ('qNivel' in r && !/^(GOOD|MEDIUM|BAD)$/.test(String(r.qNivel))) r.qNivel = '';   // v3.3
     ['id', 'status', 'up', 'familyId', 'titulo', 'sku', 'tipo', 'tarifaTxt', 'prazo', 'garantia', 'qualidade', 'pai', 'nome'].forEach(k => { if (k in r && typeof r[k] !== 'string') r[k] = ''; });
     ['entrega', 'custoEnvio'].forEach(k => { if (k in r) r[k] = r[k] && typeof r[k] === 'object' && !Array.isArray(r[k]) ? { id: txtOk(r[k].id, 40), txt: txtOk(r[k].txt, 80) } : null; });
     if ('dicas' in r) r.dicas = Array.isArray(r.dicas) ? r.dicas.filter(t => typeof t === 'string').map(t => t.slice(0, 80)).slice(0, 10) : [];
@@ -78,6 +79,36 @@ async function juntarAnuncios(conta, itens, familias, lidoEm) {
     await emFila(() => gravarFretes(lote));
     if (saiu && !emAndamento) atualizarAlertas(conta).catch(() => {});   // v3.2.0: "Saiu da promoção" já no sino (sincronização rodando: a etapa Alertas dela recalcula)
     return snap.itens.length;
+}
+
+// v3.3 Experiência de compra (SHC.mlExperienciaCompra) vinda da aba: tipos e tamanhos conferidos (a aba pode ter sido adulterada).
+function experienciaNaFaixa(x) {
+    if (!x || typeof x !== 'object' || Array.isArray(x) || !/^[A-Z]{3}U?\d{4,20}$/.test(String(x.id || ''))) return null;
+    const nota = Number.isInteger(x.nota) && x.nota >= 0 && x.nota <= 100 ? x.nota : null, faixa = /^(boa|mediana|ruim|sem)$/.test(x.faixa) ? x.faixa : (nota === null ? 'sem' : SHC.faixaExperiencia('', nota));
+    const lista = (a, n, t) => (Array.isArray(a) ? a.filter(v => typeof v === 'string').map(v => v.slice(0, t)).slice(0, n) : []);
+    return { id: String(x.id), up: !!x.up, nota, faixa, cor: txtOk(x.cor, 20), status: /^(active|paused|moderated)$/.test(x.status) ? x.status : '', pelaExperiencia: x.pelaExperiencia === true,
+        congelado: x.congelado === true, congeladoTxt: txtOk(x.congeladoTxt, 200), de: txtOk(x.de, 10), ate: txtOk(x.ate, 10), consequencia: txtOk(x.consequencia, 200),
+        motivos: lista(x.motivos, 3, 300), recomendacoes: lista(x.recomendacoes, 3, 160), acaoPrincipal: txtOk(x.acaoPrincipal, 160),
+        problemas: (Array.isArray(x.problemas) ? x.problemas : []).filter(p => p && typeof p === 'object').slice(0, 10).map(p => ({ chave: txtOk(p.chave, 40), grupo: txtOk(p.grupo, 20),
+            titulo: txtOk(p.titulo, 90), qtd: qtdOk(p.qtd) || 0, reclamacoes: qtdOk(p.reclamacoes) || 0, cancelamentos: qtdOk(p.cancelamentos) || 0, principal: p.principal === true, remedio: txtOk(p.remedio, 160) })),
+        ts: Date.now() };
+}
+// exp:<conta> = { ts, porItem:{MLB: registro}, porUp:{MLBU: registro}, antes:{porItem:{MLB:{nota}}, porUp:{…}} } — antes = a nota da leitura anterior
+// (o alerta "caiu N pontos"). Leitura nova só troca o que veio; o resto fica. → quantos registros entraram.
+async function juntarExperiencia(conta, lista) {
+    const novos = (Array.isArray(lista) ? lista : []).slice(0, 200).map(experienciaNaFaixa).filter(Boolean);
+    if (!novos.length) return 0;
+    await emFila(async () => {
+        const k = 'exp:' + conta, ant = (await SHC.lerChave(k)) || {}, porItem = Object.assign({}, ant.porItem), porUp = Object.assign({}, ant.porUp);
+        const antes = { porItem: Object.assign({}, (ant.antes || {}).porItem), porUp: Object.assign({}, (ant.antes || {}).porUp) };
+        novos.forEach(x => {
+            const alvo = x.up ? porUp : porItem, velho = alvo[x.id], a = x.up ? antes.porUp : antes.porItem;
+            if (velho && velho.nota !== null && velho.nota !== x.nota) a[x.id] = { nota: velho.nota, ts: velho.ts || 0 };
+            alvo[x.id] = x;
+        });
+        await SHC.gravarChave(k, { ts: Date.now(), porItem, porUp, antes });
+    });
+    return novos.length;
 }
 
 // v3.2 Editor em massa (a seller abriu a tela; a aba leu só com GET): editor:<conta> = { ts, total, completo, porItem:{MLB: SHC.editorLinha + variacoes} }.

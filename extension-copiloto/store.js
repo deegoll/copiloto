@@ -6,7 +6,56 @@
 (function (root) {
     'use strict';
     const SHC = root.SHC || (root.SHC = {});
-    const area = () => chrome.storage.local;
+    // ── v3.3 Multi-empresa (pedido da dona 07/10/2026: "o sistema tem que ser assertivo para não misturar os dados") ──
+    // Conta do ML marcada em Ajustes como OUTRA EMPRESA (cfg.empresaSeparada = {sellerId: true}) tem só dela, enquanto ela é a conta aberta:
+    //   · os custos por SKU: a chave lógica 'c|sku|X' é guardada como 'c|sku@<sellerId>|X';
+    //   · o ERP (credencial e produtos lidos): 'erp:…' é guardado como 'erp@<sellerId>:…';
+    //   · os números da empresa (SHC.CAMPOS_EMPRESA: imposto, margem, despesas fixas, plano da Shopee) em cfg.porConta[sellerId].
+    // As contas não marcadas são a mesma empresa e dividem tudo, como sempre. O resto já é por conta (ml:anuncios:<c>, frete:<c>…) ou por
+    // anúncio (c|ml|MLB…, ids únicos no ML). Tudo passa por area(): telas e fundo continuam usando a chave lógica; a de outra empresa some.
+    const crua = () => chrome.storage.local;
+    let empCache = null;
+    SHC.empresaSeparada = async function () {
+        if (empCache && Date.now() - empCache.ts < 1500) return empCache.e;
+        const r = await crua().get(['ml:conta', 'cfg']), c = String(r['ml:conta'] || ''), sep = (r.cfg && r.cfg.empresaSeparada) || {};
+        const e = /^\d{6,15}$/.test(c) && sep[c] === true ? c : '';
+        empCache = { e, ts: Date.now() };
+        return e;
+    };
+    try { chrome.storage.onChanged.addListener(m => { if (m && (m['ml:conta'] || m.cfg)) empCache = null; }); } catch (e) { /* sem onChanged (teste) */ }
+    const ESPACOS = [['c|sku|', e => 'c|sku@' + e + '|', /^c\|sku@\d+\|/], ['erp:', e => 'erp@' + e + ':', /^erp@\d+:/]];
+    SHC.chaveFisica = (k, e) => { if (!e || typeof k !== 'string') return k; const x = ESPACOS.find(([pre]) => k.indexOf(pre) === 0); return x ? x[1](e) + k.slice(x[0].length) : k; };
+    // Física → lógica; null = é de OUTRA empresa (fica invisível para esta).
+    SHC.chaveLogica = (k, e) => {
+        for (const [pre, de, rx] of ESPACOS) {
+            if (rx.test(k)) { const p = e ? de(e) : null; return p && k.indexOf(p) === 0 ? pre + k.slice(p.length) : null; }
+            if (e && k.indexOf(pre) === 0) return null;
+        }
+        return k;
+    };
+    const area = () => ({
+        async get(ks) {
+            const e = await SHC.empresaSeparada();
+            if (ks === null || ks === undefined) {
+                const t = await crua().get(null), o = {};
+                Object.keys(t).forEach(k => { const l = SHC.chaveLogica(k, e); if (l !== null) o[l] = t[k]; });
+                return o;
+            }
+            if (!e) return crua().get(ks);
+            const lista = [].concat(ks), r = await crua().get(lista.map(k => SHC.chaveFisica(k, e))), o = {};
+            lista.forEach(k => { const f = SHC.chaveFisica(k, e); if (f in r) o[k] = r[f]; });
+            return o;
+        },
+        async set(obj) {
+            const e = await SHC.empresaSeparada();
+            if (!e) return crua().set(obj);
+            const o = {};
+            Object.keys(obj).forEach(k => { o[SHC.chaveFisica(k, e)] = obj[k]; });
+            return crua().set(o);
+        },
+        async remove(ks) { const e = await SHC.empresaSeparada(); return crua().remove(e ? [].concat(ks).map(k => SHC.chaveFisica(k, e)) : ks); },
+    });
+    SHC.areaEmpresa = area;   // para quem grava custo em lote (tiny.js) passar pelo mesmo caminho
 
     SHC.chave = (canal, id) => 'c|' + canal + '|' + id;
 
@@ -248,6 +297,11 @@
         const [contas, cfg, atual] = await Promise.all([SHC.lerChave('ml:contas'), SHC.lerCfg(), SHC.contaAtual()]);
         return Object.keys(contas || {}).filter(id => /^\d{6,15}$/.test(id)).map(id => ({ sellerId: id, nome: SHC.nomeConta(id, cfg, contas), visto: (contas[id] || {}).visto || 0, atual: id === atual }))
             .sort((a, b) => (b.atual - a.atual) || (b.visto - a.visto));
+    };
+    // v3.3 multi-empresa: as contas da MESMA empresa da conta aberta (conta separada = só ela; as outras = todas as não separadas).
+    SHC.contasDaEmpresa = async function () {
+        const [cs, e, r] = await Promise.all([SHC.contas(), SHC.empresaSeparada(), crua().get('cfg')]), sep = (r.cfg && r.cfg.empresaSeparada) || {};
+        return cs.filter(c => (e ? c.sellerId === e : sep[c.sellerId] !== true));
     };
     /** Dados de cada conta para SHC.consolidado(…, mes): vb:<c>, fech:<c>:<mes> e shc:anomalias:<c> (gravado pelo fundo em atualizarAlertas). */
     SHC.dadosContas = async function (mes) {
@@ -604,6 +658,8 @@
         if (parou || st.estado === 'erro') {
             const fazer = parou ? 'A leitura parou no meio. Tente de novo.'
                 : st.erro === 'sem_sessao' ? 'Entre no Mercado Livre neste Chrome e tente de novo.'
+                // v3.3 multi-empresa: o login do ML mudou no meio da leitura (fundo/08: contaSegue).
+                : st.erro === 'outra_conta' ? 'O Mercado Livre mudou de conta no meio da leitura. Parei para não misturar as empresas: sincronize de novo com a conta certa aberta.'
                 : 'O Mercado Livre não respondeu. Tente de novo em alguns minutos.';
             return { estado: 'erro', cor: 'vermelho', texto: 'Não sincronizou · ' + fazer, fazer, pct: null, etapa: '', restante: '' };
         }
@@ -753,15 +809,27 @@
         return h + '</div>';
     };
 
+    // v3.3 multi-empresa: números que são da EMPRESA (a conta separada tem os dela em cfg.porConta[sellerId]; sem eles, os padrões — nunca os da outra).
+    SHC.CAMPOS_EMPRESA = ['imposto_pct', 'margem_alvo_pct', 'despesas_fixas', 'sp_comissao_pct', 'sp_taxa_fixa'];
     SHC.lerCfg = async function () {
-        const r = await area().get('cfg');
-        return Object.assign({}, SHC.PADRAO, r.cfg || {});
+        const r = await area().get('cfg'), c = r.cfg || {}, e = await SHC.empresaSeparada();
+        if (!e) return Object.assign({}, SHC.PADRAO, c);
+        const meu = (c.porConta && c.porConta[e]) || {}, proprio = {};
+        SHC.CAMPOS_EMPRESA.forEach(k => { proprio[k] = k in meu ? meu[k] : SHC.PADRAO[k]; });
+        return Object.assign({}, SHC.PADRAO, c, proprio, { empresa: e, empresaSemNumeros: !Object.keys(meu).length });
     };
-    SHC.salvarCfg = async function (patch) {
-        const atual = await SHC.lerCfg();
-        const novo = Object.assign(atual, patch, { configurado: true });
-        await area().set({ cfg: novo });
-        return novo;
+    // opc.semMarcar: não marca cfg.configurado (as despesas fixas não podem inventar "imposto 0%").
+    SHC.salvarCfg = async function (patch, opc) {
+        const r = await crua().get('cfg'), base = Object.assign({}, r.cfg || {}), e = await SHC.empresaSeparada(), p = Object.assign({}, patch);
+        delete p.empresa; delete p.empresaSemNumeros;   // são da leitura (SHC.lerCfg), não se gravam
+        if (e) {
+            const meu = Object.assign({}, (base.porConta || {})[e]);
+            SHC.CAMPOS_EMPRESA.forEach(k => { if (k in p) { meu[k] = p[k]; delete p[k]; } });
+            base.porConta = Object.assign({}, base.porConta, { [e]: meu });
+        }
+        await crua().set({ cfg: Object.assign(base, p, opc && opc.semMarcar ? {} : { configurado: true }) });
+        empCache = null;   // empresaSeparada pode ter mudado neste patch
+        return SHC.lerCfg();
     };
 
     // ── Despesas fixas do mês (pesquisa aprovada pela dona): aluguel, salários, embalagem, sistemas, contador. cfg.despesas_fixas = [{nome, valor}].
@@ -803,11 +871,11 @@
     };
     /** Grava só a lista (objeto cfg NOVO). Não marca cfg.configurado: salvar despesas não pode inventar "imposto 0%". */
     SHC.salvarDespesasFixas = async function (lista) {
-        const r = await area().get('cfg'), atual = Object.assign({}, r.cfg || {}), antes = SHC.despesasFixas(atual), mes = SHC.hoje().slice(0, 7);
+        // v3.3 multi-empresa: a conta separada guarda as despesas dela (cfg.porConta[sellerId].despesas_fixas): SHC.salvarCfg decide onde.
+        const antes = SHC.despesasFixas(await SHC.lerCfg()), mes = SHC.hoje().slice(0, 7);
         // desde: o da mesma despesa já guardada (pelo nome); despesa nova = o mês de hoje
-        atual.despesas_fixas = SHC.despesasFixas({ despesas_fixas: (lista || []).map(d => Object.assign({}, d, { desde: (d && d.desde) || ((antes.find(a => a.nome === String((d && d.nome) || '').replace(/\s+/g, ' ').trim().slice(0, 40)) || {}).desde) || mes })) });
-        await area().set({ cfg: atual });
-        return Object.assign({}, SHC.PADRAO, atual);
+        const nova = SHC.despesasFixas({ despesas_fixas: (lista || []).map(d => Object.assign({}, d, { desde: (d && d.desde) || ((antes.find(a => a.nome === String((d && d.nome) || '').replace(/\s+/g, ' ').trim().slice(0, 40)) || {}).desde) || mes })) });
+        return SHC.salvarCfg({ despesas_fixas: nova }, { semMarcar: true });
     };
 
     SHC.lerCustos = async function (chaves) {
@@ -826,7 +894,7 @@
     // Tudo (painel): separa custos, vistos e cfg.
     SHC.lerTudo = async function () {
         const todos = await area().get(null);
-        const out = { cfg: Object.assign({}, SHC.PADRAO, todos.cfg || {}), custos: {}, vistos: {} };
+        const out = { cfg: await SHC.lerCfg(), custos: {}, vistos: {} };   // v3.3: com os números da empresa da conta aberta
         for (const k in todos) {
             const p = k.split('|');
             if (p.length < 3 || (p[0] !== 'c' && p[0] !== 'v')) continue;

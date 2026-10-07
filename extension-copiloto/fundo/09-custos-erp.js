@@ -52,7 +52,8 @@ async function erpConferir(conta, opc) {
 }
 async function erpConferirTodas(opc) {
     let cs = [];
-    try { cs = await SHC.contas(); } catch (e) { cs = []; }
+    // v3.3 multi-empresa: o ERP guardado é o da empresa da conta aberta → só as contas dessa empresa são conferidas com ele.
+    try { cs = SHC.contasDaEmpresa ? await SHC.contasDaEmpresa() : await SHC.contas(); } catch (e) { cs = []; }
     const ids = cs.length ? cs.map(c => c.sellerId) : [await SHC.contaAtual()];
     for (const id of ids) await erpConferir(id, opc).catch(() => null);
 }

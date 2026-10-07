@@ -521,15 +521,12 @@
             'Valor cobrado: ' + SHC.moeda(x.valor),
             'Minha dúvida: ' + (typeof x.duvida === 'string' ? x.duvida : x.motivo), '',
             'Podem conferir se esta cobrança está correta? Obrigado.'].join('\n');
-        return ['Olá! Peço, por favor, a revisão de uma cobrança do meu Faturamento.', '',
-            'Pedido: #' + x.pedido + (x.data ? ' (' + dataBR(x.data) + ')' : ''),
-            'Anúncio: ' + (x.itemId || '—') + (x.titulo ? ' – ' + x.titulo : ''),
-            'Cobrança: ' + x.cobranca,
-            'Valor cobrado: ' + SHC.moeda(x.valor),
-            'Valor que eu esperava: ' + SHC.moeda(x.esperado),
-            'Diferença: ' + SHC.moeda(x.diferenca),
-            'Por quê: ' + x.motivo, '',
-            'Podem conferir se o valor está correto? Obrigado.'].join('\n');
+        // v3.3: formato de contestação (SHC.textoContestacao) — com a regra do ML quando ela se aplica e o pedido explícito do estorno da diferença.
+        const REGRA = { frete: ['frete_tabela', 'frete_calculo'], devolucao: ['devolucao'] }, regra = REGRA[x.regra] || (/devolu/i.test(x.cobranca || '') ? ['devolucao'] : []);
+        return SHC.textoContestacao({ assunto: 'Contestação de cobrança indevida: ' + x.cobranca, ids: [['Pedido', '#' + x.pedido], ['Anúncio', x.itemId || '']],
+            intro: 'Identificamos uma cobrança acima do valor devido no Faturamento' + (x.data ? ' em ' + dataBR(x.data) : '') + (x.titulo ? ' (anúncio “' + x.titulo + '”)' : '') + '.',
+            fatos: ['Valor cobrado: ' + SHC.moeda(x.valor), 'Valor devido: ' + SHC.moeda(x.esperado), 'Diferença: ' + SHC.moeda(x.diferenca), 'Por quê: ' + x.motivo],
+            regras: regra, pedido: 'a revisão desta cobrança e o estorno da diferença de ' + SHC.moeda(x.diferenca) + ' na nossa conta.' });
     };
 
     /**

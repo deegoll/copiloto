@@ -8,6 +8,7 @@ Cada versão publicada tem uma etiqueta no Git (`copiloto-vX.Y.Z`). Nela, a past
 | 3.1.0 | 29/09/2026 20:05 | Publicada (100%) em 30/09/2026 | `4a730e6f3c29c921734b35da49780dfbf930853eb423b6572ecbffcca2f4c909` | `copiloto-v3.1.0` |
 | 3.2.0 | 01/10/2026 16:22 | Publicada (100%) em 01/10/2026 | `33571b17ac0d22014645137c91ee0ef9a344860a122755810158b60abeddfcff` | `copiloto-v3.2.0` |
 | 3.2.1 | 02/10/2026 04:20 | Publicada (100%) em 02/10/2026 | `809bea9ba393637328f19f7ba49d58694bb12975ed6f60eb8afea0acd213f0f1` | `copiloto-v3.2.1` |
+| 3.3.0 | 07/10/2026 | Pronta, **não enviada** (falta a suíte interna, a credencial da loja e o OK da dona) | `5817cab8722949115a2a44c31ce4001abdcbb7765bf43c3b46d9cc9248c1c022` | `copiloto-v3.3.0` |
 
 ## Como conferir uma versão
 

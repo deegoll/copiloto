@@ -23,7 +23,10 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     if (msg.acao === 'certificado') {
         if (!daAbaDoML(sender)) return false;
         // semAviso APAGA o alerta: só com a conta da página e se for a aberta agora. O aviso com texto sem conta ainda vale (a CONFIRMAR AO VIVO se o Faturador traz o id).
-        (msg.conta || msg.semAviso ? daContaAtual(msg) : Promise.resolve('ok')).then(ok => (ok ? gravarCertificado(msg) : { ok: false, motivo: 'conta' }))
+        // v3.3 (multi-empresa): aviso SEM a conta da página só vale com 1 conta neste Chrome — com 2+, um Faturador de outra empresa marcaria
+        // o certificado desta como vencido.
+        const semConta = () => (SHC.contas ? SHC.contas() : Promise.resolve([])).then(cs => ((cs || []).length <= 1 ? 'ok' : ''), () => '');
+        (msg.conta || msg.semAviso ? daContaAtual(msg) : semConta()).then(ok => (ok ? gravarCertificado(msg) : { ok: false, motivo: 'conta' }))
             .then(responder, () => responder({ ok: false, motivo: 'erro' }));
         return true;
     }
@@ -93,6 +96,12 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     if (msg.acao === 'editor_anuncios' && msg.dados && msg.dados.porItem && typeof msg.dados.porItem === 'object') {   // v3.2: Editor em massa aberto pela seller
         if (!daAbaDoML(sender)) return false;
         daContaAtual(msg).then(conta => (conta ? juntarEditor(conta, msg.dados).then(n => ({ ok: true, lidos: n })) : { ok: false, motivo: 'conta' }))
+            .then(responder, () => responder({ ok: false }));
+        return true;
+    }
+    if (msg.acao === 'experiencia_anuncios' && Array.isArray(msg.lista)) {   // v3.3: a tela do ML trouxe a experiência de compra de anúncios
+        if (!daAbaDoML(sender)) return false;
+        daContaAtual(msg).then(conta => (conta ? juntarExperiencia(conta, msg.lista).then(n => ({ ok: true, lidos: n })) : { ok: false, motivo: 'conta' }))
             .then(responder, () => responder({ ok: false }));
         return true;
     }

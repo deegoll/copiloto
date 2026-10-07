@@ -320,7 +320,23 @@
         else if ((out.cobertura !== null && out.cobertura > 90) || P.un(p.tempoEstoque) > 0) out.classe = 'excedente';
         else if (out.dias !== null) out.classe = 'saudavel';
         out.alerta = out.classe === 'critico' || (out.classe === 'sem_estoque' && (prevQtd > 0 || out.abaixoMin));
+        // v3.3: unidades sobrando = paradas (todas) ou além de 90 dias de venda (excedente) — é o que gera armazenagem sem vender.
+        out.excesso = out.classe === 'parado' ? tem : out.classe === 'excedente' && prevQtd > 0 ? Math.max(0, tem - Math.ceil(prevQtd * 90 / 30)) : 0;
         return out;
+    };
+    /**
+     * v3.3 O que fazer com estoque parado ou sobrando no Full (pedido da dona 07/10/2026: "empaca e começa a girar custo de armazenamento").
+     * Regras do ML (Central de vendedores, "Quanto custa vender pelo Full" e ajuda/15731, lidas em 07/10/2026): armazenagem por unidade por dia,
+     * pelo tamanho; custo por estoque antigo a partir de 4 meses no Full (2 meses em Supermercado); retirada ou descarte param o custo.
+     * l = linha do plano (com saude e travas). → texto curto | ''.
+     */
+    P.acaoParado = function (l) {
+        const s = l && l.saude, v = l && l.p ? P.un(l.p.vendas30) : null;
+        if (!s || !(s.excesso > 0)) return '';
+        const saude = l.travas && l.travas.length ? ' ' + l.travas[0] : '';
+        const custo = 'O ML cobra a armazenagem de cada unidade por dia e, depois de 4 meses no Full (2 em Supermercado), o custo por estoque antigo.';
+        if (s.classe === 'parado') return `${s.excesso} un. paradas: nenhuma venda em 30 dias. ${custo}${saude} Corrija o anúncio ou faça promoção; se não girar, peça a retirada antes dos 4 meses.`;
+        return `${s.excesso} un. além de 90 dias de venda${v ? ' (' + SHC.qtd(v, 'venda', 'vendas') + ' em 30 dias)' : ''}. ${custo}${saude} Faça promoção ou ajuste o preço para girar; retire o que não vai vender.`;
     };
     // Grava o mínimo em unidades no c|sku|<SKU> sem mexer no custo, na origem, na data do custo nem nas medidas.
     // Não usa SHC.salvarCustoSku: sem custo ele apaga o registro (o mínimo sumiria) e troca a data do custo.
@@ -601,11 +617,62 @@
     // Previsão de 30 dias = o maior entre as vendas dos últimos 30 dias (ML) e as do mesmo mês do ano passado (vm|ml).
     // Campo que o ML não mostrou fica null (não vira 0): sem os dois números → qtd null (sem sugestão).
     // lidos = meses lidos inteiros no Faturamento (ml:cobrancas mesesLidos): lá, mês sem a chave no vm = 0 vendas.
-    P.previsaoFull = function (vendas30, vm, hoje, lidos) {
+    // v3.3 (pedido da dona 07/10/2026: "sugerir pelo estoque, pelo giro e pela sazonalidade"):
+    //  · PARADO (opc.aptas > 0 e nenhuma venda em 30 dias) não usa o ano passado: com estoque e sem venda o problema é o anúncio (exposição,
+    //    experiência, preço), não a época — mandar mais só empaca e gera armazenagem. fonte 'parado', qtd 0.
+    //  · Sazonalidade: vendas de 30 dias × índice do ano passado (mês alvo ÷ mês destes 30 dias, os dois de um ano antes). Só entra com 3+ vendas
+    //    no mês base e só para subir (até 3×): queda de época já aparece nas vendas de 30 dias. Vale o maior entre 30 dias, ano passado e índice.
+    P.SAZONAL_MAX = 3;
+    P.previsaoFull = function (vendas30, vm, hoje, lidos, opc) {
         const u = P.un(vendas30), ult30 = u === null ? null : Math.max(0, u), mes = P.mesAnoPassado(hoje);
-        const a = vm && vm[mes] !== undefined && vm[mes] !== null ? P.un(vm[mes]) : (vm && (lidos || []).indexOf(mes) >= 0 ? 0 : null), ano = a === null ? null : Math.max(0, a);
-        const qtd = ult30 === null && ano === null ? null : Math.max(ult30 || 0, ano || 0);
-        return { qtd, fonte: ano !== null && (ult30 === null || ano > ult30) ? 'anoPassado' : 'ult30', ult30, mes, anoPassado: ano };
+        const doMes = m => (vm && vm[m] !== undefined && vm[m] !== null ? P.un(vm[m]) : (vm && (lidos || []).indexOf(m) >= 0 ? 0 : null));
+        const a = doMes(mes), ano = a === null ? null : Math.max(0, a);
+        if (ult30 === 0 && P.un(opc && opc.aptas) > 0) return { qtd: 0, fonte: 'parado', ult30, mes, anoPassado: ano, base: null, baseAno: null, indice: null };
+        const base = P.mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') - 15 * 864e5).toISOString().slice(0, 7), 12), b = base === mes ? null : doMes(base);
+        const indice = ult30 > 0 && ano !== null && b >= 3 && ano > b ? Math.min(P.SAZONAL_MAX, SHC.r2(ano / b)) : null;
+        const saz = indice ? Math.ceil(ult30 * indice - 1e-9) : null;
+        const qtd = ult30 === null && ano === null ? null : Math.max(ult30 || 0, ano || 0, saz || 0);
+        const fonte = saz !== null && qtd === saz && saz > Math.max(ult30 || 0, ano || 0) ? 'sazonal' : ano !== null && (ult30 === null || ano > ult30) ? 'anoPassado' : 'ult30';
+        return { qtd, fonte, ult30, mes, anoPassado: ano, base: indice ? base : null, baseAno: indice ? b : null, indice };
+    };
+    /**
+     * v3.3 Saúde do anúncio antes de mandar estoque ao Full (pedido da dona 07/10/2026: "se o anúncio estiver no vermelho ou abaixo da média,
+     * ele não sai mais, empaca e começa a girar custo de armazenamento"). its = anúncios do produto (P.anunciosDoFull).
+     * f = { exp: exp:<conta> (SHC.mlExperienciaCompra por anúncio/produto), editor: editor:<conta>, reputacao: reputacao:<conta> }.
+     * → { bloqueia:[motivo], reduz:[motivo] }: bloqueia = não sugerir envio; reduz = cobrir no máximo P.FULL_DIAS_CAUTELA dias.
+     * Bloqueia: todos os anúncios fora do ar; pausado/moderado pela experiência; experiência ruim (sem o benefício do ML que segura a exposição).
+     * Reduz: experiência mediana; entre os anúncios com mais problemas na reputação; qualidade do anúncio "básica" (BAD) no Editor em massa;
+     *   perdendo a Buy Box do catálogo (todos os anúncios do produto que competem).
+     */
+    P.FULL_DIAS_CAUTELA = 15;
+    P.saudeEnvioFull = function (its, f) {
+        const o = { bloqueia: [], reduz: [] }, l = (its || []).filter(Boolean);
+        if (!l.length) return o;
+        f = f || {};
+        const comStatus = l.filter(i => i.status), fora = comStatus.filter(i => !SHC.anuncioAtivo(i));
+        if (comStatus.length && fora.length === l.length) o.bloqueia.push('O anúncio está pausado ou inativo no ML: sem venda, o estoque no Full só gera armazenagem.');
+        const ex = (f.exp && f.exp.porItem) || {}, exUp = (f.exp && f.exp.porUp) || {}, vistos = new Set();
+        const exps = [].concat(...l.map(i => [ex[i.itemId], i.userProductId ? exUp[i.userProductId] : null])).filter(x => x && !vistos.has(x.id) && vistos.add(x.id));
+        // Vale o MELHOR anúncio do produto: o Full abastece todos; se um vende bem, o estoque não empaca.
+        const ordem = { boa: 0, sem: 1, mediana: 2, ruim: 3 }, melhor = exps.slice().sort((a, b) => (a.pelaExperiencia - b.pelaExperiencia) || (ordem[a.faixa] - ordem[b.faixa]))[0];
+        if (melhor && melhor.nota !== null) {
+            const n = ' (nota ' + melhor.nota + ' de 100)';
+            if (melhor.pelaExperiencia) o.bloqueia.push('O ML ' + (melhor.status === 'moderated' ? 'moderou' : 'pausou') + ' o anúncio pela experiência de compra' + n + ': corrija e reative antes de mandar estoque.');
+            else if (melhor.faixa === 'ruim' && !melhor.congelado) o.bloqueia.push('Experiência de compra ruim' + n + ': o anúncio fica quase sem exposição e o estoque empaca no Full.');
+            else if (melhor.faixa === 'ruim' || melhor.faixa === 'mediana') o.reduz.push('Experiência de compra ' + melhor.faixa + n + (melhor.congelado ? ', segurada por um benefício do ML por enquanto' : ': o anúncio perde exposição') + '.');
+        }
+        const top = ((f.reputacao && f.reputacao.topItens) || []).filter(t => t && l.some(i => i.itemId === t.itemId));
+        if (top.length) o.reduz.push('Está entre os anúncios com mais problemas na sua reputação (' + SHC.qtd(top.reduce((s, t) => s + (t.problemas || 0), 0), 'caso', 'casos') + ').');
+        const ed = (f.editor && f.editor.porItem) || {};
+        if (l.every(i => ed[i.itemId] && ed[i.itemId].qNivel === 'BAD')) o.reduz.push('Qualidade do anúncio básica no ML: complete fotos, ficha técnica e título para ele competir.');
+        // Buy Box (pedido da dona 07/10/2026): no catálogo, sem a Buy Box o anúncio quase não vende. Todos os anúncios do produto que competem
+        // estão perdendo (ou restritos) → cautela, com o motivo do ML (preço ou entrega). Nenhum compete (fora do catálogo): não conta.
+        const cat = l.filter(i => /^(ganhando|perdendo|restrito|dividindo)$/.test(String(i.competicao || '')));
+        if (cat.length && cat.every(i => i.competicao === 'perdendo' || i.competicao === 'restrito')) {
+            const m = cat.map(i => i.competicaoMotivo).find(Boolean);
+            o.reduz.push('Perdendo a Buy Box do catálogo' + (m === 'preco' ? ' por preço' : m === 'entrega' ? ' pela entrega' : '') + ': sem ela o anúncio quase não vende.');
+        }
+        return o;
     };
     // Soma {'AAAA-MM': n} de vários anúncios do mesmo produto.
     P.somaMeses = lista => (lista || []).reduce((o, vm) => { Object.keys(vm || {}).forEach(m => { o[m] = (o[m] || 0) + (P.un(vm[m]) || 0); }); return o; }, {});
@@ -639,14 +706,17 @@
                 parte = { n: ir.length, pct: tot > 0 && u !== null ? Math.max(0, u) / tot * 100 : null };
                 vm = parte.pct === null ? null : Object.keys(vm || {}).reduce((o, m) => { const v = P.un(vm[m]); if (v !== null) o[m] = Math.round(v * parte.pct / 100); return o; }, {});
             }
-            const prev = Object.assign(P.previsaoFull(p.vendas30, vm, ctx.hoje, ctx.mesesLidos), { parte });
+            const prev = Object.assign(P.previsaoFull(p.vendas30, vm, ctx.hoje, ctx.mesesLidos, { aptas: p.aptas }), { parte });
             const ua = P.un(p.aptas), uc = P.un(p.aCaminho);
             const semDado = [ua === null ? 'as unidades aptas' : '', prev.qtd === null ? 'as vendas dos últimos 30 dias' : ''].filter(Boolean);
             const aptas = ua === null ? null : Math.max(0, ua), aCaminho = uc === null ? 0 : Math.max(0, uc);
-            const alvo = semDado.length ? null : Math.ceil(prev.qtd * dias / 30 - 1e-9), bruto = semDado.length ? null : Math.max(0, alvo - aptas - aCaminho);
+            // v3.3: saúde do anúncio (P.saudeEnvioFull): bloqueado → nada a enviar; cautela → cobre no máximo P.FULL_DIAS_CAUTELA dias.
+            const sa = (ctx.saudeDe && ctx.saudeDe(p)) || { bloqueia: [], reduz: [] }, travas = sa.bloqueia || [], cautela = travas.length ? [] : (sa.reduz || []);
+            const diasUsados = cautela.length ? Math.min(dias, P.FULL_DIAS_CAUTELA) : dias;
+            const alvo = semDado.length ? null : travas.length ? 0 : Math.ceil(prev.qtd * diasUsados / 30 - 1e-9), bruto = semDado.length ? null : Math.max(0, alvo - aptas - aCaminho);
             const lx = ctx.lucroDe(p), lo = lx !== null && typeof lx === 'object' ? lx : { lucro: lx === undefined ? null : lx, motivo: '' };
             const lucro = lo.lucro === undefined ? null : lo.lucro, seg = P.segmentoDe(p.tamanho, esp);
-            return { p, prev, aptas, aCaminho, semCaminho: uc === null, semDado, alvo, bruto, qtd: bruto, limitado: false, lucro,
+            return { p, prev, aptas, aCaminho, semCaminho: uc === null, semDado, alvo, bruto, qtd: bruto, limitado: false, lucro, travas, cautela, diasUsados,
                 motivoLucro: lucro === null ? (lo.motivo || 'sem_custo') : '', semAnuncio: lo.motivo === 'sem_anuncio', seg, semSegmento: seg === null && temLivre,
                 segTitulo: seg !== null ? String((esp.find(e => e.id === seg) || {}).titulo || '').replace(/:.*$/, '') : '',
                 esgota: !semDado.length && prev.qtd > 0 ? Math.floor((aptas + aCaminho) / (prev.qtd / 30)) : null };
@@ -671,7 +741,9 @@
         const x = l.prev, nm = P.nomeMes(x.mes), out = [], p = l.p || {};
         const naoLido = l.semAnuncio ? '' : ` As vendas de ${nm} ainda não foram lidas.`;
         if (l.semAnuncio) out.push(`Não achei o anúncio deste produto na sua lista${p.sku ? ' (SKU ' + p.sku + ')' : ''}: sem lucro e sem vendas do ano passado.`);
-        if (x.ult30 === null && x.anoPassado === null) out.push('O ML não mostrou as vendas dos últimos 30 dias deste produto.' + naoLido);
+        if (x.fonte === 'parado') out.push(`Você tem ${l.aptas} aptas e nenhuma venda nos últimos 30 dias${x.anoPassado ? ` (em ${nm} do ano passado foram ${x.anoPassado})` : ''}: não usei o ano passado. Com estoque e sem venda, o problema é o anúncio (exposição, experiência de compra ou preço), não a época.`);
+        else if (x.fonte === 'sazonal') out.push(`Nos últimos 30 dias você vendeu ${x.ult30}. No ano passado, ${nm} vendeu ${x.anoPassado} contra ${x.baseAno} em ${P.nomeMes(x.base)} (${String(x.indice).replace('.', ',')}×): usei ${x.ult30} × ${String(x.indice).replace('.', ',')} = ${x.qtd}.`);
+        else if (x.ult30 === null && x.anoPassado === null) out.push('O ML não mostrou as vendas dos últimos 30 dias deste produto.' + naoLido);
         else if (x.ult30 === null) out.push(`O ML não mostrou as vendas dos últimos 30 dias deste produto. Em ${nm} você vendeu ${x.anoPassado}: usei ${nm}, o mesmo mês do ano passado.`);
         else if (x.anoPassado === null) out.push(`Nos últimos 30 dias você vendeu ${x.ult30}.${naoLido} Usei os últimos 30 dias.`);
         else if (x.fonte === 'anoPassado') out.push(`Em ${nm} você vendeu ${x.anoPassado}, mais que nos últimos 30 dias (${x.ult30}). Usei ${nm}, o mesmo mês do ano passado.`);
@@ -680,9 +752,11 @@
             ? `Este anúncio tem ${x.parte.n} variações no Full e as vendas por mês são do anúncio inteiro. Sem vendas nos últimos 30 dias para dividir entre elas, não usei o ano passado.`
             : `Este anúncio tem ${x.parte.n} variações no Full e as vendas por mês são do anúncio inteiro: esta variação ficou com ${SHC.pctTxt(x.parte.pct)}, a parte dela nas vendas dos últimos 30 dias.`);
         if (l.semDado && l.semDado.length) out.push(`Sem sugestão: o ML não mostrou ${l.semDado.join(' nem ')} deste produto.`);
+        else if (l.travas && l.travas.length) out.push('Não sugeri envio: ' + l.travas.join(' '));
         else {
-            const conta = x.qtd * dias / 30;
-            out.push(`Para ${dias} dias: ${x.qtd} × ${dias} ÷ 30 = ${l.alvo}${Number.isInteger(SHC.r2(conta)) ? '' : ' (arredondado para cima)'}; menos ${l.aptas} aptas e ${l.aCaminho} a caminho = ${l.bruto}.`
+            const du = l.diasUsados || dias, conta = x.qtd * du / 30;
+            if (l.cautela && l.cautela.length && du < dias) out.push(`Cobri só ${du} dias, não ${dias}: ${l.cautela.join(' ')}`);
+            out.push(`Para ${du} dias: ${x.qtd} × ${du} ÷ 30 = ${l.alvo}${Number.isInteger(SHC.r2(conta)) ? '' : ' (arredondado para cima)'}; menos ${l.aptas} aptas e ${l.aCaminho} a caminho = ${l.bruto}.`
                 + (l.semCaminho ? ' O ML não mostrou quantas estão a caminho: contei 0.' : ''));
         }
         if (l.limitado) out.push(`O espaço livre${l.segTitulo ? ' de ' + l.segTitulo : ''} que sobra para este produto é ${l.livreAntes} un.: você pode enviar até ${l.qtd}.`);
@@ -1200,25 +1274,27 @@
 
     // Texto do chamado: só números reais. A frase das medidas entra só com a caixa marcada pelo seller.
     // Pedidos: os cobrados acima do frete de antes (número, data, valor, diferença). Medidas do ERP só com a caixa marcada.
+    // v3.3: no formato de contestação (SHC.textoContestacao): assunto, anúncio/SKU, fatos com os pedidos, a regra do ML e o pedido explícito.
     P.textoChamado = function (item, hist, vendas, confirmouMedidas, medidas) {
         const b = P.baseChamado(hist, vendas, item);
         if (!b) return '';
-        let t = b.fonte === 'lista'
-            ? `Olá. O custo de envio do anúncio ${item.itemId} passou de ${SHC.moeda(b.base)} para ${SHC.moeda(b.para)} em ${P.dataBr(b.desde)}, segundo a lista de Anúncios do meu painel.`
-            : `Olá. O frete cobrado por pedido nas vendas do anúncio ${item.itemId} passou de ${SHC.moeda(b.base)} (valor típico em ${P.nomeMes(b.mesAntes)}) para ${SHC.moeda(b.para)} (valor típico em ${P.nomeMes(b.mes)}), segundo o Faturamento do meu painel.`;
-        const { peds, fora } = P.pedidosAMais(vendas, b.base, b.desde);
+        const fatos = [b.fonte === 'lista'
+            ? `O custo de envio do anúncio passou de ${SHC.moeda(b.base)} para ${SHC.moeda(b.para)} em ${P.dataBr(b.desde)}, segundo a lista de Anúncios do meu painel.`
+            : `O frete cobrado por pedido nas vendas do anúncio passou de ${SHC.moeda(b.base)} (valor típico em ${P.nomeMes(b.mesAntes)}) para ${SHC.moeda(b.para)} (valor típico em ${P.nomeMes(b.mes)}), segundo o Faturamento do meu painel.`];
+        const { peds, fora } = P.pedidosAMais(vendas, b.base, b.desde), soma = SHC.r2(peds.reduce((a, p) => a + p.dif, 0));
         if (peds.length) {
-            t += ` Pedidos cobrados acima de ${SHC.moeda(b.base)} desde ${P.dataBr(b.desde)} (${peds.length}): `
+            fatos.push(`Pedidos cobrados acima de ${SHC.moeda(b.base)} desde ${P.dataBr(b.desde)} (${peds.length}): `
                 + peds.slice(0, 10).map(p => `#${p.orderId} de ${P.dataBr(p.d)}: ${SHC.moeda(p.f)} (${SHC.moeda(p.dif)} a mais)`).join('; ')
-                + (peds.length > 10 ? ` e mais ${peds.length - 10}` : '')
-                + `. Diferença somada: ${SHC.moeda(SHC.r2(peds.reduce((a, p) => a + p.dif, 0)))}.`;
+                + (peds.length > 10 ? ` e mais ${peds.length - 10}` : '') + '.', `Diferença somada: ${SHC.moeda(soma)}.`);
         }
-        if (fora.length) t += ` Deixei de fora ${SHC.qtd(fora.length, 'pedido', 'pedidos')} com frete bem maior, que podem ter mais de uma unidade.`;
-        if (confirmouMedidas) {
-            t += ' Não alterei peso, medidas nem embalagem.';
-            if (medidas) t += ` Peso e medidas da embalagem no meu cadastro: ${medidas}.`;
-        }
-        return t + ' Peço a revisão do peso e das medidas considerados no cálculo do frete. Obrigado.';
+        if (fora.length) fatos.push(`Deixei de fora ${SHC.qtd(fora.length, 'pedido', 'pedidos')} com frete bem maior, que podem ter mais de uma unidade.`);
+        if (confirmouMedidas) fatos.push('Não alterei peso, medidas nem embalagem.' + (medidas ? ` Peso e medidas da embalagem no meu cadastro: ${medidas}.` : ''));
+        return SHC.textoContestacao({ assunto: 'Contestação de cobrança indevida de frete', ids: [['SKU', item.sku || ''], ['Anúncio', item.itemId]].concat(peds.length === 1 ? [['Pedido', '#' + peds[0].orderId]] : []),
+            intro: `Identificamos uma divergência no custo de envio do anúncio: o frete passou a ser cobrado acima da faixa de ${SHC.moeda(b.base)}${confirmouMedidas ? ', sem mudança no produto nem na embalagem' : ''}.`,
+            fatos, regras: ['frete_tabela', 'frete_calculo'],
+            anexos: confirmouMedidas ? ['especificações técnicas do fabricante (medidas e peso)', 'nota fiscal do item'] : [],
+            pedido: 'a revisão da cubagem (peso e medidas) considerada no cálculo do frete deste anúncio, a correção para os envios futuros'
+                + (peds.length ? ` e o estorno da diferença cobrada nos pedidos acima (${SHC.moeda(soma)}) na nossa conta.` : '.') });
     };
 
     P.respostaSemCusto = function (resumos, comPromo) {
@@ -1282,8 +1358,8 @@
     P.ABA_DO_ALERTA = { conta: 'full', full: 'full', ads: 'ads', fiscal: 'saude', visitas: 'saude', medidas: 'saude', medmud: 'saude' };
     // v2.7: 'perguntas' e 'reputacao' (aba Saúde desde a v2.9) e a remessa do Full com inconformidade/multa (tipo 'full' + remessaId, aba Full) também vêm do fundo.
     // v3.1: certificado/NF-e (fiscal) e custo novo na fatura ficam na Conciliação; o fiscal da Saúde é o do painel (P.ABA_DO_ALERTA), nunca em dobro.
-    const ROT_ANOM = { frete: 'Frete', pagamento: 'Cobrança', posvenda: 'Pós-venda', perguntas: 'Perguntas', reputacao: 'Reputação', fiscal: 'Fiscal', custo: 'Fatura', prejuizo: 'Venda no prejuízo', promo: 'Promoção' };   // v3.2: prejuizo; v3.2.0: promo
-    const LINK_ANOM = { posvenda: 'Abrir o pós-venda', perguntas: 'Responder no ML', reputacao: 'Ver a reputação no ML', remessa: 'Abrir a remessa no ML', prejuizo: 'Abrir a venda no ML', promo: 'Abrir a Central de promoções' };
+    const ROT_ANOM = { frete: 'Frete', pagamento: 'Cobrança', posvenda: 'Pós-venda', perguntas: 'Perguntas', reputacao: 'Reputação', fiscal: 'Fiscal', custo: 'Fatura', prejuizo: 'Venda no prejuízo', promo: 'Promoção', experiencia: 'Experiência de compra' };   // v3.2: prejuizo; v3.2.0: promo; v3.3: experiencia
+    const LINK_ANOM = { posvenda: 'Abrir o pós-venda', perguntas: 'Responder no ML', reputacao: 'Ver a reputação no ML', remessa: 'Abrir a remessa no ML', prejuizo: 'Abrir a venda no ML', promo: 'Abrir a Central de promoções', experiencia: 'Abrir no ML' };
     P.ROT_ANOM = ROT_ANOM;
     /** Alertas de UMA aba → [{tipo, rot, titulo, texto, link?, linkTxt?}]. anom só vale se for da conta aberta (anom.conta). */
     P.alertasDaAba = function (aba, al, anom, conta) {
@@ -2029,6 +2105,7 @@
     $('#fundo').addEventListener('click', e => { if (e.target === $('#fundo')) fechaJanelaErpx(); });
     $('#fundo').addEventListener('keydown', e => { if (e.key === 'Escape') fechaJanelaErpx(); });
     let editor = null, pendAberta = '';   // v3.2: editor:<conta> (Editor em massa, lido quando a seller abre a tela); tipo de pendência aberto
+    let experiencia = null;   // v3.3: exp:<conta> = { porItem, porUp, antes } (experiência de compra de cada anúncio/produto, SHC.mlExperienciaCompra)
     // "Ver mais"/"Ver menos" das listas da Saúde: lembrados como os outros cartões (chave saude:ver:<lista>).
     const saudeVer = {};
     ['fiscal', 'fotos', 'marcadas', 'estavel', 'subindo', 'medidas', 'medmud', 'registro', 'pend'].forEach(k => Object.defineProperty(saudeVer, k, { enumerable: true,
@@ -2242,9 +2319,10 @@
         const c = ct || undefined, le = (fn, pref) => (SHC[fn] ? SHC[fn](c) : SHC.lerChave(pref + (ct || 'atual')));
         let pw = false;
         try { pw = !!(chrome.permissions && chrome.permissions.contains && await chrome.permissions.contains(PERM_WWW)); } catch (e) { pw = false; }
-        return [...await Promise.all([le('lerFiscal', 'fiscal:'), le('lerFotos', 'fotos:'), le('lerVisitas', 'visitas:'), le('lerRobo', 'robo:'), le('lerMedidas', 'medidas:'), le('lerEditor', 'editor:')]), pw];
+        return [...await Promise.all([le('lerFiscal', 'fiscal:'), le('lerFotos', 'fotos:'), le('lerVisitas', 'visitas:'), le('lerRobo', 'robo:'), le('lerMedidas', 'medidas:'), le('lerEditor', 'editor:'),
+            le('lerExperiencia', 'exp:')]), pw];
     }
-    function usaSaude(sd) { [fiscal, fotos, visitas, robo, medidas, editor, permWww] = sd; }
+    function usaSaude(sd) { [fiscal, fotos, visitas, robo, medidas, editor, experiencia, permWww] = sd; }
     // Chaves da Geral, Conciliação e Canal (a Conciliação resume o mês passado, como o fechamento completo).
     async function lerExtras(ct) {
         const c = ct || 'atual', mesAnt = P.mesMenos(SHC.hoje().slice(0, 7), 1);
@@ -3720,6 +3798,7 @@
     /** posvenda:<conta> × anúncios → SHC.posvendaAnalise | null (a lista ainda não foi lida). */
     P.posAnalise = (pv, its) => (pv && Array.isArray(pv.casos) ? SHC.posvendaAnalise(pv.casos, its) : null);
     const ddmmHora = ts => { const d = new Date(ts), z = n => String(n).padStart(2, '0'); return z(d.getDate()) + '/' + z(d.getMonth() + 1) + ' às ' + z(d.getHours()) + ':' + z(d.getMinutes()); };
+    let posCopiado = '';   // v3.3: motivo cujo pedido de exclusão acabou de ser copiado
     function desenhaPos() { $('#listaPos').innerHTML = cardPosVenda(); }
     function cardPosVenda() {
         const pv = P.posVenda(posvenda);
@@ -3749,7 +3828,10 @@
         const max = a.motivos[0].casos, nMot = aberto('pos:motivos') ? a.motivos.length : 5;
         h += `<div class="card" id="posMotivos"><div class="ch"><h3>Motivos das reclamações</h3><span class="d det">${esc(SHC.qtd(a.total, 'caso', 'casos'))}</span></div>`
             + a.motivos.slice(0, nMot).map((x, i) => `<div class="hb"><div class="l"><b>${esc(curtoTxt(x.motivo, 40))}</b><span class="v">${x.casos}${x.valor > 0 ? ' · <small>' + SHC.moeda(x.valor) + '</small>' : ''}</span></div>`
-                + `<div class="medidor"><i class="${i === 0 ? 'pr' : x.casos > 1 ? 'at' : ''}" style="width:${Math.max(4, Math.round(x.casos / max * 100))}%"></i></div></div>`).join('')
+                + `<div class="medidor"><i class="${i === 0 ? 'pr' : x.casos > 1 ? 'at' : ''}" style="width:${Math.max(4, Math.round(x.casos / max * 100))}%"></i></div>`
+                // v3.3: motivo que as regras de exclusão do ML aceitam → o pedido de exclusão pronto (reputação e experiência de compra).
+                + (SHC.motivoExcluivel(x.motivo) ? `<small class="det" style="display:block">Pode sair da reputação: ${esc(SHC.motivoExcluivel(x.motivo))}. <button class="lnk" data-pos-excluir="${esc(x.motivo)}">${posCopiado === x.motivo ? '✓ Texto copiado' : 'Copiar pedido de exclusão'}</button></small>` : '')
+                + '</div>').join('')
             + (a.motivos.length > 5 ? `<p class="rs">${btVer('pos:motivos', `Ver mais (${a.motivos.length - 5})`)}</p>` : '')
             + `<p class="rs">${esc(a.naReputacao + ' de ' + a.total)} contaram na sua reputação.</p></div>`;
         // Produtos que mais dão problema (SKU pelo anúncio achado pelo título; sem anúncio, o título). v3.1 (imagem tela-posvenda): % das vendas
@@ -3794,6 +3876,8 @@
         const doFull = p => P.anunciosDoFull(p, itens), idsDe = idsDoPlano;
         return P.planoFull(full, {
             hoje: SHC.hoje(), dias: fullDias, idsDe, mesesLidos,
+            // v3.3: saúde do anúncio antes de sugerir envio (experiência de compra, fora do ar, reputação, qualidade).
+            saudeDe: p => P.saudeEnvioFull(doFull(p), { exp: experiencia, editor, reputacao }),
             // Sem nenhum anúncio ligado: vendas do ano passado desconhecidas (null), não "ainda não lidas".
             vmDe: p => { const ids = idsDe(p); return ids.length ? P.somaMeses(ids.map(id => vm[id])) : null; },
             lucroDe: p => {
@@ -3838,6 +3922,7 @@
     // v2.9 (pedido da dona 26/09): remessa recebida com inconformidade, em destaque no topo da aba Full, com o botão para reclamar no ML.
     // Prazo só quando o ML manda a data (senão o botão diz só "Reclamar no ML"). Nome do produto vem do seu anúncio (itemId); o detalhe não guarda título.
     const incRemessas = () => (remessas ? SHC.remessasInconformes(remessas, remDet, SHC.hoje()) : []);
+    let remCopiada = '';   // v3.3: remessa cujo texto de reclamação acabou de ser copiado
     function cardInconformes() {
         const tit = id => { const a = (itens || []).find(i => i && i.itemId === id); return a ? a.titulo : ''; };
         const n = v => (v === null || v === undefined ? '—' : fmtUn(v)), sinal = v => (v > 0 ? '+' + fmtUn(v) : v < 0 ? '−' + fmtUn(-v) : '0');
@@ -3861,7 +3946,9 @@
                 : !pend ? ['Ver a remessa no ML', 'O ML não aceita mais reclamação nesta remessa.']
                 : ['Reclamar no ML', 'Abre a remessa no ML: lá, toque em “Iniciar reclamação por diferenças”.'];
             const ver = ps.length && (ps.length > vis.length || aberto(k) || decl) ? `<button class="bt leve" data-ver="${esc(k)}" aria-expanded="${aberto(k)}">${aberto(k) ? 'Ver menos' : 'Ver a remessa'}</button>` : '';
-            return h + `<div class="linha-bts"><a class="bt ${pend ? 'ml' : 'leve'}" href="${esc(r.link)}" target="_blank" rel="noopener">${esc(bt)}</a>${ver}</div>`
+            // v3.3: texto da reclamação pronto (SHC.chamadoRemessa): declaradas × processadas por SKU, o que o ML cobrou, anexos e o pedido.
+            const cop = pend ? `<button class="bt leve" data-rem-copiar="${esc(r.id)}">${remCopiada === r.id ? '✓ Texto copiado' : 'Copiar texto da reclamação'}</button>` : '';
+            return h + `<div class="linha-bts"><a class="bt ${pend ? 'ml' : 'leve'}" href="${esc(r.link)}" target="_blank" rel="noopener">${esc(bt)}</a>${cop}${ver}</div>`
                 + `<p class="det" style="margin:6px 0 0">${esc(dica)}</p></div>`;
         }).join('');
     }
@@ -4021,7 +4108,7 @@
             h += '<p class="rs fu-sub">Parado ou sobrando no Full</p>' + vmLista('full:par', par, 3)[0].map(l => {
                 const a = P.un(l.p.aptas), v = P.un(l.p.vendas30), vt = v === null ? '' : v > 0 ? ' · ' + SHC.qtd(v, 'venda', 'vendas') + ' em 30 dias' : ' · nenhuma venda em 30 dias';
                 return `<div class="hb"><div class="l"><b>${esc(l.p.titulo || l.p.sku || 'Produto do Full')}</b><span class="v">${fmtUn(a)} un.</span></div><div class="medidor"><i class="${l.saude.classe === 'parado' ? 'at' : ''}" style="width:${Math.max(3, Math.round(a / mx * 100))}%"></i></div>`
-                    + `<small class="det">${esc(P.CLASSES_FULL[l.saude.classe].toLowerCase() + vt)}</small></div>`;
+                    + `<small class="det">${esc(P.CLASSES_FULL[l.saude.classe].toLowerCase() + vt)}</small>${P.acaoParado(l) ? `<small class="det" style="display:block">${esc(P.acaoParado(l))}</small>` : ''}</div>`;
             }).join('') + (par.length > 3 ? `<p class="rs">${vmLista('full:par', par, 3)[1]}</p>` : '');
         }
         return h + '</div>';
@@ -4044,12 +4131,13 @@
             const acoes = [...new Set([].concat(p.acaoSugerida || [], p.avisos || []).map(txtML).filter(Boolean))];
             const sug = l.qtd === null ? `Sem sugestão: o ML não mostrou ${esc(l.semDado.join(' nem '))} deste produto`
                 : l.qtd > 0 ? `Enviar <b>${l.qtd} un.</b>${l.limitado ? ` (você pode enviar até ${l.qtd}; o cálculo pedia ${l.bruto})` : ''}${l.semSegmento ? ' — sem limite de espaço: não sei em qual espaço do Full ele entra' : ''}`
+                : l.travas && l.travas.length ? 'Não enviar agora: ' + esc(l.travas[0])
                 : (l.bruto > 0 ? 'Sem espaço livre para este produto agora' : 'Nada a enviar agora');
             return `<div class="card"><div class="tit">${l.qtd > 0 ? (i + 1) + '. ' : ''}${esc(p.titulo)}</div><div class="sub">${esc([p.sku ? 'SKU ' + p.sku : '', txtML(p.variacao), txtML(p.tamanho), txtML(p.status)].filter(Boolean).join(' · '))}</div>
               <div class="mes-grid"><div class="mes"><small>Vendas 30 dias</small><b>${fmtUn(p.vendas30)}</b></div><div class="mes"><small>Aptas</small><b>${fmtUn(p.aptas)}</b></div><div class="mes"><small>A caminho</small><b>${fmtUn(p.aCaminho)}</b></div></div>
               ${dML ? `<div class="det">Tempo até esgotar (ML): ${esc(dML)}</div>` : ''}${acoes.length ? `<div class="recnota aviso">Ação sugerida pelo ML: ${esc(acoes.join(' · '))}</div>` : ''}
               ${saudeHtml(l)}
-              <div class="recnota ${l.qtd > 0 ? 'ok' : 'neutra'}">Copiloto: ${sug} <span class="det">(estimativa)</span></div>
+              <div class="recnota ${l.qtd > 0 ? 'ok' : l.travas && l.travas.length ? 'ruim' : 'neutra'}">Copiloto: ${sug} <span class="det">(estimativa)</span></div>${l.cautela && l.cautela.length ? `<div class="recnota aviso">Cobri só ${l.diasUsados} dias: ${esc(l.cautela.join(' '))}</div>` : ''}
               <button class="lnk explique" data-full-expl="${esc(k)}">${fullExpl.has(k) ? 'Fechar explicação' : 'Explique: por que esta quantidade?'}</button>${fullExpl.has(k) ? respHtml(P.explicaFull(l, pl.dias)) : ''}</div>`;
         }).join('') + botaoMais('full', vis.length - limite.full) + (fullClasse ? '' : vmFim('full:produtos'));
         return html;
@@ -4108,11 +4196,14 @@
             const p = P.contaTopo(c.sellerId, cfg), id = esc(c.sellerId);
             return `<div class="aj-uma"><div class="aj-conta"><span class="av${p.temNome ? '' : ' sem'}" aria-hidden="true">${esc(p.iniciais || '✎')}</span><div class="ct"><b${p.temNome ? '' : ' class="pede"'}>${esc(p.temNome ? p.nome : DAR_NOME)}</b>`
                 + `<span class="id">${esc(p.idTxt)}<button type="button" class="aj-copia" data-copiar-id="${id}" aria-label="Copiar o ID ${id}" title="Copiar o ID"><svg class="i" aria-hidden="true"><use href="#i-copiar"/></svg></button></span></div>${c.atual ? '<span class="contatag agora">aberta agora</span>' : ''}</div>`
-                + `<div class="campo"><label for="ap-${id}">Apelido (só você vê)</label><input class="inp" id="ap-${id}" data-apelido="${id}" maxlength="40" placeholder="Ex.: Loja 1" value="${esc(p.nome)}"></div></div>`;
+                + `<div class="campo"><label for="ap-${id}">Apelido (só você vê)</label><input class="inp" id="ap-${id}" data-apelido="${id}" maxlength="40" placeholder="Ex.: Loja 1" value="${esc(p.nome)}"></div>`
+                // v3.3 multi-empresa: só com 2+ contas (com 1 não há o que separar).
+                + (contasLista.length > 1 ? `<label class="det" style="display:flex;gap:6px;align-items:flex-start;margin-top:6px"><input type="checkbox" data-empresa="${id}"${((cfg.empresaSeparada || {})[c.sellerId] === true) ? ' checked' : ''}><span>Outra empresa: custos por SKU, imposto, margem, despesas fixas e ERP só desta conta</span></label>` : '')
+                + '</div>';
         }).join('')
             : '<p class="det">Sincronize para o Copiloto saber qual é a sua conta. Cada conta em que você entrar neste Chrome aparece aqui.</p>';
         $('#salvarApelidos').hidden = !contasLista.length;
-        $('#salvarApelidos').textContent = contasLista.length > 1 ? 'Salvar apelidos' : 'Salvar apelido';
+        $('#salvarApelidos').textContent = contasLista.length > 1 ? 'Salvar contas' : 'Salvar apelido';
         $('#tituloContas').textContent = contasLista.length > 1 ? 'Suas contas' : 'Sua conta';
         // v2.8: módulos ligados/desligados (cfg.modulos[id] === false desliga). v3.1: interruptor por aba, na ordem das abas; Geral travada.
         if (!document.activeElement || !document.activeElement.closest('#listaModulos')) {
@@ -5688,6 +5779,21 @@
         const ia = t.closest('[data-ir-aba]');
         if (ia && P.ABAS.indexOf(ia.dataset.irAba) >= 0) { abreAba(ia.dataset.irAba); $('.corpo').scrollTop = 0; return; }
         if (t.closest('[data-abrir-posvenda]')) { chrome.tabs.create({ url: SHC.POSVENDA_URL }); return; }
+        const rc = t.closest('[data-rem-copiar]');   // v3.3: texto da reclamação da remessa do Full (SHC.chamadoRemessa)
+        if (rc) {
+            const r = incRemessas().find(x => String(x.id) === rc.dataset.remCopiar);
+            try { await navigator.clipboard.writeText(SHC.chamadoRemessa(r)); remCopiada = r ? r.id : ''; } catch (e) { remCopiada = ''; }
+            if (aba === 'full') desenhaFull();
+            return;
+        }
+        const pex = t.closest('[data-pos-excluir]');   // v3.3: pedido de exclusão de reclamações (SHC.chamadoExclusao)
+        if (pex) {
+            const mot = pex.dataset.posExcluir, cs = ((posvenda && posvenda.casos) || []).filter(c => c && c.motivo === mot);
+            const g = { motivo: mot, casos: cs.length, naReputacao: cs.filter(c => c.afetouReputacao === true).length, produtos: [...new Set(cs.map(c => c.titulo).filter(Boolean))] };
+            try { await navigator.clipboard.writeText(SHC.chamadoExclusao(g)); posCopiado = mot; } catch (e) { posCopiado = ''; }
+            desenhaPos();
+            return;
+        }
         const ccp = t.closest('[data-conc-copiar]');
         if (ccp) { await copiarConc(+ccp.dataset.concCopiar); return; }
         const fcp = t.closest('[data-fr-copiar]');   // v3.3: chamado do frete cobrado a mais (todos ou de 1 anúncio; só os que dá para contestar)
@@ -5943,7 +6049,9 @@
     $('#salvarApelidos').addEventListener('click', async () => {
         const txt = {};
         document.querySelectorAll('[data-apelido]').forEach(i => { txt[i.dataset.apelido] = i.value; });
-        try { cfg = await SHC.salvarCfg({ apelidos: P.lerApelidos(txt) }); } catch (e) { return falhaGravar(e); }
+        const sep = {}, temCaixa = !!document.querySelector('[data-empresa]');   // v3.3: contas de outra empresa (só existe com 2+ contas)
+        document.querySelectorAll('[data-empresa]').forEach(i => { if (i.checked && /^\d{6,15}$/.test(i.dataset.empresa)) sep[i.dataset.empresa] = true; });
+        try { cfg = await SHC.salvarCfg(Object.assign({ apelidos: P.lerApelidos(txt) }, temCaixa ? { empresaSeparada: sep } : {})); } catch (e) { return falhaGravar(e); }
         $('#okApelidos').textContent = '✓ Salvo';
         setTimeout(() => { $('#okApelidos').textContent = ''; }, 2500);
         desenhaConta();

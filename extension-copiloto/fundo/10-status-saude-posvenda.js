@@ -120,6 +120,38 @@ async function confereSessao(conta) {
     const c = SHC.mlContaDoEstado(SHC.mlExtraiEstado(b.html) || {}), id = c && c.sellerId;
     return id && String(id) !== String(conta) ? 'outra_conta' : '';
 }
+// v3.3 (multi-empresa, auditoria 07/10/2026): trocar o login do ML no meio da sincronização (ou do histórico em segundo plano) fazia a conta
+// nova ser gravada nas chaves da antiga — e o mês fechado lido assim não era mais relido. contaSegue(conta) confere a sessão (confereSessao)
+// no máximo 1 vez a cada CONTA_CONFERE_MS; false só com PROVA de outra conta (a página diz o dono e é outro). Sessão caída não é troca.
+const CONTA_CONFERE_MS = 60e3;
+let contaConferida = { conta: '', ts: 0, ok: true };
+async function contaSegue(conta, forcar) {
+    if (!conta || conta === 'atual') return true;
+    const agora = Date.now();
+    if (!forcar && contaConferida.conta === conta && agora - contaConferida.ts < CONTA_CONFERE_MS) return contaConferida.ok;
+    let r = '';
+    try { r = await confereSessao(conta); } catch (e) { r = 'indisponivel'; }
+    contaConferida = { conta, ts: Date.now(), ok: r !== 'outra_conta' };
+    return contaConferida.ok;
+}
+// Depois de uma troca de conta no meio da leitura: os meses lidos desde `desde` (ms) podem ter dados da outra conta → voltam para a fila de
+// leitura desta conta (ml:cobrancas.releer e vbAnuncio.meses[m].completo = false). Nada é apagado: a próxima leitura da conta certa substitui.
+async function marcaReler(conta, desde) {
+    if (!conta || conta === 'atual' || !(desde > 0)) return;
+    const dia = new Date(desde - 3 * 3600e3).toISOString().slice(0, 10);   // lidoEm é o dia de Brasília (UTC−3)
+    const kc = 'ml:cobrancas:' + conta, mc = await SHC.lerChave(kc);
+    if (mc && mc.lidoEm) {
+        const re = Object.keys(mc.lidoEm).filter(m => String(mc.lidoEm[m] || '') >= dia);
+        if (re.length) await SHC.gravarChave(kc, Object.assign({}, mc, { releer: [...new Set((mc.releer || []).concat(re))].sort() }));
+    }
+    const kv = 'vbAnuncio:' + conta, va = await SHC.lerChave(kv);
+    if (va && va.meses) {
+        let mudou = false;
+        const meses = Object.assign({}, va.meses);
+        Object.keys(meses).forEach(m => { const x = meses[m]; if (x && x.completo && (x.lidoTs || 0) >= desde) { meses[m] = Object.assign({}, x, { completo: false }); mudou = true; } });
+        if (mudou) await SHC.gravarChave(kv, Object.assign({}, va, { meses, mesesLidos: (va.mesesLidos || []).filter(m => !(meses[m] && meses[m].completo === false)) }));
+    }
+}
 async function fiscalAgora() {
     const conta = await SHC.contaAtual();
     if (conta === 'atual') return { ok: false, motivo: 'sem_conta', fiscal: null };

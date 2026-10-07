@@ -112,10 +112,13 @@
      */
     SHC.tinyGravar = async function (produtos, erp) {
         const chaves = [...new Set((produtos || []).map(p => SHC.chaveSku(p.sku)).filter(Boolean))];
-        const atuais = chaves.length ? await chrome.storage.local.get(chaves) : {};
+        // v3.3 multi-empresa: lê e grava pelo caminho da empresa da conta aberta (SHC.areaEmpresa): o ERP de uma empresa nunca grava na outra.
+        const area = SHC.areaEmpresa ? SHC.areaEmpresa() : chrome.storage.local;
+        const atuais = chaves.length ? await area.get(chaves) : {};
         // F17a (auditoria 30/09): os retratos de TODAS as contas (antes só a aberta) e TODOS os SKUs de cada anúncio (antes só o 1º).
+        // v3.3: todas as contas DA MESMA EMPRESA (conta separada em Ajustes não entra na conta das outras).
         let cs = [];
-        try { cs = SHC.contas ? await SHC.contas() : []; } catch (e) { cs = []; }
+        try { cs = SHC.contasDaEmpresa ? await SHC.contasDaEmpresa() : SHC.contas ? await SHC.contas() : []; } catch (e) { cs = []; }
         const contas = cs.length ? cs : [{ sellerId: undefined, nome: '' }];
         const retratos = await Promise.all(contas.map(c => SHC.lerAnuncios(c.sellerId).catch(() => null)));
         const doMl = new Map(), porConta = contas.map(() => new Set());   // c|sku|X → [{familia, itemId}] dos anúncios dos retratos
@@ -128,7 +131,7 @@
         const achou = sem.length ? await SHC.custosDe([].concat(...sem.map(k => doMl.get(k)))) : new Map();
         const antigos = new Set(sem.filter(k => doMl.get(k).some(i => achou.get(i))));
         const d = SHC.tinyDecide(produtos, atuais, Date.now(), antigos, erp);
-        if (Object.keys(d.lote).length) await chrome.storage.local.set(d.lote);
+        if (Object.keys(d.lote).length) await area.set(d.lote);
         const gravadas = Object.keys(d.lote);
         return { atualizados: d.atualizados, semCusto: d.semCusto, mantidos: d.mantidos, noMl: nItens ? gravadas.filter(k => doMl.has(k)).length : null,
             noMlPorConta: contas.length > 1 ? contas.map((c, ci) => ({ nome: c.nome, n: gravadas.filter(k => porConta[ci].has(k)).length })) : null };

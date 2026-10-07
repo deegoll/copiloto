@@ -71,6 +71,8 @@ const O_QUE_FAZER = {
     sem_login_mp: 'Entre no Mercado Pago neste Chrome e sincronize de novo.',
     ads_sem_conta: 'Abra o Mercado Ads uma vez neste Chrome e clique em Sincronizar agora.',   // v3.1: conta de anúncios não liberada
     ads_escolher_conta: 'Abra o Mercado Ads e escolha a conta de anúncios. Depois clique em Sincronizar agora.',
+    // v3.3 (multi-empresa): o login do ML mudou no meio da leitura — parei para não gravar uma empresa na outra.
+    outra_conta: 'O Mercado Livre deste Chrome mudou de conta no meio da leitura. Parei para não misturar as empresas: sincronize de novo com a conta certa aberta.',
 };
 async function sincronizar(origem) {
     if (emAndamento) return emAndamento;
@@ -179,12 +181,23 @@ async function sincronizar(origem) {
         // Cada etapa depois dos anúncios falha sozinha: o que ela tinha gravado antes fica, e o status ganha erro<Etapa>.
         // resumo(r) = texto curto do que foi lido; r.semPermissao = etapa pulada (não é erro).
         // v2.10: etapa já feita neste ciclo não roda de novo (os campos do status dela voltam do ciclo no fim).
+        // v3.3 (multi-empresa): antes e depois de cada etapa, a sessão do ML ainda é da conta desta sincronização (contaSegue, 1 GET por minuto
+        // no máximo). Trocou: esta e as próximas etapas param ('outra_conta') e os meses lidos nesta rodada voltam para a fila (marcaReler).
+        let contaSync = null, trocou = false;
+        const conferirConta = async () => {
+            if (trocou || !contaSync || await contaSegue(contaSync)) return !trocou;
+            trocou = true;
+            await marcaReler(contaSync, st.inicio || Date.now()).catch(() => {});
+            return false;
+        };
         const etapa = async (id, fn, resumo, erroDe) => {
             if (feita(id)) return { pulou: true };
+            if (!(await conferirConta())) { await termina(id, 'erro', null, 'outra_conta'); return { erro: 'outra_conta' }; }
             await comeca(id);
             let e;
             try { const r = await fn(); e = r && r.falha ? { erro: codigo(r.falha) } : { r }; } catch (x) { e = { erro: 'ml_indisponivel' }; }
-            if (e.erro) await termina(id, 'erro', null, erroDe ? erroDe(e.erro) : e.erro);
+            if (!(await conferirConta())) e = { erro: 'outra_conta' };
+            if (e.erro) await termina(id, 'erro', null, erroDe && e.erro !== 'outra_conta' ? erroDe(e.erro) : e.erro);
             else await termina(id, e.r && (e.r.semPermissao || e.r.pulado) ? 'pulado' : 'ok', resumo(e.r || {}), null, e.r);
             return e;
         };
@@ -202,6 +215,7 @@ async function sincronizar(origem) {
                 if (cic && !an.retomada) cic.conta = an.sellerId;
                 if (!an.retomada) await termina('anuncios', 'ok', SHC.resumoLeituraAnuncios(an.snap), null, an);   // F20: "… · li X de Y linhas do ML"
                 const conta = an.sellerId;
+                contaSync = conta;
                 // v2.5.3 (D6): 1ª sincronização depois de instalar/atualizar, ou conta ainda sem dados fiscais → a parte fiscal começa JÁ, junto
                 // com as promoções (sem o andamento: a barra é da etapa atual). A etapa 'saude' depois só usa o resultado.
                 try {
@@ -265,6 +279,9 @@ async function sincronizar(origem) {
                     return atualizarAlertas(conta); },
                     r => (r.anomalias && r.anomalias.total ? SHC.qtd(r.anomalias.total, 'ponto de atenção', 'pontos de atenção') : 'Nada pede sua atenção agora'));
                 al = e.r || null;
+                // v3.3 multi-empresa: no fim, 1 conferência SEM o guardado (a troca entre duas conferências não passa sem ser vista).
+                if (!trocou && !(await contaSegue(conta, true))) { trocou = true; await marcaReler(conta, st.inicio || Date.now()).catch(() => {}); }
+                if (trocou) erro = 'outra_conta';
             }
         } catch (e) { erro = String((e && e.message) || e); }
 
@@ -371,10 +388,12 @@ function lerHistorico() {
         await gravaHistorico(Object.assign(h, { lendo: true, rodadas }));
         // Andamento: recalcula "N de 12" no máximo a cada 3 s; nas outras chamadas só mantém o worker acordado. O diagnóstico por mês
         // (conta.meses) vai para a etapa correspondente do status.
-        let ultima = Date.now(), etapaHist = 'faturamento';
-        const diag = {};
+        let ultima = Date.now(), etapaHist = 'faturamento', trocouHist = false;
+        const inicioHist = Date.now(), diag = {};
         const anda = async (patch, conta_) => {
             if (conta_ && conta_.meses) diag[etapaHist] = juntaMeses(diag[etapaHist], conta_.meses);
+            // v3.3 (multi-empresa): o login mudou no meio do histórico → para antes do próximo pedido (histParar) e os meses desta rodada voltam à fila.
+            if (!histParar && !(await contaSegue(conta))) { histParar = true; trocouHist = true; }
             if (Date.now() - ultima < 3000 || histParar) return bateVivo(null);
             ultima = Date.now();
             await gravaHistorico(Object.assign(await historicoConta(conta), { lendo: true, rodadas }), diag);
@@ -388,6 +407,7 @@ function lerHistorico() {
             if (!histParar) lido.nfe = await sincronizarNfe(conta, anda, 'historico');
             if (!histParar) await gravarRateio(conta).catch(() => {});   // meses novos no rateio das faturas
         } catch (e) { lido.erro = String((e && e.message) || e); /* o que foi gravado por mês fica; o resto na próxima vez */ }
+        if (trocouHist) { await marcaReler(conta, inicioHist).catch(() => {}); lido.erro = 'outra_conta'; }
         h = await historicoConta(conta);
         h.lido = lido;
         await gravaHistorico(Object.assign(h, { lendo: false, rodadas: histParar ? rodadas : rodadas + 1 }), diag);

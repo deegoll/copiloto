@@ -63,7 +63,9 @@ async function atualizarAlertas(conta) {
         const [saiu, promos] = await Promise.all([SHC.lerChave('promoSaiu:' + c), SHC.lerPromos(c)]), its = (an && an.itens) || [];
         promo = SHC.promoAlertas(saiu, SHC.promoTermina(its, promos, hoje, cfg.promo_aviso_dias), Date.now(), its);
     } catch (e) { promo = []; /* derivado: nunca derruba os alertas */ }
-    const anom = SHC.anomalias(c, { alertas: r, posvenda: pvd, frete: frh, conferir: cnf, rateio: rat, cert, medidas: med, titulos, perguntas: perg, reputacao: rep, remessas, nfe, fatura, familias, prejuizo, promo }, cfg);   // v2.8: módulos desligados não contam
+    const experiencia = await SHC.lerChave('exp:' + c);   // v3.3: experiência de compra (juntarExperiencia); tarefas = avisos da lista de Anúncios (fiscal:<conta>)
+    const anom = SHC.anomalias(c, { alertas: r, posvenda: pvd, frete: frh, conferir: cnf, rateio: rat, cert, medidas: med, titulos, perguntas: perg, reputacao: rep, remessas, nfe, fatura, familias, prejuizo, promo,
+        experiencia, itens: (an && an.itens) || [], tarefas: (fiscal && fiscal.tarefas) || [] }, cfg);   // v2.8: módulos desligados não contam
     const snapAnom = Object.assign({ ts: Date.now() }, anom, { itens: anom.itens.slice(0, 200) });
     await chrome.storage.local.set({ 'shc:anomalias': snapAnom, ['shc:anomalias:' + c]: snapAnom });   // por conta também: "suas contas juntas" (SHC.dadosContas)
     const rp = await roboPromoPassada(c, cfg).catch(() => null);   // v2.9: robô de promoções (só sugere; nenhum GET a mais)

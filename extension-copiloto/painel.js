@@ -627,11 +627,14 @@
     async function desenhaContas() {
         let cs = [];
         try { cs = SHC.contas ? await SHC.contas() : []; } catch (e) { cs = []; }
-        const el = $('#listaContas'), ap = cfg.apelidos || {};
+        const el = $('#listaContas'), ap = cfg.apelidos || {}, sep = cfg.empresaSeparada || {};
         if (!el) return;
         el.innerHTML = cs.length ? cs.map(c => {
             const nomeAp = ap[c.sellerId];
-            return `<div class="campo" style="background:#F8FAFC;border:1px solid var(--linha);border-left:3px solid ${c.atual ? 'var(--verde)' : '#D0D5DD'};border-radius:10px;padding:9px 10px 10px"><div class="conta-linha"><b>${esc(c.nome)}</b><span class="contatag">ID …${esc(c.sellerId.slice(-4))}</span>${c.atual ? '<span class="contatag agora">aberta agora</span>' : ''}</div><label for="ap-${esc(c.sellerId)}" style="font-weight:500;color:var(--suave)">Apelido próprio (opcional; no lugar do nome do ML)</label><input class="inp" id="ap-${esc(c.sellerId)}" data-apelido="${esc(c.sellerId)}" maxlength="40" placeholder="Ex.: Loja 1" value="${esc(nomeAp || '')}"></div>`;
+            return `<div class="campo" style="background:#F8FAFC;border:1px solid var(--linha);border-left:3px solid ${c.atual ? 'var(--verde)' : '#D0D5DD'};border-radius:10px;padding:9px 10px 10px"><div class="conta-linha"><b>${esc(c.nome)}</b><span class="contatag">ID …${esc(c.sellerId.slice(-4))}</span>${c.atual ? '<span class="contatag agora">aberta agora</span>' : ''}</div><label for="ap-${esc(c.sellerId)}" style="font-weight:500;color:var(--suave)">Apelido próprio (opcional; no lugar do nome do ML)</label><input class="inp" id="ap-${esc(c.sellerId)}" data-apelido="${esc(c.sellerId)}" maxlength="40" placeholder="Ex.: Loja 1" value="${esc(nomeAp || '')}">`
+                // v3.3 multi-empresa: conta de outra empresa tem custos por SKU, imposto, margem, despesas e ERP só dela (store.js, SHC.empresaSeparada).
+                + (cs.length > 1 ? `<label style="display:flex;gap:6px;align-items:flex-start;margin-top:8px;font-weight:500"><input type="checkbox" data-empresa="${esc(c.sellerId)}"${sep[c.sellerId] === true ? ' checked' : ''}>`
+                    + `<span>Outra empresa: custos por SKU, imposto, margem, despesas fixas e ERP só desta conta</span></label>` : '') + '</div>';
         }).join('')
             : '<p class="sub">Entre no Mercado Livre e sincronize pelo Copiloto: cada conta em que você entrar neste Chrome aparece aqui.</p>';
         $('#salvarApelidos').hidden = !cs.length;
@@ -639,7 +642,9 @@
     $('#salvarApelidos').addEventListener('click', async () => {
         const ok = $('#okApelidos'), txt = {};
         document.querySelectorAll('[data-apelido]').forEach(i => { txt[i.dataset.apelido] = i.value; });
-        try { cfg = await SHC.salvarCfg({ apelidos: SHC.apelidosLimpos(txt) }); } catch (e) { ok.className = 'msg erro'; ok.textContent = FALHA; return; }
+        const sep = {}, temCaixa = !!document.querySelector('[data-empresa]');   // v3.3: contas de outra empresa (só com 2+ contas)
+        document.querySelectorAll('[data-empresa]').forEach(i => { if (i.checked && /^\d{6,15}$/.test(i.dataset.empresa)) sep[i.dataset.empresa] = true; });
+        try { cfg = await SHC.salvarCfg(Object.assign({ apelidos: SHC.apelidosLimpos(txt) }, temCaixa ? { empresaSeparada: sep } : {})); } catch (e) { ok.className = 'msg erro'; ok.textContent = FALHA; return; }
         ok.className = 'ok'; ok.textContent = '✓ Salvo';
         setTimeout(() => { ok.textContent = ''; }, 4000);
     });
