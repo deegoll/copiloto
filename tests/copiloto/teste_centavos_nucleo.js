@@ -29,10 +29,9 @@
 //   4) CORRIGIDA (#33): tarifa 'ads' DENTRO do extrato do pedido (GMV Pay, mapeado por suposição; a conta do extrato fecha com ela) deixava
 //      o repasse do motor ≠ settlement (84 × 54) e a conciliação "a menor" −R$ 30 falso. Agora o Ads com origem_pagamento 'venda' (o
 //      adaptador diz que veio no extrato/escrow do pedido) sai do repasse; a conta na tela mostra "Ads pago com o repasse" (seções G e K).
-//   5) tiktok.transacaoDoExtrato: frete com valor ilegível/ausente vira 0 (dinheiro(...) || 0, sem aviso próprio) e {amount:""} vira 0
-//      (Number("") = 0): frete.cheio = 0 e frete_venda inventado; a extensão usa o detalhe "exato" assim mesmo → Repasse na tela ≠ o que o
-//      TikTok pagou e "a menor/a maior" falso, em vez de "não lido". (Receita e tarifa ilegíveis geram aviso no núcleo, mas o aviso não chega
-//      à tela e o pedido segue "exato".)
+//   5) CORRIGIDA (#34): frete ilegível virava 0 e {amount:""} virava 0 (Number("") = 0); a extensão usava o detalhe como "exato" assim mesmo
+//      (Repasse R$ 100 × R$ 80 pagos, "a menor" falso). Agora vazio → null, frete ilegível = frete não lido com aviso, e o detalhe que não fecha
+//      (ou com valor ilegível) nunca é exato: vale a lista do Financeiro, ou o pedido fica "não lido" (seções A, G e K).
 //   6) SHC.tt.resumo: o KPI "Lucro 30 dias" (e a receita/margem) soma só status 'ok'; o pedido CANCELADO com tarifa/frete que ficou
 //      (lucro −R$ 8,50) entra em Produtos e na conciliação, mas some do KPI: KPI R$ 37,00 × produto R$ 28,50 na mesma tela.
 //   7) tarifas.simular: classe pela margem JÁ arredondada a 1 casa: prejuízo de −R$ 0,01 em R$ 300 (margem −0,003% → −0) sai "lucrativo".
@@ -153,7 +152,9 @@ console.log('A. Régua: CopilotoNucleo.util (r2, soma, num) × SHC.r2/SHC.moeda;
     ok(['', 'abc', '1,234.56', '6abc', '1.234.5', '1,2,3', 'R$', '1e9'].every(s => U.num(s) === null) && NADA.every(v => U.num(v) === null),
         'U.num: texto que não é número → null (melhor sem número do que com um errado)');
     ok([null, undefined, {}, { amount: 'abc' }, { amount: null }, { amount: { amount: 'x' } }, { format_price: 'grátis' }, 'abc', NaN, Infinity].every(v => N.dinheiro(v) === null),
-        'dinheiro do TikTok: ausente/ilegível → null ({amount:""} vira 0: divergência 5)');
+        'dinheiro do TikTok: ausente/ilegível → null');
+    ok([{ amount: '' }, { amount: '   ' }, { amount: { amount: '' } }, '', '  '].every(v => N.dinheiro(v) === null) && N.dinheiro({ amount: '0' }) === 0 && N.dinheiro({ amount: '0.00' }) === 0,
+        'dinheiro do TikTok: vazio ({amount:""}, "", só espaço) → null, nunca R$ 0,00 (antes Number("") = 0); "0"/"0.00" continuam 0 — #34');
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -738,7 +739,14 @@ console.log('G. Adaptador TikTok (núcleo): repasse = preço − tarifas − fre
     const ruim = respTransacao(g0); ruim.data.order_record.out_come.fee_list[0].amount = { amount: 'abc' };
     const tr = N.transacaoDoExtrato(ruim, { conta: '7000000001' });
     ok(tr.avisos.some(a => /tarifa sem valor/.test(a)) && tr.avisos.some(a => /extrato não fecha/.test(a)) && tr.confere.diferenca === -U.r2(g0.fees[0].c / 100),
-        'tarifa ilegível: o extrato avisa "tarifa sem valor" e "não fecha" com a diferença exata (a extensão ainda não leva o aviso à tela — divergência 5)');
+        'tarifa ilegível: o extrato avisa "tarifa sem valor" e "não fecha" com a diferença exata (a extensão não usa esse extrato como exato: seção K)');
+    // #34: frete com valor vazio/ilegível → frete não lido (sem valores, sem frete_venda inventado), aviso próprio e o extrato "não fecha";
+    // settlement e saldo vazios → não lido (antes {amount:""} virava R$ 0,00).
+    const fr = respTransacao(g0); fr.data.order_record.shipping_fee_detail.fee_list[0].amount = { amount: '', currency: 'BRL' };
+    const tf = N.transacaoDoExtrato(fr, { conta: '7000000001' }), stV = respTransacao(g0); stV.data.order_record.settlement_amount = { amount: '' };
+    ok(tf.avisos.some(a => /^frete sem valor/.test(a)) && tf.frete.cheio === null && tf.frete.cobrado_vendedor === null && !tf.tarifas.some(x => x.tipo === 'frete_venda')
+        && (g0.frete.liq === 0 || tf.confere.diferenca !== 0) && M.ehNaoLido(N.transacaoDoExtrato(stV, { conta: '7000000001' }).repasse) && M.ehNaoLido(N.saldoDisponivel({ code: 0, data: { amount: { amount: '' } } })),
+        'frete com valor vazio: "frete sem valor", frete não lido e sem frete_venda inventado (antes cheio 0 e −R$ 12 de frete); settlement e saldo vazios → não lido — #34');
 
     // Detalhe do pedido (Pedidos): preço de origem por SKU. 1 SKU (ou preço cheio por SKU) = exato; vários com desconto: pelo maior resto,
     // Σ itens = preço de origem no centavo (antes cada linha = r2(origem × pago ÷ Σ) sem o resto: divergência 1, corrigida #30).
@@ -968,7 +976,7 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         b.replace(/<div class="cl[^"]*"><span>(.*?)<\/span><b>(.*?)<\/b><\/div>/g, (m, rot, v) => { linhas.push({ rot: rot.replace(/<[^>]+>/g, '').replace(/\s*estimado$/, '').trim(), c: deMoeda(v), txt: v }); return m; });
         // Cada linha ↔ o campo do resultado (com o sinal da tela: o que sai do vendedor aparece −, estorno +).
         const campo = l => {
-            if (l.rot === 'Preço') return x.bruto;
+            if (l.rot === 'Preço') return (x.faltando || []).indexOf('preco') >= 0 ? null : x.bruto;
             if (l.rot === 'Seu desconto') return -x.desconto_vendedor;
             if (l.rot === 'Reembolso ao cliente') return -x.reembolso;
             if (ROT[l.rot]) return -x.tarifas_por_tipo[ROT[l.rot]];
@@ -1063,6 +1071,29 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
             && luc && luc.c === 3800 && 5400 + somaC(ls.slice(iRep + 1).filter(l => l !== luc), l => l.c) === 3800 && !/diferença do esperado/.test(h33)
             && cent(prod.repasse) === 5400 && /repasse R\$ 54,00/.test(subProd),
             'GMV Pay na tela (#33): "Ads pago com o repasse −R$ 30,00", Repasse R$ 54,00 = o que o TikTok pagou (antes R$ 84,00 e "a menor" −R$ 30,00); Preço − tarifas − Ads = Repasse; Repasse − custo − imposto = Lucro R$ 38,00; produto com repasse R$ 54,00');
+    }
+
+    {   // #34: o extrato do pedido com o custo do frete vazio ({amount:""}), settlement R$ 80,00 e o cliente pagou R$ 12,00.
+        const C34 = '7000000034', a34 = v => ({ amount: v, currency: 'BRL' }), id34 = '5770000000000000800';
+        const ext34 = { code: 0, data: { order_record: { statement_detail_id: '5770000000000000801', statement_id: '8800000034', trade_order_id: id34, placed_time: msDia('2026-09-20'), settlement_status: 2,
+            settlement_time: msDia('2026-09-24'), settlement_amount: a34('80.00'), in_come: { fee_list: [{ type: 'subtotal_before_discount', amount: a34('100.00') }] },
+            out_come: { fee_list: [{ type: 'platform_commission', amount: a34('-6.00') }, { type: 'sfp_service_fee', amount: a34('-6.00') }] },
+            shipping_fee_detail: { fee_list: [{ type: 'fbm_shipping_fee', amount: a34('') }, { type: 'x', starling: { starling_key: 'customer_shipping_payment' }, amount: a34('12.00') }] } } } };
+        await TT.gravarCaptura('transacao', ext34, C34, lidoEm);
+        const v34 = TT.resumo(await TT.ler(C34), { hoje: '2026-09-25' }), p34 = v34.pedidos[0], h34 = ABA.html(v34, { hoje: '2026-09-25' }), ls34 = contaTela(h34, id34);
+        const sob34 = (new RegExp('data-k="ped:' + id34 + '"><summary><span class="rlt"><b>[^<]*</b><span class="sobra [^"]*">([^<]*)<').exec(h34) || [])[1];
+        ok(p34.status === 'nao_lido' && !p34.exato && p34.repasse === null && p34.lucro_real === null && p34.avisos.some(a => /ilegível/.test(a)) && p34.avisos.some(a => /^frete sem valor/.test(a))
+            && Object.keys(v34.conciliacao.por_status).length === 0 && sob34 === 'não lido' && valorDe(ls34, 'Repasse do TikTok') === null && valorDe(ls34, 'Preço') === 10000
+            && !/R\$ 0,00/.test(h34.slice(h34.indexOf('data-k="ped:' + id34), h34.indexOf('</details>', h34.indexOf('data-k="ped:' + id34))))
+            && v34.kpis.nao_lidos === 1,
+            'extrato com frete vazio e sem a lista (#34): o pedido fica "não lido" (Repasse "—", nada de R$ 100,00 nem "a menor" −R$ 20,00 falso), com o aviso do núcleo');
+        // Com a lista do Financeiro do mesmo pedido: vale a lista (repasse = o do TikTok, tarifas estimadas), nunca o detalhe ilegível.
+        await TT.gravarCaptura('pedidos_fin', { code: 0, data: { order_records: [{ trade_order_id: id34, statement_detail_id: '5770000000000000801', statement_id: '8800000034', placed_time: msDia('2026-09-20'),
+            delivery_time: msDia('2026-09-21'), settlement_status: 2, settlement_time: msDia('2026-09-24'), earning_amount: a34('100.00'), fees: a34('-12.00'), shipping_amount: a34('-8.00'),
+            settlement_amount: a34('80.00'), sku_records: [{ sku_id: '1730000000000000934', quantity: 1, product_name: 'Produto 34', earning_amount: a34('100.00') }] }] } }, C34, lidoEm);
+        const q34 = TT.resumo(await TT.ler(C34), { hoje: '2026-09-25' }), r34 = q34.pedidos[0];
+        ok(!r34.exato && r34.estimado && r34.repasse === 80 && r34.tarifas_por_tipo.frete_venda === 8 && r34.avisos.some(a => /ilegível/.test(a)) && q34.conciliacao.diferenca === 0 && q34.conciliacao.por_status.ok === 1,
+            'o mesmo pedido com a lista do Financeiro (#34): vale a lista — repasse R$ 80,00 = o do TikTok, frete R$ 8,00, "estimado", conciliação ok');
     }
 
     console.log('\n' + nChecks + ' verificações.');

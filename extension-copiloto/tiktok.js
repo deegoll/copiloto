@@ -246,17 +246,21 @@
      * O detalhe do extrato (transaction/detail) só vale no lugar da lista do Financeiro quando cobre TODAS as linhas dela deste pedido.
      * Ex.: venda de 477,92 aberta no detalhe + estorno de −188 em outro extrato, lido só pela lista: o detalhe sozinho daria R$ 188 a mais.
      * Confere pelos ids (linha da lista = statement_detail_id = extrato_detalhe_id do detalhe) e pela soma dos repasses (até 0,01).
-     * → { usar, parcial }
+     * Extrato com valor vazio/ilegível ou que não fecha com o settlement do TikTok (aviso do núcleo) NUNCA vale como exato: ilegivel = true.
+     * → { usar, parcial, ilegivel }
      */
     TT.detalheCobre = function (ped, f, j) {
-        if (!j) return { usar: false, parcial: false };
-        if (!f || f.repasse === null) return { usar: true, parcial: false };
+        if (!j) return { usar: false, parcial: false, ilegivel: false };
+        const fecha = t => !!(t.confere && typeof t.confere.diferenca === 'number' && Math.abs(t.confere.diferenca) <= 0.01) && !(t.avisos || []).some(a => /sem valor/.test(a));
+        if (!valores(ped && ped.trans).every(fecha)) return { usar: false, parcial: false, ilegivel: true };
+        if (!f || f.repasse === null) return { usar: true, parcial: false, ilegivel: false };
         const abertos = valores(ped && ped.trans).map(t => t.extrato_detalhe_id).filter(Boolean);
         const falta = f.repasses.some(r => !/#extrato$/.test(String(r.id)) && abertos.indexOf(r.id) < 0);
         const parcial = falta || Math.abs(U.r2(U.soma(j.repasses, r => r.valor) - f.repasse)) > 0.01;
-        return { usar: !parcial, parcial };
+        return { usar: !parcial, parcial, ilegivel: false };
     };
     const AVISO_VOLTOU = 'reembolso total sem saber se o produto voltou: o custo do produto foi contado';
+    const AVISO_ILEGIVEL = 'o detalhe do extrato tem valor vazio/ilegível ou não fecha com o que o TikTok pagou';
 
     TT.lucroDoPedido = function (ped, ctx) {
         ctx = Object.assign({ custos: {}, cfg: {}, skumap: {} }, ctx || {});
@@ -281,6 +285,14 @@
             devolveu = (f.receita <= 0 && f.repasse < 0) || (reembolso > 0 && reembolso >= bruto - 0.01);
             if (reembolso > 0 && !devolveu) avisos.push('reembolso parcial de ' + String(reembolso.toFixed(2)).replace('.', ',') + ' (lista do Financeiro × detalhe do pedido)');
             if (cob.parcial) avisos.push('o detalhe do extrato cobre só parte das linhas deste pedido: vale a lista do Financeiro (tarifas estimadas)');
+            if (cob.ilegivel) avisos.push(AVISO_ILEGIVEL + ': vale a lista do Financeiro (tarifas estimadas)');
+        } else if (cob.ilegivel) {
+            // Só o detalhe do extrato, com valor ilegível ou sem fechar: "não lido" (nada de frete/tarifa R$ 0,00 inventado nem repasse a mais).
+            const recLida = !j0.avisos.some(a => /receita sem valor/.test(a));
+            bruto = det ? U.soma(det.pedido.itens, it => it.total) : (recLida ? j0.receita.bruto : null);
+            desconto = det ? det.pedido.desconto_vendedor || 0 : (recLida ? j0.receita.desconto_vendedor : 0);
+            tarifas = M.naoLido(AVISO_ILEGIVEL);
+            avisos.push(AVISO_ILEGIVEL); avisos.push.apply(avisos, j0.avisos);
         } else if (det) {
             bruto = U.soma(det.pedido.itens, it => it.total); desconto = det.pedido.desconto_vendedor || 0; estimar = true;
             // Devolvido e visto só em Pedidos: o detalhe não traz o valor do reembolso → total (o motor deixa só o SFP, que não volta).
@@ -313,7 +325,7 @@
         return Object.assign(r, {
             dia: data, canal_venda: pedido.canal_venda || null,
             estimado: !!((f && f.estimado) || (j && j.repasses.some(x => x.estimado)) || estimar || r.tarifas_estimadas || cob.parcial),
-            exato: !!j, lido_em: ped.lido_em || null, tela: j ? TT.TELA.transacao : (f ? TT.TELA.pedidos_fin : TT.TELA.pedido),
+            exato: !!j, lido_em: ped.lido_em || null, tela: j || (cob.ilegivel && !lista) ? TT.TELA.transacao : (f ? TT.TELA.pedidos_fin : TT.TELA.pedido),
             extratos: f ? f.extratos : [], data_prevista: (f && f.data_prevista) || null, status_repasse: f ? (f.estimado ? 'a_liberar' : 'disponivel') : null,
             itens: itens.map((x, i) => ({ sku: x.it.sku, sku_vendedor: x.s.sku || null, sku_id: x.it.anuncio_id || null, titulo: x.it.titulo, qtd: x.it.qtd, canal_venda: base[i].canal_venda || pedido.canal_venda || null })),
             _modelo: { pedido, tarifas: Array.isArray(tarifas) ? tarifas : [], repasses: j ? j.repasses : (f ? f.repasses : []), devolucoes },
