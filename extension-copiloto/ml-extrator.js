@@ -1621,6 +1621,16 @@
         + '|ajuda (a|ao|do) mercado livre|mercado livre (esta )?(analis|avali|decid|vai decid)|vamos (decidir|analisar|avaliar)|(decidi|analisa|avalia)remos|estamos (analis|avali|revis)'
         + '|nossa (decis|analise|avalia|revis)|\\bdecis(ao|oes)\\b|(decisao|analise) do mercado livre|em (analise|revisao)').test(semAcento(s));
     /**
+     * Revisão 3 (07/10/2026): a lista de palavras da mediação não fecha ("Vamos revisar o caso", "Em avaliação", "Analisando o caso" passavam).
+     * Agora é o contrário: a situação (detail-title) só entra no pedido de exclusão quando é uma das situações SEGURAS desta lista fechada
+     * (com, no máximo, uma data no fim). Qualquer outro texto, ou vazio, fica fora (na dúvida, não pede). O SHC.emMediacao continua como veto
+     * extra. Ampliar a lista quando a sessão local trouxer o retrato do detail-title.
+     */
+    const SITUACAO_SEGURA = new RegExp('^(?:aguardando (?:a )?sua resposta|aguardando (?:a )?devolucao(?: do produto)?|devolucao em andamento'
+        + '|(?:a )?reclamacao (?:foi )?(?:encerrada|resolvida|fechada))'
+        + '(?: (?:ate|em|desde|no dia|dia) (?:o dia )?\\d{1,2}(?: de [a-z]+| \\d{1,2})?(?: (?:de )?\\d{2,4})?)?$');
+    SHC.situacaoSegura = s => SITUACAO_SEGURA.test(semAcento(s)) && !SHC.emMediacao(s);
+    /**
      * Pedido de exclusão (reputação e experiência de compra) para os casos com um motivo excluível. g = { motivo, casos, naReputacao,
      * produtos?:[{sku, titulo} | 'título'], pedidos?:[nº] } (P.grupoExclusao monta no painel, já sem os casos em mediação).
      * '' quando o motivo não está nas regras de exclusão.
