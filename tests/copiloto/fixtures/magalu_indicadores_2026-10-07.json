@@ -1,0 +1,123 @@
+{
+  "canal": "magalu",
+  "tela": "indicadores",
+  "lido_em": "2026-10-07",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "GET",
+      "url": "https://ps-core-seller-lebron-api.magalu.com/api/v1/seller/indicators",
+      "parametros": [
+        "name",
+        "name",
+        "name",
+        "name",
+        "name",
+        "name",
+        "start_date",
+        "end_date",
+        "limit",
+        "skip"
+      ],
+      "status": 200,
+      "corpo": [
+        {
+          "seller": {
+            "id": "vendedor-x",
+            "tenant_id": "9000000000000000000000000000000000000000001"
+          },
+          "channel": {
+            "name": "magazineluiza"
+          },
+          "value": "0",
+          "name": "current_day_total_sales",
+          "date": "2026-10-07T22:12:06.178860Z",
+          "expire_at": "2026-10-14T22:12:06",
+          "refresh_date": "2026-10-07T23:12:06",
+          "created_at": null,
+          "extras": null
+        },
+        {
+          "seller": {
+            "id": "vendedor-x",
+            "tenant_id": "9000000000000000000000000000000000000000001"
+          },
+          "channel": {
+            "name": "magazineluiza"
+          },
+          "value": "0",
+          "name": "Produto 1",
+          "date": "2026-10-07T22:12:06.178860Z",
+          "expire_at": "2026-10-14T22:12:06",
+          "refresh_date": "2026-10-07T23:12:06",
+          "created_at": null,
+          "extras": null
+        },
+        {
+          "seller": {
+            "id": "vendedor-x",
+            "tenant_id": "9000000000000000000000000000000000000000001"
+          },
+          "channel": {
+            "name": "magazineluiza"
+          },
+          "value": "1458.9",
+          "name": "Produto 2",
+          "date": "2026-10-07T22:12:06.178860Z",
+          "expire_at": "2026-10-14T22:12:06",
+          "refresh_date": "2026-10-07T23:12:06",
+          "created_at": null,
+          "extras": null
+        },
+        {
+          "seller": {
+            "id": "vendedor-x",
+            "tenant_id": "9000000000000000000000000000000000000000001"
+          },
+          "channel": {
+            "name": "magazineluiza"
+          },
+          "value": "-51.18",
+          "name": "Produto 3",
+          "date": "2026-10-07T22:12:06.178860Z",
+          "expire_at": "2026-10-14T22:12:06",
+          "refresh_date": "2026-10-07T23:12:06",
+          "created_at": null,
+          "extras": null
+        },
+        {
+          "seller": {
+            "id": "vendedor-x",
+            "tenant_id": "9000000000000000000000000000000000000000001"
+          },
+          "channel": {
+            "name": "magazineluiza"
+          },
+          "value": "1124.37",
+          "name": "current_month_total_sales",
+          "date": "2026-10-07T22:12:06.178860Z",
+          "expire_at": "2026-10-14T22:12:06",
+          "refresh_date": "2026-10-07T23:12:06",
+          "created_at": null,
+          "extras": null
+        },
+        {
+          "seller": {
+            "id": "vendedor-x",
+            "tenant_id": "9000000000000000000000000000000000000000001"
+          },
+          "channel": {
+            "name": "magazineluiza"
+          },
+          "value": "-83.93",
+          "name": "Produto 4",
+          "date": "2026-10-07T22:12:06.178860Z",
+          "expire_at": "2026-10-14T22:12:06",
+          "refresh_date": "2026-10-07T23:12:06",
+          "created_at": null,
+          "extras": null
+        }
+      ]
+    }
+  ]
+}

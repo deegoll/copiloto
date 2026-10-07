@@ -1,0 +1,77 @@
+{
+  "canal": "magalu",
+  "tela": "indprodutos",
+  "lido_em": "2026-10-07",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "GET",
+      "url": "https://api-product-search.magalu.com/seller/v1/portfolios/indicators",
+      "parametros": [
+        "name",
+        "name",
+        "name",
+        "name",
+        "name",
+        "name",
+        "name",
+        "name",
+        "name",
+        "name"
+      ],
+      "status": 200,
+      "corpo": [
+        {
+          "name": "low_stock_products",
+          "date": "2026-10-07T22:22:20.067Z",
+          "value": 0
+        },
+        {
+          "name": "losing_competitiveness_products",
+          "date": "2026-10-07T22:22:20.067Z",
+          "value": 320
+        },
+        {
+          "name": "fulfillment_active",
+          "date": "2026-10-07T22:22:20.067Z",
+          "value": 100
+        },
+        {
+          "name": "reproved_products",
+          "date": "2026-10-07T22:22:20.067Z",
+          "value": 110
+        },
+        {
+          "name": "promotional_price",
+          "date": "2026-10-07T22:22:20.067Z",
+          "value": 13
+        },
+        {
+          "name": "out_of_stock_products",
+          "date": "2026-10-07T22:22:20.067Z",
+          "value": 0
+        },
+        {
+          "name": "unpublished_products",
+          "date": "2026-10-07T22:22:20.067Z",
+          "value": 114
+        },
+        {
+          "name": "low_relevance_products",
+          "date": "2026-10-07T22:22:20.067Z",
+          "value": 0
+        },
+        {
+          "name": "blocked_products",
+          "date": "2026-10-07T22:22:20.067Z",
+          "value": 108
+        },
+        {
+          "name": "low_score_products",
+          "date": "2026-10-07T22:22:20.067Z",
+          "value": 53
+        }
+      ]
+    }
+  ]
+}

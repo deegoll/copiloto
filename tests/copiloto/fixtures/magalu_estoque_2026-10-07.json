@@ -1,0 +1,188 @@
+{
+  "canal": "magalu",
+  "tela": "estoque",
+  "lido_em": "2026-10-07",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/stocks/SKU-M7/summary",
+      "parametros": [],
+      "status": 200,
+      "corpo": [
+        {
+          "modality": "fulfillment",
+          "available": 0,
+          "quantity": 0
+        },
+        {
+          "modality": "self",
+          "available": 0,
+          "quantity": 1355
+        }
+      ]
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/stocks/SKU-M9/summary",
+      "parametros": [],
+      "status": 200,
+      "corpo": [
+        {
+          "quantity": 0,
+          "available": 0,
+          "modality": "fulfillment"
+        },
+        {
+          "quantity": 1348,
+          "available": 0,
+          "modality": "self"
+        }
+      ]
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/stocks/SKU-M1/summary",
+      "parametros": [],
+      "status": 200,
+      "corpo": [
+        {
+          "quantity": 0,
+          "modality": "fulfillment",
+          "available": 0
+        },
+        {
+          "quantity": 1355,
+          "modality": "self",
+          "available": 0
+        }
+      ]
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/stocks/SKU-M6/summary",
+      "parametros": [],
+      "status": 200,
+      "corpo": [
+        {
+          "available": 0,
+          "modality": "fulfillment",
+          "quantity": 0
+        },
+        {
+          "available": 0,
+          "modality": "self",
+          "quantity": 1354
+        }
+      ]
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/stocks/SKU-M10/summary",
+      "parametros": [],
+      "status": 200,
+      "corpo": [
+        {
+          "available": 0,
+          "quantity": 0,
+          "modality": "fulfillment"
+        },
+        {
+          "available": 0,
+          "quantity": 1351,
+          "modality": "self"
+        }
+      ]
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/stocks/SKU-M3/summary",
+      "parametros": [],
+      "status": 200,
+      "corpo": [
+        {
+          "quantity": 0,
+          "modality": "fulfillment",
+          "available": 0
+        },
+        {
+          "quantity": 1355,
+          "modality": "self",
+          "available": 0
+        }
+      ]
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/stocks/SKU-M2/summary",
+      "parametros": [],
+      "status": 200,
+      "corpo": [
+        {
+          "modality": "fulfillment",
+          "quantity": 0,
+          "available": 0
+        },
+        {
+          "modality": "self",
+          "quantity": 1346,
+          "available": 0
+        }
+      ]
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/stocks/SKU-M5/summary",
+      "parametros": [],
+      "status": 200,
+      "corpo": [
+        {
+          "quantity": 0,
+          "available": 0,
+          "modality": "fulfillment"
+        },
+        {
+          "quantity": 1355,
+          "available": 0,
+          "modality": "self"
+        }
+      ]
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/stocks/SKU-M4/summary",
+      "parametros": [],
+      "status": 200,
+      "corpo": [
+        {
+          "modality": "fulfillment",
+          "quantity": 0,
+          "available": 0
+        },
+        {
+          "modality": "self",
+          "quantity": 1347,
+          "available": 0
+        }
+      ]
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/stocks/SKU-M8/summary",
+      "parametros": [],
+      "status": 200,
+      "corpo": [
+        {
+          "quantity": 0,
+          "modality": "fulfillment",
+          "available": 0
+        },
+        {
+          "quantity": 1354,
+          "modality": "self",
+          "available": 0
+        }
+      ]
+    }
+  ]
+}

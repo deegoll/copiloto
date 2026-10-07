@@ -1,0 +1,2124 @@
+{
+  "canal": "magalu",
+  "tela": "pedidos",
+  "lido_em": "2026-10-07",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "GET",
+      "url": "https://magalu-sellers.magalu.com/ps-core-order/api/v0/packages",
+      "parametros": [
+        "purchased_at__gte",
+        "purchased_at__lte",
+        "_limit",
+        "_offset",
+        "delivery_type_priority"
+      ],
+      "status": 200,
+      "corpo": {
+        "meta": {
+          "page": {
+            "limit": 8,
+            "offset": 0,
+            "count": 8,
+            "max_limit": 1009
+          },
+          "links": {
+            "next": "?_offset=10&limit=10",
+            "self": "?_offset=0&limit=10"
+          }
+        },
+        "results": [
+          {
+            "external_id": "900000000000000000000000000000000001",
+            "organization": {
+              "external_id": "9000000002"
+            },
+            "marketplace": {
+              "external_id": "900000000000003"
+            },
+            "seller": {
+              "external_id": "vendedor-x"
+            },
+            "order": {
+              "external_id": "9000000000000004",
+              "purchased_at": "2026-10-05T21:33:18Z",
+              "approved_at": "2026-10-06T04:50:00Z",
+              "customer": {
+                "name": "***",
+                "cpf": "***"
+              }
+            },
+            "sub_order": {
+              "external_id": "900000000000000000000000000000000001"
+            },
+            "code": "900000000000000000005",
+            "status": {
+              "external_id": "shipped",
+              "description": "Produto 1"
+            },
+            "items": [
+              {
+                "external_id": "ehj0h1d5f1",
+                "quantity": 1,
+                "freight": "29.35",
+                "discount": "59",
+                "total": "264.82",
+                "invoice_external_id": "90000000000000000000000000000000000000000006",
+                "invoice_can_be_replaced": false,
+                "product": {
+                  "seller_sku": "SKU-1",
+                  "description": "Produto 2",
+                  "price": "294.34",
+                  "brand": "Marca X",
+                  "image_url": "https://exemplo.invalid/imagem.jpg"
+                },
+                "fee": {
+                  "total": "26.45",
+                  "tech_total": "0",
+                  "sub_total": "250.19"
+                }
+              }
+            ],
+            "shipping": {
+              "amount": "29.35",
+              "shipped_at": "2026-10-06T13:08:40Z",
+              "tracking_url": "https://rastreio.magalog.com.br/",
+              "shipping_provider": {
+                "external_id": "magalog",
+                "name": "***",
+                "description": "***"
+              },
+              "deadline": {
+                "value": 4,
+                "precision": "days",
+                "workday": true,
+                "limit_date": "2026-10-14",
+                "posting_limit_date": "2026-10-06T14:00:00Z"
+              },
+              "logistic_network": {
+                "external_id": "direta",
+                "description": "***"
+              },
+              "drop_off_location": {
+                "type": "package_shipping_drop_off",
+                "external_id": "908",
+                "street": "***",
+                "number": "9009",
+                "complement": "***",
+                "district": "***",
+                "city": "***",
+                "state": "PR",
+                "reference": "N/A",
+                "zipcode": "***",
+                "additional_fields": {
+                  "cnpj": "***",
+                  "drop_off_limit_time": "1177"
+                }
+              },
+              "carrier_description": "Magalu Entregas",
+              "shipping_label": {
+                "status": {
+                  "external_id": "shipped",
+                  "description": "***",
+                  "status_date": "2026-10-06T19:27:46.315000Z"
+                },
+                "label_core_shipping_uuid": "900000000000000000000000000000000010",
+                "additional_fields": {
+                  "show_ship_button": false
+                }
+              },
+              "additional_fields": {
+                "mle": true,
+                "meta": {
+                  "fee_freight": 0,
+                  "interest_amount": 0,
+                  "delivery_type_id": "911",
+                  "isInterestWithheld": true,
+                  "delivery_parameters": {
+                    "type": "drop_off",
+                    "provider": "magalog",
+                    "delivery_id": "90000000000000000000000000000000000012",
+                    "modality_type": "conventional",
+                    "shipping_name": "***",
+                    "shipping_type": "Convencional",
+                    "delivery_option_id": "90000000000000000000000000000013",
+                    "quotation_provider": "magalog",
+                    "delivery_time_description": "Texto 1"
+                  }
+                },
+                "fulfillment": false,
+                "delivery_type": "Agência Magalu",
+                "shipping_name": "***",
+                "shipping_type": "Convencional",
+                "delivery_option": {
+                  "profile_id": "911",
+                  "delivery_type": "drop_off",
+                  "modality_type": "conventional",
+                  "delivery_type_id": "911",
+                  "delivery_option_id": "90000000000000000000000000000013",
+                  "quotation_provider": "magalog"
+                },
+                "shipping_platform_id": "ironhide",
+                "quotation_delivery_name": "Magalu Entregas",
+                "display_time_posting_limit_date": true
+              }
+            },
+            "invoices": [
+              {
+                "external_id": "90000000000000000000000000000000000000000006",
+                "key": "90000000000000000000000000000000000000000006",
+                "status": {
+                  "id": "approved"
+                },
+                "type": "sale"
+              }
+            ],
+            "package_lock": {
+              "external_id": "mle_delivery",
+              "type": "mle_delivery",
+              "description": "Produto 3"
+            },
+            "additional_fields": {
+              "items": [
+                {
+                  "uuid": "900000000000000000000000000000000014",
+                  "external_id": "ehj0h1d5f1"
+                }
+              ],
+              "shared_freight_status": "Em apuração"
+            },
+            "source_channel": {
+              "external_id": "9000000000015",
+              "description": "Produto 4"
+            },
+            "allow_seller_view": true,
+            "allow_seller_view_at": "2026-10-05T21:34:00.639000Z",
+            "origin_branch_id": "908",
+            "origin_branch_name": "vendedor-x-CD1",
+            "package_identifiers": {
+              "keys": [
+                {
+                  "name": "label_status",
+                  "value": "shipped"
+                },
+                {
+                  "name": "weight_class",
+                  "value": "light_weight"
+                },
+                {
+                  "name": "customer_name",
+                  "value": "Cliente"
+                },
+                {
+                  "name": "delivery_type",
+                  "value": "ship_ml_agency_drop_off"
+                },
+                {
+                  "name": "invoice_status",
+                  "value": "approved"
+                },
+                {
+                  "name": "customer_document",
+                  "value": "90000000016"
+                },
+                {
+                  "name": "posting_situation",
+                  "value": "2026-10-06T14:00:00Z"
+                },
+                {
+                  "name": "deadline_situation",
+                  "value": "2026-10-14"
+                },
+                {
+                  "name": "total",
+                  "value": "264.82"
+                },
+                {
+                  "name": "source_channel",
+                  "value": "MagazineLuiza"
+                }
+              ]
+            }
+          },
+          {
+            "external_id": "900000000000000000000000000000000017",
+            "organization": {
+              "external_id": "9000000002"
+            },
+            "marketplace": {
+              "external_id": "900000000000003"
+            },
+            "seller": {
+              "external_id": "vendedor-x"
+            },
+            "order": {
+              "external_id": "9000000000000018",
+              "purchased_at": "2026-10-03T09:12:59Z",
+              "approved_at": "2026-10-03T09:18:05Z",
+              "customer": {
+                "name": "***",
+                "cpf": "***"
+              }
+            },
+            "sub_order": {
+              "external_id": "900000000000000000000000000000000017"
+            },
+            "code": "900000000000000000019",
+            "status": {
+              "external_id": "shipped",
+              "description": "Produto 1"
+            },
+            "items": [
+              {
+                "external_id": "gg138hh314",
+                "quantity": 1,
+                "freight": "23.46",
+                "discount": "0",
+                "total": "234.11",
+                "invoice_external_id": "90000000000000000000000000000000000000000020",
+                "invoice_can_be_replaced": false,
+                "product": {
+                  "seller_sku": "SKU-2",
+                  "description": "Produto 5",
+                  "price": "210.65",
+                  "brand": "Marca X",
+                  "image_url": "https://exemplo.invalid/imagem.jpg"
+                },
+                "fee": {
+                  "total": "23.17",
+                  "tech_total": "0",
+                  "sub_total": "210.65"
+                }
+              }
+            ],
+            "shipping": {
+              "amount": "23.46",
+              "shipped_at": "2026-10-05T13:14:25Z",
+              "tracking_url": "https://rastreio.magalog.com.br/",
+              "shipping_provider": {
+                "external_id": "magalog",
+                "name": "***",
+                "description": "***"
+              },
+              "deadline": {
+                "value": 8,
+                "precision": "days",
+                "workday": true,
+                "limit_date": "2026-10-19",
+                "posting_limit_date": "2026-10-05T14:00:00Z"
+              },
+              "logistic_network": {
+                "external_id": "direta",
+                "description": "***"
+              },
+              "drop_off_location": {
+                "type": "package_shipping_drop_off",
+                "external_id": "908",
+                "street": "***",
+                "number": "9009",
+                "complement": "***",
+                "district": "***",
+                "city": "***",
+                "state": "PR",
+                "reference": "N/A",
+                "zipcode": "***",
+                "additional_fields": {
+                  "cnpj": "***",
+                  "drop_off_limit_time": "1177"
+                }
+              },
+              "carrier_description": "Magalu Entregas",
+              "shipping_label": {
+                "status": {
+                  "external_id": "shipped",
+                  "description": "***",
+                  "status_date": "2026-10-05T20:25:32.518000Z"
+                },
+                "label_core_shipping_uuid": "900000000000000000000000000000000022",
+                "additional_fields": {
+                  "show_ship_button": false
+                }
+              },
+              "additional_fields": {
+                "mle": true,
+                "meta": {
+                  "fee_freight": 0,
+                  "interest_amount": 0,
+                  "delivery_type_id": "911",
+                  "isInterestWithheld": true,
+                  "delivery_parameters": {
+                    "type": "drop_off",
+                    "provider": "magalog",
+                    "delivery_id": "90000000000000000000000000000000000023",
+                    "modality_type": "conventional",
+                    "shipping_name": "***",
+                    "shipping_type": "Convencional",
+                    "delivery_option_id": "90000000000000000000000000000024",
+                    "quotation_provider": "magalog",
+                    "delivery_time_description": "Texto 2"
+                  }
+                },
+                "fulfillment": false,
+                "delivery_type": "Agência Magalu",
+                "shipping_name": "***",
+                "shipping_type": "Convencional",
+                "delivery_option": {
+                  "profile_id": "911",
+                  "delivery_type": "drop_off",
+                  "modality_type": "conventional",
+                  "delivery_type_id": "911",
+                  "delivery_option_id": "90000000000000000000000000000024",
+                  "quotation_provider": "magalog"
+                },
+                "shipping_platform_id": "ironhide",
+                "quotation_delivery_name": "Magalu Entregas",
+                "display_time_posting_limit_date": true
+              }
+            },
+            "invoices": [
+              {
+                "external_id": "90000000000000000000000000000000000000000020",
+                "key": "90000000000000000000000000000000000000000020",
+                "status": {
+                  "id": "approved"
+                },
+                "type": "sale"
+              }
+            ],
+            "package_lock": {
+              "external_id": "mle_delivery",
+              "type": "mle_delivery",
+              "description": "Produto 3"
+            },
+            "additional_fields": {
+              "items": [
+                {
+                  "uuid": "900000000000000000000000000000000025",
+                  "external_id": "gg138hh314"
+                }
+              ],
+              "shared_freight_status": "Em apuração"
+            },
+            "source_channel": {
+              "external_id": "9000000000015",
+              "description": "Produto 4"
+            },
+            "allow_seller_view": true,
+            "allow_seller_view_at": "2026-10-03T09:13:40.702000Z",
+            "origin_branch_id": "908",
+            "origin_branch_name": "vendedor-x-CD1",
+            "package_identifiers": {
+              "keys": [
+                {
+                  "name": "label_status",
+                  "value": "shipped"
+                },
+                {
+                  "name": "weight_class",
+                  "value": "light_weight"
+                },
+                {
+                  "name": "customer_name",
+                  "value": "Cliente"
+                },
+                {
+                  "name": "delivery_type",
+                  "value": "ship_ml_agency_drop_off"
+                },
+                {
+                  "name": "invoice_status",
+                  "value": "approved"
+                },
+                {
+                  "name": "customer_document",
+                  "value": "90000000026"
+                },
+                {
+                  "name": "posting_situation",
+                  "value": "2026-10-05T14:00:00Z"
+                },
+                {
+                  "name": "deadline_situation",
+                  "value": "2026-10-19"
+                },
+                {
+                  "name": "total",
+                  "value": "234.11"
+                },
+                {
+                  "name": "source_channel",
+                  "value": "MagazineLuiza"
+                }
+              ]
+            }
+          },
+          {
+            "external_id": "900000000000000000000000000000000027",
+            "organization": {
+              "external_id": "9000000002"
+            },
+            "marketplace": {
+              "external_id": "900000000000003"
+            },
+            "seller": {
+              "external_id": "vendedor-x"
+            },
+            "order": {
+              "external_id": "9000000000000028",
+              "purchased_at": "2026-10-02T13:57:09Z",
+              "approved_at": "2026-10-02T14:04:34Z",
+              "customer": {
+                "name": "***",
+                "cnpj": "***"
+              }
+            },
+            "sub_order": {
+              "external_id": "900000000000000000000000000000000027"
+            },
+            "code": "900000000000000000029",
+            "status": {
+              "external_id": "shipped",
+              "description": "Produto 1"
+            },
+            "items": [
+              {
+                "external_id": "agk59a4h6e",
+                "quantity": 1,
+                "freight": "14.21",
+                "discount": "0",
+                "total": "173.99",
+                "invoice_external_id": "90000000000000000000000000000000000000000030",
+                "invoice_can_be_replaced": false,
+                "product": {
+                  "seller_sku": "SKU-3",
+                  "description": "Produto 6",
+                  "price": "159.78",
+                  "brand": "Marca X",
+                  "image_url": "https://exemplo.invalid/imagem.jpg"
+                },
+                "fee": {
+                  "total": "17.58",
+                  "tech_total": "0",
+                  "sub_total": "159.78"
+                }
+              }
+            ],
+            "shipping": {
+              "amount": "14.21",
+              "shipped_at": "2026-10-02T17:03:56Z",
+              "tracking_url": "https://rastreio.magalog.com.br/",
+              "shipping_provider": {
+                "external_id": "magalog",
+                "name": "***",
+                "description": "***"
+              },
+              "deadline": {
+                "value": 4,
+                "precision": "days",
+                "workday": true,
+                "limit_date": "2026-10-09",
+                "posting_limit_date": "2026-10-05T14:00:00Z"
+              },
+              "logistic_network": {
+                "external_id": "direta",
+                "description": "***"
+              },
+              "drop_off_location": {
+                "type": "package_shipping_drop_off",
+                "external_id": "908",
+                "street": "***",
+                "number": "9009",
+                "complement": "***",
+                "district": "***",
+                "city": "***",
+                "state": "PR",
+                "reference": "N/A",
+                "zipcode": "***",
+                "additional_fields": {
+                  "cnpj": "***",
+                  "drop_off_limit_time": "1177"
+                }
+              },
+              "carrier_description": "Magalu Entregas",
+              "shipping_label": {
+                "status": {
+                  "external_id": "shipped",
+                  "description": "***",
+                  "status_date": "2026-10-05T20:25:48.544000Z"
+                },
+                "label_core_shipping_uuid": "900000000000000000000000000000000032",
+                "additional_fields": {
+                  "show_ship_button": false
+                }
+              },
+              "additional_fields": {
+                "mle": true,
+                "meta": {
+                  "fee_freight": 0,
+                  "interest_amount": 0,
+                  "delivery_type_id": "911",
+                  "isInterestWithheld": true,
+                  "delivery_parameters": {
+                    "type": "drop_off",
+                    "provider": "magalog",
+                    "delivery_id": "90000000000000000000000000000000000033",
+                    "modality_type": "conventional",
+                    "shipping_name": "***",
+                    "shipping_type": "Convencional",
+                    "delivery_option_id": "90000000000000000000000000000034",
+                    "quotation_provider": "magalog",
+                    "delivery_time_description": "Texto 3"
+                  }
+                },
+                "fulfillment": false,
+                "delivery_type": "Agência Magalu",
+                "shipping_name": "***",
+                "shipping_type": "Convencional",
+                "delivery_option": {
+                  "profile_id": "911",
+                  "delivery_type": "drop_off",
+                  "modality_type": "conventional",
+                  "delivery_type_id": "911",
+                  "delivery_option_id": "90000000000000000000000000000034",
+                  "quotation_provider": "magalog"
+                },
+                "shipping_platform_id": "ironhide",
+                "quotation_delivery_name": "Magalu Entregas",
+                "display_time_posting_limit_date": true
+              }
+            },
+            "invoices": [
+              {
+                "external_id": "90000000000000000000000000000000000000000030",
+                "key": "90000000000000000000000000000000000000000030",
+                "status": {
+                  "id": "approved"
+                },
+                "type": "sale"
+              }
+            ],
+            "package_lock": {
+              "external_id": "mle_delivery",
+              "type": "mle_delivery",
+              "description": "Produto 3"
+            },
+            "additional_fields": {
+              "items": [
+                {
+                  "uuid": "900000000000000000000000000000000035",
+                  "external_id": "agk59a4h6e"
+                }
+              ],
+              "shared_freight_status": "Em apuração"
+            },
+            "source_channel": {
+              "external_id": "9000000000015",
+              "description": "Produto 4"
+            },
+            "allow_seller_view": true,
+            "allow_seller_view_at": "2026-10-02T13:57:50.985000Z",
+            "origin_branch_id": "908",
+            "origin_branch_name": "vendedor-x-CD1",
+            "package_identifiers": {
+              "keys": [
+                {
+                  "name": "label_status",
+                  "value": "shipped"
+                },
+                {
+                  "name": "weight_class",
+                  "value": "light_weight"
+                },
+                {
+                  "name": "customer_name",
+                  "value": "Cliente"
+                },
+                {
+                  "name": "delivery_type",
+                  "value": "ship_ml_agency_drop_off"
+                },
+                {
+                  "name": "invoice_status",
+                  "value": "approved"
+                },
+                {
+                  "name": "customer_document",
+                  "value": "90000000000036"
+                },
+                {
+                  "name": "posting_situation",
+                  "value": "2026-10-05T14:00:00Z"
+                },
+                {
+                  "name": "deadline_situation",
+                  "value": "2026-10-09"
+                },
+                {
+                  "name": "total",
+                  "value": "173.99"
+                },
+                {
+                  "name": "source_channel",
+                  "value": "MagazineLuiza"
+                }
+              ]
+            }
+          },
+          {
+            "external_id": "900000000000000000000000000000000037",
+            "organization": {
+              "external_id": "9000000002"
+            },
+            "marketplace": {
+              "external_id": "900000000000003"
+            },
+            "seller": {
+              "external_id": "vendedor-x"
+            },
+            "order": {
+              "external_id": "9000000000000038",
+              "purchased_at": "2026-10-02T13:43:15Z",
+              "approved_at": "2026-10-02T13:48:00Z",
+              "customer": {
+                "name": "***",
+                "cpf": "***"
+              }
+            },
+            "sub_order": {
+              "external_id": "900000000000000000000000000000000037"
+            },
+            "code": "900000000000000000039",
+            "status": {
+              "external_id": "shipped",
+              "description": "Produto 1"
+            },
+            "items": [
+              {
+                "external_id": "bkh98e4g93",
+                "quantity": 1,
+                "freight": "29.35",
+                "discount": "24",
+                "total": "324.53",
+                "invoice_external_id": "90000000000000000000000000000000000000000040",
+                "invoice_can_be_replaced": false,
+                "product": {
+                  "seller_sku": "SKU-4",
+                  "description": "Produto 7",
+                  "price": "319.57",
+                  "brand": "Marca X Suportes",
+                  "image_url": "https://exemplo.invalid/imagem.jpg"
+                },
+                "fee": {
+                  "total": "34.08",
+                  "tech_total": "0",
+                  "sub_total": "311.16"
+                }
+              }
+            ],
+            "shipping": {
+              "amount": "29.35",
+              "shipped_at": "2026-10-02T17:03:56Z",
+              "tracking_url": "https://rastreio.magalog.com.br/",
+              "shipping_provider": {
+                "external_id": "magalog",
+                "name": "***",
+                "description": "***"
+              },
+              "deadline": {
+                "value": 4,
+                "precision": "days",
+                "workday": true,
+                "limit_date": "2026-10-09",
+                "posting_limit_date": "2026-10-05T14:00:00Z"
+              },
+              "logistic_network": {
+                "external_id": "direta",
+                "description": "***"
+              },
+              "drop_off_location": {
+                "type": "package_shipping_drop_off",
+                "external_id": "908",
+                "street": "***",
+                "number": "9009",
+                "complement": "***",
+                "district": "***",
+                "city": "***",
+                "state": "PR",
+                "reference": "N/A",
+                "zipcode": "***",
+                "additional_fields": {
+                  "cnpj": "***",
+                  "drop_off_limit_time": "1177"
+                }
+              },
+              "carrier_description": "Magalu Entregas",
+              "shipping_label": {
+                "status": {
+                  "external_id": "shipped",
+                  "description": "***",
+                  "status_date": "2026-10-05T20:25:34.655000Z"
+                },
+                "label_core_shipping_uuid": "900000000000000000000000000000000043",
+                "additional_fields": {
+                  "show_ship_button": false
+                }
+              },
+              "additional_fields": {
+                "mle": true,
+                "meta": {
+                  "fee_freight": 0,
+                  "interest_amount": 0,
+                  "delivery_type_id": "911",
+                  "isInterestWithheld": true,
+                  "delivery_parameters": {
+                    "type": "drop_off",
+                    "provider": "magalog",
+                    "delivery_id": "90000000000000000000000000000000000044",
+                    "modality_type": "conventional",
+                    "shipping_name": "***",
+                    "shipping_type": "Convencional",
+                    "delivery_option_id": "90000000000000000000000000000045",
+                    "quotation_provider": "magalog",
+                    "delivery_time_description": "Texto 3"
+                  }
+                },
+                "fulfillment": false,
+                "delivery_type": "Agência Magalu",
+                "shipping_name": "***",
+                "shipping_type": "Convencional",
+                "delivery_option": {
+                  "profile_id": "911",
+                  "delivery_type": "drop_off",
+                  "modality_type": "conventional",
+                  "delivery_type_id": "911",
+                  "delivery_option_id": "90000000000000000000000000000045",
+                  "quotation_provider": "magalog"
+                },
+                "shipping_platform_id": "ironhide",
+                "quotation_delivery_name": "Magalu Entregas",
+                "display_time_posting_limit_date": true
+              }
+            },
+            "invoices": [
+              {
+                "external_id": "90000000000000000000000000000000000000000040",
+                "key": "90000000000000000000000000000000000000000040",
+                "status": {
+                  "id": "approved"
+                },
+                "type": "sale"
+              }
+            ],
+            "package_lock": {
+              "external_id": "mle_delivery",
+              "type": "mle_delivery",
+              "description": "Produto 3"
+            },
+            "additional_fields": {
+              "items": [
+                {
+                  "uuid": "900000000000000000000000000000000046",
+                  "external_id": "bkh98e4g93"
+                }
+              ],
+              "shared_freight_status": "Em apuração"
+            },
+            "source_channel": {
+              "external_id": "9000000000015",
+              "description": "Produto 4"
+            },
+            "allow_seller_view": true,
+            "allow_seller_view_at": "2026-10-02T13:45:10.395000Z",
+            "origin_branch_id": "908",
+            "origin_branch_name": "vendedor-x-CD1",
+            "package_identifiers": {
+              "keys": [
+                {
+                  "name": "label_status",
+                  "value": "shipped"
+                },
+                {
+                  "name": "weight_class",
+                  "value": "light_weight"
+                },
+                {
+                  "name": "customer_name",
+                  "value": "Cliente"
+                },
+                {
+                  "name": "delivery_type",
+                  "value": "ship_ml_agency_drop_off"
+                },
+                {
+                  "name": "invoice_status",
+                  "value": "approved"
+                },
+                {
+                  "name": "customer_document",
+                  "value": "90000000047"
+                },
+                {
+                  "name": "posting_situation",
+                  "value": "2026-10-05T14:00:00Z"
+                },
+                {
+                  "name": "deadline_situation",
+                  "value": "2026-10-09"
+                },
+                {
+                  "name": "total",
+                  "value": "324.53"
+                },
+                {
+                  "name": "source_channel",
+                  "value": "MagazineLuiza"
+                }
+              ]
+            }
+          },
+          {
+            "external_id": "900000000000000000000000000000000048",
+            "organization": {
+              "external_id": "9000000002"
+            },
+            "marketplace": {
+              "external_id": "900000000000003"
+            },
+            "seller": {
+              "external_id": "vendedor-x"
+            },
+            "order": {
+              "external_id": "9000000000000049",
+              "purchased_at": "2026-10-01T01:31:09Z",
+              "approved_at": "2026-10-01T01:35:53Z",
+              "customer": {
+                "name": "***",
+                "cpf": "***"
+              }
+            },
+            "sub_order": {
+              "external_id": "900000000000000000000000000000000048"
+            },
+            "code": "900000000000000000050",
+            "status": {
+              "external_id": "delivered",
+              "description": "Produto 8"
+            },
+            "items": [
+              {
+                "external_id": "900000051",
+                "quantity": 1,
+                "freight": "25.15",
+                "discount": "6",
+                "total": "136.99",
+                "invoice_external_id": "90000000000000000000000000000000000000000052",
+                "invoice_can_be_replaced": false,
+                "product": {
+                  "seller_sku": "SKU-5",
+                  "description": "Produto 9",
+                  "price": "117.73",
+                  "brand": "Marca X",
+                  "image_url": "https://exemplo.invalid/imagem.jpg"
+                },
+                "fee": {
+                  "total": "12.56",
+                  "tech_total": "0",
+                  "sub_total": "117.73"
+                }
+              }
+            ],
+            "shipping": {
+              "amount": "25.15",
+              "shipped_at": "2026-10-01T13:28:59Z",
+              "delivered_at": "2026-10-06T01:34:05Z",
+              "tracking_url": "https://rastreio.magalog.com.br/",
+              "shipping_provider": {
+                "external_id": "magalog",
+                "name": "***",
+                "description": "***"
+              },
+              "deadline": {
+                "value": 5,
+                "precision": "days",
+                "workday": true,
+                "limit_date": "2026-10-08",
+                "posting_limit_date": "2026-10-01T14:00:00Z"
+              },
+              "logistic_network": {
+                "external_id": "direta",
+                "description": "***"
+              },
+              "drop_off_location": {
+                "type": "package_shipping_drop_off",
+                "external_id": "908",
+                "street": "***",
+                "number": "9009",
+                "complement": "***",
+                "district": "***",
+                "city": "***",
+                "state": "PR",
+                "reference": "N/A",
+                "zipcode": "***",
+                "additional_fields": {
+                  "cnpj": "***",
+                  "drop_off_limit_time": "1177"
+                }
+              },
+              "carrier_description": "Magalu Entregas",
+              "shipping_label": {
+                "status": {
+                  "external_id": "shipped",
+                  "description": "***",
+                  "status_date": "2026-10-06T01:56:29.751000Z"
+                },
+                "label_core_shipping_uuid": "900000000000000000000000000000000054",
+                "additional_fields": {
+                  "show_ship_button": false
+                }
+              },
+              "additional_fields": {
+                "mle": true,
+                "meta": {
+                  "fee_freight": 0,
+                  "interest_amount": 0,
+                  "delivery_type_id": "911",
+                  "isInterestWithheld": true,
+                  "delivery_parameters": {
+                    "type": "drop_off",
+                    "provider": "magalog",
+                    "delivery_id": "90000000000000000000000000000000000055",
+                    "modality_type": "conventional",
+                    "shipping_name": "***",
+                    "shipping_type": "Convencional",
+                    "delivery_option_id": "90000000000000000000000000000056",
+                    "quotation_provider": "magalog",
+                    "delivery_time_description": "Texto 4"
+                  }
+                },
+                "fulfillment": false,
+                "delivery_type": "Agência Magalu",
+                "shipping_name": "***",
+                "shipping_type": "Convencional",
+                "delivery_option": {
+                  "profile_id": "911",
+                  "delivery_type": "drop_off",
+                  "modality_type": "conventional",
+                  "delivery_type_id": "911",
+                  "delivery_option_id": "90000000000000000000000000000056",
+                  "quotation_provider": "magalog"
+                },
+                "shipping_platform_id": "ironhide",
+                "quotation_delivery_name": "Magalu Entregas",
+                "display_time_posting_limit_date": true
+              }
+            },
+            "invoices": [
+              {
+                "external_id": "90000000000000000000000000000000000000000052",
+                "key": "90000000000000000000000000000000000000000052",
+                "status": {
+                  "id": "approved"
+                },
+                "type": "sale"
+              }
+            ],
+            "package_lock": {
+              "external_id": "mle_delivery",
+              "type": "mle_delivery",
+              "description": "Produto 3"
+            },
+            "additional_fields": {
+              "items": [
+                {
+                  "uuid": "900000000000000000000000000000000057",
+                  "external_id": "900000051"
+                }
+              ],
+              "shared_freight_status": "Entregue",
+              "shared_freight_entry_type": "Texto 5"
+            },
+            "source_channel": {
+              "external_id": "9000000000015",
+              "description": "Produto 4"
+            },
+            "allow_seller_view": true,
+            "allow_seller_view_at": "2026-10-01T01:31:51.163000Z",
+            "origin_branch_id": "908",
+            "origin_branch_name": "vendedor-x-CD1",
+            "package_identifiers": {
+              "keys": [
+                {
+                  "name": "label_status",
+                  "value": "shipped"
+                },
+                {
+                  "name": "weight_class",
+                  "value": "light_weight"
+                },
+                {
+                  "name": "customer_name",
+                  "value": "Texto 6"
+                },
+                {
+                  "name": "delivery_type",
+                  "value": "ship_ml_agency_drop_off"
+                },
+                {
+                  "name": "invoice_status",
+                  "value": "approved"
+                },
+                {
+                  "name": "customer_document",
+                  "value": "90000000058"
+                },
+                {
+                  "name": "posting_situation",
+                  "value": "2026-10-01T14:00:00Z"
+                },
+                {
+                  "name": "deadline_situation",
+                  "value": "2026-10-08"
+                },
+                {
+                  "name": "total",
+                  "value": "136.99"
+                },
+                {
+                  "name": "source_channel",
+                  "value": "MagazineLuiza"
+                }
+              ]
+            }
+          },
+          {
+            "external_id": "900000000000000000000000000000000059",
+            "organization": {
+              "external_id": "9000000002"
+            },
+            "marketplace": {
+              "external_id": "900000000000003"
+            },
+            "seller": {
+              "external_id": "vendedor-x"
+            },
+            "order": {
+              "external_id": "9000000000000060",
+              "purchased_at": "2026-09-30T17:58:56Z",
+              "approved_at": "2026-09-30T18:03:52Z",
+              "customer": {
+                "name": "***",
+                "cpf": "***"
+              }
+            },
+            "sub_order": {
+              "external_id": "900000000000000000000000000000000059"
+            },
+            "code": "900000000000000000061",
+            "status": {
+              "external_id": "delivered",
+              "description": "Produto 8"
+            },
+            "items": [
+              {
+                "external_id": "hd23k66daa",
+                "quantity": 1,
+                "freight": "0",
+                "discount": "8",
+                "total": "159.78",
+                "invoice_external_id": "90000000000000000000000000000000000000000062",
+                "invoice_can_be_replaced": false,
+                "product": {
+                  "seller_sku": "SKU-6",
+                  "description": "Produto 10",
+                  "price": "168.19",
+                  "brand": "Marca X",
+                  "image_url": "https://exemplo.invalid/imagem.jpg"
+                },
+                "fee": {
+                  "total": "17.95",
+                  "tech_total": "0",
+                  "sub_total": "168.19"
+                }
+              }
+            ],
+            "shipping": {
+              "amount": "0",
+              "shipped_at": "2026-10-01T13:28:59Z",
+              "delivered_at": "2026-10-03T21:33:15Z",
+              "tracking_url": "https://rastreio.magalog.com.br/",
+              "shipping_provider": {
+                "external_id": "magalog",
+                "name": "***",
+                "description": "***"
+              },
+              "deadline": {
+                "value": 3,
+                "precision": "days",
+                "workday": true,
+                "limit_date": "2026-10-06",
+                "posting_limit_date": "2026-10-01T14:00:00Z"
+              },
+              "logistic_network": {
+                "external_id": "direta",
+                "description": "***"
+              },
+              "drop_off_location": {
+                "type": "package_shipping_drop_off",
+                "external_id": "908",
+                "street": "***",
+                "number": "9009",
+                "complement": "***",
+                "district": "***",
+                "city": "***",
+                "state": "PR",
+                "reference": "N/A",
+                "zipcode": "***",
+                "additional_fields": {
+                  "cnpj": "***",
+                  "drop_off_limit_time": "1177"
+                }
+              },
+              "carrier_description": "Magalu Entregas",
+              "shipping_label": {
+                "status": {
+                  "external_id": "shipped",
+                  "description": "***",
+                  "status_date": "2026-10-03T21:34:27.739000Z"
+                },
+                "label_core_shipping_uuid": "900000000000000000000000000000000063",
+                "additional_fields": {
+                  "show_ship_button": false
+                }
+              },
+              "additional_fields": {
+                "mle": true,
+                "meta": {
+                  "fee_freight": 0,
+                  "interest_amount": 0,
+                  "delivery_type_id": "911",
+                  "isInterestWithheld": true,
+                  "delivery_parameters": {
+                    "type": "drop_off",
+                    "provider": "magalog",
+                    "delivery_id": "90000000000000000000000000000000000064",
+                    "modality_type": "conventional",
+                    "shipping_name": "***",
+                    "shipping_type": "Convencional",
+                    "delivery_option_id": "90000000000000000000000000000065",
+                    "quotation_provider": "magalog",
+                    "delivery_time_description": "Texto 7"
+                  }
+                },
+                "fulfillment": false,
+                "delivery_type": "Agência Magalu",
+                "shipping_name": "***",
+                "shipping_type": "Convencional",
+                "delivery_option": {
+                  "profile_id": "911",
+                  "delivery_type": "drop_off",
+                  "modality_type": "conventional",
+                  "delivery_type_id": "911",
+                  "delivery_option_id": "90000000000000000000000000000065",
+                  "quotation_provider": "magalog"
+                },
+                "shipping_platform_id": "ironhide",
+                "quotation_delivery_name": "Magalu Entregas",
+                "display_time_posting_limit_date": true
+              }
+            },
+            "invoices": [
+              {
+                "external_id": "90000000000000000000000000000000000000000062",
+                "key": "90000000000000000000000000000000000000000062",
+                "status": {
+                  "id": "approved"
+                },
+                "type": "sale"
+              }
+            ],
+            "package_lock": {
+              "external_id": "mle_delivery",
+              "type": "mle_delivery",
+              "description": "Produto 3"
+            },
+            "additional_fields": {
+              "items": [
+                {
+                  "uuid": "900000000000000000000000000000000066",
+                  "external_id": "hd23k66daa"
+                }
+              ],
+              "shared_freight_status": "Entregue",
+              "shared_freight_entry_type": "Texto 5"
+            },
+            "source_channel": {
+              "external_id": "9000000000015",
+              "description": "Produto 4"
+            },
+            "allow_seller_view": true,
+            "allow_seller_view_at": "2026-09-30T17:59:38.713000Z",
+            "origin_branch_id": "908",
+            "origin_branch_name": "vendedor-x-CD1",
+            "package_identifiers": {
+              "keys": [
+                {
+                  "name": "label_status",
+                  "value": "shipped"
+                },
+                {
+                  "name": "weight_class",
+                  "value": "light_weight"
+                },
+                {
+                  "name": "customer_name",
+                  "value": "Cliente"
+                },
+                {
+                  "name": "delivery_type",
+                  "value": "ship_ml_agency_drop_off"
+                },
+                {
+                  "name": "invoice_status",
+                  "value": "approved"
+                },
+                {
+                  "name": "customer_document",
+                  "value": "90000000067"
+                },
+                {
+                  "name": "posting_situation",
+                  "value": "2026-10-01T14:00:00Z"
+                },
+                {
+                  "name": "deadline_situation",
+                  "value": "2026-10-06"
+                },
+                {
+                  "name": "total",
+                  "value": "159.78"
+                },
+                {
+                  "name": "source_channel",
+                  "value": "MagazineLuiza"
+                }
+              ]
+            }
+          },
+          {
+            "external_id": "900000000000000000000000000000000068",
+            "organization": {
+              "external_id": "9000000002"
+            },
+            "marketplace": {
+              "external_id": "900000000000003"
+            },
+            "seller": {
+              "external_id": "vendedor-x"
+            },
+            "order": {
+              "external_id": "9000000000000069",
+              "purchased_at": "2026-09-28T20:00:47Z",
+              "approved_at": "2026-09-28T20:06:13Z",
+              "customer": {
+                "name": "***",
+                "cnpj": "***"
+              }
+            },
+            "sub_order": {
+              "external_id": "900000000000000000000000000000000068"
+            },
+            "code": "900000000000000000070",
+            "status": {
+              "external_id": "delivered",
+              "description": "Produto 8"
+            },
+            "items": [
+              {
+                "external_id": "aeh4gf0fj9",
+                "quantity": 1,
+                "freight": "33.56",
+                "discount": "16.98",
+                "total": "356.26",
+                "invoice_external_id": "90000000000000000000000000000000000000000071",
+                "invoice_can_be_replaced": false,
+                "product": {
+                  "seller_sku": "SKU-7",
+                  "description": "Produto 11",
+                  "price": "339.68",
+                  "brand": "Marca X",
+                  "image_url": "https://exemplo.invalid/imagem.jpg"
+                },
+                "fee": {
+                  "total": "36.25",
+                  "tech_total": "0",
+                  "sub_total": "339.68"
+                }
+              }
+            ],
+            "shipping": {
+              "amount": "33.56",
+              "shipped_at": "2026-09-29T13:25:55Z",
+              "delivered_at": "2026-10-02T12:45:52Z",
+              "tracking_url": "https://rastreio.magalog.com.br/",
+              "shipping_provider": {
+                "external_id": "magalog",
+                "name": "***",
+                "description": "***"
+              },
+              "deadline": {
+                "value": 4,
+                "precision": "days",
+                "workday": true,
+                "limit_date": "2026-10-05",
+                "posting_limit_date": "2026-09-29T14:00:00Z"
+              },
+              "logistic_network": {
+                "external_id": "direta",
+                "description": "***"
+              },
+              "drop_off_location": {
+                "type": "package_shipping_drop_off",
+                "external_id": "908",
+                "street": "***",
+                "number": "9009",
+                "complement": "***",
+                "district": "***",
+                "city": "***",
+                "state": "PR",
+                "reference": "N/A",
+                "zipcode": "***",
+                "additional_fields": {
+                  "cnpj": "***",
+                  "drop_off_limit_time": "1177"
+                }
+              },
+              "carrier_description": "Magalu Entregas",
+              "shipping_label": {
+                "status": {
+                  "external_id": "shipped",
+                  "description": "***",
+                  "status_date": "2026-10-02T12:47:33.629000Z"
+                },
+                "label_core_shipping_uuid": "900000000000000000000000000000000072",
+                "additional_fields": {
+                  "show_ship_button": false
+                }
+              },
+              "additional_fields": {
+                "mle": true,
+                "meta": {
+                  "fee_freight": 0,
+                  "interest_amount": 0,
+                  "delivery_type_id": "911",
+                  "isInterestWithheld": true,
+                  "delivery_parameters": {
+                    "type": "drop_off",
+                    "provider": "magalog",
+                    "delivery_id": "90000000000000000000000000000000000073",
+                    "modality_type": "conventional",
+                    "shipping_name": "***",
+                    "shipping_type": "Convencional",
+                    "delivery_option_id": "90000000000000000000000000000074",
+                    "quotation_provider": "magalog",
+                    "delivery_time_description": "Texto 8"
+                  }
+                },
+                "fulfillment": false,
+                "delivery_type": "Agência Magalu",
+                "shipping_name": "***",
+                "shipping_type": "Convencional",
+                "delivery_option": {
+                  "profile_id": "911",
+                  "delivery_type": "drop_off",
+                  "modality_type": "conventional",
+                  "delivery_type_id": "911",
+                  "delivery_option_id": "90000000000000000000000000000074",
+                  "quotation_provider": "magalog"
+                },
+                "shipping_platform_id": "ironhide",
+                "quotation_delivery_name": "Magalu Entregas",
+                "display_time_posting_limit_date": true
+              }
+            },
+            "invoices": [
+              {
+                "external_id": "90000000000000000000000000000000000000000071",
+                "key": "90000000000000000000000000000000000000000071",
+                "status": {
+                  "id": "approved"
+                },
+                "type": "sale"
+              }
+            ],
+            "package_lock": {
+              "external_id": "mle_delivery",
+              "type": "mle_delivery",
+              "description": "Produto 3"
+            },
+            "additional_fields": {
+              "items": [
+                {
+                  "uuid": "900000000000000000000000000000000075",
+                  "external_id": "aeh4gf0fj9"
+                }
+              ],
+              "shared_freight_status": "Entregue",
+              "shared_freight_entry_type": "Texto 5"
+            },
+            "source_channel": {
+              "external_id": "9000000000015",
+              "description": "Produto 4"
+            },
+            "allow_seller_view": true,
+            "allow_seller_view_at": "2026-09-28T20:01:30.554000Z",
+            "origin_branch_id": "908",
+            "origin_branch_name": "vendedor-x-CD1",
+            "package_identifiers": {
+              "keys": [
+                {
+                  "name": "label_status",
+                  "value": "shipped"
+                },
+                {
+                  "name": "weight_class",
+                  "value": "light_weight"
+                },
+                {
+                  "name": "customer_name",
+                  "value": "Texto 9"
+                },
+                {
+                  "name": "delivery_type",
+                  "value": "ship_ml_agency_drop_off"
+                },
+                {
+                  "name": "invoice_status",
+                  "value": "approved"
+                },
+                {
+                  "name": "customer_document",
+                  "value": "90000000000076"
+                },
+                {
+                  "name": "posting_situation",
+                  "value": "2026-09-29T14:00:00Z"
+                },
+                {
+                  "name": "deadline_situation",
+                  "value": "2026-10-05"
+                },
+                {
+                  "name": "total",
+                  "value": "356.26"
+                },
+                {
+                  "name": "source_channel",
+                  "value": "MagazineLuiza"
+                }
+              ]
+            }
+          },
+          {
+            "external_id": "900000000000000000000000000000000077",
+            "organization": {
+              "external_id": "9000000002"
+            },
+            "marketplace": {
+              "external_id": "900000000000003"
+            },
+            "seller": {
+              "external_id": "vendedor-x"
+            },
+            "order": {
+              "external_id": "9000000000000078",
+              "purchased_at": "2026-09-28T16:26:00Z",
+              "approved_at": "2026-09-28T16:33:25Z",
+              "customer": {
+                "name": "***",
+                "cpf": "***"
+              }
+            },
+            "sub_order": {
+              "external_id": "900000000000000000000000000000000077"
+            },
+            "code": "900000000000000000079",
+            "status": {
+              "external_id": "cancelled",
+              "description": "Produto 12"
+            },
+            "items": [
+              {
+                "external_id": "gg138hh314",
+                "quantity": 1,
+                "freight": "23.46",
+                "discount": "0",
+                "total": "234.11",
+                "invoice_can_be_replaced": true,
+                "product": {
+                  "seller_sku": "SKU-2",
+                  "description": "Produto 5",
+                  "price": "210.65",
+                  "brand": "Marca X",
+                  "image_url": "https://exemplo.invalid/imagem.jpg"
+                },
+                "fee": {
+                  "total": "23.17",
+                  "tech_total": "0",
+                  "sub_total": "210.65"
+                }
+              }
+            ],
+            "shipping": {
+              "amount": "23.46",
+              "cancelled_at": "2026-09-29T09:23:12Z",
+              "shipping_provider": {
+                "external_id": "900000000000080",
+                "name": "***",
+                "description": "***"
+              },
+              "deadline": {
+                "value": 8,
+                "precision": "days",
+                "workday": true,
+                "limit_date": "2026-10-13",
+                "posting_limit_date": "2026-09-29T14:00:00Z"
+              },
+              "logistic_network": {
+                "external_id": "9000000000000081",
+                "description": "***"
+              },
+              "drop_off_location": {
+                "type": "package_shipping_drop_off",
+                "external_id": "908",
+                "street": "***",
+                "number": "9009",
+                "complement": "***",
+                "district": "***",
+                "city": "***",
+                "state": "PR",
+                "reference": "N/A",
+                "zipcode": "***",
+                "additional_fields": {
+                  "cnpj": "***",
+                  "drop_off_limit_time": "1177"
+                }
+              },
+              "carrier_description": "Magalu Entregas",
+              "shipping_label": {
+                "status": {
+                  "external_id": "unavailable",
+                  "description": "***",
+                  "status_date": "2026-09-29T09:23:54.526000Z"
+                },
+                "label_core_shipping_uuid": "900000000000000000000000000000000082",
+                "additional_fields": {
+                  "show_ship_button": false
+                }
+              },
+              "additional_fields": {
+                "mle": true,
+                "meta": {
+                  "fee_freight": 0,
+                  "interest_amount": 0,
+                  "delivery_type_id": "911",
+                  "isInterestWithheld": true,
+                  "delivery_parameters": {
+                    "type": "drop_off",
+                    "provider": "magalu-entregas",
+                    "delivery_id": "90000000000000000000000000000000000083",
+                    "service_code": "90084",
+                    "service_name": "PAC",
+                    "modality_type": "conventional",
+                    "shipping_name": "***",
+                    "shipping_type": "Convencional",
+                    "delivery_option_id": "90000000000000000000000000000085",
+                    "quotation_provider": "magalu-entregas",
+                    "dynamic_shipping_time": {
+                      "unit": "hours",
+                      "value": 182
+                    },
+                    "original_shipping_time": {
+                      "unit": "hours",
+                      "value": 182
+                    },
+                    "delivery_time_description": "Texto 1"
+                  }
+                },
+                "fulfillment": false,
+                "delivery_type": "Agência Magalu",
+                "shipping_name": "***",
+                "shipping_type": "Convencional",
+                "delivery_option": {
+                  "profile_id": "911",
+                  "delivery_type": "drop_off",
+                  "modality_type": "conventional",
+                  "delivery_type_id": "911",
+                  "delivery_option_id": "90000000000000000000000000000085",
+                  "quotation_provider": "magalu-entregas"
+                },
+                "shipping_platform_id": "ironhide",
+                "quotation_delivery_name": "Magalu Entregas",
+                "display_time_posting_limit_date": true
+              }
+            },
+            "invoices": [],
+            "package_lock": {
+              "external_id": "mle_delivery",
+              "type": "mle_delivery",
+              "description": "Produto 3"
+            },
+            "additional_fields": {
+              "items": [
+                {
+                  "uuid": "900000000000000000000000000000000086",
+                  "external_id": "gg138hh314"
+                }
+              ],
+              "shared_freight_status": "Em apuração"
+            },
+            "source_channel": {
+              "external_id": "9000000000015",
+              "description": "Produto 4"
+            },
+            "allow_seller_view": true,
+            "allow_seller_view_at": "2026-09-28T16:26:42.222000Z",
+            "origin_branch_id": "908",
+            "origin_branch_name": "vendedor-x-CD1",
+            "package_identifiers": {
+              "keys": [
+                {
+                  "name": "label_status",
+                  "value": "unavailable"
+                },
+                {
+                  "name": "weight_class",
+                  "value": "light_weight"
+                },
+                {
+                  "name": "customer_name",
+                  "value": "Texto 10"
+                },
+                {
+                  "name": "delivery_type",
+                  "value": "ship_ml_agency_drop_off"
+                },
+                {
+                  "name": "invoice_status",
+                  "value": "awaiting_invoice_input"
+                },
+                {
+                  "name": "customer_document",
+                  "value": "90000000087"
+                },
+                {
+                  "name": "posting_situation",
+                  "value": "2026-09-29T14:00:00Z"
+                },
+                {
+                  "name": "deadline_situation",
+                  "value": "2026-10-13"
+                },
+                {
+                  "name": "total",
+                  "value": "234.11"
+                },
+                {
+                  "name": "source_channel",
+                  "value": "MagazineLuiza"
+                }
+              ]
+            }
+          },
+          {
+            "external_id": "900000000000000000000000000000000088",
+            "organization": {
+              "external_id": "9000000002"
+            },
+            "marketplace": {
+              "external_id": "900000000000003"
+            },
+            "seller": {
+              "external_id": "vendedor-x"
+            },
+            "order": {
+              "external_id": "9000000000000089",
+              "purchased_at": "2026-09-28T15:26:17Z",
+              "approved_at": "2026-09-28T15:31:10Z",
+              "customer": {
+                "name": "***",
+                "cpf": "***"
+              }
+            },
+            "sub_order": {
+              "external_id": "900000000000000000000000000000000088"
+            },
+            "code": "900000000000000000090",
+            "status": {
+              "external_id": "delivered",
+              "description": "Produto 8"
+            },
+            "items": [
+              {
+                "external_id": "ek5kd9ccdg",
+                "quantity": 1,
+                "freight": "71",
+                "discount": "35.12",
+                "total": "738.77",
+                "invoice_external_id": "90000000000000000000000000000000000000000091",
+                "invoice_can_be_replaced": false,
+                "product": {
+                  "seller_sku": "SKU-8",
+                  "description": "Produto 13",
+                  "price": "702.4",
+                  "brand": "Marca X Suportes",
+                  "image_url": "https://exemplo.invalid/imagem.jpg"
+                },
+                "fee": {
+                  "total": "74.95",
+                  "tech_total": "0",
+                  "sub_total": "702.4"
+                }
+              }
+            ],
+            "shipping": {
+              "amount": "71",
+              "shipped_at": "2026-09-28T19:30:00Z",
+              "delivered_at": "2026-10-06T11:31:00Z",
+              "tracking_code": "https://enviarapido.log.br/",
+              "tracking_url": "https://enviarapido.log.br/",
+              "shipping_provider": {
+                "external_id": "frete_proprio",
+                "name": "***",
+                "description": "***"
+              },
+              "deadline": {
+                "value": 4,
+                "precision": "days",
+                "workday": true,
+                "limit_date": "2026-10-05"
+              },
+              "logistic_network": {
+                "external_id": "9000000000000000093",
+                "description": "***"
+              },
+              "carrier_description": "FRETE PROPRIO 1",
+              "additional_fields": {
+                "mle": false,
+                "meta": {
+                  "fee_freight": 7.86,
+                  "interest_amount": 0,
+                  "delivery_type_id": "911",
+                  "isInterestWithheld": true,
+                  "delivery_parameters": {
+                    "type": "delivery",
+                    "provider": "frete_proprio",
+                    "delivery_id": "90000000000000000000000000000000000094",
+                    "modality_type": "conventional",
+                    "shipping_name": "***",
+                    "shipping_type": "Própria",
+                    "delivery_option_id": "900000000000000000000095",
+                    "quotation_provider": "frete_proprio",
+                    "delivery_time_description": "Texto 11"
+                  }
+                },
+                "fulfillment": false,
+                "delivery_type": "Transportadora Própria",
+                "shipping_name": "***",
+                "shipping_type": "Convencional",
+                "delivery_option": {
+                  "profile_id": "996",
+                  "delivery_type": "delivery",
+                  "modality_type": "conventional",
+                  "delivery_type_id": "911",
+                  "delivery_option_id": "900000000000000000000095",
+                  "quotation_provider": "frete_proprio"
+                },
+                "shipping_platform_id": "ironhide",
+                "quotation_delivery_name": "FRETE PROPRIO 1",
+                "display_time_posting_limit_date": false
+              }
+            },
+            "invoices": [
+              {
+                "external_id": "90000000000000000000000000000000000000000091",
+                "key": "90000000000000000000000000000000000000000091",
+                "status": {
+                  "id": "approved"
+                },
+                "type": "sale"
+              }
+            ],
+            "additional_fields": {
+              "items": [
+                {
+                  "uuid": "900000000000000000000000000000000097",
+                  "external_id": "ek5kd9ccdg"
+                }
+              ],
+              "shared_freight_status": "Não se aplica"
+            },
+            "source_channel": {
+              "external_id": "9000000000015",
+              "description": "Produto 4"
+            },
+            "allow_seller_view": true,
+            "allow_seller_view_at": "2026-09-28T15:26:59.227000Z",
+            "origin_branch_id": "911",
+            "origin_branch_name": "vendedor-x-CD1",
+            "package_identifiers": {
+              "keys": [
+                {
+                  "name": "weight_class",
+                  "value": "heavy"
+                },
+                {
+                  "name": "customer_name",
+                  "value": "Texto 12"
+                },
+                {
+                  "name": "delivery_type",
+                  "value": "ship_self_service"
+                },
+                {
+                  "name": "invoice_status",
+                  "value": "approved"
+                },
+                {
+                  "name": "customer_document",
+                  "value": "90000000098"
+                },
+                {
+                  "name": "deadline_situation",
+                  "value": "2026-10-05"
+                },
+                {
+                  "name": "total",
+                  "value": "738.77"
+                },
+                {
+                  "name": "source_channel",
+                  "value": "MagazineLuiza"
+                }
+              ]
+            }
+          },
+          {
+            "external_id": "900000000000000000000000000000000099",
+            "organization": {
+              "external_id": "9000000002"
+            },
+            "marketplace": {
+              "external_id": "900000000000003"
+            },
+            "seller": {
+              "external_id": "vendedor-x"
+            },
+            "order": {
+              "external_id": "9000000000000100",
+              "purchased_at": "2026-09-28T03:04:35Z",
+              "approved_at": "2026-09-28T03:08:37Z",
+              "customer": {
+                "name": "***",
+                "cpf": "***"
+              }
+            },
+            "sub_order": {
+              "external_id": "900000000000000000000000000000000099"
+            },
+            "code": "900000000000000000101",
+            "status": {
+              "external_id": "delivered",
+              "description": "Produto 8"
+            },
+            "items": [
+              {
+                "external_id": "bdged5fcdc",
+                "quantity": 1,
+                "freight": "33.56",
+                "discount": "16.78",
+                "total": "352.34",
+                "invoice_external_id": "90000000000000000000000000000000000000000102",
+                "invoice_can_be_replaced": false,
+                "product": {
+                  "seller_sku": "SKU-9",
+                  "description": "Produto 14",
+                  "price": "336",
+                  "brand": "Marca X",
+                  "image_url": "https://exemplo.invalid/imagem.jpg"
+                },
+                "fee": {
+                  "total": "35.07",
+                  "tech_total": "0",
+                  "sub_total": "318.78"
+                }
+              }
+            ],
+            "shipping": {
+              "amount": "33.56",
+              "shipped_at": "2026-09-28T13:13:47Z",
+              "delivered_at": "2026-10-01T20:21:13Z",
+              "tracking_url": "https://rastreio.magalog.com.br/",
+              "shipping_provider": {
+                "external_id": "magalog",
+                "name": "***",
+                "description": "***"
+              },
+              "deadline": {
+                "value": 3,
+                "precision": "days",
+                "workday": true,
+                "limit_date": "2026-10-02",
+                "posting_limit_date": "2026-09-28T14:00:00Z"
+              },
+              "logistic_network": {
+                "external_id": "direta",
+                "description": "***"
+              },
+              "drop_off_location": {
+                "type": "package_shipping_drop_off",
+                "external_id": "908",
+                "street": "***",
+                "number": "9009",
+                "complement": "***",
+                "district": "***",
+                "city": "***",
+                "state": "PR",
+                "reference": "N/A",
+                "zipcode": "***",
+                "additional_fields": {
+                  "cnpj": "***",
+                  "drop_off_limit_time": "1177"
+                }
+              },
+              "carrier_description": "Magalu Entregas",
+              "shipping_label": {
+                "status": {
+                  "external_id": "shipped",
+                  "description": "***",
+                  "status_date": "2026-10-01T20:23:29.375000Z"
+                },
+                "label_core_shipping_uuid": "900000000000000000000000000000000104",
+                "additional_fields": {
+                  "show_ship_button": false
+                }
+              },
+              "additional_fields": {
+                "mle": true,
+                "meta": {
+                  "fee_freight": 0,
+                  "interest_amount": 0,
+                  "delivery_type_id": "911",
+                  "isInterestWithheld": true,
+                  "delivery_parameters": {
+                    "type": "drop_off",
+                    "provider": "magalog",
+                    "delivery_id": "90000000000000000000000000000000000105",
+                    "modality_type": "conventional",
+                    "shipping_name": "***",
+                    "shipping_type": "Convencional",
+                    "delivery_option_id": "90000000000000000000000000000106",
+                    "quotation_provider": "magalog",
+                    "delivery_time_description": "Texto 13"
+                  }
+                },
+                "fulfillment": false,
+                "delivery_type": "Agência Magalu",
+                "shipping_name": "***",
+                "shipping_type": "Convencional",
+                "delivery_option": {
+                  "profile_id": "911",
+                  "delivery_type": "drop_off",
+                  "modality_type": "conventional",
+                  "delivery_type_id": "911",
+                  "delivery_option_id": "90000000000000000000000000000106",
+                  "quotation_provider": "magalog"
+                },
+                "shipping_platform_id": "ironhide",
+                "quotation_delivery_name": "Magalu Entregas",
+                "display_time_posting_limit_date": true
+              }
+            },
+            "invoices": [
+              {
+                "external_id": "90000000000000000000000000000000000000000102",
+                "key": "90000000000000000000000000000000000000000102",
+                "status": {
+                  "id": "approved"
+                },
+                "type": "sale"
+              }
+            ],
+            "package_lock": {
+              "external_id": "mle_delivery",
+              "type": "mle_delivery",
+              "description": "Produto 3"
+            },
+            "additional_fields": {
+              "items": [
+                {
+                  "uuid": "900000000000000000000000000000000107",
+                  "external_id": "bdged5fcdc"
+                }
+              ],
+              "shared_freight_status": "Entregue",
+              "shared_freight_entry_type": "Texto 5"
+            },
+            "source_channel": {
+              "external_id": "9000000000015",
+              "description": "Produto 4"
+            },
+            "allow_seller_view": true,
+            "allow_seller_view_at": "2026-09-28T03:05:17.922000Z",
+            "origin_branch_id": "908",
+            "origin_branch_name": "vendedor-x-CD1",
+            "package_identifiers": {
+              "keys": [
+                {
+                  "name": "label_status",
+                  "value": "shipped"
+                },
+                {
+                  "name": "weight_class",
+                  "value": "light_weight"
+                },
+                {
+                  "name": "customer_name",
+                  "value": "Cliente"
+                },
+                {
+                  "name": "delivery_type",
+                  "value": "ship_ml_agency_drop_off"
+                },
+                {
+                  "name": "invoice_status",
+                  "value": "approved"
+                },
+                {
+                  "name": "customer_document",
+                  "value": "90000000108"
+                },
+                {
+                  "name": "posting_situation",
+                  "value": "2026-09-28T14:00:00Z"
+                },
+                {
+                  "name": "deadline_situation",
+                  "value": "2026-10-02"
+                },
+                {
+                  "name": "total",
+                  "value": "352.34"
+                },
+                {
+                  "name": "source_channel",
+                  "value": "MagazineLuiza"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
