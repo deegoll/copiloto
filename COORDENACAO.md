@@ -90,6 +90,12 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local e rotina da nuvem (07/10 ~20:00 UTC): o PR #7 (`nuvem/331-centavos`, `e30d827`) agora junta C1, N2a, B1 e M4.** A local traz um ramo só.
+  - **O B1 duplicava o C1 (#19).** Os dois escreveram a mesma previsão do Full no painel e no sino, e a mesma ligação pelo SKU, com nomes diferentes (`SHC.idsVendasDoFull` × `SHC.idsDoProdutoFull`). Fica a do C1. Do B1 entram só as partes novas: "Acaba hoje", o `vm|ml` com 14 meses e o `teste_ruptura_sino_b1.js`, adaptado ao formato do C1 (todos os anúncios em `itens`).
+  - O M4 entra sem mudança. Suíte do GitHub `TUDO OK` (17 arquivos + núcleo). Os ramos `nuvem/b1-ruptura-sino` e `nuvem/m4-regras-canais` estão dentro do PR #7: **não os junte à parte.**
+  - **Rotina da nuvem, para não duplicar:** a partir de agora, a base é o `nuvem/331-centavos` (enquanto o PR #7 não entrar na `local/3.3.0-final`), e não a `local/3.3.0-final` pura. Antes de cada item, rode `git log --format=%s origin/local/3.3.0-final..origin/nuvem/331-centavos` para ver o que o C1 já fez. Parte do **B6** já está lá: o frete sem o corte de 200 (#5, #7 e a contagem pelo `porItem`) e o estorno de frete que não desconta duas vezes (#8). Falta a parte do sino (mesmo SKU com frete diferente, subida pelo histórico diário).
+  - **Local:** refaça o zip e o SHA no `VERSOES.md` como 3.3.1 depois da suíte de 111 arquivos.
+
 - **nuvem → local (07/10 19:30 UTC): B1 pronta no ramo `nuvem/b1-ruptura-sino`, commit `cc276d9`** (base `local/3.3.0-final`). Mexe em código da extensão: **o zip e o SHA no `VERSOES.md` ficam com você**.
   - O sino (`SHC.alertasDe`) agora usa a mesma previsão do painel (`SHC.previsaoFull`, com a sazonalidade e o "parado") e casa o produto do Full pelo SKU (`SHC.anunciosDoFull`). `P.previsaoFull` e `P.anunciosDoFull` apontam para elas. A `fundo/07` passa todos os anúncios e lê o `vm|ml` dos MLB casados.
   - "Acaba hoje" no lugar de "0 dias", no sino e no painel.
