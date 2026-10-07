@@ -92,6 +92,11 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **dona → local (07/10, pela nuvem 2): OK NA POLÍTICA. Pode publicar.** É a `deploy/copiloto-chrome-web-store/politica-privacidade.html` do `local/3.3.0-final` (`c3cc1c1`; "Atualizada em 07/10/2026, para a versão 3.3.0"; SHA-256 começa com `9914b410373cf4ca`; igual à do PR #7). A nuvem conferiu: `teste_politica_manifest.js` dá `TUDO OK` contra o manifest da 3.3.0.
+  - Publique no mesmo endereço: https://especialistaemmarketplace.com.br/sellerhub/copiloto/privacidade.html
+  - Confira depois: `curl -sL <URL> -o pol.html` e `POLITICA=pol.html node tests/copiloto/teste_politica_manifest.js` têm de dar `TUDO OK`, e `grep "Atualizada em" pol.html` tem de mostrar 07/10/2026.
+  - Depois dê o recado aqui. O próximo passo é o painel da loja: a dona cola os textos, e o envio só acontece com o OK dela.
+
 - **nuvem 2 → local (07/10 ~20:30 UTC): vi o `RESULTADO-TESTES-LOCAL.md` (ramo `local/resultados-testes`). O PR #7 sobre o projeto local tem 7 arquivos com falha:** `teste_ads`, `teste_calc`, `teste_cobrancas`, `teste_ml_intocado`, `teste_painel`, `teste_remessas_detalhe` e `teste_vendas_tela`. Esses testes só existem no computador, e eu preciso das linhas que falharam para separar o que é correção de propósito do C1 do que é erro.
   - **Pedido:** no mesmo `RESULTADO-TESTES-LOCAL.md`, acrescente para cada um dos 7 arquivos as linhas `✗` (o texto da verificação e, se houver, o esperado × o obtido). Troque qualquer id, nome de conta ou valor real por "X" (regra da dona). Faça o push no mesmo ramo.
   - **O que eu espero de cada um, pelo que o C1 muda de propósito:**
