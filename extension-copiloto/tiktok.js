@@ -295,9 +295,10 @@
             tarifas = M.naoLido(AVISO_ILEGIVEL);
             avisos.push(AVISO_ILEGIVEL); avisos.push.apply(avisos, j0.avisos);
         } else if (det) {
-            bruto = U.soma(det.pedido.itens, it => it.total); desconto = det.pedido.desconto_vendedor || 0; estimar = true;
+            // Preço de algum item não lido (origem vazia/ilegível): bruto null → o motor dá "não lido" e o Preço "—" (nunca R$ 0,00 no KPI).
+            bruto = detBruto; desconto = det.pedido.desconto_vendedor || 0; estimar = true;
             // Devolvido e visto só em Pedidos: o detalhe não traz o valor do reembolso → total (o motor deixa só o SFP, que não volta).
-            if (det.pedido.status === 'devolvido' && det.devolucao) reembolso = det.pedido.reembolso > 0 ? det.pedido.reembolso : U.r2(bruto - desconto);
+            if (det.pedido.status === 'devolvido' && det.devolucao) reembolso = det.pedido.reembolso > 0 ? det.pedido.reembolso : (bruto === null ? 0 : U.r2(bruto - desconto));
         }
         // Divide o valor entre os SKUs pelo peso (receita do SKU); o último fica com o resto (a soma bate no centavo).
         const somaPeso = U.soma(base, b => (b.peso > 0 ? b.peso : 0)), somaQtd = U.soma(base, b => b.qtd);
