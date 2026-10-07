@@ -2702,8 +2702,9 @@
             const c = SHC.custoDeAnuncio ? SHC.custoDeAnuncio(custos, { sku: it.sku, skus: it.skus, skuFonte: it.skuFonte, itemId: it.itemId, familia: it.familia }) : null;
             const eq = SHC.adsEquilibrio(it, c && c.dados, cfg);
             if (!eq) return;
-            const antes = SHC.r2(eq.sobraAntes * (a.vendas || 0));
-            if (!(a.custo > antes + 0.004)) return;
+            // #26: SHC.adsLucro (margem × receita do Ads, no centavo), a mesma conta do cartão Alertas (P.adsEquilibrio) e de ads.html.
+            const l = SHC.adsLucro(eq.equilibrio, a.receita, a.custo), antes = l.antes;
+            if (!l.acima) return;
             lista.push({ tipo: 'ads', nivel: 'critico', chave: 'ads|' + a.itemId, itemId: a.itemId, sku: it.sku || '', titulo: a.titulo || it.titulo || '',
                 texto: eq.equilibrio <= 0 ? 'Este anúncio já dá prejuízo antes do Ads e ainda gastou ' + SHC.moeda(a.custo) + ' em Ads.'
                     : 'O Ads gastou ' + SHC.moeda(a.custo) + ' e a sobra dessas vendas antes do Ads era ' + SHC.moeda(antes) + ' (margem de ' + SHC.pctTxt(eq.equilibrio) + ').',
