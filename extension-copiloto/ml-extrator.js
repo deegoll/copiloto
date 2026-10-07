@@ -1494,7 +1494,14 @@
     /** O que o seller confere antes de mandar o pedido de exclusão desse motivo ('' = não é excluível). */
     SHC.confereExclusao = t => { const x = excluivel(t); return x ? x[2] : ''; };
     /**
-     * Pedido de exclusão (reputação e experiência de compra) para os casos com um motivo excluível. g = { motivo, casos, naReputacao, produtos?:[título/SKU], pedidos?:[nº] }.
+     * Rastreio 07/10/2026 (R10): situação da reclamação (detail-title do pós-venda) → true com mediação aberta com o ML. A regra de exclusão
+     * do ML não analisa reclamação em mediação: ela fica fora do pedido. Na dúvida (o ML analisando/decidindo), também fica fora.
+     */
+    SHC.emMediacao = s => /mediac|mediand|mediad|mediar\b|disputa|interv(ir|em|eio|indo|enc)|pediu ajuda|ajuda (a|ao|do) mercado livre|mercado livre (esta )?(analis|avali|decid|vai decid)|(decisao|analise) do mercado livre/
+        .test(semAcento(s));
+    /**
+     * Pedido de exclusão (reputação e experiência de compra) para os casos com um motivo excluível. g = { motivo, casos, naReputacao,
+     * produtos?:[{sku, titulo} | 'título'], pedidos?:[nº] } (P.grupoExclusao monta no painel, já sem os casos em mediação).
      * '' quando o motivo não está nas regras de exclusão.
      */
     SHC.chamadoExclusao = function (g) {
@@ -1503,10 +1510,14 @@
         // Auditoria da loja (07/10/2026): pede a ANÁLISE de cada pedido (com o número) e a exclusão só dos que se enquadrarem — nunca afirma
         // que todos se enquadram nem o estado do produto de cada um (quem confere é o seller: SHC.confereExclusao).
         const peds = (g.pedidos || []).filter(Boolean).slice(0, 20);
-        return SHC.textoContestacao({ assunto: 'Pedido de análise de reclamações para exclusão da reputação', ids: peds.length === 1 ? [['Pedido', '#' + peds[0]]] : [],
+        // Rastreio 07/10 (R10): o produto vai com o SKU quando o Copiloto sabe; um SKU só vai também no assunto (modelo da dona: "– SKU – Pedido").
+        const ps = (g.produtos || []).filter(Boolean).map(p => (typeof p === 'object' ? p : { titulo: String(p) }));
+        const prods = ps.map(p => (p.sku ? 'SKU ' + p.sku + (p.titulo ? ' (' + p.titulo + ')' : '') : p.titulo || '')).filter(Boolean);
+        const skus = [...new Set(ps.map(p => p.sku).filter(Boolean))], sku = skus.length === 1 && ps.every(p => p.sku) ? skus[0] : '';
+        return SHC.textoContestacao({ assunto: 'Pedido de análise de reclamações para exclusão da reputação', ids: [['SKU', sku], ['Pedido', peds.length === 1 ? '#' + peds[0] : '']],
             intro: 'Recebemos reclamações cujo motivo pode se enquadrar nas regras de exclusão do Mercado Livre. Pedimos a análise de cada pedido abaixo.',
             fatos: ['Motivo informado pelo comprador: “' + String(g.motivo).slice(0, 120) + '” (' + SHC.qtd(g.casos || 0, 'caso', 'casos') + (g.naReputacao ? ', ' + g.naReputacao + ' contando na reputação' : '') + ').',
-                'Regra de exclusão em que pode se enquadrar: ' + regra + '.', (g.produtos || []).length ? 'Anúncios: ' + g.produtos.slice(0, 5).join('; ') + '.' : '',
+                'Regra de exclusão em que pode se enquadrar: ' + regra + '.', prods.length ? 'Produtos: ' + prods.slice(0, 5).join('; ') + (prods.length > 5 ? ' e mais ' + (prods.length - 5) : '') + '.' : '',
                 peds.length > 1 ? 'Pedidos: ' + peds.map(n => '#' + n).join(', ') + '.' : ''],
             regras: ['exclusao', 'experiencia'],
             pedido: 'a análise de ' + (peds.length > 1 ? 'cada pedido acima' : peds.length ? 'este pedido' : 'cada caso') + ' e, ' + (peds.length > 1 ? 'nos que se enquadrarem' : 'se ele se enquadrar') + ', a exclusão da reclamação do cálculo da nossa reputação e da experiência de compra dos anúncios (Métricas › Atendimento aos seus compradores › Vendas com problemas).' });
