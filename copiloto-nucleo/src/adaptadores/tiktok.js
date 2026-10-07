@@ -6,9 +6,9 @@
 // Datas: financeiro em ms (texto), pedidos em segundos. Ids de 18–19 dígitos: SEMPRE texto.
 (function (root, fabrica) {
     'use strict';
-    if (typeof module === 'object' && module.exports) module.exports = fabrica(require('../util'), require('../modelo'), require('../tarifas'), require('../adaptador'));
-    else { const CN = root.CopilotoNucleo = root.CopilotoNucleo || {}; (CN.adaptadores = CN.adaptadores || {}).tiktok = fabrica(CN.util, CN.modelo, CN.tarifas, CN.adaptador); }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (U, M, T, A) {
+    if (typeof module === 'object' && module.exports) module.exports = fabrica(require('../util'), require('../modelo'), require('../tarifas'), require('../adaptador'), require('../motor'));
+    else { const CN = root.CopilotoNucleo = root.CopilotoNucleo || {}; (CN.adaptadores = CN.adaptadores || {}).tiktok = fabrica(CN.util, CN.modelo, CN.tarifas, CN.adaptador, CN.motor); }
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (U, M, T, A, MO) {
     'use strict';
 
     const O = (conta, fonte) => ({ canal: 'tiktok', conta: String(conta || ''), fonte: fonte || 'tela' });
@@ -187,11 +187,12 @@
         const avisos = [], pi = m.payment_info || {}, skus = Array.isArray(m.skus) ? m.skus : [];
         const origem = dinheiro(pi.main_order_origin_sale_price), subtotal = dinheiro(pi.subtotal), plat = dinheiro(pi.platform_discount_total) || 0;
         const descVend = dinheiro(pi.seller_discount_total) || 0;
-        const somaUnit = U.soma(skus, s => (dinheiro(s.total_price) !== null ? dinheiro(s.total_price) : (dinheiro(s.unit_price) || 0) * (s.quantity || 1)));
-        const itens = skus.map(s => {
-            const tot = dinheiro(s.total_price) !== null ? dinheiro(s.total_price) : U.r2((dinheiro(s.unit_price) || 0) * (s.quantity || 1));
-            // O preço do SKU já vem SEM o cupom da plataforma e SEM o desconto do vendedor: volta ao preço de origem pela participação.
-            const linha = origem !== null && somaUnit > 0 ? U.r2(origem * tot / somaUnit) : null;
+        const tots = skus.map(s => (dinheiro(s.total_price) !== null ? dinheiro(s.total_price) : U.r2((dinheiro(s.unit_price) || 0) * (s.quantity || 1))));
+        // O preço do SKU já vem SEM o cupom da plataforma e SEM o desconto do vendedor: volta ao preço de origem pela participação, pelo maior
+        // resto (Σ itens = preço de origem no centavo: R$ 100,00 em 3 SKUs pagos a R$ 33,33 = 33,34 + 33,33 + 33,33, nunca 99,99).
+        const linhas = origem !== null && U.soma(tots) > 0 ? MO.reparte(origem, tots) : skus.map(() => null);
+        const itens = skus.map((s, i) => {
+            const linha = linhas[i];
             return { sku: String(s.seller_sku_name || ''), anuncio_id: idTxt(s.sku_id) || '', titulo: String(s.product_name || '').slice(0, 200) + (s.sku_name ? ' · ' + s.sku_name : ''),
                 qtd: Number(s.quantity) || 1, total: linha, preco_unit: linha === null ? null : U.r2(linha / (Number(s.quantity) || 1)) };
         });

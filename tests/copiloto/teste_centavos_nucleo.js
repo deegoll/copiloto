@@ -20,8 +20,8 @@
 //      recebido, extratos e produtos; valor ausente aparece "—" (nunca R$ 0,00 inventado); nada de NaN/undefined/Infinity.
 // Casos gerados com semente fixa (LCG): o resultado é o mesmo em toda execução (nada de Math.random).
 // Divergências achadas nesta auditoria (fora deste teste para a suíte seguir verde; repro mínimo de cada uma: scratchpad/centavos/nucleo_repro_NN_*.js):
-//   1) tiktok.pedidoDoDetalhe: vários SKUs → cada linha = r2(origem × total_sku / Σ) sem o resto no último: Σ itens ≠ preço de origem
-//      (R$ 100,00 em 3 × R$ 33,33 → 99,99). O bruto e o reembolso "total" do pedido saem 1 centavo (ou mais) errados.
+//   1) CORRIGIDA (#30): tiktok.pedidoDoDetalhe fazia cada linha = r2(origem × total_sku / Σ) sem o resto (R$ 100,00 em 3 × R$ 33,33 → 99,99).
+//      Agora pelo maior resto (motor.reparte): Σ itens = preço de origem e o reembolso "total" fecha (seção G).
 //   2) CORRIGIDA (#29/#31): motor.rateioAds dava ao último pedido todo o arredondamento dos outros (Ads de R$ 0,05 em 10 pedidos iguais →
 //      9 × 0,01 e o último −0,04). Agora reparte pelo maior resto: cada parte a < 1 centavo da exata, nenhuma negativa (seção D).
 //   3) CORRIGIDA (#32): motor.lucroPedido.por_item fazia r2(total × participação) em cada item, sem o resto (Σ itens ≠ pedido em ≈40% dos
@@ -740,7 +740,8 @@ console.log('G. Adaptador TikTok (núcleo): repasse = preço − tarifas − fre
     ok(tr.avisos.some(a => /tarifa sem valor/.test(a)) && tr.avisos.some(a => /extrato não fecha/.test(a)) && tr.confere.diferenca === -U.r2(g0.fees[0].c / 100),
         'tarifa ilegível: o extrato avisa "tarifa sem valor" e "não fecha" com a diferença exata (a extensão ainda não leva o aviso à tela — divergência 5)');
 
-    // Detalhe do pedido (Pedidos): preço de origem por SKU. 1 SKU (ou preço cheio por SKU) = exato; vários com desconto: Σ ≈ origem (divergência 1).
+    // Detalhe do pedido (Pedidos): preço de origem por SKU. 1 SKU (ou preço cheio por SKU) = exato; vários com desconto: pelo maior resto,
+    // Σ itens = preço de origem no centavo (antes cada linha = r2(origem × pago ÷ Σ) sem o resto: divergência 1, corrigida #30).
     const d1 = lote(), dn = lote();
     let perdeu = 0, multi = 0;
     gs.slice(0, 600).forEach(g => {
@@ -753,11 +754,21 @@ console.log('G. Adaptador TikTok (núcleo): repasse = preço − tarifas − fre
         comDesc.data.main_order.skus.forEach((s, k) => { s.total_price = fp(pagos[k]); });
         const p2 = N.pedidoDoDetalhe(comDesc, { conta: '7000000001' }).pedido, dif = Math.abs(somaC(p2.itens, it => cent(it.total)) - g.brutoC);
         if (g.skus.length === 1) d1.conta(dif === 0, { g: g.i, dif });
-        else { multi++; if (dif) perdeu++; dn.conta(dif <= Math.ceil(g.skus.length / 2) && p2.itens.every(it => emCentavos(it.total)), { g: g.i, dif }); }
+        else { multi++; if (dif) perdeu++; dn.conta(dif === 0 && p2.itens.every((it, k) => emCentavos(it.total) && Math.abs(cent(it.total) - g.brutoC * pagos[k] / (g.brutoC - g.descC)) < 1 - 1e-9), { g: g.i, dif }); }
     });
     okLote(d1, 'detalhe do pedido: Σ itens = preço de origem e desconto do vendedor no centavo (1 SKU, ou preço cheio por SKU); nada do comprador passa');
-    okLote(dn, 'detalhe com vários SKUs e desconto: Σ itens a no máximo ½ centavo por SKU do preço de origem');
-    ok(multi > 0, `cobertura: ${multi} pedidos com vários SKUs e desconto (${perdeu} com Σ itens ≠ preço de origem: divergência 1)`);
+    okLote(dn, 'detalhe com vários SKUs e desconto: Σ itens = preço de origem no centavo, cada item a < 1 centavo da parte exata (#30)');
+    ok(multi > 0 && perdeu === 0, `cobertura: ${multi} pedidos com vários SKUs e desconto, nenhum com Σ itens ≠ preço de origem (#30)`);
+    // Os casos do relatório (#30): 3 SKUs pagos a R$ 33,33 com origem R$ 100,00; 3 × R$ 29,90 com cupom do vendedor de R$ 10 (pagos 26,57/26,57/26,56),
+    // entregue e devolvido (reembolso "total" = origem − desconto do vendedor = R$ 79,70, nunca 79,69).
+    const det30 = (origemC, descC, pagosC, x) => ({ code: 0, data: { main_order: Object.assign({ main_order_id: '9000000000000000301', main_order_create_time: segDia('2026-09-20'),
+        payment_info: { main_order_origin_sale_price: fp(origemC), subtotal: fp(origemC - descC), seller_discount_total: fp(descC), platform_discount_total: fp(0) },
+        skus: pagosC.map((c, k) => ({ seller_sku_name: 'PROD-' + k, sku_id: '80000000000000000' + k, quantity: 1, total_price: fp(c), sku_display_status: 122 })) }, x || {}) } });
+    const p30a = N.pedidoDoDetalhe(det30(10000, 1, [3333, 3333, 3333]), { conta: '7000000001' }).pedido;
+    const p30b = N.pedidoDoDetalhe(det30(8970, 1000, [2657, 2657, 2656], { reverse_info: { reverse_order_id: '4000000000000000030', reverse_status: 100, reverse_type: 1 } }), { conta: '7000000001' }).pedido;
+    ok(p30a.itens.map(it => cent(it.total)).join() === '3334,3333,3333' && somaC(p30a.itens, it => cent(it.total)) === 10000
+        && somaC(p30b.itens, it => cent(it.total)) === 8970 && p30b.status === 'devolvido' && cent(p30b.reembolso) === 7970,
+        'detalhe com 3 SKUs: R$ 100,00 = 33,34 + 33,33 + 33,33 (antes 99,99); 3 × R$ 29,90 com cupom de R$ 10: Σ = R$ 89,70 e o reembolso total do devolvido = R$ 79,70 (antes 89,69 e 79,69) — #30');
     const devol = respDetalhe(gs[1]); devol.data.main_order.reverse_info = { reverse_order_id: '4000000000000000001', reverse_status: 100, reverse_type: 2 };
     const pd = N.pedidoDoDetalhe(N.filtroPedidoSemComprador(devol), { conta: '7000000001' });
     ok(pd.pedido.status === 'devolvido' && cent(pd.pedido.reembolso) === gs[1].brutoC - gs[1].descC && pd.devolucao.produto_voltou === false && pd.devolucao.valor_reembolsado === null,
