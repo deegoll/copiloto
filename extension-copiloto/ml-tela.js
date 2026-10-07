@@ -526,14 +526,15 @@
     };
     /**
      * Dados guardados da conta → (v, det) → o x de SHC.telaVendaConta. A etiqueta da tela e o aviso do fundo (SHC.vendasPrejuizo) usam
-     * ESTE mesmo montador: tarifa real (cob), afiliado e Full iguais nos dois. g = { cobs:[cob:<conta>:<mês>], ads, afil (afil:<conta>), full (ml:full:<conta>), hoje }.
+     * ESTE mesmo montador: tarifa real (cob), afiliado e Full iguais nos dois. g = { cobs:[cob:<conta>:<mês>], ads, afil (afil:<conta>), full (ml:full:<conta>), hoje,
+     * itens (ml:anuncios: liga o Ads de catálogo ao anúncio pelo título, SHC.adsLigaCatalogo, como o painel e o ícone) }.
      */
     SHC.vendaExtras = function (g) {
         g = g || {};
         const cobL = [].concat(...(g.cobs || []).map(c => (c && c.linhas) || [])), cob = SHC.cobPorPedido(cobL);
         const afil = (g.afil && g.afil.pedidos && g.afil.pedidos.porPedido) || {};
         const full = g.full && g.full.temFull ? SHC.fullRateioUn(cobL, g.full.produtos, g.hoje, g.full.totalProdutos) : null;
-        const acos = id => SHC.adsAcosDe(g.ads, id);
+        const ads = g.itens && SHC.adsLigaCatalogo ? SHC.adsLigaCatalogo(g.ads, g.itens) : g.ads, acos = id => SHC.adsAcosDe(ads, id);
         // Afiliados: não se sabe ainda se saleDetail.orderId é o pedido ou o pacote (A CONFIRMAR ao vivo): procura pelos dois, como o frete.
         return (v, det) => ({ det: det || null, cob: cob[v.pedido] || null, acos, afil: afil[v.pedido] || (v.pack && afil[v.pack]) || null, full });
     };
@@ -1669,7 +1670,7 @@
                 SHC.lerChave('cob:' + conta + ':' + mes), SHC.lerChave('cob:' + conta + ':' + mesAnt), SHC.lerChave('ads:' + conta), SHC.lerChave('afil:' + conta), SHC.lerChave('ml:full:' + conta)]);
             const porId = new Map();
             ((snap && snap.itens) || []).forEach(i => { if (i && i.itemId && !porId.has(i.itemId)) porId.set(i.itemId, i); });
-            vendasC = { porId, pedidos: (fp && fp.pedidos) || {}, extras: SHC.vendaExtras({ cobs: [cob0, cob1], ads, afil, full, hoje }) };
+            vendasC = { porId, pedidos: (fp && fp.pedidos) || {}, extras: SHC.vendaExtras({ cobs: [cob0, cob1], ads, afil, full, hoje, itens: snap && snap.itens }) };
             custosC = null;
         }
         const chaveP = p => p.itemId + '|' + p.sku;

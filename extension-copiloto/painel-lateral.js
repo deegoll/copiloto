@@ -245,23 +245,9 @@
             cliques: numDe(o, ['clicks', 'cliques']), impressoes: numDe(o, ['impressions', 'prints', 'impressoes']),
         };
     };
-    // F8: o patrocinado de CATÁLOGO vem com o id do produto de catálogo. Liga ao anúncio da seller pelo título quando só UM anúncio
-    // tem esse título (a mesma regra de ads.js A.porSku); sem ligação, soma em catalogoSemLigacao (a manchete diz "veredito sobre X de Y").
-    P.adsLigaCatalogo = function (snap, itens) {
-        if (!snap || !Array.isArray(snap.anuncios)) return snap;
-        const norm = SHC.normalizaTitulo || (t => String(t || '').toLowerCase().trim()), porTitulo = new Map();
-        (itens || []).forEach(i => { const t = norm(i.titulo); if (t) porTitulo.set(t, porTitulo.has(t) && porTitulo.get(t) !== i.itemId ? '' : i.itemId); });
-        let semLig = 0, ligados = 0;
-        const anuncios = snap.anuncios.map(a => {
-            const o = Object.assign({}, (a && a.metrics) || {}, (a && a.metricas) || {}, a || {});
-            if (!(o.catalogoProduto || o.type === 'catalog')) return a;
-            const id = porTitulo.get(norm(o.titulo || o.title));
-            if (id) { ligados++; return Object.assign({}, a, { itemId: id, catalogoProduto: false, type: 'catalogo_ligado', catalogoLigado: true }); }
-            semLig += numDe(o, ['cost', 'custo', 'investimento', 'gasto']) || 0;
-            return a;
-        });
-        return Object.assign({}, snap, { anuncios, catalogoLigados: ligados, catalogoSemLigacao: SHC.r2(semLig) });
-    };
+    // F8: o patrocinado de CATÁLOGO ligado ao anúncio da seller pelo título (SHC.adsLigaCatalogo, ml-extrator.js: a mesma ligação do ícone e
+    // da etiqueta da venda); sem ligação, soma em catalogoSemLigacao (a manchete diz "veredito sobre X de Y").
+    P.adsLigaCatalogo = (snap, itens) => SHC.adsLigaCatalogo(snap, itens);
     // F22: Full com mais produtos que o teto de leitura (50 páginas de 20).
     P.fullParcialTxt = f => 'Leitura em parte: ' + P.milhar(((f && f.produtos) || []).length) + ' de ' + P.milhar((f && f.totalProdutos) || 0) + ' produtos do Full lidos.';
     // Anúncio finalizado no ML (closed, também "closed_migrated_to_up"): não é anúncio em venda (F24, Logística).

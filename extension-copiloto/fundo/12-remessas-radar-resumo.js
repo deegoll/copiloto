@@ -61,7 +61,7 @@ async function sincronizarVendasPrejuizo(conta, progresso) {
     const hojeX = SHC.hoje(), [anoX, mmX] = hojeX.slice(0, 7).split('-').map(Number), mesAntX = mmX === 1 ? (anoX - 1) + '-12' : anoX + '-' + String(mmX - 1).padStart(2, '0');
     const [snap, fp, fh, cob1, cob0, adsX, afilX, fullX] = await Promise.all([SHC.lerAnuncios(conta), SHC.lerChave('frete:' + conta + ':pedidos'), SHC.lerChave('frete:' + conta + ':hist'),
         SHC.lerChave('cob:' + conta + ':' + hojeX.slice(0, 7)), SHC.lerChave('cob:' + conta + ':' + mesAntX), SHC.lerChave('ads:' + conta), SHC.lerChave('afil:' + conta), SHC.lerChave('ml:full:' + conta)]);
-    const extras = SHC.vendaExtras ? SHC.vendaExtras({ cobs: [cob0, cob1], ads: adsX, afil: afilX, full: fullX, hoje: hojeX }) : null;
+    const extras = SHC.vendaExtras ? SHC.vendaExtras({ cobs: [cob0, cob1], ads: adsX, afil: afilX, full: fullX, hoje: hojeX, itens: snap && snap.itens }) : null;
     const porId = new Map();
     ((snap && snap.itens) || []).forEach(i => { if (i && i.itemId && !porId.has(i.itemId)) porId.set(i.itemId, i); });
     const anuncio = id => porId.get(id) || null, chaveP = x => x.itemId + '|' + x.sku, infos = new Map();

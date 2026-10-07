@@ -22,7 +22,8 @@ if (chrome.storage && chrome.storage.onChanged) chrome.storage.onChanged.addList
 async function atualizarAlertas(conta) {
     const c = conta || await SHC.contaAtual();
     const [full, ads, an, cfg, lidos] = await Promise.all([SHC.lerFull(c), SHC.lerAds(c), SHC.lerAnuncios(c), SHC.lerCfg(), SHC.lerMesesVendasLidos(c)]);
-    const comAds = new Set(((ads && ads.anuncios) || []).filter(a => a.custo > 0).map(a => a.itemId));
+    // Catálogo ligado pelo título (SHC.adsLigaCatalogo, a ligação do painel): o custo do anúncio ligado também é lido para o aviso do Ads.
+    const comAds = new Set((((ads && SHC.adsLigaCatalogo(ads, an && an.itens)) || {}).anuncios || []).filter(a => a && a.custo > 0).map(a => a.itemId));
     const itens = ((an && an.itens) || []).filter(i => comAds.has(i.itemId)), chaves = new Set(), ids = new Set();
     // F2: o custo de TODAS as variações (antes só o 1º SKU: o alerta lia o lucro inflado).
     itens.forEach(i => { SHC.skusDoAnuncio(i).forEach(s => chaves.add(SHC.chaveSku(s))); chaves.add(SHC.chave('ml', i.itemId)); if (i.familia) chaves.add(SHC.chave('ml', i.familia)); });

@@ -38,7 +38,8 @@
 //      receita, por anúncio, no centavo). O aviso do fundo (SHC.alertasDe: ícone e sino) também usa SHC.adsLucro e conta o mesmo anúncio que o
 //      cartão Alertas do painel (antes: sobra de hoje × unidades, discordava nos dois sentidos). Revisão 2: o anúncio em várias campanhas (também
 //      numa em que gastou R$ 0 e o ML atribuiu venda) é UMA entrada no painel e um aviso no ícone, com as campanhas somadas, como ads.html e o
-//      cartão do anúncio (antes "Lucro R$ 50,00" × "Prejuízo R$ 10,00"); "dá para investir mais" olha só o que foi pago.
+//      cartão do anúncio (antes "Lucro R$ 50,00" × "Prejuízo R$ 10,00"); "dá para investir mais" olha só o que foi pago. O ícone, o sino e a
+//      etiqueta da venda ligam o Ads de catálogo ao anúncio pelo título, como o painel e ads.html (SHC.adsLigaCatalogo, uma ligação só).
 //   7) [corrigida, #27] Sem o resumo do ML (falha da chamada campaigns/metrics): ads.html somava as campanhas e o painel os anúncios lidos →
 //      R$ 100,00 × R$ 60,00 com a lista de anúncios em parte, e a linha "Total" do painel ≠ soma das linhas. Agora o painel soma as campanhas
 //      (P.adsConta) e a linha Total é a soma das linhas (P.adsCampanhasTotal).
@@ -828,6 +829,32 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
             return !rs.some(r => r.cost > 0) ? c.veredito.tipo === 'semGasto' : luc === 0 || ((luc < 0) === (c.veredito.tipo === 'nao') && (luc < 0) === /acima do equilíbrio|Gastou sem nenhuma venda/.test(h)); });
         return (t.l.length === 1 && cent(x.depois) === cent(t.g.lucroRs) && cent(x.antes) === cent(t.g.sobraRs) && x.acima === ac && (t.ic.ads === 1) === ac && (t.card.ads === 1) === ac
             && (t.g.lucroRs === 0 || (t.ver.tipo === 'nao') === ac) && camps) || tag;
+    });
+}
+{   // #26, revisão 2: o ícone e o sino (SHC.alertasDe) e a etiqueta da venda (SHC.vendaExtras → SHC.adsAcosDe) ligam o Ads de CATÁLOGO ao
+    // anúncio pelo título, como o painel (P.adsLigaCatalogo) e ads.html (A.porSku): uma ligação só, SHC.adsLigaCatalogo. Antes o ícone e a
+    // etiqueta deixavam a linha de catálogo de fora e o mesmo anúncio tinha outro lucro, outro "acima" e outro ACOS.
+    const cfg = { imposto_pct: 0, margem_alvo_pct: 10 }, custo = () => ({ custo: 50 }), sobraDe = it => SHC.sobraAnuncio(it, custo(), cfg);
+    const it = [{ itemId: 'MLB9000000051', sku: 'TST-L', titulo: 'Produto L', preco: 100, recebe: 80 }];   // sobra hoje R$ 30/un. (30%)
+    const telas = rows => {
+        const snap0 = contaFixa(rows, { semResumo: true }), snap = P.adsLigaCatalogo(snap0, it), an = A.analisa(snap0, it, custo, cfg, []), l = P.adsEquilibrio(snap, it, sobraDe);
+        const ic = SHC.alertasDe({ ads: snap0, itens: it, custos: { [SHC.chaveSku('TST-L')]: custo() }, cfg, hoje: '2026-10-07', full: { produtos: [] } });
+        const ex = SHC.vendaExtras({ cobs: [], ads: snap0, hoje: '2026-10-07', itens: it })({ pedido: '1' }), d = P.adsDoItem(snap, 'MLB9000000051');
+        return { g: an.grupos.find(g => g.itens[0] === it[0]), l, ic, card: P.alertas([], l, [], {}), etq: ex.acos('MLB9000000051'), cardAcos: SHC.pctTxt(d.m.acos) };
+    };
+    const proprio = (cost, totalAmount) => ({ id: 'MLB9000000051', title: 'Produto L', campaignId: 7, cost, totalAmount, prints: 10, clicks: 1, unitsQuantity: totalAmount > 0 ? 1 : 0 });
+    const catalogo = (cost, totalAmount) => ({ id: 'MLB2000051', type: 'catalog', userId: 0, title: 'Produto L', campaignId: 8, cost, totalAmount, prints: 10, clicks: 1, unitsQuantity: totalAmount > 0 ? 1 : 0 });
+    const a = telas([proprio(10, 100), catalogo(50, 50)]);
+    ok(a.g.lucroRs === -15 && a.g.selos.includes('acima') && a.l.length === 1 && a.l[0].depois === -15 && a.l[0].acima && a.card.ads === 1 && a.ic.ads === 1
+        && a.ic.lista[0].texto === 'O Ads gastou R$ 60,00 e a sobra dessas vendas antes do Ads era R$ 45,00 (margem de 30%).' && a.ic.lista[0].excesso === 15
+        && a.etq.base === 'ACOS do anúncio (40%)' && a.cardAcos === '40%',
+        `#26 o anúncio (Ads R$ 10, R$ 100) + o catálogo ligado a ele (Ads R$ 50, R$ 50): "Prejuízo R$ 15,00" e "acima" em ads.html, no painel e no ícone; a etiqueta da venda com ACOS 40%, como o cartão do anúncio (obtido: ${A.textoMontante(a.g)} · ícone ${a.ic.ads} ${a.ic.lista.map(x => x.texto).join('')} · etiqueta ${a.etq && a.etq.base})`);
+    const rnd = semente(7264);
+    prop('#26 anúncio com linha de catálogo ligada pelo título: o ícone avisa ⇔ o cartão Alertas ⇔ ads.html dá "acima", com a mesma sobra; a etiqueta da venda tem o ACOS do cartão do anúncio', vezes(400), () => {
+        const rC = I(rnd, 0, 30000), cR = I(rnd, 0, 30000), rows = [proprio(I(rnd, 0, 6000) / 100, rC / 100), catalogo(I(rnd, 1, 6000) / 100, cR / 100)];
+        const t = telas(rows), sel = t.g.selos.includes('acima') ? 1 : 0, tE = t.etq && /do anúncio/.test(t.etq.base) ? /\((.*)\)/.exec(t.etq.base)[1] : '—';
+        return (t.l.length === 1 && cent(t.l[0].depois) === cent(t.g.lucroRs) && t.ic.ads === sel && t.card.ads === sel && (!sel || cent(t.ic.lista[0].excesso) === -cent(t.g.lucroRs))
+            && tE === t.cardAcos) || `${JSON.stringify(rows.map(r => [r.cost, r.totalAmount]))}: ${A.textoMontante(t.g)} · ícone ${t.ic.ads} · cartão ${t.card.ads} · etiqueta ${tE} × ${t.cardAcos}`;
     });
 }
 {   // #27: sem o resumo do ML (campaigns/metrics falhou) e com a lista de anúncios em parte: o mesmo Investimento nas duas telas e Total = Σ campanhas
