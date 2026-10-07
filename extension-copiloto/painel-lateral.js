@@ -298,7 +298,7 @@
     };
 
     // ── Saúde do estoque no Full (por produto). prevQtd = previsão de 30 dias (P.previsaoFull).
-    // Dias até acabar = o menor entre o que o ML mostra e aptas ÷ previsão. O mínimo compara com aptas + a caminho.
+    // Dias até acabar = o menor entre o que o ML mostra e ⌊aptas × 30 ÷ previsão⌋. O mínimo compara com aptas + a caminho.
     // Classes: sem_estoque (0 aptas) · critico (acaba em ≤ 7 dias vendendo, ou abaixo do mínimo em unidades que o seller definiu)
     // · parado (tem estoque, 0 vendas em 30 dias) · atencao (≤ 15 dias) · excedente (cobertura > 90 dias ou o ML mostra unidades
     // com tempo de estoque) · saudavel. Campo que o ML não mostrou: sem classe (null), nunca um número inventado.
@@ -310,7 +310,7 @@
         const out = { classe: null, dias: null, cobertura: null, minUn: fm.minUn, definido: fm.definido, abaixoMin: fm.abaixo, faltam: fm.faltam, sugerido: fm.sugerido, alerta: false };
         if (aptas === null) return out;
         const tem = Math.max(0, aptas);
-        if (prevQtd > 0) out.cobertura = Math.floor(tem / (prevQtd / 30));
+        if (prevQtd > 0) out.cobertura = Math.floor(tem * 30 / prevQtd);   // multiplica antes: 23 × 30 ÷ 23 = 30 (23 ÷ (23 ÷ 30) dava 29,999…)
         const ml = typeof p.diasAteEsgotar === 'number' && isFinite(p.diasAteEsgotar) ? p.diasAteEsgotar : null;
         const ds = [ml, out.cobertura].filter(x => x !== null);
         out.dias = ds.length ? Math.min(...ds) : null;
@@ -730,7 +730,7 @@
             return { p, prev, aptas, aCaminho, semCaminho: uc === null, semDado, alvo, bruto, qtd: bruto, limitado: false, lucro, travas, cautela, diasUsados,
                 motivoLucro: lucro === null ? (lo.motivo || 'sem_custo') : '', semAnuncio: lo.motivo === 'sem_anuncio', seg, semSegmento: seg === null && temLivre,
                 segTitulo: seg !== null ? String((esp.find(e => e.id === seg) || {}).titulo || '').replace(/:.*$/, '') : '',
-                esgota: !semDado.length && prev.qtd > 0 ? Math.floor((aptas + aCaminho) / (prev.qtd / 30)) : null };
+                esgota: !semDado.length && prev.qtd > 0 ? Math.floor((aptas + aCaminho) * 30 / prev.qtd) : null };   // multiplica antes (conta exata não perde 1 dia)
         });
         const faixa = l => l.esgota === null ? FAIXAS.length + 1 : FAIXAS.filter(f => l.esgota > f).length;
         const lu = l => l.lucro === null ? -1e9 : l.lucro, ruim = l => l.lucro !== null && l.lucro < 0;
