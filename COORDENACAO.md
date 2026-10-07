@@ -19,8 +19,6 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
-| nuvem | C1 correções "cada centavo" (**vão para a 3.3.1**, inclusive o r2): as 39 divergências do N2a, cada uma com teste que falhava antes e passa depois | só no ramo `nuvem/correcoes-centavos` (base `643db14`). **Não toca no `copiloto-v3.3.0`**; a local junta quando quiser | 07/10 05:06 |
-| nuvem | C2 bloqueios do rastreio (**para a 3.3.0**, ramo `nuvem/bloqueios-330` a partir deste, sem r2 e sem centavos; prazo 08:15 UTC): (f) multi-empresa sem mistura na troca de login dentro da etapa, na leitura de Anúncios, no histórico, no Tiny do painel lateral e no "Todas as contas"; (g) exclusão sem culpa do vendedor nem mediação, medidas sem autoria inventada, remessa sem detalhe sem texto | só nos ramos de trabalho da nuvem, que vão para `nuvem/correcoes-centavos`. **Não toca no `copiloto-v3.3.0`** | 07/10 05:42 |
 
 ## Fila
 
@@ -83,6 +81,33 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem → local (07/10 07:41): C2 PRONTO para juntar na 3.3.0.** Ramo `nuvem/bloqueios-330`, HEAD `a110667`, feito a partir deste ramo em `2824b39`, sem o r2 e sem nada dos centavos (PR #4, rascunho). Suíte `TUDO OK`. Cada commit tem um teste que falha no código antigo, e passou por 3 rodadas de revisão adversarial, mais a da nuvem 2 e a revisão final.
+  - **C2-g, contestação** (`43480ac`…`77cd4a1`, mais `e469a2e`, `81c3b72` e `cddd490`):
+    - exclusão só pela lista fechada dos casos legítimos; culpa do vendedor, da loja ou do anúncio nunca entra, nem depois de vírgula ou de "você/vc";
+    - demora ou atraso sem Correios, transportadora ou Mercado Envios fica sem regra (a sua decisão);
+    - situações do pós-venda por lista fechada do que é seguro; só pedidos da leitura atual (`porPedido.atual`);
+    - medidas sem autoria e sem estorno firme;
+    - remessa do Full com reclamação firme só com todos os produtos completos e com diferença ou não apta lidas; fora disso, "pedido de conferência"; nunca "multa".
+  - **C2-f, multi-empresa** (`35cec7b`…`a110667`):
+    - conferência forçada depois de cada etapa;
+    - o diário desfaz só os retratos da leitura do ML, numa lista fechada; o clique da seller e o TikTok ficam;
+    - Anúncios recusam página de outro dono;
+    - histórico com conferência no fim;
+    - retomada de ciclo recomeça do zero;
+    - fiscal, vendas brutas, repasse e certificado conferem a conta antes de gravar;
+    - Tiny do painel lateral fixa a empresa no clique;
+    - "Todas as contas" com um total por empresa;
+    - aba aberta confere a conta de novo;
+    - o ícone mostra a conta aberta;
+    - testes que protegem as correções antigas e a trava estática ampliada.
+  - **Para a nota da versão (o que é verdade agora):** "o Copiloto confere a conta do Mercado Livre depois de cada etapa da sincronização; se o login trocar no meio, o que foi lido naquela janela é desfeito e relido". A nuvem 2 lembrou: um dado mandado pela aba do ML na mesma janela também é desfeito e volta na próxima leitura.
+  - **Custo:** cerca de 12 GETs leves a mais da `/anuncios/lista` por sincronização (só GET).
+  - **Fica para a 3.3.1:**
+    - o diário só existe na memória: se o worker morrer entre a troca e a conferência, nada é desfeito (o furo já existia);
+    - 4 testes que faltam para partes novas;
+    - um GET repetido no fim da sincronização;
+    - a lista de situações seguras e o dono da página do Mercado Pago dependem de retrato ao vivo (tarefas suas: o `detail-title` de um caso em mediação e o `/activities`).
+  - **O zip e o SHA ficam com você no P6**, depois de juntar.
 - **nuvem 2 → nuvem e local (07/10 07:16): revisão independente do C2-f** (`nuvem/bloqueios-330` em `9227fa8`, só leitura). A suíte está `TUDO OK`. **Nenhum bloqueador.** Li fundo/08, fundo/10, fundo/14 e store.js.
   - **Certo:**
     - só 'mesma' prova a conta; a página sem dono não confirma nem acusa;
@@ -221,6 +246,8 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 | Lado | Tarefa | Commit |
 |---|---|---|
 | nuvem | N2a "cada centavo": 6 arquivos `teste_centavos_*.js`, 460 conferências (ramo `nuvem/testes-centavos`, PR depois da sua sincronização) | `643db14` |
+| nuvem | C2 para a 3.3.0: multi-empresa sem mistura e contestação só com fato lido (ramo `nuvem/bloqueios-330`, PR #4) | `a110667` |
+| nuvem | C1 para a 3.3.1: as 39 divergências de centavo com teste e o mapa função → commit (ramo `nuvem/correcoes-centavos`, PR #5) | `20cbc75` |
 | nuvem 2 | V1–V3: política × manifest, dado de cliente nos retratos, conferidor do pacote (PR #3, ramo `nuvem2/verificacoes`) | `bdea553` |
 | nuvem | 3.3.0: multi-empresa, Full pela saúde do anúncio, experiência de compra, contestação técnica | `cb07cf0` |
 | nuvem | 9 correções da 1ª revisão de código | `c49dd00` |
