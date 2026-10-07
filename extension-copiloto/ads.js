@@ -150,7 +150,9 @@
      * O índice de títulos é montado UMA vez (1.000 × 1.000 em milissegundos). Anúncio de catálogo também tenta o título:
      * o id dele é o do produto de catálogo e nunca casa pelo MLB.
      * custoDe(itemDoRetrato) → dados do custo ou null. Margem antes do Ads = SHC.sobraAnuncio (preço de hoje, números do ML);
-     * no SKU com mais de um anúncio vale a PIOR margem (conservador). ACOS de equilíbrio = essa margem.
+     * no SKU com mais de um anúncio vale a PIOR margem (conservador) no equilíbrio mostrado e nas sugestões. ACOS de equilíbrio = essa margem.
+     * O lucro (A.montante) e a leitura da campanha usam a margem do anúncio de cada linha (margens): o Ads do anúncio premium com a sobra
+     * do premium, como o painel (P.adsEquilibrio). Com a pior margem em todas, o lucro do SKU e o da conta saíam diferentes dos do painel.
      */
     A.porSku = function (ads, itens, custoDe, cfg, camps) {
         itens = (itens || []).filter(i => i && i.itemId);
@@ -166,8 +168,8 @@
             if (!it) { const id = porTitulo.get(norm(ad.titulo)); if (id) { it = porId.get(id); via = 'titulo'; } }
             const chave = it ? (it.sku ? 'sku:' + it.sku : 'mlb:' + it.itemId) : 'ad:' + ad.id;
             let g = grupos.get(chave);
-            if (!g) grupos.set(chave, g = { chave, sku: (it && it.sku) || '', titulo: it ? it.titulo : ad.titulo, itens: [], ads: [], via: new Set() });
-            g.ads.push(ad);
+            if (!g) grupos.set(chave, g = { chave, sku: (it && it.sku) || '', titulo: it ? it.titulo : ad.titulo, itens: [], ads: [], adIt: [], via: new Set() });
+            g.ads.push(ad); g.adIt.push(it || null);
             if (it && g.itens.indexOf(it) < 0) g.itens.push(it);
             if (via) g.via.add(via);
         });
@@ -176,6 +178,8 @@
             const ss = g.itens.map(it => SHC.sobraAnuncio(it, custoDe ? custoDe(it) : null, cfg)).filter(Boolean);
             const comMargem = ss.filter(s => s.sobra !== null);
             const margem = g.itens.length && comMargem.length === ss.length && ss.length ? Math.min(...comMargem.map(s => s.pct)) : null;
+            const pctDe = new Map(g.itens.map(it => { const s = SHC.sobraAnuncio(it, custoDe ? custoDe(it) : null, cfg); return [it, s && s.sobra !== null ? s.pct : margem]; }));
+            const margens = margem === null ? null : g.adIt.map(it => (pctDe.has(it) ? pctDe.get(it) : margem));   // margem do anúncio de cada linha
             const campIds = [...new Set(g.ads.map(a => a.campanhaId).filter(Boolean))];
             const campanhas = campIds.map(id => (campPorId.get(id) || {}).nome || g.ads.find(a => a.campanhaId === id).campanhaNome || 'Campanha ' + id);
             const perdeOrc = campIds.some(id => { const c = campPorId.get(id); return c && c.share && c.share.orcamento >= A.PERDE_MIN; });
@@ -185,13 +189,13 @@
             if (m.investimento > 0 && !(m.vendas > 0)) selos.push('semVenda');
             // Acima = lucro depois do Ads < 0 em centavos (A.montante), não ACOS > margem em ponto flutuante: Ads = sobra no centavo (lucro R$ 0,00)
             // não passa; gasto sem venda passa (como o painel, P.adsEquilibrio, e a contagem da manchete, A.resultado).
-            if (margem !== null && m.investimento > 0 && A.montante({ m, margem, ads: g.ads }).lucroRs < 0) selos.push('acima');
+            if (margem !== null && m.investimento > 0 && A.montante({ m, margem, margens, ads: g.ads }).lucroRs < 0) selos.push('acima');
             const folga = margem === null ? null : margem - meta;   // o que o Ads pode levar sem furar a meta
             // Escalar olha só o que foi pago (#26): a venda atribuída a uma campanha em que o anúncio gastou R$ 0 não diz que vale investir mais.
             const pago = A.soma(g.ads.filter(a => a.m && a.m.investimento > 0).map(a => a.m));
             if (folga > 0 && pago && pago.acos > 0 && pago.acos <= folga * A.ESCALA && perdeOrc) selos.push('escalar');
             return { chave: g.chave, sku: g.sku, titulo: g.titulo, itens: g.itens, ads: g.ads, porTitulo: g.via.has('titulo') && !g.via.has('id'),
-                m, margem, equilibrio: margem, campIds, campanhas, perdeOrc, selos };
+                m, margem, margens, equilibrio: margem, campIds, campanhas, perdeOrc, selos };
         }).sort((a, b) => (b.m.investimento || 0) - (a.m.investimento || 0) || (b.m.impressoes || 0) - (a.m.impressoes || 0) || String(a.titulo).localeCompare(String(b.titulo)));
     };
 
@@ -232,16 +236,17 @@
      */
     A.leituraCampanha = function (c, grupos, cfg) {
         const meta = SHC.num((cfg || {}).margem_alvo_pct) || 0;
-        // Equilíbrio da campanha = margem dos SKUs dela, pesada pela receita de Ads de cada um.
+        // Equilíbrio da campanha = margem dos anúncios dela, pesada pela receita de Ads de cada um.
         let peso = 0, soma = 0, antes = 0, gasto = 0, fora = false;
         grupos.forEach(g => {
-            const ms = g.ads.filter(a => a.campanhaId === c.id).map(a => a.m || {});
-            if (!ms.length) return;
-            if (g.margem === null) { fora = fora || ms.some(m => m.investimento > 0 || m.receita > 0); return; }
-            const rec = ms.reduce((s, m) => s + (m.receita || 0), 0);
-            if (rec > 0) { peso += rec; soma += rec * g.margem; }
-            const l = SHC.adsLucro(g.margem, ms.map(m => ({ receita: m.receita, gasto: m.investimento })));
-            antes += l.antes; gasto += l.gasto;
+            const ix = g.ads.map((a, i) => i).filter(i => g.ads[i].campanhaId === c.id);
+            if (!ix.length) return;
+            if (g.margem === null) { fora = fora || ix.some(i => (g.ads[i].m || {}).investimento > 0 || (g.ads[i].m || {}).receita > 0); return; }
+            ix.forEach(i => {   // margem do anúncio de cada linha (A.porSku: margens), como o painel
+                const m = g.ads[i].m || {}, mg = g.margens && g.margens[i] != null ? g.margens[i] : g.margem, l = SHC.adsLucro(mg, m.receita, m.investimento);
+                if (m.receita > 0) { peso += m.receita; soma += m.receita * mg; }
+                antes += l.antes; gasto += l.gasto;
+            });
         });
         antes = SHC.r2(antes); gasto = SHC.r2(gasto);
         const eq = peso > 0 ? soma / peso : null, acos = peso > 0 ? gasto / peso * 100 : null, lucro = SHC.r2(antes - gasto), acima = gasto > 0 && lucro < 0;
@@ -298,8 +303,8 @@
     A.montante = function (g) {
         const ads = SHC.r2(g.m.investimento || 0);
         if (g.margem === null) return { adsRs: ads, sobraRs: null, lucroRs: null };
-        const ms = g.ads && g.ads.length ? g.ads.map(a => a.m || {}) : [g.m];
-        const sobra = SHC.adsLucro(g.margem, ms.map(m => ({ receita: m.receita, gasto: m.investimento }))).antes;
+        const ms = g.ads && g.ads.length ? g.ads.map(a => a.m || {}) : [g.m], mg = i => (g.margens && g.margens[i] != null ? g.margens[i] : g.margem);
+        const sobra = SHC.r2(ms.reduce((t, m, i) => t + SHC.adsLucro(mg(i), m.receita, m.investimento).antes, 0));   // margem do anúncio de cada linha
         return { adsRs: ads, sobraRs: sobra, lucroRs: SHC.r2(sobra - ads) };
     };
 
