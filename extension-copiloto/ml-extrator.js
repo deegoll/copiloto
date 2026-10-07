@@ -1352,14 +1352,16 @@
     const DEV_ARREP = /arrepend|desist|mudou de ideia|n[ãa]o (quer|quero|gostou|gostei|precisa|precisou)|comprou por engano|n[ãa]o serviu/i;
     const DEV_TRANSP = /danific|embalage|amassad|quebrad|avari|extravi|transport|pacote sem|chegou (aberto|vazio)/i;
     SHC.DEV_COR = { verde: '🟢 dá para questionar', amarelo: '🟡 vale conferir', cinza: '⚪ foi sua responsabilidade' };
-    /** posvenda:<conta> → { pedido: {motivo, afetouReputacao, situacao, descricao} } (porPedido; null = pós-venda nunca lido com o nº do pedido). */
+    /** posvenda:<conta> → { pedido: {motivo, afetouReputacao, situacao, descricao, titulo?} } (porPedido; null = pós-venda nunca lido com o nº do pedido). */
     SHC.posvendaPorPedido = pv => (pv && pv.porPedido && typeof pv.porPedido === 'object' ? pv.porPedido : null);
     /** porPedido guardado + casos lidos agora (SHC.posvendaReclamacoesDoFlox) → o novo porPedido (o lido agora vale; até 300 pedidos, os mais novos) | null. */
     SHC.posvendaJuntaPorPedido = function (ant, casos) {
         const novo = {};
         (casos || []).forEach(c => {
             const k = String((c && c.pedido) || '').replace(/\D/g, '');
-            if (k.length >= 6 && !novo[k]) novo[k] = { motivo: c.motivo || '', afetouReputacao: c.afetouReputacao === true ? true : c.afetouReputacao === false ? false : null, situacao: c.situacao || '', descricao: c.descricao || '' };
+            // Revisão do grupo g: + o título do produto (o pedido de exclusão diz o produto/SKU de cada pedido, e não o de outro).
+            if (k.length >= 6 && !novo[k]) novo[k] = { motivo: c.motivo || '', afetouReputacao: c.afetouReputacao === true ? true : c.afetouReputacao === false ? false : null, situacao: c.situacao || '', descricao: c.descricao || '',
+                titulo: String(c.titulo || '').slice(0, 120) };
         });
         const velhos = ant && typeof ant === 'object' ? Object.keys(ant).filter(k => !novo[k]) : [];
         const out = {};
@@ -1573,9 +1575,12 @@
     /**
      * Rastreio 07/10/2026 (R10): situação da reclamação (detail-title do pós-venda) → true com mediação aberta com o ML. A regra de exclusão
      * do ML não analisa reclamação em mediação: ela fica fora do pedido. Na dúvida (o ML analisando/decidindo), também fica fora.
+     * Revisão do grupo g: ainda não há retrato da tela de um caso em mediação (tarefa da sessão local); o ML escreve em 1ª pessoa ("pediram
+     * nossa ajuda", "vamos decidir até…", "estamos analisando", "intervimos"), então qualquer decisão, análise ou revisão também conta.
      */
-    SHC.emMediacao = s => /mediac|mediand|mediad|mediar\b|disputa|interv(ir|em|eio|indo|enc)|pediu ajuda|ajuda (a|ao|do) mercado livre|mercado livre (esta )?(analis|avali|decid|vai decid)|(decisao|analise) do mercado livre/
-        .test(semAcento(s));
+    SHC.emMediacao = s => new RegExp('mediac|mediand|mediad|mediar\\b|disputa|\\binterv(ir|em|eio|indo|enc\\w*|imos|iremos|ira|ieram|iu)\\b|pedi(u|ram|mos)( \\w+){0,2} ajuda|nossa ajuda'
+        + '|ajuda (a|ao|do) mercado livre|mercado livre (esta )?(analis|avali|decid|vai decid)|vamos (decidir|analisar|avaliar)|(decidi|analisa|avalia)remos|estamos (analis|avali|revis)'
+        + '|nossa (decis|analise|avalia|revis)|\\bdecis(ao|oes)\\b|(decisao|analise) do mercado livre|em (analise|revisao)').test(semAcento(s));
     /**
      * Pedido de exclusão (reputação e experiência de compra) para os casos com um motivo excluível. g = { motivo, casos, naReputacao,
      * produtos?:[{sku, titulo} | 'título'], pedidos?:[nº] } (P.grupoExclusao monta no painel, já sem os casos em mediação).

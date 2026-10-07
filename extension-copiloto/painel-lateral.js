@@ -1669,14 +1669,19 @@
      * contaAgora = casos da leitura atual, fora da mediação, que contam na reputação (o botão só aparece com 1 ou mais).
      * Rastreio 07/10/2026 (R10): reclamação com mediação aberta fica fora (o ML não analisa a exclusão dela), pela situação do caso e do porPedido;
      * pedidos = os do motivo que não estão marcados "não contou na reputação"; produtos com o SKU pelo anúncio achado pelo título (SHC.posvendaAnalise).
+     * Revisão do grupo g: situação vazia (porPedido antigo, tela sem o título) = não se sabe se há mediação, fica fora (na dúvida, não pede).
+     * Os produtos saem dos PEDIDOS listados (o título guardado no porPedido); sem pedido, dos casos da leitura atual. Pedido sem o título lido
+     * (porPedido de versão anterior) = produto desconhecido: nenhum produto nem SKU no texto (o SKU de outro produto nunca vai para ele).
      */
     P.grupoExclusao = function (pv, mot, itens) {
         if (!pv || !SHC.motivoExcluivel(mot)) return null;
-        const cs = (pv.casos || []).filter(c => c && c.motivo === mot && !SHC.emMediacao(c.situacao));
+        const fora = s => !!String(s || '').trim() && !SHC.emMediacao(s);
+        const cs = (pv.casos || []).filter(c => c && c.motivo === mot && fora(c.situacao));
         const pp = SHC.posvendaPorPedido(pv) || {};
-        const pedidos = Object.keys(pp).filter(n => pp[n] && pp[n].motivo === mot && pp[n].afetouReputacao !== false && !SHC.emMediacao(pp[n].situacao));
+        const pedidos = Object.keys(pp).filter(n => pp[n] && pp[n].motivo === mot && pp[n].afetouReputacao !== false && fora(pp[n].situacao));
         if (!cs.length && !pedidos.length) return null;
-        const produtos = SHC.posvendaAnalise(cs.filter(c => c.afetouReputacao !== false), itens || []).produtos.map(p => ({ sku: p.sku || '', titulo: p.titulo || '' }));
+        const base = !pedidos.length ? cs.filter(c => c.afetouReputacao !== false) : pedidos.every(n => pp[n].titulo) ? pedidos.map(n => ({ titulo: pp[n].titulo, motivo: mot })) : [];
+        const produtos = SHC.posvendaAnalise(base, itens || []).produtos.map(p => ({ sku: p.sku || '', titulo: p.titulo || '' }));
         const naReputacao = pedidos.length ? pedidos.filter(n => pp[n].afetouReputacao === true).length : cs.filter(c => c.afetouReputacao === true).length;
         return { motivo: mot, casos: pedidos.length || cs.length, naReputacao, produtos, pedidos, contaAgora: cs.filter(c => c.afetouReputacao === true).length };
     };

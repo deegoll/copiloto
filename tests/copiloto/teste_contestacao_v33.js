@@ -351,13 +351,13 @@ console.log('Pedido de exclusão (rastreio 07/10, R10): os pedidos certos, o SKU
         casos: [{ titulo: 'Bomba d’água 12V', motivo: mot, afetouReputacao: true, situacao: 'Aguardando sua resposta', valor: 89.9 },
             { titulo: 'Bomba d’água 12V', motivo: mot, afetouReputacao: true, situacao: 'Em mediação com o Mercado Livre', valor: 89.9 },
             { titulo: 'Bomba d’água 12V', motivo: 'Produto com defeito', afetouReputacao: true, situacao: 'Aguardando sua resposta', valor: 89.9 }],
-        porPedido: {
-            '2000000101': { motivo: mot, afetouReputacao: true, situacao: 'Mediação em andamento' },
-            '2000000102': { motivo: mot, afetouReputacao: null, situacao: 'Aguardando sua resposta' },
-            '2000000103': { motivo: mot, afetouReputacao: true, situacao: 'Aguardando sua resposta' },
-            '2000000104': { motivo: mot, afetouReputacao: true, situacao: 'Em mediação com o Mercado Livre' },
-            '2000000105': { motivo: 'Produto com defeito', afetouReputacao: true, situacao: 'Aguardando sua resposta' },
-            '2000000106': { motivo: mot, afetouReputacao: false, situacao: 'Aguardando sua resposta' } } };
+        porPedido: {   // revisão do grupo g: o porPedido guarda o título do produto (SHC.posvendaJuntaPorPedido)
+            '2000000101': { motivo: mot, afetouReputacao: true, situacao: 'Mediação em andamento', titulo: 'Bomba d’água 12V' },
+            '2000000102': { motivo: mot, afetouReputacao: null, situacao: 'Aguardando sua resposta', titulo: 'Bomba d’água 12V' },
+            '2000000103': { motivo: mot, afetouReputacao: true, situacao: 'Aguardando sua resposta', titulo: 'Bomba d’água 12V' },
+            '2000000104': { motivo: mot, afetouReputacao: true, situacao: 'Em mediação com o Mercado Livre', titulo: 'Bomba d’água 12V' },
+            '2000000105': { motivo: 'Produto com defeito', afetouReputacao: true, situacao: 'Aguardando sua resposta', titulo: 'Bomba d’água 12V' },
+            '2000000106': { motivo: mot, afetouReputacao: false, situacao: 'Aguardando sua resposta', titulo: 'Bomba d’água 12V' } } };
     const itens = [{ itemId: 'MLB9100000001', sku: 'BOMBA-12V', titulo: 'Bomba d’água 12V' }, { itemId: 'MLB9100000002', sku: 'FILTRO-01', titulo: 'Filtro de ar esportivo' }];
     ok(['Mediação em andamento', 'Em mediação com o Mercado Livre', 'O comprador pediu ajuda ao Mercado Livre', 'O Mercado Livre está analisando o caso'].every(m => emMed(m) === true)
         && ['Aguardando sua resposta', 'Aguardando a devolução', ''].every(m => emMed(m) === false), 'situação com mediação aberta (ou o ML decidindo) é reconhecida');
@@ -390,6 +390,30 @@ console.log('Pedido de exclusão (rastreio 07/10, R10): os pedidos certos, o SKU
             'pós-venda lido sem o nº do pedido: conta só o caso fora da mediação e leva o SKU');
         const semSku = SHC.chamadoExclusao({ motivo: mot, casos: 1, naReputacao: 1, produtos: [{ sku: '', titulo: 'Produto sem SKU' }], pedidos: ['2000000107'] });
         ok(/^Assunto: Pedido de análise de reclamações para exclusão da reputação – Pedido: #2000000107\n/.test(semSku) && /- Produtos: Produto sem SKU\./.test(semSku), 'sem SKU conhecido: o título');
+        // Revisão do grupo g (dados inventados): o SKU de um produto nunca vai para o pedido de outro.
+        console.log('Pedido de exclusão (revisão do grupo g): SKU do produto certo e mediação reconhecida pelo que o ML escreve');
+        const pad = 'Não quero mais o produto', aguarda = 'Aguardando sua resposta';
+        // Ontem o 2000000201 (Filtro), hoje o 2000000202 (Bomba), o mesmo motivo padrão do ML: o porPedido guarda o título de cada um.
+        const pp = SHC.posvendaJuntaPorPedido(SHC.posvendaJuntaPorPedido(null, [{ pedido: '2000000201', motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Filtro de ar esportivo' }]),
+            [{ pedido: '2000000202', motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' }]);
+        ok(pp && pp['2000000201'].titulo === 'Filtro de ar esportivo' && pp['2000000202'].titulo === 'Bomba d’água 12V', 'o porPedido guarda o título do produto de cada pedido');
+        const r1 = await clique({ casos: [{ titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: aguarda }], porPedido: pp }, pad), x1 = r1.copiado || '';
+        ok(/^Assunto: Pedido de análise de reclamações para exclusão da reputação\n/.test(x1) && /- Produtos: SKU FILTRO-01 \(Filtro de ar esportivo\); SKU BOMBA-12V \(Bomba d’água 12V\)\./.test(x1)
+            && /- Pedidos: #2000000201, #2000000202\./.test(x1), 'botão: pedidos de 2 produtos → os 2 produtos e nenhum SKU no assunto (antes: "SKU: BOMBA-12V" também para o pedido do filtro)');
+        // porPedido de versão anterior (sem o título) + o caso de hoje sem o nº: o produto do pedido antigo é desconhecido.
+        const velho = { casos: [{ titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: aguarda }], porPedido: { '2000000301': { motivo: pad, afetouReputacao: true, situacao: aguarda } } };
+        const r2b = await clique(velho, pad), x2 = r2b.copiado || '';
+        ok(/^Assunto: Pedido de análise de reclamações para exclusão da reputação – Pedido: #2000000301\n/.test(x2) && !/SKU|Produtos:/.test(x2),
+            'botão: pedido antigo sem o título lido → nem produto nem SKU (antes: "SKU: BOMBA-12V – Pedido: #2000000301", e o 301 era do filtro)');
+        // Mediação: o ML escreve em 1ª pessoa; situação vazia (não se sabe) também fica fora.
+        ok(['O comprador pediu nossa ajuda', 'Pediram nossa ajuda', 'Vamos decidir até 10 de outubro', 'Decidiremos até 12 de outubro', 'Estamos analisando o caso', 'Aguardando nossa decisão',
+            'Intervimos no caso', 'Em revisão'].every(m => emMed(m) === true), 'mediação escrita pelo ML em 1ª pessoa ("pediram nossa ajuda", "vamos decidir", "intervimos") é reconhecida');
+        const vazia = { casos: [{ titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: aguarda }, { titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: '' }],
+            porPedido: { '2000000401': { motivo: pad, afetouReputacao: true, titulo: 'Bomba d’água 12V' }, '2000000402': { motivo: pad, afetouReputacao: true, situacao: 'Pediram nossa ajuda', titulo: 'Bomba d’água 12V' },
+                '2000000403': { motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' } } };
+        const g4 = grupo(vazia, pad, itens), r4 = await clique(vazia, pad), x4 = r4.copiado || '';
+        ok(g4 && g4.contaAgora === 1 && /^Assunto: .* – SKU: BOMBA-12V – Pedido: #2000000403\n/.test(x4) && !/2000000401|2000000402/.test(x4),
+            'botão: pedido sem a situação lida (401) e o da mediação em 1ª pessoa (402) ficam fora; o caso sem situação não conta');
     })();
     espera.then(() => pendentes.reduce((p, fn) => p.then(fn), Promise.resolve())).then(() => { console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK'); process.exit(f ? 1 : 0); }, e => { console.error(e); process.exit(1); });
 }
