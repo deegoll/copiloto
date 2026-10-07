@@ -87,10 +87,13 @@
         const pt = r.tarifas_por_tipo || {}, est = !!r.tarifas_estimadas || !!r.estimado;
         Object.keys(pt).filter(k => pt[k]).forEach(k => { h += cl(T.ROT_TARIFA[k] || k, menos(pt[k]), '', est); });
         if (!Object.keys(pt).length && r.status === 'nao_lido') h += `<div class="cl fora"><span>Tarifas: abra o pedido no Financeiro do TikTok</span><b>—</b></div>`;
+        if (n(r.ads_no_repasse)) h += cl('Ads pago com o repasse', menos(r.ads_no_repasse), '', est);   // GMV Pay: o TikTok tira do repasse
         h += cl('Repasse do TikTok', moeda(r.repasse), 'tot', !!r.estimado);
         h += r.custo_rs === null || r.custo_rs === undefined ? `<div class="cl fora"><span>Custo do produto: informe em Produtos</span><b>—</b></div>` : cl('Custo do produto', menos(r.custo_rs));
         if (r.outros_rs) h += cl('Embalagem e outros', menos(r.outros_rs));
         if (r.imposto_rs) h += cl('Imposto (' + String(r.imposto_pct).replace('.', ',') + '%)', menos(r.imposto_rs));
+        const adsFora = n(r.ads_rs) !== null ? Math.round((r.ads_rs - (n(r.ads_no_repasse) || 0)) * 100) / 100 : 0;   // Ads fora do repasse (rateado)
+        if (adsFora) h += cl('Ads', menos(adsFora));
         if (n(r.lucro_real) !== null) h += cl(r.lucro_real < 0 ? 'Prejuízo' : 'Lucro', moeda(r.lucro_real), 'tot' + (r.lucro_real < 0 ? ' mais' : ' est'));
         return `<div class="conta-ped">${h}</div>`;
     }
