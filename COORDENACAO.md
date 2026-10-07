@@ -19,8 +19,8 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
-| nuvem | Rastreio dos pedidos da dona contra o código e backlog para vender mais (só leitura; o resultado vira tarefas na Fila) | nenhum | 07/10 02:05 |
 | nuvem | C1 correções "cada centavo": as 39 divergências do N2a, cada uma com teste que falhava antes e passa depois | só no ramo `nuvem/correcoes-centavos` (base `643db14`). **Não toca no `copiloto-v3.3.0`**; a local junta quando quiser | 07/10 05:10 |
+| nuvem | C2 bloqueios do rastreio: (f) multi-empresa sem mistura na troca de login dentro da etapa, na leitura de Anúncios, no histórico, no Tiny do painel lateral e no "Todas as contas"; (g) exclusão sem culpa do vendedor nem mediação, medidas sem autoria inventada, remessa sem detalhe sem texto | só nos ramos de trabalho da nuvem, que vão para `nuvem/correcoes-centavos`. **Não toca no `copiloto-v3.3.0`** | 07/10 05:50 |
 
 ## Fila
 
@@ -50,7 +50,23 @@ A rotina da noite (P1–P9) vem primeiro. Estes, quando ela estiver esperando.
 
 ### Nuvem
 
-**Pausada para `extension-copiloto/*` e `tests/*`** até a sincronização da local. Depois, nesta ordem: N1, N2 e N3 (acima). Em seguida, a 3.4.0 a partir dos retratos M1–M4:
+**Pausada para `extension-copiloto/*` e `tests/*`** até a sincronização da local. Depois, nesta ordem: N1, N2 e N3 (acima). Backlog do rastreio (07/10, por impacto em faturamento e margem; cada item com teste):
+
+- B1 Ruptura que o sino não vê: a previsão do painel no `SHC.alertasDe`, casar anúncios pelo SKU, guardar 14 meses de histórico, "Acaba hoje" no lugar de "0 dias", teste de paridade painel × sino.
+- B2 Ruptura do estoque próprio: o SKU que zerou as vendas do mês não some do `SHC.familiasAcoes`; um item por SKU com dias de cobertura no `SHC.anomalias`; os parados do ERP com estoque no sino.
+- B3 Buy Box perdida no sino (tipo 'catalogo'; vermelho quando tem estoque no Full).
+- B4 Pausa repentina (`SHC.pausasRegistra`), separando esgotado de pausa do vendedor.
+- B5 Conversão caindo (unidades ÷ visitas do vbAnuncio) no `porQueCaiu` e no sino.
+- B6 Frete: mesmo SKU com frete diferente no sino; a subida do frete pelo histórico diário; sem o corte de 200 e sem contar o mesmo pedido duas vezes.
+- B7 Estoque empacado no Full (parado, excedente, armazenagem estimada em R$ pelas cobranças FWA/FCBE).
+- B8 Uma decisão só por produto no Full (as travas valem em todas as telas).
+- B9 Margem abaixo da meta no sino (tipo 'margem').
+- B10 Promoções: não sugerir a oferta em que o anúncio já está; mostrar as sem data de fim.
+- B11 Shopee sem ler a Shopee: "Na Shopee a R$ X: recebe, sobra e preço mínimo" no detalhe do SKU; plano da Shopee por empresa em Ajustes.
+- B12 Visão por canal e por empresa; meta do mês por empresa.
+- B13 Grupo de contas na mesma empresa e cópia dos custos ao marcar "Outra empresa".
+
+Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 1. Experiência de compra ao vivo, pelo retrato M1.
 2. Shopee: ligar o adaptador do `copiloto-nucleo` na extensão (captura passiva) e os textos de contestação com as regras do M4.
@@ -63,9 +79,17 @@ A rotina da noite (P1–P9) vem primeiro. Estes, quando ela estiver esperando.
 
 (Qualquer sessão escreve aqui o que a outra deve pegar. Quem pegar, move para a Fila do seu lado.)
 
+- **Para a local (do rastreio da nuvem, 07/10):** retratos que dão confiança ao que já existe, todos anonimizados: resposta de `/anuncios/api/tasks`; pós-venda (o product-id é o número do pedido?); tabela do Full com produto sem vendas ("0" ou "—"); promoção ativa preenchida; paginação `?page=N` das Vendas; se o Faturador traz o id da conta; bloco "Custos por estoque antigo" e cobranças de remessa; código da restrição "em revisão"; `/anuncios/lista/precos?task=PRICE_SUGGESTION`; opiniões do produto (só nota média e contagem de 1 e 2 estrelas); se "Alterar anúncio" traz a descrição.
+
 ## Recados
 
-- **nuvem → local (07/10 05:10): N2a pronto e 39 divergências de centavo reais.** Ramo `nuvem/testes-centavos` (`643db14`): 6 arquivos `teste_centavos_*.js`, 460 conferências com dados inventados, `TUDO OK`. Achei 47 casos em que a tela e a conta não batem; 8 foram refutados na verificação e **39 são reais**. Corrijo todos no ramo `nuvem/correcoes-centavos`, cada um com teste. Aviso aqui quando terminar. **Vocês decidem:** juntar antes do P6 (zip) ou mandar como 3.3.1 no mesmo dia. Nenhum deles é bloqueador de segurança; os médios são:
+- **nuvem → local (07/10 05:50): rastreio dos pedidos da dona terminou** (123 requisitos: 3 prontos com teste, 12 prontos sem teste, 81 parciais, 27 faltam). O que pesa para o envio da 3.3.0, conferido com script de prova (vale também para a sua versão, porque o código é o que a nuvem mandou):
+  1. **Multi-empresa ainda mistura:** uma troca de login dentro da janela de 60 s da conferência grava dados da empresa B nas chaves da A, e a etapa sai "ok" (pós-venda com alerta vermelho falso, resumo, Full, cobranças). A leitura de Anúncios só confere o dono da página 1. O `lerHistorico` não confere no fim. O "Puxar custos agora" do Tiny no painel lateral grava o custo e o token da A na B. O "Todas as contas" soma empresas diferentes. **A nuvem corrige (C2 f).** Até lá, a nota da versão não pode dizer "sem mistura" nem "conferida antes e depois de cada etapa".
+  2. **Contestação:** a exclusão ainda aceita culpa do vendedor ("não serviu no meu carro", "despachou com atraso", "desisti, veio trincado") e reclamação com mediação aberta. O sino e o chamado de medidas dizem "o Mercado Livre mudou" ou "não foi feita por nós" sem saber quem mudou. **A nuvem corrige (C2 g).** A trava da remessa sem detalhe por produto, que você já tem, vai junto.
+  3. **Full:** o sino e o ícone não usam a previsão sazonal do painel; o índice sazonal não funciona do dia 1 ao ~15 do mês com dados reais; o mesmo cartão diz "Envie pelo menos N" e "Não enviar agora". A primeira parte está no C1; o resto entra depois.
+  4. **Política:** nenhuma menção a experiência de compra (`exp:<conta>`) nem a "Outra empresa". O texto pronto está em `AUDITORIA-LOJA-3.3.0.md:121-131`. É do seu P2/P4.
+  5. **Nota da versão:** promete armazenagem em R$ (só existe como frase), avisos de experiência no sino (os ids reais não passam no filtro) e "conferência no fim do histórico" (não existe). Ajuste a sua NOVIDADES; a nuvem ajusta a deste ramo junto com as correções.
+  - Backlog para vender mais (ordem por impacto): na Fila da nuvem. O que precisa de tela ao vivo foi para Ideias, para você.- **nuvem → local (07/10 05:10): N2a pronto e 39 divergências de centavo reais.** Ramo `nuvem/testes-centavos` (`643db14`): 6 arquivos `teste_centavos_*.js`, 460 conferências com dados inventados, `TUDO OK`. Achei 47 casos em que a tela e a conta não batem; 8 foram refutados na verificação e **39 são reais**. Corrijo todos no ramo `nuvem/correcoes-centavos`, cada um com teste. Aviso aqui quando terminar. **Vocês decidem:** juntar antes do P6 (zip) ou mandar como 3.3.1 no mesmo dia. Nenhum deles é bloqueador de segurança; os médios são:
   - Fechamento: o "Dá para recuperar" soma duas regras sobre a mesma cobrança (pede R$ 15 por uma cobrança de R$ 10) e conta a coleta inteira da remessa do Full como recuperável. Na sua 3.3.0 o frete não entra no "a recuperar": o corte em 200 pedidos (`pagoAMais.slice(0,200)`) não vale aí.
   - Lucro: o frete grátis sem valor (a partir de R$ 79 ou no Full) entra como R$ 0 e a sobra aparece como número firme.
   - Full: o total do mês das remessas não bate com as próprias linhas do cartão; o simulador conta remessa vencida ou cancelada; o ícone e o sino ignoram a previsão sazonal (o painel diz Crítico e o ícone não conta o produto).
