@@ -32,8 +32,8 @@
 //   5) CORRIGIDA (#34): frete ilegível virava 0 e {amount:""} virava 0 (Number("") = 0); a extensão usava o detalhe como "exato" assim mesmo
 //      (Repasse R$ 100 × R$ 80 pagos, "a menor" falso). Agora vazio → null, frete ilegível = frete não lido com aviso, e o detalhe que não fecha
 //      (ou com valor ilegível) nunca é exato: vale a lista do Financeiro, ou o pedido fica "não lido" (seções A, G e K).
-//   6) SHC.tt.resumo: o KPI "Lucro 30 dias" (e a receita/margem) soma só status 'ok'; o pedido CANCELADO com tarifa/frete que ficou
-//      (lucro −R$ 8,50) entra em Produtos e na conciliação, mas some do KPI: KPI R$ 37,00 × produto R$ 28,50 na mesma tela.
+//   6) CORRIGIDA (#35): o KPI "Lucro 30 dias" somava só 'ok' e deixava de fora o prejuízo do CANCELADO (frete que ficou), que Produtos e a
+//      conciliação contam (KPI R$ 37,00 × produto R$ 28,50). Agora o KPI soma 'ok' e 'cancelado', como Produtos e o fechamento (seções I e K).
 //   7) tarifas.simular: classe pela margem JÁ arredondada a 1 casa: prejuízo de −R$ 0,01 em R$ 300 (margem −0,003% → −0) sai "lucrativo".
 //   8) util.r2 (= SHC.r2) não arredonda o meio centavo sempre igual: 6% de R$ 282,25 = 16,935 → 16,93, mas a maioria dos empates sobe
 //      (≈4–9% dos empates de tarifa descem); SHC.moeda(16,935) mostra "R$ 16,94".
@@ -929,12 +929,12 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
     okLote(L.dev, 'devolução total (lista + Pedidos): reembolso = preço − desconto, receita líquida 0, repasse = o do TikTok (o SFP/frete que ficou), com aviso do custo');
     okLote(L.det, 'só Pedidos: tarifas pela tabela do dia (marcadas estimadas), repasse = receita − Σ tabela, fora da conciliação');
 
-    // Período (30 dias): KPI = Σ dos pedidos ok; conciliação = Σ dos repasses; linha do tempo = Σ a liberar; extratos = Σ pedidos do extrato.
-    const desde = U.somaDias(HOJE, -29), mes = vm.pedidos.filter(x => x.dia >= desde && x.dia <= HOJE), okP = mes.filter(x => x.status === 'ok');
+    // Período (30 dias): KPI = Σ dos pedidos ok e cancelados (os mesmos de Produtos, #35); conciliação = Σ dos repasses; linha do tempo = Σ a liberar.
+    const desde = U.somaDias(HOJE, -29), mes = vm.pedidos.filter(x => x.dia >= desde && x.dia <= HOJE), okP = mes.filter(x => x.status === 'ok'), okKpi = mes.filter(x => x.status === 'ok' || x.status === 'cancelado');
     const k = vm.kpis;
-    ok(cent(k.lucro_30d) === somaC(okP, x => cent(x.lucro_real)) && cent(k.receita_30d) === somaC(okP, x => cent(x.receita_liquida)) && k.pedidos_30d === mes.length
+    ok(cent(k.lucro_30d) === somaC(okKpi, x => cent(x.lucro_real)) && cent(k.receita_30d) === somaC(okKpi, x => cent(x.receita_liquida)) && k.pedidos_30d === mes.length
         && k.margem_pct === Math.round(k.lucro_30d / k.receita_30d * 10000) / 100 && k.sem_custo === mes.filter(x => x.status === 'sem_custo').length && k.sem_custo > 0,
-        `KPI: lucro 30 dias = Σ lucro dos ${okP.length} pedidos ok (${SHC.moeda(k.lucro_30d)}), receita = Σ receita líquida, margem = lucro ÷ receita; ${k.sem_custo} sem custo contados à parte`);
+        `KPI: lucro 30 dias = Σ lucro dos ${okKpi.length} pedidos ok/cancelados (${SHC.moeda(k.lucro_30d)}), receita = Σ receita líquida, margem = lucro ÷ receita; ${k.sem_custo} sem custo contados à parte`);
     const fin = linhasFin.filter(l => modos[l.id] !== 'det'), libC = somaC(fin.filter(l => l.status === 2), l => l.settlementC), aLibC = somaC(fin.filter(l => l.status === 1), l => l.settlementC);
     ok(cent(vm.conciliacao.recebido) === libC && cent(vm.conciliacao.a_liberar) === aLibC && vm.conciliacao.diferenca === 0 && (vm.conciliacao.por_status.ok || 0) === gs.filter(g => modos[g.id] !== 'det' && g.status === 2).length,
         `conciliação: recebido = Σ linhas liquidadas (${SHC.moeda(libC / 100)}), a liberar = Σ "Est." (${SHC.moeda(aLibC / 100)}), diferença 0 (o esperado de cada pedido é o do TikTok)`);
@@ -1094,6 +1094,21 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         const q34 = TT.resumo(await TT.ler(C34), { hoje: '2026-09-25' }), r34 = q34.pedidos[0];
         ok(!r34.exato && r34.estimado && r34.repasse === 80 && r34.tarifas_por_tipo.frete_venda === 8 && r34.avisos.some(a => /ilegível/.test(a)) && q34.conciliacao.diferenca === 0 && q34.conciliacao.por_status.ok === 1,
             'o mesmo pedido com a lista do Financeiro (#34): vale a lista — repasse R$ 80,00 = o do TikTok, frete R$ 8,00, "estimado", conciliação ok');
+    }
+
+    {   // #35: pedido cancelado com R$ 8,50 de frete que ficou + pedido ok de lucro R$ 37,00 (custo R$ 30, imposto 6%).
+        const C35 = '7000000035', sku35 = '1730000000000000935', a35 = v => ({ amount: v });
+        const l35 = (id, sd, earning, fees, ship, settle, dia) => ({ trade_order_id: id, statement_detail_id: sd, statement_id: '9035', placed_time: msDia(dia), settlement_status: 2, settlement_time: msDia('2026-09-24'),
+            earning_amount: a35(earning), fees: a35(fees), shipping_amount: a35(ship), settlement_amount: a35(settle), sku_records: [{ sku_id: sku35, quantity: 1, product_name: 'Produto 35', earning_amount: a35(earning) }] });
+        await TT.gravarCaptura('pedidos_fin', { code: 0, data: { order_records: [l35('577000000000003501', '3501', '0.00', '0.00', '-8.50', '-8.50', '2026-09-20'), l35('577000000000003502', '3502', '100.00', '-22.00', '-5.00', '73.00', '2026-09-21')] } }, C35, lidoEm);
+        await TT.gravarCaptura('pedido', { code: 0, data: { main_order: { main_order_id: '577000000000003501', main_order_create_time: segDia('2026-09-20'),
+            payment_info: { main_order_origin_sale_price: fp(5000) }, skus: [{ seller_sku_name: 'CAMISA-35', sku_id: sku35, quantity: 1, total_price: fp(5000), sku_display_status: 140 }] } } }, C35, lidoEm);
+        banco['c|sku|CAMISA-35'] = { custo: 30 };
+        const v35 = TT.resumo(await TT.ler(C35), { hoje: '2026-09-25' }), h35 = ABA.html(v35, { hoje: '2026-09-25' });
+        const kpi35 = (/<div class="l">Lucro 30 dias<\/div><div class="v">([^<]*)<\/div>/.exec(h35) || [])[1], man35 = (/<p class="manchete">.*?<b>([^<]*)<\/b>/.exec(h35) || [])[1];
+        ok(v35.pedidos.map(x => x.status + ' ' + x.lucro_real).sort().join() === 'cancelado -8.5,ok 37' && v35.kpis.lucro_30d === 28.5 && somaC(v35.produtos, x => cent(x.lucro_real)) === 2850
+            && v35.conciliacao.recebido === 64.5 && deMoeda(kpi35) === 2850 && man35 === 'Lucro de R$ 28,50 em 30 dias no TikTok.' && v35.kpis.receita_30d === 100 && v35.kpis.margem_pct === 28.5,
+            'KPI com pedido cancelado (#35): Lucro 30 dias R$ 28,50 = Σ Produtos = R$ 37,00 − R$ 8,50 do frete que ficou (antes R$ 37,00); manchete igual; margem 28,5%');
     }
 
     console.log('\n' + nChecks + ' verificações.');
