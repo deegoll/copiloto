@@ -262,6 +262,55 @@ console.log('Exclusão (rastreio 07/10, bloqueio 4): culpa do vendedor escrita d
         && SHC.chamadoExclusao({ motivo: 'Vendedor despachou com atraso', casos: 1, naReputacao: 1 }) === '', 'com culpa do vendedor no motivo, nenhum texto de exclusão sai');
 }
 
+console.log('Exclusão (revisão do grupo g): só o núcleo da regra + complementos neutros dela; qualquer outra oração fica sem regra');
+{
+    const vazou = l => l.filter(m => SHC.motivoExcluivel(m));
+    const travou = l => l.filter(m => !SHC.motivoExcluivel(m));
+    const msg = (t, l) => t + (l.length ? ': ' + l.join(' | ') : '');
+    // Autopeças sem as palavras "carro", "veículo", "compatível": a troca só vale pura (ou com o complemento de vestuário).
+    const a1 = vazou(['Quero trocar o modelo, não deu no meu gol', 'Quero trocar o modelo, a furação não bateu', 'trocar por outro modelo, a rosca não bateu',
+        'quero trocar o modelo pq nao e pro meu civic', 'Quero trocar de modelo, peça não é do meu ano', 'Quero trocar o modelo, não entra no meu onix', 'Quero trocar o modelo, a peça é de outro ano',
+        'Quero trocar o modelo, não é pro meu ano/modelo', 'Quero trocar o modelo, não é pro meu fusca', 'Quero trocar o modelo, o furo não alinha', 'Quero trocar o modelo, é de outra versão',
+        'quero trocar o modelo, veio errado', 'Quero trocar o tamanho, a tabela está errada', 'Quero trocar o tamanho, veio menor']);
+    ok(!a1.length, msg('troca com outra oração (veículo, ano, furação, rosca, tabela): sem regra', a1));
+    // Despacho atrasado com o substantivo antes do verbo, em preparação, "só saiu", loja: é do vendedor.
+    const a2 = vazou(['A postagem atrasou e a entrega demorou', 'o despacho demorou e a entrega atrasou', 'Ficou em preparação 6 dias e a entrega atrasou',
+        'ficou aguardando postagem uma semana e atrasou a entrega', 'O pedido só saiu depois de uma semana e chegou atrasado', 'levou uma semana pra sair e chegou atrasado',
+        'o pacote ficou parado na loja 5 dias, chegou atrasado', 'a loja segurou o pedido e atrasou a entrega', 'Os Correios atrasaram, o produto não foi postado no prazo',
+        'Chegou atrasado porque a loja demorou', 'Chegou atrasado e com defeito', 'Entrega atrasou, o envio foi feito depois do prazo', 'O pedido atrasou']);
+    ok(!a2.length, msg('despacho, preparo, "só saiu", loja (em qualquer ordem): não é demora do transporte', a2));
+    // Tamanho, número ou voltagem trocados pelo vendedor (sem "errado", "outro" ou "diferente").
+    const a3 = vazou(['Quero trocar o tamanho, pedi 40 e veio 42', 'Quero trocar o tamanho pq mandaram 42 e eu pedi 40', 'Quero trocar o tamanho, chegou 38 e eu pedi 40',
+        'quero trocar de numeração, pedi 39 e mandaram 41', 'Desisti, pedi M e veio G', 'desisti, veio 220v e eu pedi 110v', 'Quero trocar o número, mandaram 39']);
+    ok(!a3.length, msg('o comprador diz o que pediu e o que chegou: o vendedor mandou outro, sem regra', a3));
+    // Defeito, qualidade ou diferença do anúncio com palavra fora de qualquer lista: o arrependimento só vale com complemento neutro.
+    const a4 = vazou(['Desisti, a tampa veio solta', 'desisti, a costura abriu', 'me arrependi, desmontou no primeiro uso', 'Desisti, desfiou na primeira lavagem', 'desisti, encolheu na lavagem',
+        'desisti pq a tela veio com pixel morto', 'Desisti, a bateria não dura nada', 'Desisti, esquenta demais', 'me arrependi, solta tinta', 'Desisti, produto péssimo', 'desisti, produto muito ruim',
+        'Me arrependi, é muito fraco', 'Desisti, horrível', 'me arrependi, coisa de camelô', 'Desisti, é menor do que o informado', 'Desisti, nao parece com a imagem',
+        'desisti, é bem menor que nas especificações', 'desisti, o titulo dizia que servia no gol', 'desisti, não é a marca que comprei', 'Desisti, é de plástico e não de metal como dizia',
+        'Me arrependi, a cor não é igual a da imagem', 'Desisti, veio em espanhol', 'Me arrependi, não é o que eu esperava', 'Desisti, a peça não serve', 'Desisti, é muito pequeno',
+        'Me arrependi, não faz o que promete', 'Desisti, a loja não responde', 'desisti, a loja cancelou meu pedido', 'escolhi errado pq tava escrito 110v', 'Mudei de ideia, vou vender o carro']);
+    ok(!a4.length, msg('"desisti, a tampa veio solta" e outras orações fora da lista neutra: sem regra', a4));
+    // Engano da loja não é engano do comprador.
+    const a5 = vazou(['Engano da loja', 'Engano da empresa', 'Foi engano deles', 'Foi engano da loja', 'Foi engano, veio outro produto', 'Engano no pedido, mandaram outro', 'Engano na separação']);
+    ok(!a5.length, msg('engano da loja, da empresa, "deles": sem regra', a5));
+    // Os legítimos (os que já passavam e os que tinham travado sem precisar) continuam excluíveis.
+    const l1 = travou(['Me arrependi, achei em outro anúncio mais barato', 'Me arrependi, o produto está com o lacre intacto', 'Os Correios atrasaram, o produto foi postado no prazo',
+        'Quero trocar o tamanho, não serviu', 'Quero trocar o tamanho, não coube', 'Quero trocar o tamanho, ficou apertado', 'Quero trocar o número, ficou grande', 'Quero trocar o tamanho por um maior',
+        'Troca de tamanho', 'Quero trocar o modelo', 'Me arrependi de ter comprado', 'Desisti, ja comprei outro', 'Me arrependi, comprei outro igual mais barato', 'Desisti, nem abri a caixa',
+        'Desisti, devolvo lacrado', 'Me arrependi, comprei outro na loja física', 'Desisti, comprei por impulso', 'Comprei 2 por engano', 'comprei a cor errada', 'Me arrependi, não combinou com o meu sofá',
+        'Me arrependi, quero devolver', 'Comprei sem querer', 'Engano meu, desculpe', 'Abri por engano', 'Foi engano, pode cancelar a reclamação', 'Não reconheço essa compra, não fui eu',
+        'Não fiz esta compra', 'No rastreio consta como entregue mas nao recebi', 'Chegou com 10 dias de atraso', 'Atraso dos Correios', 'Estou esperando há 20 dias, entrega atrasada',
+        'Passou do prazo de entrega', 'Desisti, chegou atrasado', 'Demorou demais pra chegar, ficou parado nos correios', 'A transportadora atrasou a entrega', 'Só queria tirar uma dúvida']);
+    ok(!l1.length, msg('continuam excluíveis: arrependimento com complemento neutro, troca pura, engano do comprador, transporte com o envio no prazo', l1));
+    ok(/demora do transporte/.test(SHC.motivoExcluivel('Os Correios atrasaram, o produto foi postado no prazo')) && /demora do transporte/.test(SHC.motivoExcluivel('Não quero mais, demorou para chegar'))
+        && /reclamação por engano/.test(SHC.motivoExcluivel('Engano meu')) && /arrependeu/.test(SHC.motivoExcluivel('Engano na compra')), 'cada motivo cai na regra certa (transporte, engano, arrependimento)');
+    // Escolha documentada: o erro do comprador com o veículo junto fica como DÚVIDA (a compatibilidade pode ter vindo do anúncio); "tamanho
+    // errado" sem dizer quem errou e "não gostei do cheiro" (pode ser o produto com cheiro) também. Na dúvida, não marca.
+    const d1 = vazou(['Comprei a peça errada pro meu carro', 'Comprei o modelo errado pra minha moto', 'Tamanho errado', 'Desisti, não gostei do cheiro do perfume']);
+    ok(!d1.length, msg('dúvida (erro do comprador com o veículo, "tamanho errado", "cheiro"): não marca', d1));
+}
+
 console.log('Caso incerto: pede a conferência, nunca afirma cobrança indevida');
 {
     const dv = SHC.devolucoesContestar([{ pedido: '2000000999', itemId: 'MLB1', data: '2026-09-10', valor: 23.9, linhas: [{ v: 23.9 }] }], null, false).itens[0];
