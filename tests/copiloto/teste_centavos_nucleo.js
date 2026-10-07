@@ -26,9 +26,9 @@
 //      9 × 0,01 e o último −0,04). Agora reparte pelo maior resto: cada parte a < 1 centavo da exata, nenhuma negativa (seção D).
 //   3) CORRIGIDA (#32): motor.lucroPedido.por_item fazia r2(total × participação) em cada item, sem o resto (Σ itens ≠ pedido em ≈40% dos
 //      pedidos com 2+ itens; Produtos ≠ KPI por centavos). Agora pelo maior resto: Σ itens = o pedido (seções C, E e I).
-//   4) Extrato do TikTok com uma tarifa 'ads' (GMV Pay, mapeado por suposição): o TikTok desconta do repasse, o motor tira 'ads' do repasse →
-//      repasse do motor ≠ settlement (fixture tarifa_gmv_pay_suposicao: 84 × 54), a conciliação acusa "a menor" −R$ 30 falso e, na tela, a
-//      conta do pedido não mostra a linha de Ads (Repasse − custo − imposto ≠ Lucro).
+//   4) CORRIGIDA (#33): tarifa 'ads' DENTRO do extrato do pedido (GMV Pay, mapeado por suposição; a conta do extrato fecha com ela) deixava
+//      o repasse do motor ≠ settlement (84 × 54) e a conciliação "a menor" −R$ 30 falso. Agora o Ads com origem_pagamento 'venda' (o
+//      adaptador diz que veio no extrato/escrow do pedido) sai do repasse; a conta na tela mostra "Ads pago com o repasse" (seções G e K).
 //   5) tiktok.transacaoDoExtrato: frete com valor ilegível/ausente vira 0 (dinheiro(...) || 0, sem aviso próprio) e {amount:""} vira 0
 //      (Number("") = 0): frete.cheio = 0 e frete_venda inventado; a extensão usa o detalhe "exato" assim mesmo → Repasse na tela ≠ o que o
 //      TikTok pagou e "a menor/a maior" falso, em vez de "não lido". (Receita e tarifa ilegíveis geram aviso no núcleo, mas o aviso não chega
@@ -769,6 +769,26 @@ console.log('G. Adaptador TikTok (núcleo): repasse = preço − tarifas − fre
     ok(p30a.itens.map(it => cent(it.total)).join() === '3334,3333,3333' && somaC(p30a.itens, it => cent(it.total)) === 10000
         && somaC(p30b.itens, it => cent(it.total)) === 8970 && p30b.status === 'devolvido' && cent(p30b.reembolso) === 7970,
         'detalhe com 3 SKUs: R$ 100,00 = 33,34 + 33,33 + 33,33 (antes 99,99); 3 × R$ 29,90 com cupom de R$ 10: Σ = R$ 89,70 e o reembolso total do devolvido = R$ 79,70 (antes 89,69 e 79,69) — #30');
+    // #33: tarifa 'ads' que veio DENTRO do extrato do pedido (GMV Pay: fixture de suposição, settlement 54 = 100 − 6 − 30 − 10; a conta do extrato
+    // fecha com ela, então o TikTok a tirou do repasse) → o repasse do motor = o settlement, a conciliação "ok" e as linhas mostram o Ads.
+    {
+        const tg = N.transacaoDoExtrato(require(path.join(RAIZ, 'copiloto-nucleo', 'testes', 'fixtures', 'tarifa_gmv_pay_suposicao.json')), { conta: '7000000001' });
+        const pg = M.garantir('pedido', { canal: 'tiktok', conta: '7000000001', fonte: 'tela', id: tg.pedido_id, data_venda: tg.data, status: 'entregue', data_entrega: tg.data, itens: [{ sku: 'A', qtd: 1, total: 100 }] });
+        const rg = MO.lucroPedido(pg, { tarifas: tg.tarifas, custos: [{ sku: 'A', custo: 10 }], imposto_pct: 0 });
+        const cg = CO.conciliar({ pedidos: [pg], tarifas: tg.tarifas, repasses: [tg.repasse], hoje: '2026-10-07' });
+        const ateRep = []; for (const l of rg.linhas) { if (l.rotulo === '= Repasse do canal') break; if (!l.total) ateRep.push(l); }
+        ok(tg.confere.diferenca === 0 && tg.repasse.valor === 54 && rg.repasse === 54 && rg.ads_no_repasse === 30 && rg.ads_rs === 30 && rg.lucro_antes_ads === 74 && rg.lucro_real === 44
+            && cg.pedidos[0].status === 'ok' && cg.pedidos[0].diferenca === 0 && cg.totais.diferenca === 0
+            && somaC(ateRep, l => cent(l.valor)) === 5400 && ateRep.some(l => l.rotulo === 'Ads pago com o repasse' && l.valor === -30) && somaC(rg.linhas.filter(l => !l.total), l => cent(l.valor)) === 4400,
+            'GMV Pay no extrato (#33): repasse do motor R$ 54,00 = o que o TikTok pagou (antes R$ 84,00), conciliação "ok" (antes "a menor" −R$ 30,00); a linha "Ads pago com o repasse" fecha a conta; lucro R$ 44,00');
+        // Controle: Ads sem origem (ou de fatura) continua fora do repasse; Shopee: ads_escrow dentro do escrow sai do repasse igual.
+        const rf = MO.lucroPedido(pg, { tarifas: tg.tarifas.map(x => Object.assign({}, x, { origem_pagamento: x.tipo === 'ads' ? 'fatura' : x.origem_pagamento })), custos: [{ sku: 'A', custo: 10 }], imposto_pct: 0 });
+        const es = SP.transacaoDoEscrow({ response: { order_sn: 'SPG1', order_income: { order_original_price: '100.00', commission_fee: '20.00', ads_escrow_top_up_fee_or_technical_support_fee: '15.00', escrow_amount: '65.00', actual_shipping_fee: '0' } } }, { conta: 'loja-sp-teste', data: '2026-09-30' });
+        const ps = M.garantir('pedido', { canal: 'shopee', conta: 'loja-sp-teste', fonte: 'api', id: 'SPG1', data_venda: '2026-09-30', status: 'entregue', itens: [{ sku: 'A', qtd: 1, total: 100 }] });
+        const cs = CO.conciliar({ pedidos: [ps], tarifas: es.tarifas, repasses: [Object.assign({}, es.repasse, { status: 'disponivel' })], hoje: '2026-10-07' });
+        ok(rf.repasse === 84 && rf.lucro_real === 44 && rf.ads_no_repasse === 0 && MO.lucroPedido(ps, { tarifas: es.tarifas, custos: [{ sku: 'A', custo: 10 }], imposto_pct: 0 }).repasse === 65 && cs.pedidos[0].status === 'ok',
+            'controle: Ads de fatura fica fora do repasse (R$ 84,00, o mesmo lucro R$ 44,00); Shopee com ads_escrow de R$ 15 no escrow: repasse R$ 65,00 = escrow e conciliação "ok"');
+    }
     const devol = respDetalhe(gs[1]); devol.data.main_order.reverse_info = { reverse_order_id: '4000000000000000001', reverse_status: 100, reverse_type: 2 };
     const pd = N.pedidoDoDetalhe(N.filtroPedidoSemComprador(devol), { conta: '7000000001' });
     ok(pd.pedido.status === 'devolvido' && cent(pd.pedido.reembolso) === gs[1].brutoC - gs[1].descC && pd.devolucao.produto_voltou === false && pd.devolucao.valor_reembolsado === null,
@@ -1017,6 +1037,33 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
     const depois = JSON.parse(JSON.stringify(banco)); delete depois['tt:' + CONTA + ':falha'];
     ok(rr.ok === false && r2x.ok === false && JSON.stringify(depois) === JSON.stringify(semFalha) && (await TT.ler(CONTA)).saldo.valor === saldoC / 100,
         'resposta ilegível (saldo "abc", lista vazia): nada gravado — o saldo continua o lido antes, nunca R$ 0,00');
+
+    // ── K. Casos da correção dos centavos (TikTok e núcleo, #33–#39): da captura à tela, com dados inventados ──
+    console.log('K. Correções do TikTok na extensão: captura → resumo → tela');
+    // Linhas da conta de um pedido na tela (rótulo, centavos) e o card inteiro; mesmas regras da seção J.
+    const contaTela = (h, id) => {
+        const i = h.indexOf('data-k="ped:' + id + '"'), b = i < 0 ? '' : h.slice(i, h.indexOf('</details>', i)), ls = [];
+        b.replace(/<div class="cl[^"]*"><span>(.*?)<\/span><b>(.*?)<\/b><\/div>/g, (m, rot, v) => { ls.push({ rot: rot.replace(/<[^>]+>/g, '').replace(/\s*estimado$/, '').trim(), c: deMoeda(v) }); return m; });
+        return ls;
+    };
+    const valorDe = (ls, rot) => (ls.find(l => l.rot === rot) || {}).c;
+    {   // #33: GMV Pay no extrato do pedido (fixture de suposição) + o detalhe em Pedidos com o SKU (custo R$ 10, imposto 6% do cfg).
+        const C33 = '7000000033', fx = require(path.join(RAIZ, 'copiloto-nucleo', 'testes', 'fixtures', 'tarifa_gmv_pay_suposicao.json'));
+        await TT.gravarCaptura('transacao', fx, C33, lidoEm);
+        await TT.gravarCaptura('pedido', { code: 0, data: { main_order: { main_order_id: '5770000000000000900', main_order_create_time: segDia('2026-09-29'),
+            payment_info: { main_order_origin_sale_price: fp(10000), subtotal: fp(10000), seller_discount_total: fp(0), platform_discount_total: fp(0) },
+            skus: [{ seller_sku_name: 'GMV-01', sku_id: '1730000000000000933', quantity: 1, product_name: 'Produto GMV', total_price: fp(10000), sku_display_status: 122 }],
+            logistic_info: { title: 'Package delivered', time: segDia('2026-09-30') } } } }, C33, lidoEm);
+        banco['c|sku|GMV-01'] = { custo: 10 };
+        const v33 = TT.resumo(await TT.ler(C33), { hoje: '2026-10-07' }), p33 = v33.pedidos[0], h33 = ABA.html(v33, { hoje: '2026-10-07' }), ls = contaTela(h33, p33.pedido_id);
+        const iRep = ls.findIndex(l => l.rot === 'Repasse do TikTok'), luc = ls.find(l => l.rot === 'Lucro');
+        const prod = v33.produtos[0], subProd = (/<small>(SKU GMV-01[^<]*)<\/small>/.exec(h33) || [])[1] || '';
+        ok(p33.exato && p33.repasse === 54 && p33.ads_no_repasse === 30 && p33.lucro_real === 38 && v33.conciliacao.diferenca === 0 && v33.conciliacao.por_status.ok === 1
+            && valorDe(ls, 'Ads pago com o repasse') === -3000 && valorDe(ls, 'Repasse do TikTok') === 5400 && somaC(ls.slice(0, iRep), l => l.c) === 5400
+            && luc && luc.c === 3800 && 5400 + somaC(ls.slice(iRep + 1).filter(l => l !== luc), l => l.c) === 3800 && !/diferença do esperado/.test(h33)
+            && cent(prod.repasse) === 5400 && /repasse R\$ 54,00/.test(subProd),
+            'GMV Pay na tela (#33): "Ads pago com o repasse −R$ 30,00", Repasse R$ 54,00 = o que o TikTok pagou (antes R$ 84,00 e "a menor" −R$ 30,00); Preço − tarifas − Ads = Repasse; Repasse − custo − imposto = Lucro R$ 38,00; produto com repasse R$ 54,00');
+    }
 
     console.log('\n' + nChecks + ' verificações.');
     if (f) { console.log(f + ' FALHA(S)'); process.exit(1); }

@@ -530,7 +530,7 @@
         return ps.map(p => {
             const e = extra[U.normalizaSku(p.sku)] || {};
             return Object.assign(p, { titulo: e.titulo || '', sku_id: e.sku_id || null, sku_vendedor: e.sku_vendedor || null, canais: e.canais || {}, aproximado: !!e.aproximado,
-                repasse: U.r2(p.receita - p.tarifas), afiliado_rs: e.afiliado || 0,
+                repasse: U.r2(p.receita - p.tarifas - (p.ads_repasse || 0)), afiliado_rs: e.afiliado || 0,   // o Ads tirado do repasse (GMV Pay) também sai
                 afiliado_pct: e.receita_exata > 0 ? Math.round(e.afiliado / e.receita_exata * 10000) / 100 : null });
         });
     };
