@@ -461,7 +461,8 @@
             if (cob.ilegivel) avisos.push(AVISO_ILEGIVEL + ': vale a lista do Financeiro (tarifas estimadas)');
         } else if (cob.ilegivel) {
             // Só o detalhe do extrato, com valor ilegível ou sem fechar: "não lido" (nada de frete/tarifa R$ 0,00 inventado nem repasse a mais).
-            const recLida = !j0.avisos.some(a => /receita sem valor/.test(a)), doDet = detBruto !== null;
+            // Preço do extrato só se veio (> 0) e sem valor ilegível: bloco in_come ausente/renomeado dá 0 sem aviso → "—", nunca R$ 0,00.
+            const recLida = j0.receita.bruto > 0 && !j0.avisos.some(a => /receita sem valor/.test(a)), doDet = detBruto !== null;
             bruto = doDet ? detBruto : (recLida ? j0.receita.bruto : null);
             desconto = doDet ? det.pedido.desconto_vendedor || 0 : (recLida ? j0.receita.desconto_vendedor : 0);
             tarifas = M.naoLido(AVISO_ILEGIVEL);
