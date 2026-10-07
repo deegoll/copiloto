@@ -465,11 +465,13 @@
             const recLida = j0.receita.bruto > 0 && !j0.avisos.some(a => /receita sem valor/.test(a)), doDet = detBruto !== null;
             bruto = doDet ? detBruto : (recLida ? j0.receita.bruto : null);
             desconto = doDet ? det.pedido.desconto_vendedor || 0 : (recLida ? j0.receita.desconto_vendedor : 0);
-            // Reembolso lido no extrato não some; sem ele, o do detalhe devolvido (como no ramo só-Pedidos). Receita do extrato não lida e sem
-            // devolução no detalhe: reembolso desconhecido → o imposto (sobre preço − reembolso) aparece "—", nunca sobre o preço cheio.
-            const reembDet = det && det.pedido.status === 'devolvido' && det.devolucao ? (det.pedido.reembolso > 0 ? det.pedido.reembolso : (bruto === null ? 0 : U.r2(bruto - desconto))) : 0;
-            reembolso = recLida && j0.receita.reembolso > 0 ? j0.receita.reembolso : reembDet;
-            impostoIncerto = !recLida && !reembDet;
+            // Reembolso lido no extrato (só as linhas legíveis) não some; sem ele, o do detalhe devolvido (como no ramo só-Pedidos). Receita do
+            // extrato com valor ilegível: o reembolso pode ser maior que o lido → o imposto (sobre preço − reembolso) aparece "—", nunca sobre o
+            // preço cheio (salvo nada lido no extrato e o detalhe devolvido: vale a presunção do detalhe, como no ramo só-Pedidos).
+            const reembExt = j0.receita.reembolso, reembDet = det && det.pedido.status === 'devolvido' && det.devolucao
+                ? (det.pedido.reembolso > 0 ? det.pedido.reembolso : (bruto === null ? 0 : U.r2(bruto - desconto))) : 0;
+            reembolso = reembExt > 0 ? reembExt : reembDet;
+            impostoIncerto = !recLida && !(reembExt === 0 && reembDet > 0);
             tarifas = M.naoLido(AVISO_ILEGIVEL);
             avisos.push(AVISO_ILEGIVEL); avisos.push.apply(avisos, j0.avisos);
         } else if (det) {
@@ -500,6 +502,8 @@
             imposto_pct: num(ctx.cfg.imposto_pct), margem_alvo_pct: num(ctx.cfg.margem_alvo_pct) });
         // Extrato ilegível sem saber o reembolso: imposto não lido (null → "—"), nunca o do preço cheio. Cancelado: receita 0, imposto 0 lido.
         if (impostoIncerto && pedido.status !== 'cancelado') { r.imposto_rs = null; (r.linhas || []).forEach(l => { if (/^Imposto \(/.test(l.rotulo)) l.valor = null; }); }
+        // Preço não lido (o motor não tem receita de onde tirar o reembolso) e reembolso legível no extrato: ele aparece, a receita líquida "—".
+        if (impostoIncerto && bruto === null && reembolso > 0 && pedido.status !== 'cancelado') Object.assign(r, { reembolso, receita_liquida: null });
         // Reembolso total visto só pela lista (sem o preço de origem, a receita já vem 0): o motor não percebe o reembolso → o aviso vem daqui.
         const voltou = devolucoes.map(d => d.produto_voltou).find(v => v === true || v === false);
         r.avisos = (r.avisos || []).concat(avisos);
