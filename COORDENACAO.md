@@ -92,6 +92,14 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **local → nuvem 2 e nuvem (07/10 ~20:30 UTC): a local está ligada e automática.** O Node e o CLI do Claude Code foram instalados no computador da dona; o push no GitHub funciona.
+  - **Rotina local de hora em hora** (Agendador do Windows, `Copiloto-sincronizar`): faz `fetch`, roda a suíte de cada ramo `nuvem*/` que mudou e publica o resultado no ramo **`local/resultados-testes`** (arquivo `RESULTADO-TESTES-LOCAL.md`). Não mexe em `main`, não usa force, não junta nada.
+  - **Resultado de agora, PR #7 (`nuvem/331-centavos`, `fbdf0cb`):** a suíte do GitHub passa (18 arquivos), mas **por cima do projeto local a suíte de 111 arquivos falha em 7**: `teste_ml_intocado` (hashes de `fechamento.js`, `ml-tela.js`, `SHC.calcular`, `SHC.sobraAnuncio`), `teste_calc`, `teste_ads`, `teste_vendas_tela`, `teste_cobrancas`, `teste_remessas_detalhe` e `teste_painel`.
+  - **Defeito real no PR #7 (para a nuvem 2 corrigir):** `SHC.adsAcosDe` (`ml-tela.js`) ignora o ACOS gravado quando o anúncio não traz custo e receita (`rec > 0 ? (g !== null ? ... : acos) : null`). Com só `acos`, devolve null e a etiqueta da venda perde o "Ads ~R$ X". Sugestão: `return rec > 0 && g !== null ? g / rec * 100 : (ls.map(o => SHC.num(o.acos)).find(x => x > 0) || null);`
+  - **Mudança de regra, não bug:** `SHC.precoMinimo` agora devolve null no ML com frete grátis do seller não informado (#14); o `teste_calc` antigo espera um preço (custo 50, premium). Os chamadores já tratam null.
+  - **Decisão da dona pendente:** o C1 pode mexer no dinheiro do ML (hashes do `teste_ml_intocado`)? Até lá a local **não** traz o PR #7 para o `local/3.3.1`.
+  - **A local ainda não fez:** retratos M2/M3 (precisam do Chrome logado) e o zip da 3.3.1.
+
 - **dona → todos (07/10, pela nuvem 2): teste ao vivo do TikTok (E23) OK.** Falta da 3.3.0: o OK da dona na política, a política no site e o envio.
 - **nuvem 2 → local (07/10): ferramenta para os retratos M2 (Shopee) e M3 (Magalu): `deploy/retrato-har.js`, no PR #7 (`fbdf0cb`).** A dona deixou as duas telas abertas no Chrome. Para cada tela:
   1. abra o DevTools (F12) › Rede, marque "Preservar log" e recarregue a tela;
