@@ -884,11 +884,13 @@
         if (m.acos !== null && m.acos < eq.equilibrio) return { tipo: 'compensa', texto: 'Compensa', det: `ACOS ${SHC.pctTxt(m.acos)}, abaixo do equilíbrio de ${SHC.pctTxt(eq.equilibrio)}: o Ads deixa lucro.` };
         return { tipo: 'nao', texto: 'Não compensa', det: m.acos === null ? `Gastou ${SHC.moeda(m.gasto)} sem venda pelo Ads.` : `ACOS ${SHC.pctTxt(m.acos)}, acima do equilíbrio de ${SHC.pctTxt(eq.equilibrio)}: o Ads leva mais do que sobra da venda.` };
     };
-    // Visão geral da conta no Mercado Ads: resumo do ML (resumo.total) e, no que faltar, a soma dos anúncios.
+    // Visão geral da conta no Mercado Ads: resumo do ML (resumo.total) e, no que faltar, a soma das CAMPANHAS (como ads.html, A.kpis: a lista
+    // de campanhas vem inteira e a de anúncios pode vir em parte, completo:false); sem métricas de campanha, a soma dos anúncios.
     P.adsConta = function (snap) {
         if (!snap || snap.temAds === false) return null;
-        const r = snap.resumo ? (snap.resumo.total || snap.resumo) : {}, as = snap.anuncios || [];
-        const um = (ks) => { const v = numDe(r, ks); return v !== null ? v : (as.length ? SHC.r2(as.reduce((t, a) => t + (numDe(Object.assign({}, a.metrics || {}, a.metricas || {}, a), ks) || 0), 0)) : null); };
+        const r = snap.resumo ? (snap.resumo.total || snap.resumo) : {}, cm = (snap.campanhas || []).map(c => c && (c.metricas || c.metrics)).filter(Boolean);
+        const base = cm.length ? cm : (snap.anuncios || []).map(a => Object.assign({}, a.metrics || {}, a.metricas || {}, a));
+        const um = (ks) => { const v = numDe(r, ks); return v !== null ? v : (base.length ? SHC.r2(base.reduce((t, o) => t + (numDe(o, ks) || 0), 0)) : null); };
         const m = razoes({ gasto: um(['custo', 'cost', 'investimento', 'gasto']) || 0, receita: um(['receita', 'totalAmount', 'amountTotal']) || 0,
             vendas: um(['vendas', 'unitsQuantity', 'soldQuantityTotal', 'unidades']) || 0, cliques: um(['cliques', 'clicks']), impressoes: um(['impressoes', 'prints', 'impressions']) });
         m.tacos = numDe(r, ['tacos']);
@@ -925,6 +927,11 @@
                 perdeOrcamento: sh ? SHC.num(sh.perdidasOrcamento) : null, perdeClassificacao: sh ? SHC.num(sh.perdidasClassificacao) : null,
                 veredito: P.adsVereditoDe((eq || []).filter(x => x.a.campanhaId === id), m.gasto) };
         }).sort((x, y) => ((y.status === 'ativo') - (x.status === 'ativo')) || (y.m.gasto - x.m.gasto));
+    };
+    // Linha "Total" da tabela de campanhas: a soma das linhas que ela mostra (P.adsCampanhasLista), no centavo, e o ACOS dessa soma.
+    P.adsCampanhasTotal = function (camps) {
+        const s = k => SHC.r2((camps || []).reduce((t, c) => t + ((c.m && c.m[k]) || 0), 0));
+        return razoes({ gasto: s('gasto'), receita: s('receita'), vendas: s('vendas'), cliques: null, impressoes: null });
     };
     // Filtros do "Ver por produto" sobre P.adsEquilibrio. Escalar = ACOS até 60% da folga (equilíbrio − meta), com venda.
     P.adsFiltros = function (lista, meta) {
@@ -3644,7 +3651,7 @@
                 + `<tr class="rbl"><td colspan="4">${barraRet(c.m.receita, c.m.gasto, maxC, cor)}</td></tr>`;
         };
         h += camps.length ? blocoAd('ads:camp', 'Campanhas criadas', esc(resCamp), legRet('investimento no Ads') + `<table class="tb"><thead><tr><th>Campanha</th><th>Gasto</th><th>Vendas</th><th title="${esc(ACOS_TXT)}">ACOS</th></tr></thead><tbody>`
-                + camps.map(linhaCamp).join('') + (camps.length > 1 ? `<tr><td><b>Total</b></td><td><b>${SHC.moeda(m.gasto)}</b></td><td><b>${SHC.moeda(m.receita)}</b></td><td><b>${pctOu(m.acos)}</b></td></tr>` : '') + '</tbody></table>'
+                + camps.map(linhaCamp).join('') + (camps.length > 1 ? (t => `<tr><td><b>Total</b></td><td><b>${SHC.moeda(t.gasto)}</b></td><td><b>${SHC.moeda(t.receita)}</b></td><td><b>${pctOu(t.acos)}</b></td></tr>`)(P.adsCampanhasTotal(camps)) : '') + '</tbody></table>'   // Total = Σ das linhas acima
                 + `<p class="det">${esc(per)}. Compensa = o Ads gastou menos do que sobra das vendas que trouxe (pelo custo que você informou).${adsSnap.completo === false ? ' Parte dos anúncios não foi lida.' : ''}</p>`)
             : blocoAd('ads:camp', 'Campanhas criadas', 'Nenhuma campanha lida no Mercado Ads.', '');
         // [Ver mais] Resumo da conta
