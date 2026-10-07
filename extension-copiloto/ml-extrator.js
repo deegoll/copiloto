@@ -1698,9 +1698,9 @@
         const ps = (r.produtos || []).filter(p => p && ((p.diferencas || 0) !== 0 || (p.naoAptas || 0) > 0));
         const fatos = ps.slice(0, 15).map(p => (p.sku ? 'SKU ' + p.sku : p.itemId || 'produto') + (p.itemId && p.sku ? ' (' + p.itemId + ')' : '') + ': declaradas ' + n(p.declaradas)
             + ', processadas ' + n(p.processadas) + (p.naoAptas ? ', não aptas ' + p.naoAptas : '') + (p.resultado ? ' — ' + p.resultado : '') + '.');
-        // 3.3.0 (juntada com a nuvem): sem o detalhe por produto não há texto. Sem detalhe, "declaradas" vem do units_count da lista, que conta
-        // PRODUTOS, e "aptas" conta unidades (leitura ao vivo de 06/10).
-        if (!ps.length) return '';
+        // 3.3.0 (juntada com a nuvem): sem o detalhe por produto não há texto (a 1ª linha). Sem detalhe, "declaradas" vem do units_count da lista,
+        // que conta PRODUTOS, e "aptas" conta unidades (leitura ao vivo de 06/10): os totais da remessa nunca entram, só os números por produto.
+        if (!ps.length && !(temQtd('declaradas') && temQtd('aptas'))) return '';
         // Revisão 3 (07/10/2026): os totais da remessa e o "recebida com diferença" só com TODOS os produtos com declaradas E aptas em número
         // (every, não some: "declaradas 15; disponíveis 10" com as aptas de um produto não lidas seria número que o Copiloto não leu).
         // Detalhe incompleto: só pede a conferência, com os produtos completos e sem total, sem reclamação firme nem estorno.
@@ -1718,11 +1718,10 @@
                 pedido: 'a informação de quantas unidades de cada produto desta remessa foram declaradas, processadas e estão disponíveis para venda e, se houver diferença ou unidade não apta, o motivo.' });
         };
         if (!r.produtos.every(completo)) return conferencia('O detalhe desta remessa não traz as unidades declaradas e as disponíveis para venda de todos os produtos.');
-        const contagem = ps.some(p => (p.diferencas || 0) !== 0) || (!ps.length && r.declaradas !== null && r.aptas !== null && r.aptas < r.declaradas && !(r.motivos || []).every(m => /não aptas/.test(m)));
+        const contagem = ps.some(p => (p.diferencas || 0) !== 0);
         const naoAptas = ps.reduce((s, p) => s + (p.naoAptas || 0), 0), quando = r.quando ? ' (' + dt(r.quando) + ')' : '';
         // Revisão final (07/10): "unidades não aptas" só com não aptas LIDAS (> 0); status de diferença sem número por produto = conferência.
         if (!contagem && !(naoAptas > 0)) return conferencia('O ML marcou diferença nesta remessa, mas o detalhe não traz diferença de contagem nem unidade não apta por produto.');
-        if (!ps.length) fatos.push('Unidades declaradas: ' + n(r.declaradas) + '; disponíveis para venda: ' + n(r.aptas) + '.');
         // Auditoria da loja (07/10/2026) e regra da dona: r.custo é o total_charged da remessa = coleta e/ou penalidade — nunca "multa" nem
         // "cobrado pela inconformidade". Só unidade não apta (sem diferença de contagem) não é erro de contagem: pode ter vindo do nosso preparo.
         if (r.custo) fatos.push('Total cobrado pelo Mercado Livre nesta remessa (coleta e/ou penalidade): ' + SHC.moeda(r.custo) + '.');
