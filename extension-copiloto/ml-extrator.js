@@ -2950,9 +2950,10 @@
         const pv = d.posvenda || {};
         if (pv.reclamacoes > 0) add('posvenda', SHC.qtd(pv.reclamacoes, 'reclamação ou mediação em aberto', 'reclamações ou mediações em aberto') + ' no pós-venda.', { chave: 'anom|pv|reclamacoes', qtd: pv.reclamacoes, link: SHC.POSVENDA_URL, vermelho: true });
         if (pv.devolucoes > 0) add('posvenda', SHC.qtd(pv.devolucoes, 'devolução pendente', 'devoluções pendentes') + ' no pós-venda.', { chave: 'anom|pv|devolucoes', qtd: pv.devolucoes, link: SHC.POSVENDA_URL });
-        // Medidas da embalagem mudadas nos últimos 30 dias (fora as do próprio seller): 1 por anúncio.
+        // Medidas da embalagem mudadas nos últimos 30 dias (fora as do próprio seller): 1 por anúncio. Rastreio 07/10: "o Mercado Livre mudou" só
+        // com a marca de autoria (quem 'ml'); sem ela, a medida mudou e o seller confere se foi ele.
         const mm = d.medidas && d.medidas.porItem && SHC.medidasMudadas ? SHC.medidasMudadas(d.medidas.porItem, agora - 30 * 864e5) : [], mIds = new Set();
-        mm.forEach(m => { if (mIds.has(m.itemId)) return; mIds.add(m.itemId); add('medidas', nome(m.itemId) + ': o Mercado Livre mudou as medidas da embalagem para ' + SHC.medidaTxt(m.depois) + '.', { chave: 'anom|medidas|' + m.itemId, itemId: m.itemId }); });
+        mm.forEach(m => { if (mIds.has(m.itemId)) return; mIds.add(m.itemId); add('medidas', nome(m.itemId) + (m.quem === 'ml' ? ': o Mercado Livre mudou as medidas da embalagem para ' + SHC.medidaTxt(m.depois) + '.' : ': a medida da embalagem mudou para ' + SHC.medidaTxt(m.depois) + '. Se não foi você, peça a revisão ao ML (texto pronto na aba Saúde).'), { chave: 'anom|medidas|' + m.itemId, itemId: m.itemId }); });
         // v2.7: remessas do Full com inconformidade ou multa (SHC.remessasResumo): 1 por remessa.
         const rm = d.remessas || {}, porRem = {};
         (rm.comInconformidade || []).forEach(r => { porRem[r.id] = (r.textos || []).slice(); });
@@ -4205,16 +4206,22 @@
     // v3.3: com a regra do ML (o frete sai do peso e das medidas da embalagem) e o pedido explícito: corrigir a medida E rever o frete cobrado.
     // Auditoria da loja (07/10/2026): "aumenta o custo de envio" e o estorno só quando o peso CONSIDERADO (o maior entre o físico e o
     // volumétrico) subiu; medida que diminuiu ou ficou igual pede só a correção do cadastro.
+    // Rastreio 07/10/2026 (R13): "não foi feita por nós" e "sem que nós mexêssemos" só com a marca de autoria no dado (quem 'ml' de
+    // SHC.medidasMudadas). Sem ela, o texto diz que a medida mudou, PERGUNTA quem alterou e pede a revisão — o estorno só se não foi nossa.
     SHC.medidasChamado = (mu) => {
-        const subiu = SHC.medidaConsiderada(mu.depois) > SHC.medidaConsiderada(mu.antes) + 0.001;
-        return SHC.textoContestacao({ assunto: subiu ? 'Contestação de cubagem alterada no anúncio' : 'Pedido de correção da cubagem do anúncio', ids: [['SKU', mu.sku || ''], ['Anúncio', mu.itemId]],
-            intro: 'As medidas da embalagem deste anúncio foram alteradas sem que nós mexêssemos' + (subiu ? ', e isso aumenta o custo de envio cobrado.' : '.'),
-            fatos: ['Medidas da embalagem: de ' + SHC.medidaTxt(mu.antes) + ' para ' + SHC.medidaTxt(mu.depois) + ' ' + SHC.medidasQuando(mu) + '. A alteração não foi feita por nós.',
+        const subiu = SHC.medidaConsiderada(mu.depois) > SHC.medidaConsiderada(mu.antes) + 0.001, ml = mu.quem === 'ml';
+        const corrige = mu.correta ? 'a correção das medidas para ' + SHC.medidaTxt(mu.correta) + ' nos envios futuros' : '', desde = ddmm(mu.vistoAte || mu.em);
+        return SHC.textoContestacao({ assunto: !ml ? 'Pedido de revisão da cubagem do anúncio' : subiu ? 'Contestação de cubagem alterada no anúncio' : 'Pedido de correção da cubagem do anúncio',
+            ids: [['SKU', mu.sku || ''], ['Anúncio', mu.itemId]],
+            intro: ml ? 'As medidas da embalagem deste anúncio foram alteradas sem que nós mexêssemos' + (subiu ? ', e isso aumenta o custo de envio cobrado.' : '.')
+                : 'As medidas da embalagem deste anúncio mudaram' + (subiu ? ' e o peso considerado no frete subiu' : '') + '. Gostaríamos de entender quem fez a alteração e qual medida vale para o cálculo do frete.',
+            fatos: ['Medidas da embalagem: de ' + SHC.medidaTxt(mu.antes) + ' para ' + SHC.medidaTxt(mu.depois) + ' ' + SHC.medidasQuando(mu) + '.' + (ml ? ' A alteração não foi feita por nós.' : ''),
                 'Peso considerado no frete (o maior entre o físico e o volumétrico): de ' + kgTxt(SHC.medidaConsiderada(mu.antes)) + ' kg para ' + kgTxt(SHC.medidaConsiderada(mu.depois)) + ' kg.',
                 mu.correta ? 'Medidas corretas (' + (mu.corretaDe === 'erp' ? 'do nosso cadastro' : 'as que deixamos no anúncio') + '): ' + SHC.medidaTxt(mu.correta) + '.' : ''],
             regras: ['frete_tabela', 'frete_calculo'], anexos: ['especificações técnicas do fabricante (medidas e peso)', 'foto da embalagem com trena e balança', 'nota fiscal do item'],
-            pedido: 'a revisão da cubagem do anúncio' + (mu.correta ? ', a correção das medidas para ' + SHC.medidaTxt(mu.correta) + ' nos envios futuros' : '')
-                + (subiu ? ' e o estorno do custo de envio cobrado a mais desde ' + ddmm(mu.vistoAte || mu.em) + '.' : '.') });
+            pedido: ml ? 'a revisão da cubagem do anúncio' + (corrige ? ', ' + corrige : '') + (subiu ? ' e o estorno do custo de envio cobrado a mais desde ' + desde + '.' : '.')
+                : 'a informação de quem alterou as medidas e de qual medida está sendo usada no cálculo do frete, e a revisão da cubagem do anúncio.'
+                    + (subiu || corrige ? ' Se a alteração não foi feita por nós, pedimos também ' + [corrige, subiu ? 'o estorno do custo de envio cobrado a mais desde ' + desde : ''].filter(Boolean).join(' e ') + '.' : '') });
     };
     SHC.MEDIDAS_SELLER_MS = 48 * 36e5;   // mudança vista até 48 h depois de um clique em "Alterar no ML" = provavelmente do seller
     /**
