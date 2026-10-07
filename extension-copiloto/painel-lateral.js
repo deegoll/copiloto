@@ -2067,6 +2067,21 @@
             lidoDev: (d.dev && d.dev.lido_em) || null, lidoTarefas: (d.tarefas && d.tarefas.lido_em) || null };
     };
     // ── fim 3.3.0 (E18) ──
+    /**
+     * v3.3 Botão "Copiar pedido de exclusão" (aba Pós-venda): posvenda:<conta> + motivo + anúncios → o g de SHC.chamadoExclusao | null (nada a pedir).
+     * Rastreio 07/10/2026 (R10): reclamação com mediação aberta fica fora (o ML não analisa a exclusão dela), pela situação do caso e do porPedido;
+     * pedidos = os do motivo que não estão marcados "não contou na reputação"; produtos com o SKU pelo anúncio achado pelo título (SHC.posvendaAnalise).
+     */
+    P.grupoExclusao = function (pv, mot, itens) {
+        if (!pv || !SHC.motivoExcluivel(mot)) return null;
+        const cs = (pv.casos || []).filter(c => c && c.motivo === mot && !SHC.emMediacao(c.situacao));
+        const pp = SHC.posvendaPorPedido(pv) || {};
+        const pedidos = Object.keys(pp).filter(n => pp[n] && pp[n].motivo === mot && pp[n].afetouReputacao !== false && !SHC.emMediacao(pp[n].situacao));
+        if (!cs.length && !pedidos.length) return null;
+        const produtos = SHC.posvendaAnalise(cs.filter(c => c.afetouReputacao !== false), itens || []).produtos.map(p => ({ sku: p.sku || '', titulo: p.titulo || '' }));
+        const naReputacao = pedidos.length ? pedidos.filter(n => pp[n].afetouReputacao === true).length : cs.filter(c => c.afetouReputacao === true).length;
+        return { motivo: mot, casos: pedidos.length || cs.length, naReputacao, produtos, pedidos };
+    };
     /** Frete da conta (frete:<conta>:hist) → {cor, resumo, conc} | null. Sempre vale conciliados + faltam + compradorPaga = vendas. */
     // Conciliação só vale com as vendas lidas (depois de atualizar a extensão, antes da sincronização, não há vendas: nunca "0 de 0").
     P.concDe = h => (h && h.vendasLidas !== false ? h.conciliacao || null : null);
@@ -4964,7 +4979,8 @@
                 + `<div class="medidor"><i class="${i === 0 ? 'pr' : x.casos > 1 ? 'at' : ''}" style="width:${Math.max(4, Math.round(x.casos / max * 100))}%"></i></div>`
                 // v3.3: motivo que as regras de exclusão do ML aceitam → o pedido de exclusão pronto (reputação e experiência de compra).
                 // Auditoria da loja: só quando algum caso desse motivo CONTA na reputação (pedir a exclusão do que não conta não tem sentido).
-                + (SHC.motivoExcluivel(x.motivo) && (posvenda.casos || []).some(c => c && c.motivo === x.motivo && c.afetouReputacao === true) ? `<small class="det" style="display:block">Pode sair da reputação: ${esc(SHC.motivoExcluivel(x.motivo))}. Envie só se ${esc(SHC.confereExclusao(x.motivo))}. <button class="lnk" data-pos-excluir="${esc(x.motivo)}">${posCopiado === x.motivo ? '✓ Texto copiado' : 'Copiar pedido de exclusão'}</button></small>` : '')
+                // Rastreio 07/10 (R10): e fora da mediação (P.grupoExclusao): caso em mediação o ML não analisa.
+                + (((P.grupoExclusao(posvenda, x.motivo, itens) || {}).naReputacao > 0) ? `<small class="det" style="display:block">Pode sair da reputação: ${esc(SHC.motivoExcluivel(x.motivo))}. Envie só se ${esc(SHC.confereExclusao(x.motivo))}. <button class="lnk" data-pos-excluir="${esc(x.motivo)}">${posCopiado === x.motivo ? '✓ Texto copiado' : 'Copiar pedido de exclusão'}</button></small>` : '')
                 + '</div>').join('')
             + (a.motivos.length > 5 ? `<p class="rs">${btVer('pos:motivos', `Ver mais (${a.motivos.length - 5})`)}</p>` : '')
             + `<p class="rs">${esc(a.naReputacao + ' de ' + a.total)} contaram na sua reputação.</p></div>`;
@@ -7420,11 +7436,9 @@
         }
         const pex = t.closest('[data-pos-excluir]');   // v3.3: pedido de exclusão de reclamações (SHC.chamadoExclusao)
         if (pex) {
-            const mot = pex.dataset.posExcluir, cs = ((posvenda && posvenda.casos) || []).filter(c => c && c.motivo === mot);
-            // Os números dos pedidos (posvenda.porPedido): os do mesmo motivo que não estão marcados como "não contou na reputação".
-            const pp = SHC.posvendaPorPedido(posvenda) || {}, pedidos = Object.keys(pp).filter(n => pp[n] && pp[n].motivo === mot && pp[n].afetouReputacao !== false);
-            const g = { motivo: mot, casos: cs.length, naReputacao: cs.filter(c => c.afetouReputacao === true).length, produtos: [...new Set(cs.map(c => c.titulo).filter(Boolean))], pedidos };
-            try { await navigator.clipboard.writeText(SHC.chamadoExclusao(g)); posCopiado = mot; } catch (e) { posCopiado = ''; }
+            // Pedidos do motivo (posvenda.porPedido) e produtos com SKU, sem os casos em mediação (P.grupoExclusao).
+            const mot = pex.dataset.posExcluir, txt = SHC.chamadoExclusao(P.grupoExclusao(posvenda, mot, itens));
+            try { if (!txt) throw new Error('nada a pedir'); await navigator.clipboard.writeText(txt); posCopiado = mot; } catch (e) { posCopiado = ''; }
             desenhaPos(canalAgora());
             return;
         }

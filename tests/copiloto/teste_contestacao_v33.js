@@ -227,5 +227,53 @@ console.log('Caso incerto: pede a conferência, nunca afirma cobrança indevida'
     ok(fr === '', 'trava do frete (06/10): F.chamadoFrete não gera texto de contestação do frete de envio (fica "para conferir")');
 }
 
-console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK');
-process.exit(f ? 1 : 0);
+// Por último: o handler do botão roda com await (a área de transferência falsa); o resumo sai depois dele.
+console.log('Pedido de exclusão (rastreio 07/10, R10): os pedidos certos, o SKU e nada em mediação — o botão do painel');
+{
+    const fs = require('fs');
+    const P = SHC.pl, mot = 'Me arrependi da compra';
+    const emMed = SHC.emMediacao || (() => null), grupo = P.grupoExclusao || (() => undefined);   // antes da correção não existiam: ✗ em vez de quebrar
+    // posvenda:<conta> como o fundo grava: casos sem o nº do pedido; porPedido = nº → motivo, reputação e situação (dados inventados).
+    const posvenda = {
+        casos: [{ titulo: 'Bomba d’água 12V', motivo: mot, afetouReputacao: true, situacao: 'Aguardando sua resposta', valor: 89.9 },
+            { titulo: 'Bomba d’água 12V', motivo: mot, afetouReputacao: true, situacao: 'Em mediação com o Mercado Livre', valor: 89.9 },
+            { titulo: 'Bomba d’água 12V', motivo: 'Produto com defeito', afetouReputacao: true, situacao: 'Aguardando sua resposta', valor: 89.9 }],
+        porPedido: {
+            '2000000101': { motivo: mot, afetouReputacao: true, situacao: 'Mediação em andamento' },
+            '2000000102': { motivo: mot, afetouReputacao: null, situacao: 'Aguardando sua resposta' },
+            '2000000103': { motivo: mot, afetouReputacao: true, situacao: 'Aguardando sua resposta' },
+            '2000000104': { motivo: mot, afetouReputacao: true, situacao: 'Em mediação com o Mercado Livre' },
+            '2000000105': { motivo: 'Produto com defeito', afetouReputacao: true, situacao: 'Aguardando sua resposta' },
+            '2000000106': { motivo: mot, afetouReputacao: false, situacao: 'Aguardando sua resposta' } } };
+    const itens = [{ itemId: 'MLB9100000001', sku: 'BOMBA-12V', titulo: 'Bomba d’água 12V' }, { itemId: 'MLB9100000002', sku: 'FILTRO-01', titulo: 'Filtro de ar esportivo' }];
+    ok(['Mediação em andamento', 'Em mediação com o Mercado Livre', 'O comprador pediu ajuda ao Mercado Livre', 'O Mercado Livre está analisando o caso'].every(m => emMed(m) === true)
+        && ['Aguardando sua resposta', 'Aguardando a devolução', ''].every(m => emMed(m) === false), 'situação com mediação aberta (ou o ML decidindo) é reconhecida');
+    // O handler do botão "Copiar pedido de exclusão", como está no painel, rodando com a área de transferência falsa.
+    const src = fs.readFileSync(path.join(EXT, 'painel-lateral.js'), 'utf8'), ini = src.indexOf("const pex = t.closest('[data-pos-excluir]');");
+    const bloco = src.slice(ini, src.indexOf("const ccp = t.closest('[data-conc-copiar]');", ini));
+    const clique = async (pv, m) => {
+        let copiado = null;
+        const t = { closest: s => (s === '[data-pos-excluir]' ? { dataset: { posExcluir: m } } : null) }, nav = { clipboard: { writeText: async x => { copiado = x; } } };
+        const f = new Function('t', 'posvenda', 'itens', 'navigator', 'desenhaPos', 'SHC', 'P', 'let posCopiado = ""; return (async () => { ' + bloco + ' })().then(() => posCopiado);');
+        const pc = await f(t, pv, itens, nav, () => {}, SHC, P);
+        return { copiado, pc };
+    };
+    const espera = (async () => {
+        const r = await clique(posvenda, mot), txt = r.copiado || '';
+        ok(ini > 0 && /#2000000102, #2000000103\./.test(txt) && !/2000000101|2000000104/.test(txt) && !/2000000105|2000000106/.test(txt) && r.pc === mot,
+            'botão: só os pedidos do motivo, fora os em mediação (101, 104), o de outro motivo (105) e o que não contou na reputação (106)');
+        ok(/^Assunto: Pedido de análise de reclamações para exclusão da reputação – SKU: BOMBA-12V\n/.test(txt) && /- Produtos: SKU BOMBA-12V \(Bomba d’água 12V\)\./.test(txt)
+            && /\(2 casos, 1 contando na reputação\)/.test(txt), 'botão: o texto leva o SKU (no assunto e no produto) e os números certos');
+        const soMed = { casos: [posvenda.casos[1]], porPedido: { '2000000104': posvenda.porPedido['2000000104'] } };
+        const r2 = await clique(soMed, mot);
+        ok(grupo(soMed, mot, itens) === null && r2.copiado === null && r2.pc === '', 'tudo em mediação: o botão não aparece e o clique não copia nada');
+        ok((grupo(posvenda, mot, itens) || {}).naReputacao > 0 && /\(P\.grupoExclusao\(posvenda, x\.motivo, itens\) \|\| \{\}\)\.naReputacao > 0/.test(src),
+            'o botão só aparece com caso fora da mediação que conta na reputação (a mesma conta do texto)');
+        const semNum = { casos: posvenda.casos.slice(0, 2) }, g3 = grupo(semNum, mot, itens), t3 = SHC.chamadoExclusao(g3);
+        ok(g3 && g3.casos === 1 && !g3.pedidos.length && /\(1 caso, 1 contando na reputação\)/.test(t3) && /SKU BOMBA-12V/.test(t3) && /a análise de cada caso/.test(t3),
+            'pós-venda lido sem o nº do pedido: conta só o caso fora da mediação e leva o SKU');
+        const semSku = SHC.chamadoExclusao({ motivo: mot, casos: 1, naReputacao: 1, produtos: [{ sku: '', titulo: 'Produto sem SKU' }], pedidos: ['2000000107'] });
+        ok(/^Assunto: Pedido de análise de reclamações para exclusão da reputação – Pedido: #2000000107\n/.test(semSku) && /- Produtos: Produto sem SKU\./.test(semSku), 'sem SKU conhecido: o título');
+    })();
+    espera.then(() => { console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK'); process.exit(f ? 1 : 0); }, e => { console.error(e); process.exit(1); });
+}
