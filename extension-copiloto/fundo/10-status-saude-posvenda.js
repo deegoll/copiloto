@@ -81,6 +81,8 @@ async function sincronizarSaude(sellerId, progresso) {
             n === 1 ? d => !(d.itens || []).length && !(d.familias || []).length : null));
         if (pag.falha) { if (n === 1) return { falha: pag.falha }; break; }
         const d = pag.dados || {};
+        // v3.3 (bloqueio 5): página que diz outro dono = o login trocou no meio → para sem gravar (nenhum GET a mais).
+        if (d.conta && d.conta.sellerId && String(d.conta.sellerId) !== String(sellerId) && sellerId !== 'atual') return { falha: 'outra_conta' };
         if (n === 1 && typeof d.total === 'number') total = d.total;
         const novos = (d.itens || []).map(i => i && i.itemId).filter(id => id && !vistos.has(id)), novasF = (d.familias || []).filter(f => !vistos.has('F' + f));
         if (!novos.length && !novasF.length) break;   // passou da última página (ou o ML repetiu)
@@ -99,6 +101,8 @@ async function sincronizarSaude(sellerId, progresso) {
         (ant.familias || []).forEach(f => { if (!vistos.has('F' + f)) { vistos.add('F' + f); familias.push(f); } });
     }
     const snap = { ts: Date.now(), total, itens, familias, completo, tarefas };
+    // Leitura avulsa (fiscal_agora) ou a que começa cedo, fora das etapas: confere a sessão de novo, SEM o guardado, antes de gravar.
+    if (!(await contaSegue(sellerId, true))) return { falha: 'outra_conta' };
     await SHC.gravarChave('fiscal:' + sellerId, snap);
     return snap;
 }
@@ -118,26 +122,30 @@ function fiscalCompartilhado(conta, progresso) {
 }
 // {acao:'fiscal_agora'} → { ok:true, fiscal (fiscal:<conta>) } | { ok:false, motivo:'sem_conta'|'sem_sessao'|'ml_indisponivel', fiscal (o anterior, se houver) }
 // Leitura avulsa (fora da sincronização) grava na conta da ÚLTIMA sincronização (ml:conta). Se o ML aberto agora for outra conta, gravaria os
-// dados dela na errada. 1 GET da 1ª página de Anúncios diz a conta da sessão. → '' (mesma conta, ou a página não diz) | 'outra_conta' | 'login' | 'indisponivel'.
+// dados dela na errada. 1 GET da 1ª página de Anúncios diz a conta da sessão.
+// → 'mesma' (a página diz o dono e é esta conta) | '' (a página NÃO diz o dono: tela intermediária, verificação de segurança) | 'outra_conta' |
+//   'login' | 'indisponivel'. Revisão 07/10/2026: '' não prova nada — só 'mesma' confirma o que foi gravado (diário da sincronização, fundo/08).
 async function confereSessao(conta) {
     const b = await buscarHtml(BASE + '/anuncios/lista');
     if (!b) return 'indisponivel';
     if (b.login) return 'login';
     const c = SHC.mlContaDoEstado(SHC.mlExtraiEstado(b.html) || {}), id = c && c.sellerId;
-    return id && String(id) !== String(conta) ? 'outra_conta' : '';
+    return !id ? '' : String(id) !== String(conta) ? 'outra_conta' : 'mesma';
 }
 // v3.3 (multi-empresa, auditoria 07/10/2026): trocar o login do ML no meio da sincronização (ou do histórico em segundo plano) fazia a conta
 // nova ser gravada nas chaves da antiga — e o mês fechado lido assim não era mais relido. contaSegue(conta) confere a sessão (confereSessao)
 // no máximo 1 vez a cada CONTA_CONFERE_MS; false só com PROVA de outra conta (a página diz o dono e é outro). Sessão caída não é troca.
 const CONTA_CONFERE_MS = 60e3;
-let contaConferida = { conta: '', ts: 0, ok: true };
+// r = a resposta da última conferência (confereSessao): só 'mesma' PROVA a conta e confirma o diário da sincronização (fundo/08); '' (página sem
+// dono), 'login' e 'indisponivel' não são troca (ok) nem prova.
+let contaConferida = { conta: '', ts: 0, ok: true, r: '' };
 async function contaSegue(conta, forcar) {
     if (!conta || conta === 'atual') return true;
     const agora = Date.now();
     if (!forcar && contaConferida.conta === conta && agora - contaConferida.ts < CONTA_CONFERE_MS) return contaConferida.ok;
     let r = '';
     try { r = await confereSessao(conta); } catch (e) { r = 'indisponivel'; }
-    contaConferida = { conta, ts: Date.now(), ok: r !== 'outra_conta' };
+    contaConferida = { conta, ts: Date.now(), ok: r !== 'outra_conta', r };
     return contaConferida.ok;
 }
 // Depois de uma troca de conta no meio da leitura: os meses lidos desde `desde` (ms) podem ter dados da outra conta → voltam para a fila de
@@ -177,7 +185,7 @@ async function fiscalAgora() {
     if (sessao === 'login' || sessao === 'outra_conta') return { ok: false, motivo: sessao === 'login' ? 'sem_sessao' : 'outra_conta', fiscal: await SHC.lerChave('fiscal:' + conta) };
     let r;
     try { r = await fiscalCompartilhado(conta, null); } catch (e) { r = { falha: 'indisponivel' }; }
-    if (r && r.falha) return { ok: false, motivo: r.falha === 'login' ? 'sem_sessao' : 'ml_indisponivel', fiscal: await SHC.lerChave('fiscal:' + conta) };
+    if (r && r.falha) return { ok: false, motivo: r.falha === 'login' ? 'sem_sessao' : r.falha === 'outra_conta' ? 'outra_conta' : 'ml_indisponivel', fiscal: await SHC.lerChave('fiscal:' + conta) };
     if (!emAndamento) atualizarAlertas(conta).catch(() => {});   // com sincronização rodando, a etapa Alertas dela recalcula
     return { ok: true, fiscal: r };
 }

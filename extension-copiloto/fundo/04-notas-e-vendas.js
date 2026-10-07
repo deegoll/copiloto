@@ -139,6 +139,9 @@ async function sincronizarVendasBrutas(sellerId, progresso, soMeses) {
     }
     const naoLidos = meses.filter(m => lidosAgora.indexOf(m) < 0);
     if (!lidosAgora.length) return { falha: login ? 'login' : 'indisponivel', diag };   // nada respondeu: o que havia fica
+    // "Tentar agora" (soMeses, fora da sincronização): a sessão pode ter trocado DEPOIS da conferência do começo (lerVbMes) → confere de novo,
+    // sem o guardado, antes de gravar. Na sincronização, a conferência forçada depois da etapa (e o diário) cuidam disso.
+    if (soMeses && !(await contaSegue(sellerId, true))) return { falha: 'outra_conta', diag };
     // v2.5.3: grava JUNTANDO com o vb:<conta> de agora (na fila): o "Tentar agora" de um mês e a sincronização podem ler ao mesmo tempo
     // e um não apaga os dias que o outro acabou de gravar. Só os dias lidos agora entram por cima.
     const limite = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
@@ -182,6 +185,7 @@ async function lerVbMes(mes) {
     const conta = await SHC.contaAtual(), sessao = conta === 'atual' ? '' : await confereSessao(conta);
     if (sessao === 'outra_conta' || sessao === 'login') return { ok: false, mes, motivo: sessao };   // não mistura as vendas de outra conta
     const r = await sincronizarVendasBrutas(conta, null, [mes]), diag = (r.diag || {})[mes] || 'sem resposta';
+    if (r.falha === 'outra_conta') return { ok: false, mes, motivo: 'outra_conta' };   // lido com a sessão de outra conta: nada gravado, nem o diagnóstico
     const marca = st => { const es = st.etapas || (st.etapas = {}), e = es.vendasBrutas || (es.vendasBrutas = {}); e.meses = juntaMeses(e.meses, { [mes]: diag }); };
     if (stSync && gravarSync) { marca(stSync); await gravarSync(); }   // sincronização rodando: o status dela (em memória) ganha o diagnóstico
     else await emFilaStatus(async () => { const st = await SHC.lerStatus(); marca(st); await SHC.salvarStatus(st); });

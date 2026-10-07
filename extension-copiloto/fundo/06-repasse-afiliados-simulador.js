@@ -30,6 +30,9 @@ async function sincronizarRepasse(sellerId, progresso) {
     ks.forEach(m => { out[m] = meses[m]; });
     // Nenhuma venda/reembolso (só compras, ou só o mês cortado): não grava por cima — o repasse anterior fica.
     if (!ks.length) return { paginas, meses: 0, semItens: true };
+    // v3.3 multi-empresa (revisão 07/10/2026): o login trocado durante a leitura (avulsa ou na sincronização) não grava o repasse de uma empresa
+    // na outra — a sessão do ML é conferida de novo, sem o guardado de 1 min, antes de gravar (1 GET).
+    if (!(await contaSegue(sellerId, true))) return { falha: 'outra_conta' };
     await SHC.salvarRepasse(sellerId, { ts: Date.now(), meses: out, paginas, desde, completo: inteira, aConfirmar: true });
     return { paginas, meses: ks.length };
 }
