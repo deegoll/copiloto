@@ -213,7 +213,12 @@ function cargaTardia(partes) {
     const doTT = f => /\bTT\.(gravarCaptura|sincronizarScripts)\(/.test(String(f));
     // C2 (07/10): o ícone acompanha a conta aberta (ml:conta mudou → seloAgora), 1 storage.onChanged a mais na 07; fora da conta, como o do TikTok.
     const doSelo = f => String(f).length < 200 && /m\['ml:conta'\]/.test(String(f)) && /seloAgora\(/.test(String(f));
-    const qtd = (f, ehTT) => Object.keys(f.registros).map(k => k + ' ' + f.registros[k].filter(x => !doSelo(x) && !!ehTT === doTT(x)).length).join(', ');
+    // 3.4.0 (N-C): a etiqueta da Shopee (SHC.etqInstalarFundo, na 01) põe 1 ouvinte de mensagens, os 2 de permissão e o do storage, como o TikTok.
+    const doEtq = f => /SHC\.etqSincronizar\(/.test(String(f));
+    const qtd = (f, ehTT) => Object.keys(f.registros).map(k => k + ' ' + f.registros[k].filter(x => !doSelo(x) && !doEtq(x) && !!ehTT === doTT(x)).length).join(', ');
+    const qtdEtq = f => Object.keys(f.registros).map(k => k + ' ' + f.registros[k].filter(doEtq).length).join(', ');
+    ok(Object.keys(velho.registros).every(k => !velho.registros[k].some(doEtq)) && qtdEtq(novo) === 'onMessage 1, onInstalled 0, onStartup 0, onAlarm 0, permissions.onAdded 1, permissions.onRemoved 1, storage.onChanged 1',
+        'os listeners da etiqueta da Shopee (3.4.0) são exatamente 4, como os do TikTok: ' + qtdEtq(novo));
     ok(novo.registros['storage.onChanged'].filter(doSelo).length === 1 && Object.keys(velho.registros).every(k => !velho.registros[k].some(doSelo)), 'o ouvinte do ícone pela conta aberta (C2) é 1 só e é novo');
     const DE_ANTES = ['onMessage', 'onInstalled', 'onStartup', 'onAlarm'];
     ok(qtd(novo) === qtd(velho) && DE_ANTES.every(k => novo.registros[k].filter(x => !doTT(x)).length >= 1), 'listeners do Chrome registrados na carga, fora os do TikTok: ' + qtd(novo));
@@ -222,7 +227,10 @@ function cargaTardia(partes) {
     const funcoes = f => Object.keys(f.ctx).filter(k => typeof f.ctx[k] === 'function').sort().join();
     const comNovas = f => funcoes(f).split(',').concat(f === velho ? Object.keys(NOVAS) : []).sort().join();
     ok(comNovas(novo) === comNovas(velho) && funcoes(novo).split(',').length > 100, 'mesmas funções de topo no fundo, mais as novas listadas (' + funcoes(novo).split(',').length + ')');
-    ok(Object.keys(novo.ctx.SHC).sort().join() === Object.keys(velho.ctx.SHC).sort().join(), 'mesmo SHC (' + Object.keys(novo.ctx.SHC).length + ' nomes, com o Object.assign do robô)');
+    // 3.4.0 (N-C): os nomes da etiqueta (etiqueta-fundo.js: SHC.ETQ_CANAIS, SHC.etq*) são os únicos a mais.
+    const semEtq = f => Object.keys(f.ctx.SHC).filter(k => !/^(etq|ETQ_)/.test(k)).sort().join();
+    ok(Object.keys(novo.ctx.SHC).filter(k => /^(etq|ETQ_)/.test(k)).sort().join() === 'ETQ_CANAIS,etqInstalarFundo,etqLigada,etqPerm,etqSincronizar', 'os nomes novos do SHC são só os da etiqueta: ' + Object.keys(novo.ctx.SHC).filter(k => /^(etq|ETQ_)/.test(k)).sort().join());
+    ok(semEtq(novo) === semEtq(velho), 'mesmo SHC fora a etiqueta (' + Object.keys(novo.ctx.SHC).length + ' nomes, com o Object.assign do robô)');
     for (const motivo of ['install', 'update']) { velho.instala(motivo); novo.instala(motivo); }
     velho.alarme('shc-resumo'); novo.alarme('shc-resumo');
     await Promise.all([velho.tique(40), novo.tique(40)]);

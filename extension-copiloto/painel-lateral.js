@@ -7834,6 +7834,25 @@
         $('#okCanais').textContent = '✓ Salvo';
         setTimeout(() => { $('#okCanais').textContent = ''; }, 2500);
     });
+    // 3.4.0 (N-C): "Etiquetas nos outros canais" › Shopee. Ligar: pede as 2 permissões opcionais DENTRO do clique e grava cfg.etiquetas.shopee
+    // (o fundo registra os scripts: SHC.etqSincronizar). Desligar: grava false, o fundo tira os scripts e só então as permissões voltam.
+    const PERM_ETQ_SP = { permissions: ['scripting'], origins: ['https://seller.shopee.com.br/*'] };
+    const cxEtqSp = $('#etq-shopee');
+    if (cxEtqSp) {
+        Promise.all([SHC.lerCfg(), chrome.permissions.contains(PERM_ETQ_SP)]).then(([c, tem]) => { cxEtqSp.checked = !!(c && c.etiquetas && c.etiquetas.shopee === true) && !!tem; }).catch(() => {});
+        cxEtqSp.addEventListener('change', () => {
+            const ligar = cxEtqSp.checked;
+            let pedido;   // request dentro do clique, antes de qualquer await (senão o Chrome recusa)
+            try { pedido = ligar ? chrome.permissions.request(PERM_ETQ_SP) : Promise.resolve(true); } catch (x) { pedido = Promise.resolve(false); }
+            Promise.resolve(pedido).catch(() => false).then(async ok => {
+                if (ligar && !ok) { cxEtqSp.checked = false; avisa('O Chrome não deixou ler a Shopee. Tente de novo.', 8000); return; }
+                try { cfg = await SHC.salvarCfg({ etiquetas: Object.assign({}, cfg.etiquetas, { shopee: ligar }) }, { semMarcar: true }); } catch (x) { return falhaGravar(x); }
+                await Promise.resolve(chrome.runtime.sendMessage({ acao: 'etq_sincronizar' })).catch(() => {});
+                if (!ligar) await Promise.resolve(chrome.permissions.remove(PERM_ETQ_SP)).catch(() => {});
+                avisa(ligar ? '✓ Etiquetas ligadas. Abra (ou recarregue) Meus Produtos na Shopee.' : 'Etiquetas da Shopee desligadas.', 6000);
+            }).catch(() => {});
+        });
+    }
     // Ads do TikTok por mês (SHC.tt.salvarAds): campo vazio = "não informado" (apaga o valor; o mês fica "≈"), nunca 0; valor negativo é recusado;
     // "Não uso Ads no TikTok" grava nao_uso, e os meses sem valor valem 0 de propósito.
     async function salvarAdsTT() {

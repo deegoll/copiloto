@@ -12,7 +12,7 @@ $dentro = @('manifest.json', 'background.js', 'calc.js', 'store.js', 'xls.js', '
     'copiloto-ml.js', 'ml-tela.js', 'ml-tela.css', 'ml-canal.js', 'agenda-canal.html', 'agenda-canal.js',
     'painel.html', 'painel.js', 'painel-lateral.html', 'painel-lateral.js', 'tiktok-aba.js', 'ads.html', 'ads.js',
     'fechamento.html', 'fechamento.js', 'apresentacao.html', 'apresentacao.js', 'tour.js', 'icons',
-    'tiktok.js', 'tiktok-pagina.js', 'tiktok-tela.js', 'etiqueta-canal.js', 'nucleo', 'fundo')   # v3.2 TikTok: nucleo/ = cópia de copiloto-nucleo/src (teste_tiktok_nucleo.js confere)
+    'tiktok.js', 'tiktok-pagina.js', 'tiktok-tela.js', 'etiqueta-canal.js', 'etiqueta-tela.js', 'etiqueta-fundo.js', 'shopee-pagina.js', 'shopee-tela.js', 'nucleo', 'fundo')   # v3.2 TikTok: nucleo/ = cópia de copiloto-nucleo/src (teste_tiktok_nucleo.js confere)
 # 02/10: fundo/ = o background.js dividido por assunto (o background.js ficou só o carregador; teste_fundo_dividido.js confere).
 # 02/10: licenca.js e licenca-tela.js ("Entrar com o SellerHub") desligados e fora do pacote até o servidor entrar no ar.
 # Religar: voltar os 2 para $dentro e devolver as referências (importScripts do fundo/01-carga-e-eventos.js e <script> do painel-lateral.html;

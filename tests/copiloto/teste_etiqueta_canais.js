@@ -71,5 +71,29 @@ console.log('d) Magalu');
     ok(mg.texto === 'Sobra R$ 40,10 · margem 40,1%', 'com 9,9% informado em Ajustes: R$ 100 − 9,90 − 50 = R$ 40,10 (' + mg.texto + ')');
 }
 
+console.log('e) o leitor da página da Shopee (shopee-pagina.js) e o "achar o produto na linha" (etiqueta-tela.js)');
+{
+    const vm = require('vm');
+    const roda = (arq, w) => { vm.runInNewContext(fs.readFileSync(path.join(EXT, arq), 'utf8'), { window: w, URL, Symbol, JSON, Object, Array, String, Math }); return w; };
+    const ws = roda('shopee-pagina.js', { location: { href: 'https://seller.shopee.com.br/portal/product/list/all', origin: 'https://seller.shopee.com.br' }, addEventListener() {}, postMessage() {} });
+    const sp = ws[Symbol.for('copiloto.shopee')];
+    ok(sp && sp.eDaRota('/api/v3/opt/mpsku/list/v2/get_product_list?page_number=1', 'GET') && !sp.eDaRota('/api/v3/opt/mpsku/list/v2/get_product_list', 'POST')
+        && !sp.eDaRota('/api/v3/order/get_order_list_card_list', 'GET') && !sp.eDaRota('https://outro.site/api/v3/opt/mpsku/list/v2/get_product_list', 'GET'),
+        'só a lista de Meus Produtos (GET, mesma origem) é lida; pedidos, outras rotas e outros sites não');
+    const j = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'shopee_produtos_2026-10-07.json'), 'utf8')).respostas.find(x => /get_product_list$/.test(x.url)).corpo;
+    const sujo = JSON.parse(JSON.stringify(j));
+    sujo.data.products[0].buyer = { name: 'Fulana', phone: '(44) 99912-0000' };
+    sujo.data.products[0].statistics.view_count = 999;
+    const c = sp.corta(sujo), p0 = c.data.products[0];
+    ok(c.data.products.length === j.data.products.length && !('buyer' in p0) && !('statistics' in p0) && !('cover_image' in p0) && !('promotion' in p0),
+        'da resposta só saem os campos da etiqueta (nada de comprador, estatística, imagem ou campanha)');
+    ok(JSON.stringify(SP.produtosDaLista(c)) === JSON.stringify(SP.produtosDaLista(j)), 'o recorte dá a mesma lista que a resposta inteira (a etiqueta não perde nada)');
+    const wt = roda('etiqueta-tela.js', { document: {} }), casa = wt.__copilotoEtq._casa;
+    const it = { nome: 'Kit Panela 5 Peças', sku: 'PAN-05', skus: ['PAN-05'] };
+    ok(casa('Kit Panela 5 Peças', it) === 'nome' && casa('  kit panela 5 pecas ', it) === 'nome' && casa('SKU principal: PAN-05', it) === 'sku' && casa('PAN-05', it) === 'sku'
+        && casa('PAN-050', it) === '' && casa('Kit Panela 5 Peças Azul', it) === '' && casa('R$ 609', it) === '',
+        'o produto é achado pelo nome inteiro (sem acento e caixa) ou pelo SKU sozinho; texto parecido não casa');
+}
+
 console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK');
 process.exit(f ? 1 : 0);
