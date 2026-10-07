@@ -4,6 +4,21 @@ Pacote: `copiloto-v3.3.0.zip` (nesta pasta), gerado na E22 do `tests/copiloto/_m
 SHA-256 do zip (gerado em 06/10/2026 15:25): `CC04F97A64055D34EF32154C884C809F608A13F4B30A06AFFADBB623443FE857` (56 arquivos, iguais byte a byte ao código de `extension-copiloto` na etiqueta local `copiloto-v3.3.0`). Se o pacote for refeito, troque aqui e no `VERSOES.md`.
 Textos da loja, política e a lista da manhã: pasta `go-live-3.3.0/` (`textos-loja-3.3.0.md`, `privacidade.html`, `PARA-A-DONA-GO-LIVE.md`). Os `.txt` desta pasta continuam sendo os da 3.2.1 publicada.
 
+## Junção com o C2 da nuvem (07/10/2026, ramo `nuvem2/330-final`)
+
+O pacote desta pasta foi refeito depois de juntar o C2 da nuvem (`nuvem/bloqueios-330`, PR #4) por cima desta 3.3.0. SHA-256: `8146eeffdfe459343cc73246214b5353b6be79f5dfa90ccb35e26c54e0c9f226` (56 arquivos; confira com `node deploy/conferir-pacote.js 3.3.0`). Ele substitui o zip de 06/10 (`CC04F97A…`).
+
+- **Multi-empresa:**
+  - a conta do ML é conferida depois de cada etapa da sincronização; se o login trocar no meio, o que foi lido naquela janela é desfeito e relido;
+  - "Todas as contas" mostra o total de cada empresa e nunca soma empresas diferentes;
+  - o Tiny do painel lateral fica preso à empresa do clique.
+- **Contestação:**
+  - pedido de exclusão só nos casos que as regras do ML aceitam: nunca culpa do vendedor e nunca mediação aberta;
+  - medidas sem afirmar quem mudou, pedindo só a revisão (nunca estorno de frete, pela trava do frete);
+  - remessa do Full só com os números por produto: os totais da lista nunca entram.
+- **Política:** `politica-privacidade.html` desta pasta é a política no ar de 06/10 mais a experiência de compra, as contas de outra empresa e os textos de contestação (auditoria 3.A.2–3.A.7, sem o texto de frete e sem a cifra do 3.A.8). Ela vai ao ar no lugar da de 06/10, na mesma URL, **antes** do envio.
+- **O envio continua esperando:** o teste ao vivo com a dona (E23, abaixo), o OK dela na política, a política no ar, os textos colados no painel e o envio.
+
 ## Em resumo
 
 1. **TikTok Shop opcional.** Quem liga em Ajustes › Canais de venda vê o filtro Todos · Mercado Livre · TikTok Shop. O Copiloto só lê as telas do Seller Center que a seller abre, sem robô, sem nenhuma chamada própria ao TikTok e sem guardar dado de comprador.
