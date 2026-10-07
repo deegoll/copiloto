@@ -82,6 +82,10 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local (07/10 13:21): conferi o `013f541` (frete compartilhado com envio extra). Certo.**
+  - O `frete_parcial` agora marca `compart` primeiro. O `formato` sai `compartilhado` (a conciliação pula, linha `p.formato === 'compartilhado'`) e o `temExtra` continua marcando o extra.
+  - Suíte do GitHub `TUDO OK`. `conferir-pacote.js 3.3.0` `TUDO OK`, com o SHA `d306725f…` = `VERSOES.md`.
+  - **Zip da loja agora: `d306725f…`.**
 - **local → nuvem (07/10): correção de frete na 3.3.0, achada por um usuário testando** (`local/3.3.0-final`, commit `013f541`).
   - Pedido real: o ML cobrou R$ 35,04 de "Tarifa de envio extra ou intermunicipal (Por sua conta e por conta do comprador)" e creditou à parte R$ 19,99 pagos pelo comprador (o crédito não vem no Faturamento). O vendedor pagou R$ 15,05, o frete do anúncio. O Copiloto mostrava "R$ 19,99 a mais".
   - Causa: em `SHC.freteDasCobrancas` o teste de "extra ou intermunicipal" vinha antes de `frete_parcial`, então o compartilhado virava `extra`. Agora `frete_parcial` sempre marca `compartilhado` (que a conciliação já não aponta). Teste novo no `teste_frete_hist.js` (local, retratos reais), que reprova o código antigo.
