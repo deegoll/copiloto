@@ -335,7 +335,9 @@
     const int = v => v === null || v === undefined ? '—' : Math.round(v).toLocaleString('pt-BR');
     const pct = v => v === null || v === undefined || !isFinite(v) ? '—' : SHC.pctTxt(v);
     const rs = v => v === null || v === undefined ? '—' : SHC.moeda(v);
-    const rs0 = v => v === null || v === undefined || !isFinite(v) ? '—' : (Math.round(v) < 0 ? '−' : '') + 'R$ ' + Math.abs(Math.round(v)).toLocaleString('pt-BR');   // KPI: "R$ 1.433"
+    // KPI: "R$ 1.433". Centavo (SHC.r2) e depois o real, meio real para LONGE do zero nos dois sinais: −2,50 → "−R$ 3" como 2,50 → "R$ 3"
+    // (Math.round dava −2: a manchete dizia "prejuízo de R$ 3" e o KPI "−R$ 2").
+    const rs0 = v => { if (v === null || v === undefined || !isFinite(v)) return '—'; const r = Math.round(SHC.r2(Math.abs(v))); return (v < 0 && r ? '−' : '') + 'R$ ' + r.toLocaleString('pt-BR'); };
     A.rs0 = rs0;
     const dataBR = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')); return m ? m[3] + '/' + m[2] : ''; };
 
@@ -387,8 +389,9 @@
         if (!a) return '<p class="sub">Sem totais do período.</p>';
         const cel = (cls, rot, tit, valor, sub) => `<div class="kpi ${cls}" title="${esc(tit)}"><div class="l">${esc(rot)}</div><div class="v">${valor}</div><div class="s">${esc(sub)}</div></div>`;
         const corLucro = r.lucro === null ? '' : (r.lucro < 0 ? 'pr' : 'ok');
+        // A conta do rodapé em centavos (fecha: sobra − Ads = lucro); o número grande é esse lucro em R$ inteiro (o mesmo da manchete).
         const subLucro = r.lucro === null ? 'informe o custo dos produtos'
-            : `sobra ${rs0(r.sobra)} − Ads ${rs0(r.ads)}` + (r.semCusto ? ` · ${SHC.qtd(r.semCusto, 'sem custo fica', 'sem custo ficam')} fora` : '');
+            : `sobra ${rs(r.sobra)} − Ads ${rs(r.ads)} = ${rs(r.lucro)}` + (r.semCusto ? ` · ${SHC.qtd(r.semCusto, 'sem custo fica', 'sem custo ficam')} fora` : '');
         return '<div class="kpis k4">'
             + cel('', 'Investimento', A.SIGLAS.investimento, rs0(a.investimento), A.variacao(a.investimento, b.investimento))
             + cel('', 'Receita pelo Ads', A.SIGLAS.receita, rs0(a.receita), A.variacao(a.receita, b.receita))
