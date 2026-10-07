@@ -5456,7 +5456,7 @@
         if (base.length && un > 0) {
             const pu = base.map(r => r.custo / r.unidades), med = pu.reduce((s, x) => s + x, 0) / pu.length;
             custo = { valor: SHC.r2(med * un), min: SHC.r2(Math.min(...pu) * un), max: SHC.r2(Math.max(...pu) * un), porUnidade: SHC.r2(med), base: base.length, fonte: 'suas remessas anteriores' };
-        } else custoMotivo = 'O Mercado Livre cobra a coleta por distância, mas não publica a tabela; o Copiloto aprende com as suas remessas' + (un > 0 ? ' — ainda não há remessa fechada com cobrança nesta conta.' : '.');
+        } else custoMotivo = 'O Mercado Livre cobra a coleta por distância, mas não publica a tabela; o Copiloto aprende com as suas remessas' + (un > 0 ? ' — ainda não há remessa recebida com cobrança nesta conta.' : '.');   // recebida: vencida/cancelada não conta (#17)
         return { itens, unidades: un, volumeM3: vol, pesoKg: peso, semMedida, semPeso, volumesEstimados: volumes, veiculo,
             veiculoMotivo: veiculo ? '' : (!un ? 'Informe as quantidades.' : 'Falta a medida de ' + SHC.qtd(semMedida.length, 'SKU', 'SKUs') + ' (o Copiloto lê as medidas do ML na rodada lenta, ou use a planilha do ERP).'),
             custoEstimado: custo, custoMotivo };

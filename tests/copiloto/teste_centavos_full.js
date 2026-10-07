@@ -361,7 +361,7 @@ console.log('G. Próxima remessa: SHC.simulaRemessa (custo estimado da coleta) e
         'média por unidade só das fechadas com cobrança e unidades (R$ 100/30 e R$ 50/7): R$ 523,81 para 100 un. (de R$ 333,33 a R$ 714,29)');
     ok(ce.min <= ce.valor && ce.valor <= ce.max && [ce.valor, ce.min, ce.max, ce.porUnidade].every(emCentavos), 'mín ≤ estimado ≤ máx, tudo em centavos');
     const sem = SHC.simulaRemessa({ skus: [{ sku: 'S1', qtd: 5 }], remessasAnteriores: [base[2]] });
-    ok(sem.custoEstimado === null && !/R\$/.test(sem.custoMotivo) && /ainda não há remessa fechada com cobrança/.test(sem.custoMotivo), 'sem remessa fechada com cobrança: sem custo (nada de R$ 0,00), com o motivo');
+    ok(sem.custoEstimado === null && !/R\$/.test(sem.custoMotivo) && /ainda não há remessa recebida com cobrança/.test(sem.custoMotivo), 'sem remessa recebida com cobrança: sem custo (nada de R$ 0,00), com o motivo');
     const sk = P.skusParaSimular([{ p: { sku: 'A', titulo: 'A' }, qtd: 7 }, { p: { sku: 'B', titulo: 'B' }, qtd: 3 }, { p: { sku: 'C', titulo: 'C' }, qtd: 0 }, { p: { sku: 'D', titulo: 'D' }, qtd: 4 }],
         { A: '2,6', B: '-4', D: 'abc' }, null);
     ok(sk.map(x => x.sku + '=' + x.qtd).join(' ') === 'A=3 B=0 D=0', 'quantidade digitada: "2,6" → 3, "-4" → 0, "abc" → 0; sem envio nem digitação fica de fora (C)');
@@ -389,7 +389,9 @@ console.log('G. Próxima remessa: SHC.simulaRemessa (custo estimado da coleta) e
     ok(c17 && c17.base === 1 && c17.valor === 120.5 && c17.min === 120.5 && c17.max === 120.5 && c17.porUnidade === 1.21
         && c17.porUnidade === SHC.remessasResumo(v17, null, '2026-09', HOJE).custoPorUnidade,
         'recebida R$ 120,50/100 un. + vencida R$ 80,00 + cancelada R$ 35,00: custo estimado R$ 120,50 (R$ 1,21/un., o mesmo R$/un. do cartão de remessas)');
-    ok(SHC.simulaRemessa({ skus: [{ sku: 'S1', qtd: 5 }], remessasAnteriores: v17.slice(1) }).custoEstimado === null, 'só vencida e cancelada cobradas: sem custo estimado (nenhuma coleta recebida para aprender)');
+    const sv17 = SHC.simulaRemessa({ skus: [{ sku: 'S1', qtd: 5 }], remessasAnteriores: v17.slice(1) });
+    ok(sv17.custoEstimado === null && /ainda não há remessa recebida com cobrança nesta conta\.$/.test(sv17.custoMotivo),
+        'só vencida e cancelada cobradas: sem custo estimado e o motivo diz "nenhuma remessa recebida" (a vencida tem "o ML cobrou" na lista: não é "fechada sem cobrança")');
     const r17 = lcg(1717), g17 = lote();
     let comPen = 0;
     for (let k = 0; k < 400; k++) {
