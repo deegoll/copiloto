@@ -18,7 +18,6 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
-| nuvem 2 | **Conduz a 3.3.0 no lugar da local e da nuvem, que ficaram sem token (a dona avisou às 07/10 10:21)**: receber da dona a 3.3.0 real do computador (com o TikTok) num ramo novo, juntar o C2 (`nuvem/bloqueios-330`), suíte, ficha, textos da loja, zip e SHA. O envio, a política no site e o painel continuam com a dona | ramo `local/3.3.0-real` (a dona sobe) e o que sair dele; `COORDENACAO.md` | 07/10 10:21 |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
 ## Fila
@@ -82,6 +81,16 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → todos (07/10 10:58): 3.3.0 FINAL pronta no ramo `nuvem2/330-final` (PR #6, base `local/3.3.0-real`).** Ela tem o código do computador da dona (com o TikTok) e o C2 inteiro aplicado por cima.
+  - **Suíte:** 9 arquivos + núcleo, `TUDO OK`. V1 (política × manifest), V2 (dado de cliente) e V3 (zip) também `TUDO OK`.
+  - **Zip:** 56 arquivos, SHA `8146eeff…f226`, registrado no `VERSOES.md`.
+  - **Política nova:** a de 06/10 mais a experiência de compra, a outra empresa e a contestação, sem o frete.
+  - **Conflitos resolvidos pela regra da dona:**
+    - medidas só com pedido de revisão do frete, nunca estorno;
+    - remessa sem os totais da lista.
+  - **Não rodou:** a suíte interna de 105 arquivos, porque está no computador da dona.
+  - **Falta, com a dona:** E23 (teste ao vivo do TikTok), OK na política, política no site, colar no painel e envio.
+  - **Quem voltar com token:** junte o `nuvem2/330-final` na sua 3.3.0 em vez de refazer, e rode a suíte de 105 antes do envio, se der.
 - **nuvem 2 → local e nuvem (07/10 10:21): a dona avisou que as duas sessões ficaram sem token. A nuvem 2 assume a condução da 3.3.0.**
   - A dona vai subir a 3.3.0 real do computador (com o TikTok) no ramo `local/3.3.0-real`, só com `extension-copiloto/` e os textos da loja, **nada de teste com dado real**.
   - Com ela, a nuvem 2 faz o que dá na nuvem: juntar o C2, rodar a suíte daqui com o V1–V3, conferir a política contra o manifest, atualizar a ficha, fazer o zip e o SHA.
@@ -252,6 +261,7 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 | Lado | Tarefa | Commit |
 |---|---|---|
+| nuvem 2 | 3.3.0 final: código do computador + C2, política nova, zip e SHA (ramo `nuvem2/330-final`, PR #6) | `703209f` |
 | nuvem | N2a "cada centavo": 6 arquivos `teste_centavos_*.js`, 460 conferências (ramo `nuvem/testes-centavos`, PR depois da sua sincronização) | `643db14` |
 | nuvem | C2 para a 3.3.0: multi-empresa sem mistura e contestação só com fato lido (ramo `nuvem/bloqueios-330`, PR #4) | `a110667` |
 | nuvem | C1 para a 3.3.1: as 39 divergências de centavo com teste e o mapa função → commit (ramo `nuvem/correcoes-centavos`, PR #5) | `20cbc75` |
