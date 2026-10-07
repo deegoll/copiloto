@@ -23,7 +23,8 @@
 //      "lucrativo"/"apertado" e 9,98% passava na meta de 10%. Agora compara sem arredondar, como SHC.sobraAnuncio/sobraProposta (B e C).
 //   3) [corrigida, #11] Custo/outros/frete digitados com 3+ casas ("12,345": etiqueta, painel, planilha) entravam crus na conta; a tela mostrava
 //      o arredondado e as linhas não fechavam (1 centavo). SHC.kitDe arredondava com Math.round(x*100)/100 (1,005 → 1,00). Agora entram e são
-//      gravados em centavos (SHC.r2): SHC.calcular, sobraAnuncio/Atacado/Proposta, kitDe, salvarCustoSku, lerTabela e a etiqueta (B, C, F, G).
+//      gravados em centavos (SHC.r2): SHC.calcular, sobraAnuncio/Atacado/Proposta, kitDe, salvarCustoSku, salvarCusto (anúncio sem SKU: painel,
+//      Agenda do Canal, TikTok), lerTabela e a etiqueta (B, C, F, G).
 //   4) [corrigida, #4/#13/#36] SHC.r2 não arredondava o meio centavo do mesmo jeito: r2(2,145) = 2,15 mas r2(2,175) = 2,17 (imposto de 6% em
 //      R$ 36,25) e r2(−1,285) = −1,28; SHC.moeda(2,175) mostrava "R$ 2,18". Agora r2, o r2 do núcleo e o SHC.moeda: meio centavo para longe do zero (A).
 //   5) [corrigida, #12] SHC.recomendaPromo: precoMeta (fórmula fechada) errava até 2 centavos (≈12% dos casos ficava 1 centavo abaixo da meta) e a
@@ -367,6 +368,19 @@ console.log('E. SHC.precoMinimo: o menor preço que deixa a meta (busca centavo 
         ok(banco['c|sku|CX-1'].custo === 12.35 && banco['c|sku|CX-1'].outros === 0.13 && !('c|sku|CX-2' in banco)
             && tb.itens.length === 1 && tb.itens[0].custo === 10 && tb.itens[0].outros === 0.13 && ta.itens[0].custo === 7.78 && ta.itens[0].outros === 1.01 && ta.itens[0].frete === 20,
             'grava em centavos: custo "12,345" → 12,35 e outros 0,125 → 0,13; custo 0,004 vira 0 (não é custo); planilha "10,0040" → 10,00, "1,005" → 1,01, frete "19,995" → 20,00');
+        // #11: anúncio sem SKU (painel, Agenda do Canal, TikTok → SHC.salvarCusto) grava em centavos como o do SKU. Antes ficava 1,005: o campo do
+        // painel (toFixed(2), como o nfr) mostrava "1,00", a etiqueta "R$ 1,01" e a sobra de R$ 87,00 saía 85,99.
+        const campo = v => Number(v).toFixed(2).replace('.', ',');
+        await SHC.salvarCusto('ml', 'MLB9100000011', { custo: PN.valorCampo('1,005').valor, origem: 'manual' });
+        await SHC.salvarCusto('ml', 'MLB9100000011', { outros: PN.valorCampo('0,125').valor });
+        await SHC.salvarCustoSku('CX-3', { custo: PN.valorCampo('1,005').valor });
+        await SHC.salvarCusto('ml', 'MLB9100000012', { custo: SHC.num('7,777'), outros: SHC.num('1,005'), frete: SHC.num('19,995'), comissao_pct: 12.345 });
+        await SHC.salvarCusto('ml', 'MLB9100000013', { custo: 0 });
+        const ga = banco[SHC.chave('ml', 'MLB9100000011')], gb = banco[SHC.chave('ml', 'MLB9100000012')], sa = SHC.sobraAnuncio({ preco: 100, recebe: 87 }, ga, {});
+        ok(ga.custo === 1.01 && ga.outros === 0.13 && ga.origem === 'manual' && ga.custo === banco['c|sku|CX-3'].custo && campo(ga.custo) === '1,01' && SHC.moeda(ga.custo) === 'R$ 1,01'
+            && sa.sobra === 85.86 && cent(sa.sobra) === 8700 - deMoeda(SHC.moeda(ga.custo)) - deMoeda(SHC.moeda(ga.outros))
+            && gb.custo === 7.78 && gb.outros === 1.01 && gb.frete === 20 && gb.comissao_pct === 12.345 && banco[SHC.chave('ml', 'MLB9100000013')].custo === 0,
+            'anúncio sem SKU grava em centavos: "1,005" → 1,01 (igual ao do SKU), o campo do painel e a etiqueta mostram 1,01 e a sobra 87,00 − 1,01 − 0,13 = 85,86; % de comissão fica como veio');
     }
 
     console.log('G. Lista de Anúncios → balão "Resultado de 1 venda" → etiqueta (números do ML + custo e imposto do seller)');
