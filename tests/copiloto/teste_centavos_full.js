@@ -26,7 +26,8 @@
 //      R$ 1,00: somava o custo da remessa sem units_count e não as unidades dela) — seção D;
 //   4) SHC.alertasDe (número do ícone e sino) recalcula a previsão sem o índice sazonal da v3.3 (P.previsaoFull): o painel diz "Crítico,
 //      acaba em 4 dias" e o ícone não conta o produto;
-//   5) cobertura/esgota em dias = floor(aptas ÷ (previsão ÷ 30)) perde 1 dia quando a conta é exata (23 aptas, 23 vendas → 29 dias, não 30);
+//   5) #20 CORRIGIDA: dias até acabar = ⌊aptas × 30 ÷ previsão⌋ no painel, no plano e no ícone (antes ⌊aptas ÷ (previsão ÷ 30)⌋ perdia 1 dia
+//      na conta exata: 23 aptas, 23 vendas → 29 dias, não 30) — seções K e L;
 //   6) simulador: "R$ 5,24 por unidade" × 100 un. = R$ 524,00, mas o custo estimado mostrado é R$ 523,81 (média sem arredondar × un.);
 //   7) P.explicaFull sazonal: "usei 7 × 1,33 = 10" (7 × 1,33 = 9,31; arredondou para cima sem dizer).
 // Rodar: node tests/copiloto/teste_centavos_full.js
@@ -507,7 +508,7 @@ console.log('J. Previsão de 30 dias (P.previsaoFull) contra o oráculo em intei
 console.log('K. Plano de envio (P.planoFull + P.explicaFull): quantidade = alvo − aptas − a caminho, nunca negativa');
 {
     const r = lcg(424242), l = lote(), esp = lote(), tx = lote(), ordem = lote(), es = lote();
-    let exatos = 0, perdeuDia = 0, limitados = 0, travados = 0, cautelas = 0, semDado = 0;
+    let exatos = 0, limitados = 0, travados = 0, cautelas = 0, semDado = 0;
     for (let k = 0; k < 400; k++) {
         const nP = ent(r, 1, 12), pool = Array.from({ length: Math.max(1, nP - ent(r, 0, 3)) }, (_, j) => 'MLB77' + String(k * 100 + j).padStart(8, '0'));
         const unTxt = v => (v === null ? pega(r, [null, '—', 'sem dado']) : pega(r, [v, v, v + ' un.', milhar(v) + ' un.']));
@@ -540,12 +541,12 @@ console.log('K. Plano de envio (P.planoFull + P.explicaFull): quantidade = alvo 
                 && inteiroNN(x.qtd) && x.qtd <= x.bruto && (trava ? x.qtd === 0 : true), { t: p.titulo, ua, uc, du, prev: x.prev.qtd, x: { alvo: x.alvo, bruto: x.bruto, qtd: x.qtd }, alvo, bruto });
             if (x.seg === null || livre0[x.seg] === undefined) esp.conta(x.qtd === x.bruto && !x.limitado, { t: p.titulo, seg: x.seg, qtd: x.qtd, bruto: x.bruto });
             else { esp.conta(x.livreAntes >= 0 && x.qtd === Math.min(x.bruto, x.livreAntes) && x.limitado === (x.qtd < x.bruto), { t: p.titulo, x }); if (x.limitado) limitados++; }
-            // Dias até acabar (aptas + a caminho ÷ previsão de 1 dia): oráculo floor((aptas + a caminho) × 30 ÷ previsão).
+            // Dias até acabar (aptas + a caminho ÷ previsão de 1 dia): oráculo em inteiros ⌊(aptas + a caminho) × 30 ÷ previsão⌋ — #20: a conta exata
+            // não perde mais 1 dia (antes o teste aceitava o −1 nas contas exatas).
             if (x.prev.qtd > 0) {
                 const exato = ((aptas + cam) * 30) % x.prev.qtd === 0, o = Math.floor((aptas + cam) * 30 / x.prev.qtd);
                 if (exato) exatos++;
-                if (x.esgota === o - 1 && exato) perdeuDia++;
-                es.conta(Number.isInteger(x.esgota) && x.esgota >= 0 && (x.esgota === o || (exato && x.esgota === o - 1)), { aptas, cam, prev: x.prev.qtd, esgota: x.esgota, o });
+                es.conta(Number.isInteger(x.esgota) && x.esgota >= 0 && x.esgota === o, { aptas, cam, prev: x.prev.qtd, esgota: x.esgota, o });
             } else es.conta(x.esgota === null, { prev: x.prev.qtd, esgota: x.esgota });
             // O texto da tela: os mesmos números da conta.
             const e = P.explicaFull(x, D).linhas.join(' ');
@@ -565,7 +566,7 @@ console.log('K. Plano de envio (P.planoFull + P.explicaFull): quantidade = alvo 
     }
     okLote(l, `linhas geradas (${travados} travadas, ${cautelas} com cautela, ${semDado} sem dado): alvo = ⌈previsão × dias ÷ 30⌉, quantidade = máx(0, alvo − aptas − a caminho), inteira, ≤ bruto; sem dado = null (nunca 0)`);
     okLote(esp, `espaço livre (${limitados} limitadas): cada linha ≤ o que sobra, Σ do segmento ≤ livre e sobra = livre − Σ (nunca negativa)`);
-    okLote(es, `dias até acabar = ⌊(aptas + a caminho) × 30 ÷ previsão⌋ (em ${perdeuDia} de ${exatos} contas exatas o produto mostra 1 dia a menos — divergência 5)`);
+    okLote(es, `#20 dias até acabar = ⌊(aptas + a caminho) × 30 ÷ previsão⌋, também nas ${exatos} contas exatas`);
     okLote(tx, 'P.explicaFull: "Para D dias: Q × D ÷ 30 = alvo; menos A aptas e C a caminho = quantidade" com os números da linha; lucro/prejuízo no mesmo R$; sem lucro, sem R$');
     okLote(ordem, 'ordem: quem precisa enviar vem antes de quem não precisa');
     // Variações do mesmo anúncio: cada uma fica com a parte dela (nas vendas de 30 dias) e a soma das partes fica a meia unidade por variação do total.
@@ -579,7 +580,7 @@ console.log('K. Plano de envio (P.planoFull + P.explicaFull): quantidade = alvo 
 console.log('L. Saúde do estoque (P.saudeFull, P.acaoParado, SHC.fullMinimo): unidades sobrando e mínimo');
 {
     const r = lcg(5150), l = lote(), t = lote(), m = lote();
-    let parados = 0, excedentes = 0;
+    let parados = 0, excedentes = 0, exatos = 0;
     for (let k = 0; k < 3000; k++) {
         const ap = ent(r, 0, 9) ? ent(r, -2, 900) : null, ac = ent(r, 0, 2) ? ent(r, 0, 100) : null, v = ent(r, 0, 6) ? ent(r, 0, 120) : null;
         const prev = ent(r, 0, 6) ? ent(r, 0, 150) : null, mn = ent(r, 0, 2) ? null : pega(r, [ent(r, 1, 300), '40', 0, -5, 'x']);
@@ -589,7 +590,8 @@ console.log('L. Saúde do estoque (P.saudeFull, P.acaoParado, SHC.fullMinimo): u
         const tem = Math.max(0, ap), cob = prev > 0 ? Math.floor(tem * 30 / prev) : null, exato = prev > 0 && (tem * 30) % prev === 0;
         const exc = s.classe === 'parado' ? tem : s.classe === 'excedente' && prev > 0 ? Math.max(0, tem - ceilDiv(prev * 90, 30)) : 0;
         if (s.classe === 'parado') parados++; if (s.classe === 'excedente') excedentes++;
-        l.conta(inteiroNN(s.excesso) && s.excesso === exc && (cob === null ? s.cobertura === null : s.cobertura === cob || (exato && s.cobertura === cob - 1)), { p, prev, s, exc, cob });
+        if (exato) exatos++;
+        l.conta(inteiroNN(s.excesso) && s.excesso === exc && s.cobertura === cob, { p, prev, s, exc, cob });   // #20: sem o −1 nas contas exatas
         const a = P.acaoParado({ p, saude: s, travas: [] });
         t.conta(exc > 0 ? a.indexOf(exc + ' un. ') === 0 && !/R\$/.test(a) && limpo(a) : a === '', { exc, a });
         const n = SHC.num(mn), def = n !== null && n >= 1, minUn = def ? Math.round(n) : null, temM = tem + (ac === null ? 0 : Math.max(0, ac)), abaixo = def && temM < minUn;
@@ -597,9 +599,18 @@ console.log('L. Saúde do estoque (P.saudeFull, P.acaoParado, SHC.fullMinimo): u
         m.conta(fm.minUn === minUn && fm.tem === temM && fm.abaixo === abaixo && fm.faltam === (abaixo ? minUn - temM : 0) && inteiroNN(fm.faltam)
             && fm.sugerido === (!def && prev > 0 ? ceilDiv(prev * 15, 30) : null), { p, mn, prev, fm });
     }
-    okLote(l, `unidades sobrando (${parados} parados, ${excedentes} excedentes): parado = todas as aptas; excedente = aptas − ⌈90 dias de venda⌉; inteiras ≥ 0`);
+    okLote(l, `unidades sobrando (${parados} parados, ${excedentes} excedentes): parado = todas as aptas; excedente = aptas − ⌈90 dias de venda⌉; inteiras ≥ 0; cobertura = ⌊aptas × 30 ÷ previsão⌋ (${exatos} exatas)`);
     okLote(t, 'P.acaoParado: o texto começa com o mesmo número ("N un. …") e não inventa R$ de armazenagem (o ML não mostra a tarifa por produto)');
     okLote(m, 'SHC.fullMinimo: faltam = mínimo − (aptas + a caminho), sugerido = ⌈previsão × 15 ÷ 30⌉, mínimo inválido = sem mínimo');
+    // #20: conta exata não perde 1 dia por ponto flutuante (23 ÷ (23 ÷ 30) = 29,999… virava 29): painel, plano e ícone.
+    const d20 = [[23, 23, 30], [46, 23, 60], [93, 31, 90], [23, 46, 15], [55, 66, 25]].map(([ap, pv, esp]) => {
+        const s = P.saudeFull({ aptas: ap, vendas30: pv }, pv, null, ''), it = 'MLB7950000' + String(ap).padStart(3, '0');
+        const pl = P.planoFull({ produtos: [{ titulo: 'D' + ap, itemIds: [it], aptas: ap, aCaminho: 0, vendas30: pv }], espaco: [] }, { hoje: HOJE, dias: 30, vmDe: () => null, lucroDe: () => null });
+        const a = SHC.alertasDe({ full: { produtos: [{ produtoId: 'D' + ap, sku: 'SKU-D' + ap, itemId: it, itemIds: [it], aptas: ap, aCaminho: 0, vendas30: pv }] }, vm: {}, hoje: HOJE, itens: [],
+            custos: { [SHC.chaveSku('SKU-D' + ap)]: { fullMinUn: 999 } } });   // mínimo alto: o ícone lista o produto e mostra os dias
+        return s.dias === esp && s.cobertura === esp && pl.linhas[0].esgota === esp && a.lista[0] && a.lista[0].dias === esp;
+    });
+    ok(d20.every(Boolean), '23 aptas/previsão 23 → 30 dias; 46/23 → 60; 93/31 → 90; 23/46 → 15; 55/66 → 25 (P.saudeFull, P.planoFull e SHC.alertasDe) — ' + d20.join(','));
     const pr = { p: { aptas: 60, vendas30: 0 } }; pr.saude = P.saudeFull(pr.p, 0, null, '');
     ok(pr.saude.excesso === 60 && /^60 un\. paradas/.test(P.acaoParado(pr)) && !/R\$/.test(P.acaoParado(pr)), 'à mão: 60 aptas sem venda → "60 un. paradas…", sem R$');
 }

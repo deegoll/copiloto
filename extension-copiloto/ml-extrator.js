@@ -2868,7 +2868,7 @@
             const ult30 = v30 === null ? null : Math.max(0, v30), prev = ult30 === null && ano === null ? null : Math.max(ult30 || 0, ano || 0);
             const cad = p.sku && SHC.chaveSku ? custos[SHC.chaveSku(p.sku)] : null;
             const tem = Math.max(0, aptas), fm = SHC.fullMinimo(p, cad, prev, dados.sellerId);   // F23: mínimo da conta
-            const cobertura = prev > 0 ? Math.floor(tem / (prev / 30)) : null;
+            const cobertura = prev > 0 ? Math.floor(tem * 30 / prev) : null;   // multiplica antes: 23 × 30 ÷ 23 = 30 (23 ÷ (23 ÷ 30) dava 29,999…)
             const ml = typeof p.diasAteEsgotar === 'number' && isFinite(p.diasAteEsgotar) ? p.diasAteEsgotar : null;
             const ds = [ml, cobertura].filter(x => x !== null), dias = ds.length ? Math.min(...ds) : null;
             // Acaba em ≤ 7 dias (vendendo) OU abaixo do mínimo em unidades que o seller definiu. Sem mínimo nunca é "abaixo do mínimo".
