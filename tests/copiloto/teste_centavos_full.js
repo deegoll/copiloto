@@ -874,6 +874,9 @@ console.log('P. Recomendação por SKU (SHC.recomendaSku, Faturamento por famíl
         'à mão: 50 em estoque, 29 vendas em 8,7 dias (50 × 87 ÷ 290 = 15) → 15 dias e "Manter", não 14 e "Repor" — ' + r87.motivo);
     const r51 = SHC.recomendaSku({ unidades: 17, variacaoPct: 0 }, { lido: true, total: 50, proprio: 50, full: 0 }, 51 / 10);
     ok(r51.cobertura === 15 && r51.acao === 'manter', 'à mão: 50 em estoque, 17 vendas em 5,1 dias (50 × 51 ÷ 170 = 15) → 15 dias e "Manter"');
+    // Sem o mês anterior lido (variacaoPct null) o motivo começa com maiúscula, como quando há a tendência.
+    const rsv = SHC.recomendaSku({ unidades: 29, variacaoPct: null }, { lido: true, total: 50, proprio: 50, full: 0 }, 87 / 10);
+    ok(rsv.motivo === 'Estoque de 50 unidades dá para 15 dias.', 'sem a tendência do mês anterior, o motivo começa com maiúscula — ' + rsv.motivo);
     // Venda por dia na tela, com 1 casa: 33 vendas em 8,8 dias = 3.300 ÷ 88 = 37,5 décimos → "3,8" (antes 33 ÷ 8,8 × 10 = 37,499… → "3,7").
     const r88 = SHC.recomendaSku({ unidades: 33, variacaoPct: 0 }, { lido: true, total: 0, proprio: 0, full: 0 }, 88 / 10);
     ok(r88.vendaDia === 3.8 && r88.motivo === 'Sem estoque e vende 3,8 por dia.', 'à mão: 33 vendas em 8,8 dias = 3,75 por dia → "vende 3,8 por dia" (meio para cima), não "3,7" — ' + r88.motivo);
