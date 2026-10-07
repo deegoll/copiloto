@@ -2,14 +2,22 @@
 // v2.5.3: o número é o de TODAS as anomalias (SHC.anomalias); vermelho com reclamação/mediação em aberto ou pagamento a conferir, âmbar no resto.
 // O título do ícone diz quanto de cada tipo. Aceita também um número (compatível com o shc:alertas antigo).
 // v2.7: a.semanalNovo (resumo da semana ainda não visto) → sem anomalia o ícone mostra "•" âmbar; o título avisa.
-function selo(a) {
-    if (!chrome.action || !chrome.action.setBadgeText) return;
+// v3.3 multi-empresa (bloqueio 5): o número é SEMPRE o da conta aberta (ml:conta). Alertas de outra conta (a.conta ≠ aberta: rodada lenta
+// que terminou depois da troca, shc:anomalias ainda da conta anterior) → o guardado da aberta (shc:anomalias:<aberta>), ou ícone limpo.
+const pintaSelo = a => {
     const n = typeof a === 'number' ? a : (a && a.total) || 0, novo = !!(a && typeof a === 'object' && (a.semanalNovo || a.promoNovo));
     chrome.action.setBadgeText({ text: n > 0 ? (n > 99 ? '99+' : String(n)) : (novo ? '•' : '') }).catch(() => {});
     if ((n > 0 || novo) && chrome.action.setBadgeBackgroundColor) chrome.action.setBadgeBackgroundColor({ color: n > 0 && (typeof a === 'number' || (a && a.vermelho)) ? '#D93025' : '#B06000' }).catch(() => {});
     if (chrome.action.setTitle) chrome.action.setTitle({ title: typeof a === 'number' ? 'Abrir o Copiloto' : SHC.anomaliasTitulo(a) + (a && a.semanalNovo ? ' · novo resumo ' + (a.semanalNovo === 'dia' ? 'do dia' : a.semanalNovo === 'ambos' ? 'do dia e da semana' : 'da semana') : '')
         + (a && a.promoNovo ? ' · o robô achou promoção que mantém a sua margem mínima' : '') }).catch(() => {});
+};
+function selo(a) {
+    if (!chrome.action || !chrome.action.setBadgeText) return;
+    if (!(a && typeof a === 'object' && a.conta)) return pintaSelo(a);
+    SHC.contaAtual().then(async c => (c === 'atual' || c === String(a.conta) ? pintaSelo(a) : pintaSelo((await SHC.lerChave('shc:anomalias:' + c)) || 0))).catch(() => {});
 }
+// Quem trocou de conta no ML (ml:conta) vê no ícone o número da conta nova logo, sem esperar a etapa Alertas dela.
+if (chrome.storage && chrome.storage.onChanged) chrome.storage.onChanged.addListener((m, area) => { if (area === 'local' && m && m['ml:conta']) seloAgora().catch(() => {}); });
 async function atualizarAlertas(conta) {
     const c = conta || await SHC.contaAtual();
     const [full, ads, an, cfg, lidos] = await Promise.all([SHC.lerFull(c), SHC.lerAds(c), SHC.lerAnuncios(c), SHC.lerCfg(), SHC.lerMesesVendasLidos(c)]);
@@ -67,7 +75,9 @@ async function atualizarAlertas(conta) {
     const anom = SHC.anomalias(c, { alertas: r, posvenda: pvd, frete: frh, conferir: cnf, rateio: rat, cert, medidas: med, titulos, perguntas: perg, reputacao: rep, remessas, nfe, fatura, familias, prejuizo, promo,
         experiencia, itens: (an && an.itens) || [], tarefas: (fiscal && fiscal.tarefas) || [] }, cfg);   // v2.8: módulos desligados não contam
     const snapAnom = Object.assign({ ts: Date.now() }, anom, { itens: anom.itens.slice(0, 200) });
-    await chrome.storage.local.set({ 'shc:anomalias': snapAnom, ['shc:anomalias:' + c]: snapAnom });   // por conta também: "suas contas juntas" (SHC.dadosContas)
+    // Por conta também ("suas contas juntas", SHC.dadosContas). v3.3 (bloqueio 5): a chave geral (ícone e painel) só com a conta ABERTA agora.
+    const aberta = (await SHC.contaAtual()) === c;
+    await chrome.storage.local.set(Object.assign({ ['shc:anomalias:' + c]: snapAnom }, aberta ? { 'shc:anomalias': snapAnom } : {}));
     const rp = await roboPromoPassada(c, cfg).catch(() => null);   // v2.9: robô de promoções (só sugere; nenhum GET a mais)
     const diaNovo = !!((await SHC.lerChave(chaveResumo(c, 'dia'))) || {}).novo;   // v3.2: resumo do dia ainda não visto
     selo(Object.assign({}, anom, { semanalNovo: sem && sem.novo ? true : diaNovo ? 'dia' : false, promoNovo: !!(rp && rp.novo) }));

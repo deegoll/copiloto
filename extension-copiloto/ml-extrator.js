@@ -618,15 +618,20 @@
      * f = { ler(n) → {dados: SHC.mlPaginaAnuncios}|{falha}, abrir(id, page) → JSON | null, pausa() , progresso(o), maxPaginas }
      * → { itens, familias:[{id, tipo, familyId, titulo, estoque, esperado, itens:[MLB]}], paginas, total, linhas, conta, via, completo } | { falha }.
      * O total do ML conta LINHAS: completo = todas as linhas lidas E toda família/"Ver mais" aberta com os anúncios que ela diz ter.
+     * v3.3 (multi-empresa, bloqueio 5): página que diz OUTRO dono (o login do ML trocou no meio da leitura) → { falha:'outra_conta' }, sem
+     * juntar nada: o retrato de uma empresa nunca ganha os anúncios da outra. Vale o 1º dono que uma página disse (normalmente a página 1).
      */
     SHC.mlLeituraCompleta = async function (f) {
         const itens = [], vistos = new Set(), chaves = new Set(), abrir = new Map(), familias = [];
-        let paginas = 0, total = null, conta = null, via = '', completo = true, dePag = null;
+        let paginas = 0, total = null, conta = null, via = '', completo = true, dePag = null, dono = '';
         for (let n = 1; ; n++) {
             if (n > (f.maxPaginas || 80)) { completo = false; break; }
             const pag = await f.ler(n);
             if (pag.falha) { if (n === 1) return { falha: pag.falha }; completo = false; break; }
             const d = pag.dados || {}, lidos = Array.isArray(d.itens) ? d.itens : [];
+            const id = d.conta && d.conta.sellerId ? String(d.conta.sellerId) : '';
+            if (id && dono && id !== dono) return { falha: 'outra_conta' };
+            if (id && !dono) dono = id;
             const ks = Array.isArray(d.chaves) ? d.chaves : lidos.map(i => i && i.itemId);
             if (n === 1) { total = typeof d.total === 'number' ? d.total : null; conta = d.conta || null; via = pag.via || ''; dePag = total !== null && ks.length ? Math.max(1, Math.ceil(total / ks.length)) : null; }
             // Página do meio sem linha nenhuma e sem total do ML: pode ser tela intermediária → leitura incompleta (só junta, não apaga).

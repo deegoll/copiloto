@@ -24,8 +24,13 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         if (!daAbaDoML(sender)) return false;
         // semAviso APAGA o alerta: só com a conta da página e se for a aberta agora. O aviso com texto sem conta ainda vale (a CONFIRMAR AO VIVO se o Faturador traz o id).
         // v3.3 (multi-empresa): aviso SEM a conta da página só vale com 1 conta neste Chrome — com 2+, um Faturador de outra empresa marcaria
-        // o certificado desta como vencido.
-        const semConta = () => (SHC.contas ? SHC.contas() : Promise.resolve([])).then(cs => ((cs || []).length <= 1 ? 'ok' : ''), () => '');
+        // o certificado desta como vencido. Bloqueio 5: com 1 conta, 1 GET confere que a sessão do ML ainda é dela (a 2ª empresa que ainda não
+        // sincronizou não está em ml:contas e marcaria a 1ª).
+        const semConta = () => (SHC.contas ? SHC.contas() : Promise.resolve([])).then(async cs => {
+            if ((cs || []).length > 1) return '';
+            const c = await SHC.contaAtual();
+            return c === 'atual' || (await confereSessao(c)) !== 'outra_conta' ? 'ok' : '';
+        }).catch(() => '');
         (msg.conta || msg.semAviso ? daContaAtual(msg) : semConta()).then(ok => (ok ? gravarCertificado(msg) : { ok: false, motivo: 'conta' }))
             .then(responder, () => responder({ ok: false, motivo: 'erro' }));
         return true;
