@@ -1014,7 +1014,8 @@
         let t = modo === 'misto' ? cus + (cancel && cancel.ml >= 0.01 ? ' mais os cancelamentos da fatura (' + SHC.moeda(cancel.ml) + '): o Copiloto já tirou os cancelamentos das linhas; a fatura, não.' : '.')
             : modo === 'liquido' ? cus + (ant ? ' mais os cancelamentos de faturas anteriores (' + SHC.moeda(ant) + '), que a fatura põe nos pagamentos.' : '.')
             : cus + (cancel && Math.abs(cancel.dif) >= 0.01 ? ' menos a diferença nos cancelamentos (' + sinalM(cancel.dif) + ').' : '.');
-        if (Math.abs(resto) > F.BATE_RS) t += ' Os outros ' + SHC.moeda(Math.abs(resto)) + ' não dá para saber de onde vêm: confira no detalhe da fatura.';
+        // Pela fatura o total já é ✗ com R$ 0,01: o resto entra a partir de 1 centavo (nos modos estimados, só o que passa da folga de R$ 1).
+        if (modo === 'fatura' ? Math.abs(resto) >= 0.005 : Math.abs(resto) > F.BATE_RS) t += ' Os outros ' + SHC.moeda(Math.abs(resto)) + ' não dá para saber de onde vêm: confira no detalhe da fatura.';
         return t;
     };
     /**

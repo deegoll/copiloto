@@ -13,7 +13,7 @@
 //   3. SHC.r2 perde 1 centavo em parte dos empates de meio centavo (ex.: imposto de 5% sobre R$ 42,70 = 2,135 → R$ 2,13);
 //   4. F.recuperar usa a lista pagoAMais cortada em 200: o frete confirmado acima disso some do total;
 //   5. (corrigida) F.conferirFatura no modo exato (pela fatura) aceitava R$ 0,01 de diferença como "✓ bate" (tela: ML R$ 100,01 · Copiloto R$ 100,00 ✓);
-//   6. F.motivoTotal só cita o resto que passa de R$ 1: total ✗ por R$ 0,50 com o motivo "Diferença nos custos (+R$ 0,00).";
+//   6. (corrigida) F.motivoTotal só citava o resto que passa de R$ 1: total ✗ por R$ 0,50 com o motivo "Diferença nos custos (+R$ 0,00).";
 //   7. Rateio (SHC.rateioFaturas → F.htmlRateio): "✓ bate com o total da fatura" com até R$ 1,00 de diferença (partes por mês ≠ total mostrado).
 // Rodar: node tests/copiloto/teste_centavos_fechamento.js
 'use strict';
@@ -616,6 +616,12 @@ console.log('Confere com a fatura do ML (pela fatura de cada cobrança): cada li
     ok(!troca.ok && troca.linhas.filter(l => !l.ok).length === 2 && troca.total.ok, '1 centavo trocado de linha (+0,01 em venda, −0,01 em envios, total igual): as 2 linhas ✗ e a fatura não bate');
     const igual = F.conferirFatura(cat1(100, 50, 150), null, '2026-09', s1, null, [], null);
     ok(igual.ok && igual.linhas.every(l => l.ok && l.dif === 0) && igual.total.ok && /bate linha por linha/.test(F.htmlConfere(igual)), 'os mesmos centavos: tudo ✓ e "bate linha por linha"');
+    // Total ✗ pela fatura: o motivo fecha com o número mostrado (diferença nas linhas + "os outros R$ X"), também abaixo de R$ 1.
+    const so = F.conferirFatura(cat1(100, 50, 150.5), null, '2026-09', s1, null, [], null), mix = F.conferirFatura(cat1(105, 50, 155.5), null, '2026-09', s1, null, [], null);
+    ok(!so.total.ok && so.total.dif === -0.5 && /Os outros R\$ 0,50 não dá para saber de onde vêm/.test(so.total.motivo) && F.htmlConfere(so).indexOf('Os outros R$ 0,50') > 0
+        && !mix.total.ok && mix.total.dif === -5.5 && /^Diferença nos custos \(−R\$ 5,00\)\. Os outros R\$ 0,50 não dá/.test(mix.total.motivo)
+        && /Os outros R\$ 0,01 /.test(F.conferirFatura(cat1(100, 50, 150.01), null, '2026-09', s1, null, [], null).total.motivo),
+        'pela fatura, total ✗ com sobra de R$ 0,01 a R$ 1,00: o motivo cita "os outros R$ X" (0,50 sozinho; 5,00 nas linhas + 0,50; 0,01)');
 }
 
 console.log('Fatura × a anterior (F.faturaVsAnterior): agora − antes, linha a linha e no total');
