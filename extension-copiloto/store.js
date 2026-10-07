@@ -351,10 +351,12 @@
         return cs.filter(c => (e ? c.sellerId === e : sep[c.sellerId] !== true));
     };
     /** Dados de cada conta para SHC.consolidado(…, mes): vb:<c>, fech:<c>:<mes> e shc:anomalias:<c> (gravado pelo fundo em atualizarAlertas). */
+    // v3.3 multi-empresa (bloqueio 5): + empresa de cada conta ('' = as não separadas; sellerId = a marcada "Outra empresa") — o consolidado
+    // nunca soma o faturamento de empresas diferentes.
     SHC.dadosContas = async function (mes) {
-        const cs = await SHC.contas(), m = mes || SHC.hoje().slice(0, 7);
+        const cs = await SHC.contas(), m = mes || SHC.hoje().slice(0, 7), sep = (((await crua().get('cfg')).cfg || {}).empresaSeparada) || {};
         const r = await area().get(cs.flatMap(c => ['vb:' + c.sellerId, SHC.chaveFech(c.sellerId, m), 'shc:anomalias:' + c.sellerId]));
-        return cs.map(c => Object.assign({}, c, { vb: r['vb:' + c.sellerId] || null, fech: r[SHC.chaveFech(c.sellerId, m)] || null, anomalias: r['shc:anomalias:' + c.sellerId] || null }));
+        return cs.map(c => Object.assign({}, c, { empresa: sep[c.sellerId] === true ? c.sellerId : '', vb: r['vb:' + c.sellerId] || null, fech: r[SHC.chaveFech(c.sellerId, m)] || null, anomalias: r['shc:anomalias:' + c.sellerId] || null }));
     };
     // v2.7 (background.js): perguntas:<conta> = SHC.mlPerguntasDoEstado + {pendentes (do Resumo quando a página não disse), link, fonte}; resumo:<conta> = SHC.mlResumoDoConteudo;
     // reputacao:<conta> = SHC.mlReputacaoDoEstado; remessas:<conta>:detalhe = {ts, porId:{id: SHC.mlRemessaDetalheDoEstado + ts}}; resumo:<conta>:semanal = {ts, semana, texto, waLink, novo}.

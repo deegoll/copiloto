@@ -170,17 +170,19 @@ function cargaTardia(partes) {
     // Uma parte que precisar mudar entra em MUDADAS com o sha256 da parte nova e o motivo ao lado (a 3.3.0 juntou as 8 abaixo, da nuvem).
     const LIVRE = '01-carga-e-eventos.js', MOTIVO_NUVEM = 'v3.3 multi-empresa, Full pela saúde, experiência e contestação (sessão na nuvem de 07/10, juntada na 3.3.0)';
     const MUDADAS = {
+        '11-certificado-fotos-robo.js': ['428be3b54fa97c84834be94de0f6d05003fefd3f22175a7f1984eeefcee14707', 'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
+        '06-repasse-afiliados-simulador.js': ['058d71f756c8c0fc609ef5da3e44cbd59c090fde55516bcd59bc466d9fd6c3c1', 'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
         // trava do frete (07/10, achado da reconferência): o R$ de conferir:<conta> deixa de fora todo frete de envio (SHC.fech.freteSemChamado),
         // como o total do Fechamento; as cobranças e a fatura não mudam (era 181f0bba…)
         '03-faturamento.js': ['109498eba3b4bef74f42531fb84bbad53232697a76373f6a7f7231fe3dacd976', MOTIVO_NUVEM + '; trava do frete no R$ de conferir:<conta>'],
-        '04-notas-e-vendas.js': ['ff48695f2aed371de42b2791f7ba789ac71ca9bdcb263c93fbba2e696c137ee5', MOTIVO_NUVEM],
-        '07-alertas-promocoes-full.js': ['bc720a36842536c3ef14992645e41cd65337ec442a655539c90f805b76847e8e', MOTIVO_NUVEM],
+        '04-notas-e-vendas.js': ['15bfd6fe31e7e61973318ee370e9a2eba9aab2f4a0f3df3581dcad0fdb428b7f', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
+        '07-alertas-promocoes-full.js': ['3a5db45ac277a1d0f764f992ddf8b1c512664599f23911bc87dd253c1995e099', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
         // revisão da junção (07/10): a conferência da conta depois de cada etapa e no fim do histórico é sem o guardado de 60 s (era 1983b6d8…)
-        '08-sincronizacao.js': ['395293adee8c0cdd70182f125515ab9dc195144dec25140ecb37e3e25efe5e1b', MOTIVO_NUVEM + '; conferência sem o guardado depois de cada etapa'],
+        '08-sincronizacao.js': ['251591fcec20ef38dc461744d60b7ae46adf57a5b77a98eda53ea2ae3bcbfade', MOTIVO_NUVEM + '; conferência sem o guardado depois de cada etapa' + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
         '09-custos-erp.js': ['8d321ea6750a5572baf8bc3dba44515d8eaff3fffab88124eecd88856faf7c3c', MOTIVO_NUVEM],
-        '10-status-saude-posvenda.js': ['32f29550fc6104352264903131ad4c3eacc319d70c820d454263a7a51866b0ec', MOTIVO_NUVEM],
+        '10-status-saude-posvenda.js': ['b27d61e3022abb22d68de480341dcfab261c601b65e13cb16b2b1192620532e3', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
         '13-aba-do-ml-e-canal.js': ['66e8e6f2cb71bcf6133d5edb69b801ab9b233e28ab85f5a6cc03ff64e9cd85bd', MOTIVO_NUVEM],
-        '14-mensagens.js': ['9aec476741b80807c1404957bcf798523fb689190ac0da7e617705b58abec049', MOTIVO_NUVEM]
+        '14-mensagens.js': ['118eb958f1f18469a42a60c9e9ce252b8aa521d2142edb0e976ea380a315997d', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login']
     };
     const sha = b => require('crypto').createHash('sha256').update(b).digest('hex');
     const mudou = guardadas.filter((f, i) => { const a = path.join(FUNDO, f); if (f === LIVRE) return false; if (!fs.existsSync(a)) return true;
@@ -208,7 +210,10 @@ function cargaTardia(partes) {
     // 3.3.0 (E8): o TikTok destravado (SHC.tt.instalarFundo, na 01) põe na carga 1 ouvinte de mensagens, os 2 de permissão e o do storage;
     // os listeners a mais são exatamente esses (o corpo chama o TT), e fora eles o fundo registra o mesmo que o background.js de antes.
     const doTT = f => /\bTT\.(gravarCaptura|sincronizarScripts)\(/.test(String(f));
-    const qtd = (f, ehTT) => Object.keys(f.registros).map(k => k + ' ' + f.registros[k].filter(x => !!ehTT === doTT(x)).length).join(', ');
+    // C2 (07/10): o ícone acompanha a conta aberta (ml:conta mudou → seloAgora), 1 storage.onChanged a mais na 07; fora da conta, como o do TikTok.
+    const doSelo = f => String(f).length < 200 && /m\['ml:conta'\]/.test(String(f)) && /seloAgora\(/.test(String(f));
+    const qtd = (f, ehTT) => Object.keys(f.registros).map(k => k + ' ' + f.registros[k].filter(x => !doSelo(x) && !!ehTT === doTT(x)).length).join(', ');
+    ok(novo.registros['storage.onChanged'].filter(doSelo).length === 1 && Object.keys(velho.registros).every(k => !velho.registros[k].some(doSelo)), 'o ouvinte do ícone pela conta aberta (C2) é 1 só e é novo');
     const DE_ANTES = ['onMessage', 'onInstalled', 'onStartup', 'onAlarm'];
     ok(qtd(novo) === qtd(velho) && DE_ANTES.every(k => novo.registros[k].filter(x => !doTT(x)).length >= 1), 'listeners do Chrome registrados na carga, fora os do TikTok: ' + qtd(novo));
     ok(Object.keys(velho.registros).every(k => !velho.registros[k].some(doTT)) && qtd(novo, true) === 'onMessage 1, onInstalled 0, onStartup 0, onAlarm 0, permissions.onAdded 1, permissions.onRemoved 1, storage.onChanged 1',

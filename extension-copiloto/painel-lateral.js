@@ -1751,6 +1751,19 @@
         const ap = id && cfg && cfg.apelidos && cfg.apelidos[id] ? String(cfg.apelidos[id]).trim().slice(0, 40) : '';
         return { nome: ap, temNome: !!ap, idTxt: id ? 'ID ' + String(id) : '', iniciais: P.iniciais(ap) };
     };
+    // v3.3 multi-empresa (bloqueio 5): opção do seletor de contas do topo — a conta marcada "Outra empresa" em Ajustes diz isso.
+    P.contaOpcao = (c, cfg) => {
+        const q = P.contaTopo(c.sellerId, cfg), sep = (cfg && cfg.empresaSeparada) || {};
+        return (q.nome || 'Sem nome') + ' · ' + q.idTxt + (c.atual ? ' (aberta no ML)' : '') + (sep[c.sellerId] === true ? ' (outra empresa)' : '');
+    };
+    // "Todas as contas" por EMPRESA: c = SHC.consolidado; vista = 'todas' | sellerId; nomeDe(sellerId) = nome da conta separada.
+    // → [{ empresa, titulo, linhas, total }] — cada empresa com as contas e o total DELA (empresas diferentes nunca se somam); uma conta só, sem total.
+    P.contasJuntasGrupos = (c, vista, nomeDe) => {
+        if (!c) return [];
+        if (vista !== 'todas') return [{ empresa: null, titulo: '', linhas: c.contas.filter(x => x.sellerId === vista), total: null }];
+        return (c.empresas || []).map(g => ({ empresa: g.empresa, titulo: !c.variasEmpresas ? '' : g.empresa ? 'Outra empresa · ' + (nomeDe ? nomeDe(g.empresa) : 'ID ' + g.empresa) : 'Empresa principal',
+            linhas: c.contas.filter(x => (x.empresa || '') === g.empresa), total: g.total }));
+    };
 
     // ── v2.7: remessas do Full (lista + detalhe), próxima remessa, perguntas, reputação, apelidos das contas ──
     P.remessaLink = id => 'https://vendedores.mercadolivre.com.br/shipping/inbounds/' + encodeURIComponent(String(id)) + '/details';
@@ -2067,6 +2080,30 @@
             lidoDev: (d.dev && d.dev.lido_em) || null, lidoTarefas: (d.tarefas && d.tarefas.lido_em) || null };
     };
     // ── fim 3.3.0 (E18) ──
+    /**
+     * v3.3 Botão "Copiar pedido de exclusão" (aba Pós-venda): posvenda:<conta> + motivo + anúncios → o g de SHC.chamadoExclusao | null (nada a pedir);
+     * contaAgora = casos da leitura atual, fora da mediação, que contam na reputação (o botão só aparece com 1 ou mais).
+     * Rastreio 07/10/2026 (R10): reclamação com mediação aberta fica fora (o ML não analisa a exclusão dela), pela situação do caso e do porPedido;
+     * pedidos = os do motivo que não estão marcados "não contou na reputação"; produtos com o SKU pelo anúncio achado pelo título (SHC.posvendaAnalise).
+     * Revisão do grupo g: situação vazia (porPedido antigo, tela sem o título) = não se sabe se há mediação, fica fora (na dúvida, não pede).
+     * Os produtos saem dos PEDIDOS listados (o título guardado no porPedido); sem pedido, dos casos da leitura atual. Pedido sem o título lido
+     * (porPedido de versão anterior) = produto desconhecido: nenhum produto nem SKU no texto (o SKU de outro produto nunca vai para ele).
+     */
+    P.grupoExclusao = function (pv, mot, itens) {
+        if (!pv || !SHC.motivoExcluivel(mot)) return null;
+        // Revisão 3: só a situação da lista fechada do que é seguro (SHC.situacaoSegura, com o SHC.emMediacao como veto extra); o resto fica fora.
+        const fora = s => SHC.situacaoSegura(s);
+        const cs = (pv.casos || []).filter(c => c && c.motivo === mot && fora(c.situacao));
+        const pp = SHC.posvendaPorPedido(pv) || {};
+        // Revisão final (07/10): só pedido da leitura atual (atual === true, SHC.posvendaJuntaPorPedido). O porPedido guarda até 300 com a
+        // situação da leitura em que foram vistos; o que saiu da 1ª página pode ter ido para a mediação depois. Sem a marca (versão anterior) = fora.
+        const pedidos = Object.keys(pp).filter(n => pp[n] && pp[n].atual === true && pp[n].motivo === mot && pp[n].afetouReputacao !== false && fora(pp[n].situacao));
+        if (!cs.length && !pedidos.length) return null;
+        const base = !pedidos.length ? cs.filter(c => c.afetouReputacao !== false) : pedidos.every(n => pp[n].titulo) ? pedidos.map(n => ({ titulo: pp[n].titulo, motivo: mot })) : [];
+        const produtos = SHC.posvendaAnalise(base, itens || []).produtos.map(p => ({ sku: p.sku || '', titulo: p.titulo || '' }));
+        const naReputacao = pedidos.length ? pedidos.filter(n => pp[n].afetouReputacao === true).length : cs.filter(c => c.afetouReputacao === true).length;
+        return { motivo: mot, casos: pedidos.length || cs.length, naReputacao, produtos, pedidos, contaAgora: cs.filter(c => c.afetouReputacao === true).length };
+    };
     /** Frete da conta (frete:<conta>:hist) → {cor, resumo, conc} | null. Sempre vale conciliados + faltam + compradorPaga = vendas. */
     // Conciliação só vale com as vendas lidas (depois de atualizar a extensão, antes da sincronização, não há vendas: nunca "0 de 0").
     P.concDe = h => (h && h.vendasLidas !== false ? h.conciliacao || null : null);
@@ -3226,7 +3263,7 @@
             const p = vista === 'todas' ? null : P.contaTopo(vid, cfg);
             const vis = p ? pilula(p.iniciais, p.temNome ? p.nome : DAR_NOME, p.temNome, p.idTxt) : pilula(String(contasLista.length), 'Todas as contas', true, contasLista.length + ' contas');
             el.innerHTML = `<span class="conta-in" aria-hidden="true">${vis}${chev}</span><select id="selConta" aria-label="Conta: ${esc(p ? (p.nome || 'sem nome') + ', ' + p.idTxt : 'Todas as contas')}. Trocar de conta">`
-                + contasLista.map(c => { const q = P.contaTopo(c.sellerId, cfg); return `<option value="${esc(c.sellerId)}"${(vista === 'atual' && c.atual) || vista === c.sellerId ? ' selected' : ''}>${esc((q.nome || 'Sem nome') + ' · ' + q.idTxt)}${c.atual ? ' (aberta no ML)' : ''}</option>`; }).join('')
+                + contasLista.map(c => `<option value="${esc(c.sellerId)}"${(vista === 'atual' && c.atual) || vista === c.sellerId ? ' selected' : ''}>${esc(P.contaOpcao(c, cfg))}</option>`).join('')
                 + `<option value="todas"${vista === 'todas' ? ' selected' : ''}>Todas as contas</option><option value="nomes">Dar nome às contas…</option></select>`;
             el.title = p ? `${p.nome || 'Sem nome'} · ${p.idTxt}` : 'Todas as contas';
         } else if (conta) {
@@ -3246,19 +3283,22 @@
         }, 60);
     }
     // Cartão do topo da Geral quando a vista não é a conta aberta: "Todas as contas" (SHC.consolidado) ou outra conta (linha dela + como trocar no ML).
+    // v3.3 multi-empresa (bloqueio 5): "Todas as contas" por EMPRESA (P.contasJuntasGrupos): cada uma com o total dela, nunca somadas.
     function cardContasJuntas() {
         if (vista === 'atual' || contasLista.length < 2) return '';
         const mes = SHC.hoje().slice(0, 7), c = SHC.consolidado(dadosC, mes), hoje = SHC.hoje();
-        const m = v => (v === null || v === undefined ? '—' : SHC.moeda(v)), linhas = vista === 'todas' ? c.contas : c.contas.filter(x => x.sellerId === vista);
-        const outra = vista !== 'todas' ? contasLista.find(x => x.sellerId === vista) : null;
+        const m = v => (v === null || v === undefined ? '—' : SHC.moeda(v)), grupos = P.contasJuntasGrupos(c, vista, id => (contasLista.find(x => x.sellerId === id) || {}).nome || 'ID ' + id);
+        const linhas = [].concat(...grupos.map(g => g.linhas)), outra = vista !== 'todas' ? contasLista.find(x => x.sellerId === vista) : null;
+        const tabela = g => `${g.titulo ? `<p class="rs" style="margin:10px 0 2px"><b>${esc(g.titulo)}</b></p>` : ''}<table class="tabf"><thead><tr><th>Conta</th><th>Vendas brutas</th><th>Líquido</th><th>Alertas</th></tr></thead><tbody>
+          ${g.linhas.map(x => `<tr><td>${esc(x.nome)}${x.parcial ? ' <span class="det">(parcial)</span>' : ''}</td><td>${m(x.vendasBrutas)}</td><td>${m(x.liquido)}</td><td>${x.alertas === null ? '—' : x.alertas}</td></tr>`
+            + (x.motivo ? `<tr><td colspan="4" class="det" style="padding-top:0">${esc(x.motivo)}</td></tr>` : '')).join('')}</tbody>
+          ${g.total ? `<tfoot><tr><td>Total${c.variasEmpresas ? ' desta empresa' : ''} (${g.total.contasComVendas} de ${g.linhas.length} contas)</td><td>${m(g.total.vendasBrutas)}</td><td>${m(g.total.liquido)}</td><td>${g.total.alertas === null ? '—' : g.total.alertas}</td></tr></tfoot>` : ''}</table>`;
         // v3.3 (E2): com 2 canais, as contas aqui são só do ML (etiqueta); com 1 canal, nada muda
         return `<div class="card" id="cardContasJuntas"><b style="font-size:13px">${outra ? esc(outra.nome) : 'Todas as contas'} · ${esc(P.mesLongo(mes))} até ${esc(P.dataBr(hoje))}</b>${canaisAgora().length > 1 ? ' <span class="so-ml">só Mercado Livre</span>' : ''}
           ${outra ? `<p class="recnota neutra" style="margin:6px 0 0">Você está com outra conta aberta no Mercado Livre. Para ver os detalhes desta, troque de conta lá e sincronize. Abaixo, o que já foi lido dela.</p>` : ''}
-          ${linhas.length > 3 ? `<p class="rs">${esc(SHC.qtd(linhas.length, 'conta', 'contas'))} · ${m(c.total.vendasBrutas)} bruto · ${m(c.total.liquido)} líquido ${btVer('geral:contas', `Ver mais (${linhas.length})`)}</p>` : ''}
-          ${linhas.length > 3 && !aberto('geral:contas') ? '' : `<table class="tabf"><thead><tr><th>Conta</th><th>Vendas brutas</th><th>Líquido</th><th>Alertas</th></tr></thead><tbody>
-          ${linhas.map(x => `<tr><td>${esc(x.nome)}${x.parcial ? ' <span class="det">(parcial)</span>' : ''}</td><td>${m(x.vendasBrutas)}</td><td>${m(x.liquido)}</td><td>${x.alertas === null ? '—' : x.alertas}</td></tr>`
-            + (x.motivo ? `<tr><td colspan="4" class="det" style="padding-top:0">${esc(x.motivo)}</td></tr>` : '')).join('')}</tbody>
-          ${vista === 'todas' ? `<tfoot><tr><td>Total (${c.total.contasComVendas} de ${c.contas.length} contas)</td><td>${m(c.total.vendasBrutas)}</td><td>${m(c.total.liquido)}</td><td>${c.total.alertas === null ? '—' : c.total.alertas}</td></tr></tfoot>` : ''}</table>
+          ${linhas.length > 3 ? `<p class="rs">${esc(SHC.qtd(linhas.length, 'conta', 'contas'))} · ${c.total ? m(c.total.vendasBrutas) + ' bruto · ' + m(c.total.liquido) + ' líquido' : esc(SHC.qtd(grupos.length, 'empresa', 'empresas')) + ', cada uma com o total dela'} ${btVer('geral:contas', `Ver mais (${linhas.length})`)}</p>` : ''}
+          ${linhas.length > 3 && !aberto('geral:contas') ? '' : `${grupos.map(tabela).join('')}
+          ${vista === 'todas' && c.variasEmpresas ? '<p class="det">As contas marcadas como “Outra empresa” em Ajustes têm o total delas: o faturamento de empresas diferentes não se soma.</p>' : ''}
           <p class="det">Líquido = vendas brutas − canceladas e devolvidas − tudo o que o Mercado Livre cobrou no mês (a mesma conta do Fechamento). Só entram as contas em que você já entrou neste Chrome; os dados de cada uma são da última sincronização feita nela.</p>`}
           <div class="acoes" style="justify-content:flex-start;flex-wrap:wrap"><button class="bt leve" data-trocar-conta>Trocar de conta no Mercado Livre</button><button class="lnk" data-ir-aba="ajustes">Dar apelidos às contas</button></div></div>`;
     }
@@ -4964,7 +5004,8 @@
                 + `<div class="medidor"><i class="${i === 0 ? 'pr' : x.casos > 1 ? 'at' : ''}" style="width:${Math.max(4, Math.round(x.casos / max * 100))}%"></i></div>`
                 // v3.3: motivo que as regras de exclusão do ML aceitam → o pedido de exclusão pronto (reputação e experiência de compra).
                 // Auditoria da loja: só quando algum caso desse motivo CONTA na reputação (pedir a exclusão do que não conta não tem sentido).
-                + (SHC.motivoExcluivel(x.motivo) && (posvenda.casos || []).some(c => c && c.motivo === x.motivo && c.afetouReputacao === true) ? `<small class="det" style="display:block">Pode sair da reputação: ${esc(SHC.motivoExcluivel(x.motivo))}. Envie só se ${esc(SHC.confereExclusao(x.motivo))}. <button class="lnk" data-pos-excluir="${esc(x.motivo)}">${posCopiado === x.motivo ? '✓ Texto copiado' : 'Copiar pedido de exclusão'}</button></small>` : '')
+                // Rastreio 07/10 (R10): e fora da mediação (P.grupoExclusao): caso em mediação o ML não analisa.
+                + (((P.grupoExclusao(posvenda, x.motivo, itens) || {}).contaAgora > 0) ? `<small class="det" style="display:block">Pode sair da reputação: ${esc(SHC.motivoExcluivel(x.motivo))}. Envie só se ${esc(SHC.confereExclusao(x.motivo))}. <button class="lnk" data-pos-excluir="${esc(x.motivo)}">${posCopiado === x.motivo ? '✓ Texto copiado' : 'Copiar pedido de exclusão'}</button></small>` : '')
                 + '</div>').join('')
             + (a.motivos.length > 5 ? `<p class="rs">${btVer('pos:motivos', `Ver mais (${a.motivos.length - 5})`)}</p>` : '')
             + `<p class="rs">${esc(a.naReputacao + ' de ' + a.total)} contaram na sua reputação.</p></div>`;
@@ -7414,17 +7455,16 @@
         const rc = t.closest('[data-rem-copiar]');   // v3.3: texto da reclamação da remessa do Full (SHC.chamadoRemessa)
         if (rc) {
             const r = incRemessas().find(x => String(x.id) === rc.dataset.remCopiar);
-            try { await navigator.clipboard.writeText(SHC.chamadoRemessa(r)); remCopiada = r ? r.id : ''; } catch (e) { remCopiada = ''; }
+            const txt = SHC.chamadoRemessa(r);
+            try { if (!txt) throw new Error('sem detalhe'); await navigator.clipboard.writeText(txt); remCopiada = r.id; } catch (e) { remCopiada = ''; }
             if (aba === 'full') desenhaFull();
             return;
         }
         const pex = t.closest('[data-pos-excluir]');   // v3.3: pedido de exclusão de reclamações (SHC.chamadoExclusao)
         if (pex) {
-            const mot = pex.dataset.posExcluir, cs = ((posvenda && posvenda.casos) || []).filter(c => c && c.motivo === mot);
-            // Os números dos pedidos (posvenda.porPedido): os do mesmo motivo que não estão marcados como "não contou na reputação".
-            const pp = SHC.posvendaPorPedido(posvenda) || {}, pedidos = Object.keys(pp).filter(n => pp[n] && pp[n].motivo === mot && pp[n].afetouReputacao !== false);
-            const g = { motivo: mot, casos: cs.length, naReputacao: cs.filter(c => c.afetouReputacao === true).length, produtos: [...new Set(cs.map(c => c.titulo).filter(Boolean))], pedidos };
-            try { await navigator.clipboard.writeText(SHC.chamadoExclusao(g)); posCopiado = mot; } catch (e) { posCopiado = ''; }
+            // Pedidos do motivo (posvenda.porPedido) e produtos com SKU, sem os casos em mediação (P.grupoExclusao).
+            const mot = pex.dataset.posExcluir, txt = SHC.chamadoExclusao(P.grupoExclusao(posvenda, mot, itens));
+            try { if (!txt) throw new Error('nada a pedir'); await navigator.clipboard.writeText(txt); posCopiado = mot; } catch (e) { posCopiado = ''; }
             desenhaPos(canalAgora());
             return;
         }
@@ -7829,7 +7869,10 @@
     let tinyToken = '', tinyRodando = false, tinyRecusado = false, blingLigado = false;
     const tinyMsg = (t, erro) => { const m = $('#tinyMsg'); m.textContent = t || ''; m.style.color = erro ? 'var(--verm)' : ''; };
     // pedido = chrome.permissions.request(...) feito DENTRO do clique, antes de qualquer await (senão o Chrome recusa).
-    async function puxarTiny(pedido, token) {
+    // v3.3 multi-empresa (bloqueio 5): empresa = SHC.empresaSeparada() pedida NO CLIQUE (antes do pedido de permissão, que espera a seller);
+    // token = o colado agora, ou null = o Tiny DESSA empresa (o token na memória do painel pode ser da conta aberta antes — gravaria o Tiny
+    // de uma empresa e o token dela na outra).
+    async function puxarTiny(pedido, token, empresa) {
         let deu = false;
         try { deu = await pedido; } catch (e) { deu = false; }
         if (!deu) return tinyMsg('Sem a permissão do Chrome o Copiloto não consegue ler o Tiny. Clique de novo e escolha “Permitir”.', true);
@@ -7840,11 +7883,16 @@
         $('#tinyProg').hidden = false; $('#tinyBarra').style.width = '0%'; $('#tinyPct').textContent = '';
         // v3.3 multi-empresa (revisão 07/10/2026): tudo vai para a empresa da conta aberta NO CLIQUE, mesmo se o ML trocar de conta durante a leitura.
         try {
-            const e0 = await SHC.empresaSeparada(), A = SHC.areaEmpresa(e0);
+            const e0 = await (empresa || SHC.empresaSeparada()), A = SHC.areaEmpresa(e0);
+            const antes = (await A.get(SHC.TINY_CHAVE))[SHC.TINY_CHAVE] || null;
+            if (!token) token = (antes && antes.token) || '';
+            if (!token) {   // a empresa do clique não tem o Tiny: pede o token DELA (nunca usa o de outra empresa)
+                tinyToken = ''; $('#abrirTiny').textContent = 'Tiny · Conectar em 1 minuto'; $('#tinyBox').hidden = false;
+                return tinyMsg('Esta empresa ainda não tem o Tiny conectado. Cole o token do Tiny dela no passo 2.', true);
+            }
             const produtos = await SHC.tinyPuxar(token, { fetch: (u, i) => fetch(u, i), espera: ms => new Promise(r => setTimeout(r, ms)),
                 progresso: (pg, n) => { const pc = n ? Math.round(pg / n * 100) : 0; $('#tinyBarra').style.width = pc + '%'; $('#tinyPct').textContent = pc + '% · ' + pg + ' de ' + n + (n === 1 ? ' página' : ' páginas'); } });
             const r = await SHC.tinyGravar(produtos, 'tiny', { empresa: e0 });
-            const antes = (await A.get(SHC.TINY_CHAVE))[SHC.TINY_CHAVE] || null;
             await A.set({ [SHC.TINY_CHAVE]: { token, ultima: Object.assign({ ts: Date.now() }, r) } });
             if (SHC.erpRetratoDaTela) await SHC.erpRetratoDaTela('tiny', produtos, !(antes && antes.ultima), e0);   // v3.2: cruzamento ERP × ML
             tinyToken = token; tinyRecusado = false; $('#tinyToken').value = ''; $('#tinyBox').hidden = true;
@@ -7864,14 +7912,14 @@
     }
     const TINY = () => ({ origins: [SHC.TINY_ORIGEM] });
     function abrirTiny() {
-        if (tinyToken) return puxarTiny(chrome.permissions.request(TINY()), tinyToken);
+        if (tinyToken) return puxarTiny(chrome.permissions.request(TINY()), null, SHC.empresaSeparada());   // o token é relido da empresa do clique
         $('#tinyBox').hidden = false; $('#tinyToken').focus();
     }
     $('#abrirTiny').addEventListener('click', abrirTiny);
     $('#tinyConectar').addEventListener('click', () => {
         const token = $('#tinyToken').value.trim();
         if (token.length < 10 || /\s/.test(token)) return tinyMsg('Cole o token inteiro do Tiny (passo 2 acima).', true);
-        puxarTiny(chrome.permissions.request(TINY()), token);
+        puxarTiny(chrome.permissions.request(TINY()), token, SHC.empresaSeparada());
     });
     $('#tinyToken').addEventListener('keydown', e => { if (e.key === 'Enter') $('#tinyConectar').click(); });
     $('#abrirBling').addEventListener('click', () => abrePagina('painel.html#erp'));

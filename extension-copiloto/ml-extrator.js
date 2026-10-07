@@ -618,15 +618,20 @@
      * f = { ler(n) → {dados: SHC.mlPaginaAnuncios}|{falha}, abrir(id, page) → JSON | null, pausa() , progresso(o), maxPaginas }
      * → { itens, familias:[{id, tipo, familyId, titulo, estoque, esperado, itens:[MLB]}], paginas, total, linhas, conta, via, completo } | { falha }.
      * O total do ML conta LINHAS: completo = todas as linhas lidas E toda família/"Ver mais" aberta com os anúncios que ela diz ter.
+     * v3.3 (multi-empresa, bloqueio 5): página que diz OUTRO dono (o login do ML trocou no meio da leitura) → { falha:'outra_conta' }, sem
+     * juntar nada: o retrato de uma empresa nunca ganha os anúncios da outra. Vale o 1º dono que uma página disse (normalmente a página 1).
      */
     SHC.mlLeituraCompleta = async function (f) {
         const itens = [], vistos = new Set(), chaves = new Set(), abrir = new Map(), familias = [];
-        let paginas = 0, total = null, conta = null, via = '', completo = true, dePag = null;
+        let paginas = 0, total = null, conta = null, via = '', completo = true, dePag = null, dono = '';
         for (let n = 1; ; n++) {
             if (n > (f.maxPaginas || 80)) { completo = false; break; }
             const pag = await f.ler(n);
             if (pag.falha) { if (n === 1) return { falha: pag.falha }; completo = false; break; }
             const d = pag.dados || {}, lidos = Array.isArray(d.itens) ? d.itens : [];
+            const id = d.conta && d.conta.sellerId ? String(d.conta.sellerId) : '';
+            if (id && dono && id !== dono) return { falha: 'outra_conta' };
+            if (id && !dono) dono = id;
             const ks = Array.isArray(d.chaves) ? d.chaves : lidos.map(i => i && i.itemId);
             if (n === 1) { total = typeof d.total === 'number' ? d.total : null; conta = d.conta || null; via = pag.via || ''; dePag = total !== null && ks.length ? Math.max(1, Math.ceil(total / ks.length)) : null; }
             // Página do meio sem linha nenhuma e sem total do ML: pode ser tela intermediária → leitura incompleta (só junta, não apaga).
@@ -1391,18 +1396,20 @@
     const DEV_ARREP = /arrepend|desist|mudou de ideia|n[ãa]o (quer|quero|gostou|gostei|precisa|precisou)|comprou por engano|n[ãa]o serviu/i;
     const DEV_TRANSP = /danific|embalage|amassad|quebrad|avari|extravi|transport|pacote sem|chegou (aberto|vazio)/i;
     SHC.DEV_COR = { verde: '🟢 dá para questionar', amarelo: '🟡 vale conferir', cinza: '⚪ foi sua responsabilidade' };
-    /** posvenda:<conta> → { pedido: {motivo, afetouReputacao, situacao, descricao} } (porPedido; null = pós-venda nunca lido com o nº do pedido). */
+    /** posvenda:<conta> → { pedido: {motivo, afetouReputacao, situacao, descricao, titulo?} } (porPedido; null = pós-venda nunca lido com o nº do pedido). */
     SHC.posvendaPorPedido = pv => (pv && pv.porPedido && typeof pv.porPedido === 'object' ? pv.porPedido : null);
     /** porPedido guardado + casos lidos agora (SHC.posvendaReclamacoesDoFlox) → o novo porPedido (o lido agora vale; até 300 pedidos, os mais novos) | null. */
     SHC.posvendaJuntaPorPedido = function (ant, casos) {
         const novo = {};
         (casos || []).forEach(c => {
             const k = String((c && c.pedido) || '').replace(/\D/g, '');
-            if (k.length >= 6 && !novo[k]) novo[k] = { motivo: c.motivo || '', afetouReputacao: c.afetouReputacao === true ? true : c.afetouReputacao === false ? false : null, situacao: c.situacao || '', descricao: c.descricao || '' };
+            // Revisão do grupo g: + o título do produto (o pedido de exclusão diz o produto/SKU de cada pedido, e não o de outro).
+            if (k.length >= 6 && !novo[k]) novo[k] = { motivo: c.motivo || '', afetouReputacao: c.afetouReputacao === true ? true : c.afetouReputacao === false ? false : null, situacao: c.situacao || '', descricao: c.descricao || '',
+                titulo: String(c.titulo || '').slice(0, 120), atual: true };   // atual: visto nesta leitura (o pedido de exclusão só usa estes)
         });
         const velhos = ant && typeof ant === 'object' ? Object.keys(ant).filter(k => !novo[k]) : [];
         const out = {};
-        Object.keys(novo).concat(velhos).slice(0, 300).forEach(k => { out[k] = novo[k] || ant[k]; });
+        Object.keys(novo).concat(velhos).slice(0, 300).forEach(k => { out[k] = novo[k] || Object.assign({}, ant[k], { atual: false }); });
         return Object.keys(out).length ? out : null;
     };
     // ── v3.3 Textos de contestação (pedido da dona 07/10/2026: "usar os termos técnicos para brigar com a IA do Mercado Livre e ser mais
@@ -1457,46 +1464,205 @@
     // v3.3 Exclusão de reclamação: só os casos que as regras do ML aceitam analisar (Central de Vendedores, "Conheça as regras de exclusão de
     // reclamações", lida em 07/10/2026). Defeito, produto diferente, faltando peça, despacho atrasado por nós, falta de estoque, mensagem sem
     // resposta no prazo NÃO entram — o Copiloto nunca pede a retirada do que é responsabilidade do vendedor (black hat, nunca).
-    // [motivo do comprador, a regra do ML, o que o seller confere antes de enviar (o Copiloto não tem como saber)].
+    // [núcleo do motivo, a regra do ML, o que o seller confere antes de enviar (o Copiloto não tem como saber), complementos neutros da regra].
     // Auditoria da loja (07/10/2026): erro na COMPRA ("comprei por engano", "comprei errado", "engano na compra") é arrependimento, não
     // "reclamação aberta por engano"; a do transporte exige demora/atraso explícitos (só "Correios" no motivo não basta).
+    // Revisão do grupo g (07/10/2026): a trava por lista de palavras proibidas não fechava ("desisti, a tampa veio solta", "quero trocar o
+    // modelo, não deu no meu gol", "a postagem atrasou e a entrega demorou" passavam). Agora é o contrário: o motivo só é excluível quando o
+    // texto INTEIRO é o núcleo de uma regra + complementos neutros da lista fechada DELA + palavras de ligação. Qualquer outra oração deixa
+    // o motivo sem regra (na dúvida, não marca). Os vetos continuam por cima. As regras rodam no texto sem acento e sem pontuação.
+    const NAO = '\\b(?:n[ãa]o|naum|num|n)';   // "não", "nao", "naum", "num", "ñ" (sem acento vira "n")
+    const LIG = '(?:o|a|os|as|um|uma|de|da|do|das|dos|em|no|na|nos|nas|pra|pro|para|pelo|pela|pelos|e|ja|so|muito|bem|demais|bastante|meu|minha|me|eu)';
+    const NOMES = '(?:(?:o|a|os|as|d[oa]s?|n[oa]s?|est[ea]|ess[ea]|dest[ea]|dess[ea]|meu|minha) )?(?:produtos?|compras?|pedidos?|itens|item|mercadorias?|encomendas?|pacotes?)';
+    const PEDE = '(?:(?:quero|queria|gostaria de|preciso|posso|vou|desejo|poderia) )?';
+    const qualquer = (l, f) => new RegExp('\\b(?:' + [].concat(l).join('|') + ')\\b', f || 'i');   // [padrões] → regex de qualquer um, palavra inteira
+    const QTD = '(?:\\d+|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|quinze|vinte|trinta)';
+    const TROCA = 'troc(?:ar|a|o|amos)(?: (?:de|o|a|por (?:um |uma )?outr[oa]|pel[oa]))? ';
+    // Revisão 3 (07/10/2026): o erro do PRÓPRIO comprador ("comprei o tamanho errado", "pedi 2 por engano") — entre o verbo e "errado/por
+    // engano" só uma LISTA FECHADA de palavras: artigo, número, tamanho/cor/modelo/número/voltagem/peça/produto/item/quantidade, "duas vezes",
+    // "duplicado". Qualquer outra ("o vendedor separou", "pela tabela", "com a descrição", "certo, separaram") deixa o motivo sem regra.
+    const ERRO_ENTRE = '(?:(?:duas|\\d+) vezes|em dobro|duplicad[oa]s?|o|a|os|as|um|uma|isso|isto|este|esse|essa|\\d+|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|tamanho|cor|modelo|n[uú]mero|voltagem|pe[cç]as?|produtos?|itens|item|quantidade)';
+    const ERRO_VERBO = '(?:compr(?:ei|ou|a|amos)|escolh(?:i|eu)|selecion(?:ei|ou)|pedi(?:u)?)';
     const EXCLUIVEL = [
-        [/arrepend|desist|n[ãa]o (quer|quero) mais|mudou de ideia|compr(ei|ou|a)( \S+){0,3} (por engano|errad)|engano (na|da) compra/i, 'o comprador se arrependeu da compra e o produto está em perfeitas condições', 'o produto voltou sem uso e em perfeitas condições'],
-        [/\bengano\b/i, 'o comprador iniciou a reclamação por engano', 'a conversa mostra que a reclamação foi aberta por engano'],
-        [/n[ãa]o reconhe[cç]/i, 'o comprador não reconhece a compra', 'o pedido foi entregue no endereço da compra'],
-        [/(aparece|consta|marcad[oa]) como entregue/i, 'o comprador não recebeu o produto, mas o envio aparece como entregue', 'o rastreio mostra a entrega'],
-        [/^(?=.*(demor|atras))(?=.*(entreg|cheg|correio|transport|mercado envios))/i, 'a reclamação foi aberta pela demora do transporte, com o envio dentro do prazo estabelecido', 'você despachou dentro do prazo'],
-        [/trocar? (de |o |por outro )?(tamanho|modelo|numera)|tamanho errado|n[ãa]o serviu/i, 'o comprador quer trocar por outro tamanho ou modelo (autopeças, vestuário, bolsas e calçados)', 'o anúncio é de autopeças, vestuário, bolsas ou calçados'],
-        [/meio de contato|s[óo] queria (falar|perguntar)|d[úu]vida sobre/i, 'o comprador usou a reclamação como meio de contato', 'a reclamação só trazia uma pergunta'],
-    ];
+        [qualquer(['arrepend\\w*', 'desist\\w*', NAO + ' (?:quero|quer|queria|desejo|vou querer) mais', 'mud(?:ou|ei|amos)(?: de)? ideia', 'engano (?:na|da) compra',
+            'compr(?:ei|ou) (?:isso |isto |o produto |este produto |esse produto )?sem querer',
+            // o erro do próprio comprador: o verbo e o erro com até 3 palavras da lista fechada entre eles (revisão 3)
+            ERRO_VERBO + '(?: ' + ERRO_ENTRE + '){0,3} (?:errad[oa]s?|por engano)']),
+            'o comprador se arrependeu da compra e o produto está em perfeitas condições', 'o produto voltou sem uso e em perfeitas condições',
+            ['ter (?:comprado|pedido|feito (?:a|essa|esta) compra)', NAO + ' (?:preciso|precisa|precisamos|precisava|vou precisar|vai precisar)(?: mais)?(?: (?:dele|dela|disso))?',
+                '(?:achei|encontrei|vi)(?: (?:um|uma|o|a))?(?: (?:outr[oa]|igual|parecid[oa]|o mesmo|a mesma))?',
+                'compr(?:ei|ou|amos)(?: (?:um|uma))? (?:outr[oa]|o mesmo|a mesma|igual|parecid[oa])(?: (?:modelo|marca|cor|produto|igual))?',
+                // revisão 3: "desisti, comprei em outro lugar", "comprei na loja física", "vou comprar outro"
+                'compr(?:ei|o|ar|amos)(?: (?:em|n[ao]|de|d[ao]|num|numa))? (?:um |uma )?(?:outr[oa] (?:lugar|loja|site|anuncio|vendedor)|loja fisica)',
+                '(?:vou |ja |prefiro )?comprar(?: (?:um|uma))? outr[oa](?: (?:modelo|marca|cor|produto))?',
+                '(?:em|n[ao]|de|d[ao]|num|numa) (?:um |uma )?(?:outr[oa] (?:anuncio|loja|site|lugar|vendedor|plataforma)|loja fisica|mercado|supermercado|shopping)',
+                'mais barat[oa]|por menos|mais em conta|(?:com )?(?:preco|valor) (?:melhor|menor)|(?:com )?(?:melhor|menor) (?:preco|valor)', '(?:comprei |foi )?por impulso', '(?:fiquei )?sem (?:dinheiro|grana)',
+                '(?:(?:o produto|a caixa|a embalagem|ele|ela) )?(?:(?:esta|ta|continua|segue|vai|volta|voltou|vai voltar|sera devolvid[oa]) )?(?:com (?:o )?lacre(?: intacto)?|lacrad[oa]|intact[oa]|na caixa(?: original)?|sem uso|sem abrir|em perfeitas condicoes|em perfeito estado)',
+                'nem (?:abri|usei|cheguei a (?:abrir|usar)|tirei da caixa)(?: (?:a caixa|o produto|a embalagem|o pacote))?',
+                '(?:(?:o produto|ele|ela) )?(?:nao|nunca|nem) (?:foi |esta |ta |chegou a ser )?(?:usad[oa]|utilizad[oa]|abert[oa]|instalad[oa])',
+                PEDE + 'devolv(?:er|o|endo|i)(?: (?:o produto|ele|ela|a mercadoria))?', PEDE + '(?:o |meu )?(?:reembolso|estorno|dinheiro de volta)',
+                NAO + ' (?:gostei|gostou|curti|me agradou|agradou)(?: d[aoe] (?:cor|modelo|estilo|formato|design|produto))?',
+                NAO + ' combin(?:ou|a) com (?:o |a )?(?:meu |minha )?(?:sofa|decoracao|ambiente|casa|quarto|sala|cozinha|banheiro|estilo|roupa|look|moveis|movel|parede)',
+                PEDE + 'troc(?:ar|a)(?: (?:de|o|a|por (?:um |uma )?outr[oa]))?(?: (?:tamanho|numero|numeracao|modelo|cor))?', '(?:ja )?receb(?:i|eu|emos)(?: (?:o produto|a encomenda|o pedido))?', NOMES]],
+        // A reclamação aberta por engano é do COMPRADOR ("foi engano", "engano meu", "abri por engano"); "engano da loja", "engano deles" não entram.
+        [qualquer(['foi (?:um |so )?engano', 'engano meu', 'meu engano', '(?:reclamacao|chamado) (?:foi )?(?:abert[oa]|iniciad[oa]|feit[oa]) (?:por engano|sem querer)',
+            '(?:abri|abriu|iniciei|iniciou|cliquei|apertei|fiz|abrimos|criei|registrei)(?: (?:a|o|esta|essa|uma|um))?(?: (?:reclamacao|chamado|disputa|solicitacao))? (?:por engano|sem querer|errad[oa])']),
+            'o comprador iniciou a reclamação por engano', 'a conversa mostra que a reclamação foi aberta por engano',
+            ['(?:pode|podem|favor|por favor) (?:cancelar|encerrar|fechar|desconsiderar)(?: (?:a|esta|essa))?(?: reclamacao)?', '(?:a |esta |essa )?reclamacao',
+                '(?:ja )?(?:recebi|chegou)(?: (?:o produto|o pedido))?(?: (?:certinho|certo|direitinho|bem|tudo certo))?', '(?:esta|ta|deu|foi) tudo (?:certo|ok|bem)', 'tudo (?:certo|ok)',
+                'desculp(?:e|a|em|as)(?: (?:o|pelo) transtorno)?', '(?:nao (?:tem|teve|houve)|sem) (?:nenhum )?problemas?(?: nenhum)?', NOMES]],
+        [qualquer([NAO + ' reconhe\\w*', NAO + ' (?:fiz|realizei|efetuei|autorizei) (?:esta|essa|a|nenhuma) compra']), 'o comprador não reconhece a compra', 'o pedido foi entregue no endereço da compra',
+            // "não reconheço o PRODUTO" (o que chegou) não é "não reconheço a compra": produto fica de fora dos complementos
+            ['(?:(?:esta|essa|a|o|este|esse|d[ao]|dest[ae]|dess[ae]) )?(?:compra|pedido|transacao|cobranca|venda)', 'nao fui eu(?: (?:que|quem) (?:comprei|fiz|comprou))?',
+                '(?:alguem|outra pessoa) (?:comprou|usou|fez)(?: (?:com|n[ao]|usando) (?:minha|meu) (?:conta|cartao))?']],
+        [qualquer('(?:aparece|aparecendo|consta|constando|marcad[oa]|esta|ta|diz|mostra|informa|registrad[oa])(?: ' + LIG + '){0,2} como entregue'),
+            'o comprador não recebeu o produto, mas o envio aparece como entregue', 'o rastreio mostra a entrega',
+            [NAO + ' (?:recebi|recebeu|recebemos|chegou|foi entregue|entregaram)(?: (?:o produto|nada|o pedido|a encomenda|o pacote))?',
+                '(?:(?:o comprador|ele|ela|o cliente|a cliente) )?(?:diz|disse|alega|afirma|fala|falou|informa|informou|reclama) que ' + NAO + ' (?:recebeu|chegou)(?: (?:o produto|nada))?',
+                '(?:n[oa] )?(?:rastreio|rastreamento|sistema|site|app|aplicativo)', NOMES]],
+        // Transporte: só a entrega/chegada (Correios, transportadora). Despacho, postagem, preparo, "só saiu", loja: é do vendedor (fica sem regra).
+        [qualquer(['(?:chegou|chegaram|chegando|entregue|entregaram|entregou|entregas?|chegada)(?: ' + LIG + '){0,2} (?:atrasad[oa]s?|com atraso|em atraso|tarde|depois do prazo|fora do prazo|apos o prazo|muito depois)',
+            '(?:atras|demor)\\w*(?: ' + LIG + '){0,3} (?:entreg\\w*|cheg\\w*|correios?|transportador\\w*|transporte|mercado envios|frete)',
+            '(?:entreg\\w*|chegada|correios?|transportador\\w*|transporte|mercado envios)(?: ' + LIG + '){0,2} (?:atras\\w*|demor\\w*)', 'passou (?:d[oa] )?(?:prazo|data) (?:de|da) entrega',
+            '(?:chegou|chegaram|entregue|entregaram|entregou|entregas?|chegada)(?: ' + LIG + '){0,2} com (?:mais de |quase )?' + QTD + ' (?:dias?|semanas?) de atraso']),
+            'a reclamação foi aberta pela demora do transporte, com o envio dentro do prazo estabelecido', 'você despachou dentro do prazo e a entrega não foi feita por você (Flex)',
+            // "postado no prazo" só sem negação antes ("não foi postado no prazo" é do vendedor)
+            ['(?<!(?:nao|naum|num|\\bn|nem) (?:foi |ja foi )?)(?:o produto |o pedido |a encomenda |o pacote )?(?:foi |ja foi )?(?:enviad|postad|despachad|coletad)[oa]s? (?:no prazo|dentro do prazo|a tempo|em dia|no dia certo)',
+                '(?:(?:ficou|esta|ta|estava|ficando) )?parad[oa] (?:n[oa]s? |em )?(?:correios?|agencia(?: dos correios)?|transportadora|centro de distribuicao|centro de tratamento|cd)',
+                '(?:(?:os|o|a|pelos|pelo|pela|d[oa]s?|n[oa]s?) )?(?:correios?|transportadora|mercado envios|entregador|transporte|logistica)',
+                '(?:(?:ha|faz|por|mais de|quase|uns|umas|em|com|apos|depois de) )?' + QTD + ' (?:dias?|semanas?|mes|meses)(?: (?:uteis|corridos))?(?: de atraso)?',
+                '(?:(?:estou|to|tou|fiquei|fico|ainda|estava) )?(?:esperando|aguardando)(?: (?:a entrega|o produto|o pedido|a encomenda|chegar))?', '(?:(?:a|de|da|na|pela) )?(?:entregas?|chegada)(?: (?:previst[oa]|prometid[oa]|informad[oa]))?',
+                NAO + ' (?:quero|queria) mais(?: esperar)?', 'desist\\w*', 'arrepend\\w*', PEDE + 'cancel(?:ar|amento)(?: (?:a compra|o pedido|da compra|do pedido))?', NOMES]],
+        // Troca: só a troca pura, ou a de tamanho/número com o complemento de vestuário ("ficou pequeno", "não coube"). Qualquer outra oração
+        // ("não deu no meu gol", "a rosca não bateu", "pedi 40 e veio 42") deixa o motivo sem regra.
+        [qualquer(TROCA + '(?:tamanho|numero|numeracao)'), 'o comprador quer trocar por outro tamanho ou modelo (autopeças, vestuário, bolsas e calçados)',
+            'o anúncio é de autopeças, vestuário, bolsas ou calçados e a troca é escolha do comprador (não medida, tabela ou compatibilidade errada no anúncio)',
+            ['(?:(?:o|a|ele|ela) )?(?:ficou|ficaram)(?: (?:um pouco|muito|bem|meio))? (?:pequen[oa]s?|grandes?|apertad[oa]s?|larg[oa]s?|curt[oa]s?|comprid[oa]s?|just[oa]s?|folgad[oa]s?)',
+                '(?:para|pra|por) (?:um |uma |o |a )?(?:maior|menor|(?:numero|tamanho|numeracao) (?:maior|menor|acima|abaixo)|outr[oa] (?:tamanho|numero|numeracao)|\\d{2}|pp|p|m|g|gg|xg|xgg|eg|egg)',
+                NAO + ' (?:serviu|coube|cabe|vestiu|ficou bom|ficou boa)', NOMES]],
+        [qualquer(TROCA + 'modelo'), 'o comprador quer trocar por outro tamanho ou modelo (autopeças, vestuário, bolsas e calçados)',
+            'o anúncio é de autopeças, vestuário, bolsas ou calçados e a troca é escolha do comprador (não medida, tabela ou compatibilidade errada no anúncio)',
+            ['(?:para|pra|por) (?:um |o )?outro(?: modelo)?', NOMES]],
+        [qualquer(['meio de contato', 'so (?:queria|quero|gostaria de) (?:falar|perguntar|saber|tirar (?:uma )?duvida)', 'duvidas? sobre', '(?:tenho|era|e) (?:so )?uma duvida']),
+            'o comprador usou a reclamação como meio de contato', 'a reclamação só trazia uma pergunta',
+            ['(?:sobre )?(?:a |o )?(?:garantia|uso|instalacao|funcionamento|montagem|entrega|prazo de entrega|troca|devolucao|como usar)', NOMES]],
+    ].map(([n, regra, confere, comp]) => [n, regra, confere, qualquer(comp, 'gi'), new RegExp(n.source, 'gi')]);
+    // Palavras de ligação que podem sobrar depois do núcleo e dos complementos (nenhuma nega nem diz o que aconteceu: "não" nunca sobra).
+    const LIGACAO = new Set(('e mas porem entao pois que o a os as um uma uns umas de da do das dos em no na nos nas por pra pro pras pros para com eu me meu minha meus minhas mim '
+        + 'ja so ok ai isso isto pq porque q tb tambem agora ele ela se muito bem demais bastante mesmo realmente infelizmente sinceramente comprador compradora cliente '
+        + 'quero queria gostaria preciso desejo poderia posso favor ola oi obrigado obrigada pontuacaox').split(' '));   // revisão final: "você/vc" não é ligação (é o vendedor)
     // Revisão 07/10/2026: "Me arrependi porque veio com defeito" ou "o vendedor não postou nos Correios" casavam com a 1ª regra parecida.
     // Culpa do vendedor no motivo (a mesma DEV_CULPA das devoluções, fora o erro do próprio comprador; despacho; envio errado; dano no
     // transporte; estoque) VETA antes de qualquer regra. "Não chegou" só entra quando o rastreio diz entregue.
     // 2ª revisão: despacho demorado ("demorou para postar") e mensagem sem resposta também são do vendedor; o engano do vendedor ("enviou por
     // engano", "engano no envio") veta, o do comprador ("foi engano", "engano na compra") não; "não foi usado"/"sem uso" é estado bom, não "usado".
-    const EXCL_VETO = new RegExp(['n[ãa]o (despach|envi|post|mand)', 'enviad[oa] (por engano|errad)', 'envi(ou|aram) (por engano|errad|outr)', 'mand(ou|aram) (por engano|outr[oa]|errad)',
+    const EXCL_VETO = new RegExp([NAO + ' (despach|envi|post|mand)', 'enviad[oa] (por engano|errad)', 'envi(ou|aram) (por engano|errad|outr)', 'mand(ou|aram) (por engano|outr[oa]|errad)',
         'veio (outr[oa]|errad)', 'engano (no|do|de) (envio|despacho|separa|vendedor)', 'demor\\w*( \\S+){0,2} (para|pra|a|em) (despach|post|envi|mand|sair|respond)', 'atras\\w* n[oa] (despach|postag)',
-        'n[ãa]o (me )?respond', 'sem resposta', 'estoque', '\\bquebr', 'danific', 'avari', 'amassad', 'extravi', 'r[ée]plica', 'pirat',
+        NAO + ' (me )?respond', 'sem resposta', 'estoque', '\\bquebr', 'danific', 'avari', 'amassad', 'extravi', 'r[ée]plica', 'pirat',
         // auditoria da loja: produto que não funcionou, item faltando na caixa, postagem atrasada, falsificado, manchado, pacote violado/aberto, não entregue
-        'n[ãa]o funcion', 'sem (o|a|os|as) (manual|caixa|acess\\w*|pe[çc]as?|cabo|carregador|nota|etiqueta)', 'post\\w* (com atraso|tarde|atrasad)', 'vendedor (demor|atras)',
-        'falsific', 'manchad', 'violad', '(chegou|veio|caixa|pacote|embalagem) (\\S+ )?abert', 'n[ãa]o entreg'].join('|'), 'i');
+        NAO + ' funcion', 'sem (o|a|os|as) (manual|caixa|acess\\w*|pe[çc]as?|cabo|carregador|nota|etiqueta)', 'post\\w* (com atraso|tarde|atrasad)', 'vendedor (demor|atras)',
+        'falsific', 'manchad', 'violad', '(chegou|veio|caixa|pacote|embalagem) (\\S+ )?abert', NAO + ' entreg',
+        // rastreio 07/10: o que chegou não é o que foi comprado ("comprei mas chegou errado", "recebi o modelo trocado", "recebi por engano outro")
+        '(veio|vieram|chegou|chegaram|recebi|recebeu|recebemos|mand(ou|aram)|envi(ou|aram)|entreg(ou|aram))( \\w+){0,3} (outr[oa]s?|errad|trocad|diferent)',
+        // revisão do grupo g: o comprador diz o que pediu e o que chegou ("pedi 40 e veio 42", "mandaram 42 e eu pedi 40", "veio 220v")
+        'pedi\\w*( \\w+){1,3} (e|mas) (eu )?(veio|vieram|chegou|chegaram|mand(ou|aram)|envi(ou|aram)|recebi)', '(veio|vieram|chegou|chegaram|mand(ou|aram)|envi(ou|aram)|recebi)( \\w+){1,3} (e |mas )?(eu )?(tinha )?pedi',
+        '(veio|vieram|chegou|chegaram|mand(ou|aram)|envi(ou|aram)|recebi) (o |a |um |uma |numero |tamanho )?(\\d{1,3}|pp|p|m|g|gg|xg|xgg|eg|egg|bivolt|\\d{3} ?v(olts)?)\\b'].join('|'), 'i');
+    // Rastreio 07/10/2026 (bloqueio 4): culpas do vendedor escritas de outro jeito passavam ("desisti, veio trincado", "despachou com atraso",
+    // "não serviu no meu carro"). Trava por palavra, com e sem acento e gíria; na dúvida, NÃO é excluível. Roda no texto sem o erro do comprador
+    // e sem os complementos neutros da regra ("lacre intacto", "outro anúncio mais barato", "postado no prazo" não vetam).
+    const EXCL_CULPA = new RegExp([
+        // estado do produto
+        'trinc', 'rach(ad|ou|a\\b)', 'lascad', 'risc(ad|ou|os?\\b)', 'arranh', 'amass', 'estrag', 'pif(ou|ad)', 'queim(ou|ad)', 'derret', 'rasg', 'furad', '\\bfuros?\\b',
+        'descasc', 'descol', 'desbot', 'manch', 'mof(o|ad)', 'bolor', 'molhad', '\\bumid(o|a|os|as|ade)\\b', 'encharc', 'vaz(and|ament|ou|ad|a\\b)', 'cheir', 'fedo', '\\bfede(\\b|nd)', '\\bodor',
+        '\\bsuj(o|a|os|as|eira)\\b', 'encardid', 'enferruj', 'ferrug', 'oxid', 'podre', 'bichad', 'validade', 'deformad', 'empenad', '\\btort[oa]s?\\b', 'zoad', 'zuad', 'detonad',
+        'qualidade', 'porcaria', '\\blixo\\b', 'vagabund', 'fajut', 'xing ?ling', 'paragua', 'mal feit', 'fragil|frageis', 'imitac', 'generic', NAO + ' original', 'recondicion', 'remanufat',
+        'seminov', 'mostruario', 'lacre', '\\bvazi[oa]s?\\b', 'para(ou|do) de', 'deu (pau|problema|defeito|ruim)', '(com|tem|deu|apresent\\w*) problema', 'falh(a|ou|and)', 'barulh', 'ruido',
+        'chiad', 'zumbid', 'superaquec', 'trav(ou|and)',
+        NAO + ' (liga|ligou|acend|carreg|encaix|serv|cab(e|ia)|coub|ved|gel|esquent|aquec|conect|pare|le\\b|ler\\b|toc(a|ou)\\b|fech(a|ou)\\b|abr(e|iu)\\b|segur|aguent|prest|deu certo|bat(e|em)\\b|condiz|correspond|confere\\b)',
+        NAO + ' (e|eh|era) (o|a|os|as) (que|mesm)',
+        // diferente do anúncio, da foto ou do comprado
+        'an[úu]nci', '\\bfotos?\\b', 'descrit', 'propaganda', 'engan(ava|ou|aram|os[oa]s?|acao)', 'nada a ver', 'tabela', 'trocad',
+        '(cor|modelo|tamanho|voltagem|tensao|marca|numeracao|tecido|material|sabor|versao|tipo|medidas?) (e |eh |era |esta |ta |veio |vieram |ficou |totalmente |completamente |bem |muito )?(outr[oa]|errad|trocad|diferent)',
+        'compr(ei|ou|amos)( \\w+){1,3} (e|mas) (veio|vieram|chegou|chegaram|recebi|recebeu|mandaram|mandou|enviaram|enviou)',
+        '(veio|vieram|chegou|chegaram|recebi|mandaram|enviaram)( \\w+){0,2} (azul|vermelh|pret[oa]|branc|verde|amarel|rosa|cinza|marrom|bege|rox[oa]|laranja|dourad|pratead)',
+        'reconhe\\w*( \\w+){0,3} (produto|item|peca|mercadoria|marca|embalagem|chegou|veio|recebi)',
+        'engano (no|do|de|na|da) (envio|despacho|separa|vendedor|cor|modelo|tamanho|produto|item|peca|voltagem|quantidade|entrega)',
+        // revisão do grupo g: o engano da loja não é do comprador
+        'engano d[oa] (loja|empresa|lojista|vendedor\\w*)', 'engano del[ea]s?\\b', 'se engan(ou|aram)',
+        'menos (unidades|pecas|itens|produtos)', 'quantidade (menor|errad|diferent)', '(so|somente|apenas) (veio|vieram|mandaram|mandou|enviaram|enviou|recebi) (um|uma|1|2|3|metade|parte|a caixa|o manual|a capa)\\b',
+        '(veio|chegou|recebi|recebemos) sem', 'nota fiscal|\\bnfe?\\b|sem nota', 'sem garantia|' + NAO + ' (tem|tinha|veio com|deram|da|dao|cobre) garantia|garantia (negada|recusada)',
+        // autopeças: veículo incompatível é do anúncio (a compatibilidade é do vendedor); revisão do grupo g: ano, furação, rosca, "não deu no meu gol"
+        'carro', 'veicul', '\\bmotos?\\b', 'motocicleta', 'caminh(ao|oes|onete)', 'onibus', 'trator', 'automovel', 'compat', 'aplicac',
+        '\\banos?\\b', '\\bbat(e|eu|eram|em)\\b', '\\bentr(a|ou|am|aram)\\b', 'furac', 'rosca', NAO + ' (deu|e|eh|era|serve|serviu) (n[oa]|pr[oa]|d[oa]) (meu|minha)',
+        // vendedor e despacho (demora do vendedor não é demora do transporte); revisão do grupo g: em qualquer ordem, preparo, "só saiu", loja
+        'vendedor', 'lojista', 'cancel(ou|aram)\\b', 'ignor(ou|aram)', NAO + ' (me )?(atend|retorn|ajud)', 'ningu[eé]m (me )?(respond|atend|retorn)', 'sumiu',
+        '(despach|post|envi|mand|separ|fatur|emit)\\w*( \\w+){0,3} (com atraso|atrasad|tarde|depois do prazo|fora do prazo|apos o prazo|em atraso|com demora|so depois|dias depois)',
+        '(atras|demor)\\w*( \\w+){0,3} (despach|post|envi|mand|separ|fatur|emit|colet|sair)', NAO + ' foi (despach|post|envi|mand|separ|colet|fatur)',
+        'ainda ' + NAO + ' (saiu|foi|despach|post|envi)', '(so|somente|apenas) (despach|post|envi|mand)', 'sem (rastr|codigo)',
+        'despach', 'postag', 'postad', 'prepar', '\\bsepar', '\\bsaiu\\b', '\\bsair\\b', '\\bloja\\b', 'segur(ou|aram|ando|ei)\\b'].join('|'), 'i');
+    // Revisão 3: agente (vendedor, loja, "vcs"), preparo/envio/cobrança e anúncio (tabela, descrição, foto, título) vetam ANTES de tirar o
+    // trecho do comprador ("Comprei, o vendedor separou errado" não é arrependimento). Roda no texto sem os complementos neutros da regra
+    // ("outra loja", "loja física", "outro anúncio" não vetam).
+    const EXCL_AGENTE = /vendedor|lojista|\bloja\b|\bvcs?\b|\bvoces?\b|\bsepar|despach|fatur|embal|\bcobr|tabela|descri|\bfotos?\b|titulo|anunci/i;
+    // Ambíguo (na dúvida, sem regra): "foi engano no/do pedido" costuma ser o pedido que veio errado; o engano no produto, item, envio também.
+    const EXCL_DUVIDA = /\bengano (?:n[oa]s?|d[oa]s?|de) (?:pedidos?|produtos?|itens|item|pe[cç]as?|mercadorias?|encomendas?|pacotes?|envio|entrega)\b/i;
+    // Decisão da local (07/10, zero risco): demora ou atraso sem dizer quem atrasou (Correios, transportadora, Mercado Envios) pode ser o
+    // despacho; o Copiloto não sabe se foi no prazo, então não vira pedido de exclusão.
+    const DEMORA_VAGA = /\bdemor\w*(?: \w+){0,2} (?:demais|muito)\b|\b(?:muito|demais|super) demor\w*/i;
+    const QUEM_TRANSPORTA = /correio|transportador|mercado envios|entregador|logistic/i;
     const BOM_ESTADO = /(n[ãa]o (foi |era |est[áa] |esta )?|nunca (foi )?|nem )usad[oa]s?|sem uso/gi;
     // O erro do PRÓPRIO comprador sai do texto antes de procurar culpa do vendedor (antes ele anulava o veto inteiro: "comprei errado e veio
-    // com defeito" pedia exclusão). Trecho curto: o verbo e o erro com até 3 palavras entre eles.
-    const TRECHO_COMPRADOR = /\b(compr(ei|ou|a)|escolh(i|eu)|selecion(ei|ou)|pedi(u)?)\b(\s+\S+){0,3}?\s+(errad[oa]s?|por engano)/gi;
+    // com defeito" pedia exclusão). Trecho curto: o verbo e o erro com até 3 palavras entre eles — nenhuma delas de recebimento ("comprei mas
+    // chegou errado" é culpa do vendedor, não do comprador).
+    // Revisão 3: o trecho só com a lista fechada (ERRO_ENTRE); com "vendedor", "loja", "separou", "tabela"… nada é tirado e os vetos veem tudo.
+    const TRECHO_COMPRADOR = new RegExp('\\b' + ERRO_VERBO + '(?:\\s+' + ERRO_ENTRE + '){0,3}\\s+(?:errad[oa]s?|por engano)\\b', 'gi');
     const semComprador = t => String(t || '').replace(BOM_ESTADO, ' ').replace(TRECHO_COMPRADOR, ' ');
+    // Sem acento, sem pontuação e minúsculo: "Não", "nao" e "ñ" caem nas mesmas regras.
+    const semAcento = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    // Revisão final (07/10): a vírgula e o ponto separam orações; sem eles, "Comprei o produto, está errado" virava "comprei o produto esta
+    // errado" e casava com o erro do comprador. O marcador fica fora das regras e conta como palavra de ligação na sobra.
+    const semAcentoOracoes = t => semAcento(String(t || '').replace(/[,.;:!?]+/g, ' pontuacaox '));
     const excluivel = t => {
-        const s = String(t || '');
-        if (DEV_CULPA.test(semComprador(s)) || EXCL_VETO.test(s)) return null;
-        if (/n[ãa]o (chegou|recebi|recebeu|foi entregue)/i.test(s) && !EXCLUIVEL[3][0].test(s)) return null;
-        return EXCLUIVEL.find(([re]) => re.test(s)) || null;
+        const s = semAcentoOracoes(t);
+        if (!s || new RegExp(NAO + ' (chegou|recebi|recebeu|foi entregue)', 'i').test(s) && !EXCLUIVEL[3][0].test(s) || EXCL_DUVIDA.test(s)) return null;
+        if (DEMORA_VAGA.test(s) && !QUEM_TRANSPORTA.test(s)) return null;
+        for (const x of EXCLUIVEL) {
+            if (!x[0].test(s)) continue;
+            const sobra = s.replace(x[4], ' ').replace(x[3], ' ').split(' ').filter(p => p && !LIGACAO.has(p));
+            if (sobra.length) continue;   // sobrou oração que não é desta regra: na dúvida, não marca
+            const semC = s.replace(x[3], ' '), sc = semComprador(semC);   // os vetos olham o núcleo e o que não é complemento neutro
+            // Demora do transporte só com quem transporta no motivo (decisão da local, 07/10): "chegou atrasado" sozinho pode ser o despacho.
+            if (/demora do transporte/.test(x[1]) && !QUEM_TRANSPORTA.test(s)) return null;
+            return EXCL_AGENTE.test(semC) || DEV_CULPA.test(sc) || EXCL_CULPA.test(sc) || EXCL_VETO.test(semC) ? null : x;
+        }
+        return null;
     };
     /** Motivo do comprador → a regra de exclusão do ML em que ele se encaixa ('' = não é excluível: corrija a causa). */
     SHC.motivoExcluivel = t => { const x = excluivel(t); return x ? x[1] : ''; };
     /** O que o seller confere antes de mandar o pedido de exclusão desse motivo ('' = não é excluível). */
     SHC.confereExclusao = t => { const x = excluivel(t); return x ? x[2] : ''; };
     /**
-     * Pedido de exclusão (reputação e experiência de compra) para os casos com um motivo excluível. g = { motivo, casos, naReputacao, produtos?:[título/SKU], pedidos?:[nº] }.
+     * Rastreio 07/10/2026 (R10): situação da reclamação (detail-title do pós-venda) → true com mediação aberta com o ML. A regra de exclusão
+     * do ML não analisa reclamação em mediação: ela fica fora do pedido. Na dúvida (o ML analisando/decidindo), também fica fora.
+     * Revisão do grupo g: ainda não há retrato da tela de um caso em mediação (tarefa da sessão local); o ML escreve em 1ª pessoa ("pediram
+     * nossa ajuda", "vamos decidir até…", "estamos analisando", "intervimos"), então qualquer decisão, análise ou revisão também conta.
+     */
+    SHC.emMediacao = s => new RegExp('mediac|mediand|mediad|mediar\\b|disputa|\\binterv(ir|em|eio|indo|enc\\w*|imos|iremos|ira|ieram|iu)\\b|pedi(u|ram|mos)( \\w+){0,2} ajuda|nossa ajuda'
+        + '|ajuda (a|ao|do) mercado livre|mercado livre (esta )?(analis|avali|decid|vai decid)|vamos (decidir|analisar|avaliar)|(decidi|analisa|avalia)remos|estamos (analis|avali|revis)'
+        + '|nossa (decis|analise|avalia|revis)|\\bdecis(ao|oes)\\b|(decisao|analise) do mercado livre|em (analise|revisao)').test(semAcento(s));
+    /**
+     * Revisão 3 (07/10/2026): a lista de palavras da mediação não fecha ("Vamos revisar o caso", "Em avaliação", "Analisando o caso" passavam).
+     * Agora é o contrário: a situação (detail-title) só entra no pedido de exclusão quando é uma das situações SEGURAS desta lista fechada
+     * (com, no máximo, uma data no fim). Qualquer outro texto, ou vazio, fica fora (na dúvida, não pede). O SHC.emMediacao continua como veto
+     * extra. Ampliar a lista quando a sessão local trouxer o retrato do detail-title.
+     */
+    const SITUACAO_SEGURA = new RegExp('^(?:aguardando (?:a )?sua resposta|aguardando (?:a )?devolucao(?: do produto)?|devolucao em andamento'
+        + '|(?:a )?reclamacao (?:foi )?(?:encerrada|resolvida|fechada))'
+        + '(?: (?:ate|em|desde|no dia|dia) (?:o dia )?\\d{1,2}(?: de [a-z]+| \\d{1,2})?(?: (?:de )?\\d{2,4})?)?$');
+    SHC.situacaoSegura = s => SITUACAO_SEGURA.test(semAcento(s)) && !SHC.emMediacao(s);
+    /**
+     * Pedido de exclusão (reputação e experiência de compra) para os casos com um motivo excluível. g = { motivo, casos, naReputacao,
+     * produtos?:[{sku, titulo} | 'título'], pedidos?:[nº] } (P.grupoExclusao monta no painel, já sem os casos em mediação).
      * '' quando o motivo não está nas regras de exclusão.
      */
     SHC.chamadoExclusao = function (g) {
@@ -1505,32 +1671,64 @@
         // Auditoria da loja (07/10/2026): pede a ANÁLISE de cada pedido (com o número) e a exclusão só dos que se enquadrarem — nunca afirma
         // que todos se enquadram nem o estado do produto de cada um (quem confere é o seller: SHC.confereExclusao).
         const peds = (g.pedidos || []).filter(Boolean).slice(0, 20);
-        return SHC.textoContestacao({ assunto: 'Pedido de análise de reclamações para exclusão da reputação', ids: peds.length === 1 ? [['Pedido', '#' + peds[0]]] : [],
+        // Rastreio 07/10 (R10): o produto vai com o SKU quando o Copiloto sabe; um SKU só vai também no assunto (modelo da dona: "– SKU – Pedido").
+        const ps = (g.produtos || []).filter(Boolean).map(p => (typeof p === 'object' ? p : { titulo: String(p) }));
+        const prods = ps.map(p => (p.sku ? 'SKU ' + p.sku + (p.titulo ? ' (' + p.titulo + ')' : '') : p.titulo || '')).filter(Boolean);
+        const skus = [...new Set(ps.map(p => p.sku).filter(Boolean))], sku = skus.length === 1 && ps.every(p => p.sku) ? skus[0] : '';
+        return SHC.textoContestacao({ assunto: 'Pedido de análise de reclamações para exclusão da reputação', ids: [['SKU', sku], ['Pedido', peds.length === 1 ? '#' + peds[0] : '']],
             intro: 'Recebemos reclamações cujo motivo pode se enquadrar nas regras de exclusão do Mercado Livre. Pedimos a análise de cada pedido abaixo.',
             fatos: ['Motivo informado pelo comprador: “' + String(g.motivo).slice(0, 120) + '” (' + SHC.qtd(g.casos || 0, 'caso', 'casos') + (g.naReputacao ? ', ' + g.naReputacao + ' contando na reputação' : '') + ').',
-                'Regra de exclusão em que pode se enquadrar: ' + regra + '.', (g.produtos || []).length ? 'Anúncios: ' + g.produtos.slice(0, 5).join('; ') + '.' : '',
+                'Regra de exclusão em que pode se enquadrar: ' + regra + '.', prods.length ? 'Produtos: ' + prods.slice(0, 5).join('; ') + (prods.length > 5 ? ' e mais ' + (prods.length - 5) : '') + '.' : '',
                 peds.length > 1 ? 'Pedidos: ' + peds.map(n => '#' + n).join(', ') + '.' : ''],
             regras: ['exclusao', 'experiencia'],
             pedido: 'a análise de ' + (peds.length > 1 ? 'cada pedido acima' : peds.length ? 'este pedido' : 'cada caso') + ' e, ' + (peds.length > 1 ? 'nos que se enquadrarem' : 'se ele se enquadrar') + ', a exclusão da reclamação do cálculo da nossa reputação e da experiência de compra dos anúncios (Métricas › Atendimento aos seus compradores › Vendas com problemas).' });
     };
-    /** v3.3 Remessa do Full com inconformidade (SHC.remessasInconformes) → texto da reclamação por diferenças, produto a produto. */
+    /**
+     * v3.3 Remessa do Full com inconformidade (SHC.remessasInconformes) → texto da reclamação por diferenças, produto a produto.
+     * Rastreio 07/10/2026 (bloqueio 4, regra da local): sem o detalhe por produto não sai texto ('') — na lista do Full o units_count conta
+     * PRODUTOS, não unidades, e "declaradas 3; disponíveis 2" seria uma reclamação firme com número que o Copiloto não leu.
+     * Revisão do grupo g: o detalhe lido sem as quantidades por produto (declaredQuantity/processedQuantity, formato A CONFIRMAR) também não
+     * gera texto — os totais da remessa voltariam a ser os da lista. Os totais só entram quando os produtos trazem declaradas E aptas.
+     */
     SHC.chamadoRemessa = function (r) {
-        if (!r || !r.id) return '';
+        if (!r || !r.id || r.semDetalhe || !(r.produtos || []).length) return '';
+        const temQtd = k => r.produtos.some(p => p && typeof p[k] === 'number');
+        if (!temQtd('declaradas') && !temQtd('processadas')) return '';
         const n = v => (typeof v === 'number' ? String(v) : '—'), dt = x => (/^\d{4}-\d{2}-\d{2}/.test(String(x || '')) ? x.slice(8, 10) + '/' + x.slice(5, 7) + '/' + x.slice(0, 4) : '');
         const ps = (r.produtos || []).filter(p => p && ((p.diferencas || 0) !== 0 || (p.naoAptas || 0) > 0));
         const fatos = ps.slice(0, 15).map(p => (p.sku ? 'SKU ' + p.sku : p.itemId || 'produto') + (p.itemId && p.sku ? ' (' + p.itemId + ')' : '') + ': declaradas ' + n(p.declaradas)
             + ', processadas ' + n(p.processadas) + (p.naoAptas ? ', não aptas ' + p.naoAptas : '') + (p.resultado ? ' — ' + p.resultado : '') + '.');
-        // 3.3.0 (juntada com a nuvem): sem o detalhe por produto não há texto. Sem detalhe, "declaradas" vem do units_count da lista, que conta
-        // PRODUTOS, e "aptas" conta unidades (leitura ao vivo de 06/10).
-        if (!ps.length) return '';
+        // 3.3.0 (juntada com a nuvem): sem o detalhe por produto não há texto (a 1ª linha). Sem detalhe, "declaradas" vem do units_count da lista,
+        // que conta PRODUTOS, e "aptas" conta unidades (leitura ao vivo de 06/10): os totais da remessa nunca entram, só os números por produto.
+        if (!ps.length && !(temQtd('declaradas') && temQtd('aptas'))) return '';
+        // Revisão 3 (07/10/2026): os totais da remessa e o "recebida com diferença" só com TODOS os produtos com declaradas E aptas em número
+        // (every, não some: "declaradas 15; disponíveis 10" com as aptas de um produto não lidas seria número que o Copiloto não leu).
+        // Detalhe incompleto: só pede a conferência, com os produtos completos e sem total, sem reclamação firme nem estorno.
+        const completo = p => p && typeof p.declaradas === 'number' && typeof p.aptas === 'number';
+        // Sem prova de diferença: só pede a conferência (produtos completos, sem total, sem reclamação firme nem estorno).
+        const conferencia = aviso => {
+            const fc = ps.filter(completo).slice(0, 15).map(p => (p.sku ? 'SKU ' + p.sku : p.itemId || 'produto') + (p.itemId && p.sku ? ' (' + p.itemId + ')' : '') + ': declaradas ' + n(p.declaradas)
+                + ', processadas ' + n(p.processadas) + ', disponíveis para venda ' + n(p.aptas) + (p.naoAptas ? ', não aptas ' + p.naoAptas : '') + (p.resultado ? ' — ' + p.resultado : '') + '.');
+            fc.push(aviso);
+            if (r.custo) fc.push('Total cobrado pelo Mercado Livre nesta remessa (coleta e/ou penalidade): ' + SHC.moeda(r.custo) + '.');
+            if (r.prazo) fc.push('Prazo para reclamar informado pelo ML: ' + dt(r.prazo) + '.');
+            return SHC.textoContestacao({ assunto: 'Pedido de conferência da remessa do Full', ids: [['Remessa', '#' + r.id]],
+                intro: 'Gostaríamos de conferir as unidades desta remessa' + (r.quando ? ' (' + dt(r.quando) + ')' : '') + ', produto a produto.',
+                fatos: fc, regras: ['full_custos'], anexos: ['nota fiscal da remessa'],
+                pedido: 'a informação de quantas unidades de cada produto desta remessa foram declaradas, processadas e estão disponíveis para venda e, se houver diferença ou unidade não apta, o motivo.' });
+        };
+        if (!r.produtos.every(completo)) return conferencia('O detalhe desta remessa não traz as unidades declaradas e as disponíveis para venda de todos os produtos.');
+        const contagem = ps.some(p => (p.diferencas || 0) !== 0);
+        const naoAptas = ps.reduce((s, p) => s + (p.naoAptas || 0), 0), quando = r.quando ? ' (' + dt(r.quando) + ')' : '';
+        // Revisão final (07/10): "unidades não aptas" só com não aptas LIDAS (> 0); status de diferença sem número por produto = conferência.
+        if (!contagem && !(naoAptas > 0)) return conferencia('O ML marcou diferença nesta remessa, mas o detalhe não traz diferença de contagem nem unidade não apta por produto.');
         // Auditoria da loja (07/10/2026) e regra da dona: r.custo é o total_charged da remessa = coleta e/ou penalidade — nunca "multa" nem
         // "cobrado pela inconformidade". Só unidade não apta (sem diferença de contagem) não é erro de contagem: pode ter vindo do nosso preparo.
         if (r.custo) fatos.push('Total cobrado pelo Mercado Livre nesta remessa (coleta e/ou penalidade): ' + SHC.moeda(r.custo) + '.');
         if (r.prazo) fatos.push('Prazo para reclamar informado pelo ML: ' + dt(r.prazo) + '.');
-        const contagem = ps.some(p => (p.diferencas || 0) !== 0);   // só com o detalhe por produto (sem ele já saiu acima)
-        const naoAptas = ps.reduce((s, p) => s + (p.naoAptas || 0), 0), quando = r.quando ? ' (' + dt(r.quando) + ')' : '';
+        const porDif = ps.some(p => (p.diferencas || 0) !== 0);
         return SHC.textoContestacao({ assunto: contagem ? 'Reclamação por diferenças na remessa do Full' : 'Pedido de revisão de unidades não aptas na remessa do Full', ids: [['Remessa', '#' + r.id]],
-            intro: contagem ? 'A remessa foi recebida com diferença entre as unidades que declaramos e as que o centro de distribuição processou' + quando + '.'
+            intro: contagem ? 'A remessa foi recebida com diferença entre as unidades que declaramos e as ' + (porDif ? 'que o centro de distribuição processou' : 'disponíveis para venda') + quando + '.'
                 : 'No processamento da remessa' + quando + ', ' + (naoAptas ? SHC.qtd(naoAptas, 'unidade foi considerada', 'unidades foram consideradas') : 'unidades foram consideradas') + ' não aptas para venda.',
             fatos, regras: ['full_custos'], anexos: contagem ? ['nota fiscal da remessa', 'etiquetas e romaneio das caixas', 'fotos das caixas fechadas antes da coleta'] : ['nota fiscal da remessa', 'fotos das unidades e das etiquetas antes da coleta'],
             pedido: contagem ? 'a recontagem e a conferência das unidades desta remessa, o ajuste do estoque disponível para venda e, se a diferença se confirmar, o estorno do que foi cobrado por ela.'
@@ -2947,9 +3145,10 @@
         const pv = d.posvenda || {};
         if (pv.reclamacoes > 0) add('posvenda', SHC.qtd(pv.reclamacoes, 'reclamação ou mediação em aberto', 'reclamações ou mediações em aberto') + ' no pós-venda.', { chave: 'anom|pv|reclamacoes', qtd: pv.reclamacoes, link: SHC.POSVENDA_URL, vermelho: true });
         if (pv.devolucoes > 0) add('posvenda', SHC.qtd(pv.devolucoes, 'devolução pendente', 'devoluções pendentes') + ' no pós-venda.', { chave: 'anom|pv|devolucoes', qtd: pv.devolucoes, link: SHC.POSVENDA_URL });
-        // Medidas da embalagem mudadas nos últimos 30 dias (fora as do próprio seller): 1 por anúncio.
+        // Medidas da embalagem mudadas nos últimos 30 dias (fora as do próprio seller): 1 por anúncio. Revisão 3: o Copiloto não sabe quem
+        // mudou — o sino diz o que mudou (de X para Y, quando) e o seller confere se foi ele; nunca "o Mercado Livre mudou".
         const mm = d.medidas && d.medidas.porItem && SHC.medidasMudadas ? SHC.medidasMudadas(d.medidas.porItem, agora - 30 * 864e5) : [], mIds = new Set();
-        mm.forEach(m => { if (mIds.has(m.itemId)) return; mIds.add(m.itemId); add('medidas', nome(m.itemId) + ': o Mercado Livre mudou as medidas da embalagem para ' + SHC.medidaTxt(m.depois) + '.', { chave: 'anom|medidas|' + m.itemId, itemId: m.itemId }); });
+        mm.forEach(m => { if (mIds.has(m.itemId)) return; mIds.add(m.itemId); add('medidas', nome(m.itemId) + ': a medida da embalagem mudou de ' + SHC.medidaTxt(m.antes) + ' para ' + SHC.medidaTxt(m.depois) + ' ' + SHC.medidasQuando(m) + '. Se não foi você, peça a revisão ao ML (texto pronto na aba Saúde).', { chave: 'anom|medidas|' + m.itemId, itemId: m.itemId }); });
         // v2.7: remessas do Full com inconformidade ou multa (SHC.remessasResumo): 1 por remessa.
         const rm = d.remessas || {}, porRem = {};
         (rm.comInconformidade || []).forEach(r => { porRem[r.id] = (r.textos || []).slice(); });
@@ -4197,31 +4396,33 @@
     /** Quando a medida mudou: "entre 11/09 e 18/09" (última conferência igual e a que viu a mudança) ou "em 18/09". */
     SHC.medidasQuando = mu => (mu.vistoAte && ddmm(mu.vistoAte) !== ddmm(mu.em) ? 'entre ' + ddmm(mu.vistoAte) + ' e ' + ddmm(mu.em) : 'em ' + ddmm(mu.em));
     /**
-     * Texto pronto do chamado (sem dado pessoal). A medida certa só entra quando se sabe qual é: a do ERP (corretaDe 'erp') ou a última
-     * que o seller confirmou (corretaDe 'seller'). O frete é revisto desde a última conferência igual.
+     * Texto pronto do chamado (sem dado pessoal). As medidas do cadastro só entram quando vêm do ERP (corretaDe 'erp'); a "confirmada"
+     * deduzida do histórico (corretaDe 'seller') não vira "medida correta" no texto. O custo de envio é revisto desde a última conferência igual.
      */
-    // v3.3: com a regra do ML (o frete sai do peso e das medidas da embalagem) e o pedido explícito: corrigir a medida E rever o frete cobrado.
-    // Auditoria da loja (07/10/2026): "aumenta o custo de envio" e o estorno só quando o peso CONSIDERADO (o maior entre o físico e o
-    // volumétrico) subiu; medida que diminuiu ou ficou igual pede só a correção do cadastro.
-    // 3.3.0 (junção, regras da dona): trava do frete, o chamado pede a REVISÃO do frete, nunca o estorno nem "aumenta o custo" (sem o número
-    // da diferença do frete); e contestação só com prova: sem a medida certa (ERP ou a do seller) é pedido de revisão.
+    // v3.3: com a regra do ML (o frete sai do peso e das medidas da embalagem): pedir a revisão da medida e do frete cobrado.
+    // Auditoria da loja (07/10/2026): a revisão do custo de envio só quando o peso CONSIDERADO (o maior entre o físico e o volumétrico) subiu.
+    // Revisão 3 (07/10/2026): o Copiloto não tem prova de quem alterou (não há "Não fui eu" por mudança; a igualdade com o ERP ou com o
+    // histórico diz qual medida vale, nunca quem mudou). Nenhum texto afirma que o ML mudou nem que "não foi feita por nós": diz o que mudou
+    // (de X para Y, quando), quais medidas o nosso cadastro tem e PEDE a revisão — sem estorno firme (só a revisão do custo de envio).
     SHC.medidasChamado = (mu) => {
-        const subiu = SHC.medidaConsiderada(mu.depois) > SHC.medidaConsiderada(mu.antes) + 0.001;
-        return SHC.textoContestacao({ assunto: !subiu ? 'Pedido de correção da cubagem do anúncio' : (mu.correta ? 'Contestação' : 'Pedido de revisão') + ' de cubagem alterada no anúncio', ids: [['SKU', mu.sku || ''], ['Anúncio', mu.itemId]],
-            intro: 'As medidas da embalagem deste anúncio foram alteradas sem que nós mexêssemos.',
-            fatos: ['Medidas da embalagem: de ' + SHC.medidaTxt(mu.antes) + ' para ' + SHC.medidaTxt(mu.depois) + ' ' + SHC.medidasQuando(mu) + '. A alteração não foi feita por nós.',
+        const subiu = SHC.medidaConsiderada(mu.depois) > SHC.medidaConsiderada(mu.antes) + 0.001, desde = ddmm(mu.vistoAte || mu.em);
+        const cad = mu.correta && mu.corretaDe === 'erp' ? mu.correta : null;
+        const extra = [cad ? 'a correção das medidas para ' + SHC.medidaTxt(cad) + ' nos envios futuros' : '', subiu ? 'a revisão do custo de envio cobrado desde ' + desde : ''].filter(Boolean);
+        return SHC.textoContestacao({ assunto: 'Pedido de revisão da cubagem do anúncio', ids: [['SKU', mu.sku || ''], ['Anúncio', mu.itemId]],
+            intro: 'As medidas da embalagem deste anúncio mudaram' + (subiu ? ' e o peso considerado no frete subiu' : '') + '. Pedimos a revisão da cubagem e a confirmação de qual medida está sendo usada no cálculo do frete.',
+            fatos: ['Medidas da embalagem: de ' + SHC.medidaTxt(mu.antes) + ' para ' + SHC.medidaTxt(mu.depois) + ' ' + SHC.medidasQuando(mu) + '.',
                 'Peso considerado no frete (o maior entre o físico e o volumétrico): de ' + kgTxt(SHC.medidaConsiderada(mu.antes)) + ' kg para ' + kgTxt(SHC.medidaConsiderada(mu.depois)) + ' kg.',
-                mu.correta ? 'Medidas corretas (' + (mu.corretaDe === 'erp' ? 'do nosso cadastro' : 'as que deixamos no anúncio') + '): ' + SHC.medidaTxt(mu.correta) + '.' : ''],
+                cad ? 'Medidas do nosso cadastro: ' + SHC.medidaTxt(cad) + '.' : ''],
             regras: ['frete_tabela', 'frete_calculo'], anexos: ['especificações técnicas do fabricante (medidas e peso)', 'foto da embalagem com trena e balança', 'nota fiscal do item'],
-            pedido: 'a revisão da cubagem do anúncio' + (mu.correta ? ', a correção das medidas para ' + SHC.medidaTxt(mu.correta) + ' nos envios futuros' : '')
-                + (subiu ? ' e a revisão do frete cobrado desde ' + ddmm(mu.vistoAte || mu.em) + '.' : '.') });
+            pedido: 'a revisão da cubagem do anúncio e a confirmação de qual medida está sendo usada no cálculo do frete.'
+                + (extra.length ? ' Se a medida ' + (cad ? 'do nosso cadastro' : 'anterior') + ' for a correta, pedimos também ' + extra.join(' e ') + '.' : '') });
     };
     SHC.MEDIDAS_SELLER_MS = 48 * 36e5;   // mudança vista até 48 h depois de um clique em "Alterar no ML" = provavelmente do seller
     /**
      * Mudanças de medida desde `desde` (ms), tiradas do histórico de cada anúncio → [{ itemId, sku, antes, depois, em, vistoAte, fonte,
      * quem:'ml'|'?', correta, corretaDe:'erp'|'seller'|'', chamado }], da mais nova à mais velha. Ficam de fora as que parecem do seller:
      * marcadas "Fui eu", volta a uma medida que o anúncio já teve, igual à do ERP, igual à de todos os outros anúncios do SKU, ou vista
-     * até 48 h depois de um clique em "Alterar no ML". quem 'ml' = a medida certa (a do ERP ou a última do seller) era a de antes; '?' = não dá para saber.
+     * até 48 h depois de um clique em "Alterar no ML". quem é sempre '?' (revisão 3: o Copiloto não tem prova de quem alterou; não há "Não fui eu" por mudança).
      * opc = { erpDe: (sku, itemId) → {ordenadas, pesoKg} | null (medidas do ERP), itemId: só esse anúncio }
      */
     SHC.medidasMudadas = function (porItem, desde, opc) {
@@ -4242,7 +4443,8 @@
                 if (!(em >= d0)) continue;
                 const ref = erp || confirmada;
                 const mu = { itemId: id, sku: (e && e.sku) || '', antes: soMedida(a), depois: soMedida(d), em, vistoAte, fonte: d.fonte || 'tela',
-                    quem: ref && SHC.medidasIguais(a, ref) ? 'ml' : '?', correta: ref ? soMedida(ref) : null, corretaDe: erp ? 'erp' : ref ? 'seller' : '' };
+                    quem: '?',   // revisão 3: sem prova de autoria lida, nunca 'ml' (a referência diz qual medida vale, não quem mudou)
+                     correta: ref ? soMedida(ref) : null, corretaDe: erp ? 'erp' : ref ? 'seller' : '' };
                 out.push(Object.assign(mu, { chamado: SHC.medidasChamado(mu) }));
             }
         });
@@ -5132,7 +5334,9 @@
             const naoAptas = ps.reduce((s, p) => s + (p.naoAptas || 0), 0), motivos = [];
             if (dif > 0) motivos.push('unidades diferentes das declaradas');
             if (naoAptas > 0) motivos.push('unidades não aptas para o Full');
-            if (!motivos.length && (r.status === 'closed_with_changes' || /differen/i.test(r.subStatus || '') || (declaradas !== null && aptas !== null && aptas < declaradas))) motivos.push('unidades com diferenças');
+            // Revisão 3: a comparação dos totais só com TODOS os produtos do detalhe com declaradas e aptas (a soma parcial não é número lido).
+            const completo = !ps.length || ps.every(p => p && typeof p.declaradas === 'number' && typeof p.aptas === 'number');
+            if (!motivos.length && (r.status === 'closed_with_changes' || /differen/i.test(r.subStatus || '') || (completo && declaradas !== null && aptas !== null && aptas < declaradas))) motivos.push('unidades com diferenças');
             if (!motivos.length) return null;
             return { id: String(r.id), quando: r.recebida || r.atualizada || '', statusTexto: r.statusTexto || '', declaradas, aptas, custo: r.custo > 0 ? r.custo : null, motivos,
                 produtos: ps.map(p => ({ itemId: p.itemId, sku: p.sku, declaradas: p.declaradas, processadas: p.processadas, diferencas: p.diferencas, aptas: p.aptas, naoAptas: p.naoAptas, resultado: p.resultado || '' })),
@@ -5658,9 +5862,13 @@
      * contas = [{sellerId, nome, vb (vb:<conta>), fech (fech:<conta>:<mes>), anomalias (shc:anomalias:<conta> | null)}], mes 'AAAA-MM'
      * → { mes, contas:[{sellerId, nome, vendasBrutas|null, parcial, liquido|null, alertas|null, motivo}], total:{vendasBrutas, liquido, alertas, contasComVendas, contasComLiquido}, faltando:[nome] }
      * Líquido = vendas brutas − canceladas/devolvidas − tudo o que o ML cobrou no mês (fech.total), a mesma conta do Fechamento. Sem o dado, null e o motivo (nunca 0).
+     * v3.3 multi-empresa (bloqueio 5): c.empresa = '' (as contas não separadas) ou o sellerId da conta marcada "Outra empresa" (SHC.dadosContas).
+     * Faturamento de empresas diferentes NUNCA se soma: empresas = [{ empresa, contas:[sellerId], total }] (a principal primeiro) e o total geral
+     * só existe com uma empresa só (com 2 ou mais, total = null e variasEmpresas = true).
      */
     SHC.consolidado = function (contas, mes) {
-        const out = { mes, contas: [], total: { vendasBrutas: 0, liquido: 0, alertas: 0, contasComVendas: 0, contasComLiquido: 0, contasComAlertas: 0 }, faltando: [] };
+        const zero = () => ({ vendasBrutas: 0, liquido: 0, alertas: 0, contasComVendas: 0, contasComLiquido: 0, contasComAlertas: 0 }), grupos = new Map();
+        const out = { mes, contas: [], total: null, empresas: [], variasEmpresas: false, faltando: [] };
         (contas || []).forEach(c => {
             if (!c || !c.sellerId) return;
             const nome = c.nome || SHC.nomeConta(c.sellerId), vbm = c.vb && c.vb.dias ? SHC.vendasBrutasDoMes(c.vb.dias, mes) : null, f = c.fech;
@@ -5669,15 +5877,24 @@
             const liquido = bruto !== null && custos !== null ? SHC.r2(bruto - (vbm.cancelado || 0) - (vbm.devolvido || 0) - custos) : null;
             const alertas = c.anomalias && typeof c.anomalias.total === 'number' ? c.anomalias.total : null;
             const motivo = bruto === null ? 'Ainda não li as vendas desta conta neste mês. Entre nela no Mercado Livre e sincronize.' : custos === null ? 'O Faturamento deste mês ainda não foi lido nesta conta.' : '';
-            out.contas.push({ sellerId: String(c.sellerId), nome, vendasBrutas: bruto, parcial, liquido, alertas, motivo });
-            if (bruto !== null) { out.total.vendasBrutas = SHC.r2(out.total.vendasBrutas + bruto); out.total.contasComVendas++; } else out.faltando.push(nome);
-            if (liquido !== null) { out.total.liquido = SHC.r2(out.total.liquido + liquido); out.total.contasComLiquido++; }
-            if (alertas !== null) { out.total.alertas += alertas; out.total.contasComAlertas++; }
+            const empresa = typeof c.empresa === 'string' ? c.empresa : '';
+            out.contas.push({ sellerId: String(c.sellerId), nome, vendasBrutas: bruto, parcial, liquido, alertas, motivo, empresa, outraEmpresa: !!empresa });
+            if (!grupos.has(empresa)) grupos.set(empresa, { empresa, contas: [], total: zero() });
+            const g = grupos.get(empresa), t = g.total;
+            g.contas.push(String(c.sellerId));
+            if (bruto !== null) { t.vendasBrutas = SHC.r2(t.vendasBrutas + bruto); t.contasComVendas++; } else out.faltando.push(nome);
+            if (liquido !== null) { t.liquido = SHC.r2(t.liquido + liquido); t.contasComLiquido++; }
+            if (alertas !== null) { t.alertas += alertas; t.contasComAlertas++; }
         });
-        out.contas.sort((a, b) => (b.vendasBrutas || 0) - (a.vendasBrutas || 0));
-        if (!out.total.contasComVendas) out.total.vendasBrutas = null;
-        if (!out.total.contasComLiquido) out.total.liquido = null;
-        if (!out.total.contasComAlertas) out.total.alertas = null;
+        out.contas.sort((a, b) => (a.empresa === b.empresa ? 0 : !a.empresa ? -1 : !b.empresa ? 1 : a.empresa < b.empresa ? -1 : 1) || (b.vendasBrutas || 0) - (a.vendasBrutas || 0));
+        out.empresas = [...grupos.values()].sort((a, b) => (!a.empresa ? -1 : !b.empresa ? 1 : a.empresa < b.empresa ? -1 : 1));
+        out.empresas.forEach(({ total: t }) => {
+            if (!t.contasComVendas) t.vendasBrutas = null;
+            if (!t.contasComLiquido) t.liquido = null;
+            if (!t.contasComAlertas) t.alertas = null;
+        });
+        out.variasEmpresas = out.empresas.length > 1;
+        out.total = out.empresas.length === 1 ? out.empresas[0].total : out.empresas.length ? null : (t => Object.assign(t, { vendasBrutas: null, liquido: null, alertas: null }))(zero());
         return out;
     };
 
