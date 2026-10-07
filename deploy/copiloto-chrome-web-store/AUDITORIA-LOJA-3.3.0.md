@@ -350,7 +350,4 @@ O que há de novo na 3.3.0
 
 ---
 
-Não editei nenhum arquivo do repositório. Os textos finais estão em:
-- `/tmp/claude-0/-home-user/43a760b5-aced-50c5-9f0b-163b8ff490b7/scratchpad/cws/final/descricao-3.3.0.txt`
-- `/tmp/claude-0/-home-user/43a760b5-aced-50c5-9f0b-163b8ff490b7/scratchpad/cws/final/novidades-3.3.0.txt`
-- `/tmp/claude-0/-home-user/43a760b5-aced-50c5-9f0b-163b8ff490b7/scratchpad/cws/final/form.txt`
+Os textos finais propostos estão neste relatório, nas seções 3.A a 3.D.
