@@ -9,14 +9,15 @@
 //   F. P.freteSubidaJanela (não conta 2 vezes o que já está em "Frete cobrado a mais");
 //   G. SHC.freteHistorico (Σ por anúncio = conta, formatos + aproximados = total, médio, desconto do ML);
 //   H. P.pagoAMaisPorMes / P.rankingFrete (total = Σ das partes);
-//   I. SHC.vendasPorMes e SHC.registraVendas.
+//   I. SHC.vendasPorMes e SHC.registraVendas;
+//   J. fundo/03-faturamento.js gravarFreteHist: estorno lido num mês depois da tarifa (cobrado e cheio, desconto do ML, releitura).
 // Casos gerados com semente fixa (LCG): o resultado é o mesmo em toda execução (nada de Math.random).
 // Divergências achadas nesta auditoria (fora deste teste para a suíte seguir verde; repro no relatório da tarefa):
 //   1) SHC.fech.recuperar soma o "Frete cobrado a mais (confirmado)" da lista guardada (cortada em 200), e a aba Frete soma o totalAMais
 //      (sem corte): com mais de 200 pedidos contestáveis em 30 dias as duas telas mostram valores diferentes;
 //   2) SHC.freteHistorico: "Comprador paga" com a taxa operacional não lida soma R$ 0 por pedido (custoOperacional R$ 0,00 inventado).
-//   3) fundo/03-faturamento.js gravarFreteHist: estorno parcial lido num mês depois da tarifa baixa o cobrado mas não o cheio, e a diferença
-//      aparece como "Desconto do ML no frete" (o mesmo estorno lido junto com a tarifa, em SHC.freteDasCobrancas, baixa os dois).
+//   3) (corrigida; caso J) fundo/03-faturamento.js gravarFreteHist: estorno parcial lido num mês depois da tarifa baixava o cobrado mas não o
+//      cheio, e a diferença aparecia como "Desconto do ML no frete" (o mesmo estorno lido junto com a tarifa, em SHC.freteDasCobrancas, baixa os dois).
 // Rodar: node tests/copiloto/teste_centavos_frete.js
 'use strict';
 require('./relogio').fixar();
@@ -31,7 +32,7 @@ global.chrome = { storage: { local: {
 const EXT = path.join(__dirname, '../../extension-copiloto');
 const SHC = require(path.join(EXT, 'calc.js'));
 ['store.js', 'ml-extrator.js', 'fechamento.js', 'painel-lateral.js'].forEach(a => require(path.join(EXT, a)));
-const P = SHC.pl, F = SHC.fech, r2 = SHC.r2;
+const P = SHC.pl, F = SHC.fech, r2 = SHC.r2, montaFundo = require('./fundo_falso');
 let f = 0, nChecks = 0;
 const ok = (c, m) => { nChecks++; console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) f++; };
 
@@ -570,6 +571,27 @@ console.log('H. Frete pago a mais por mês e por SKU (P.pagoAMaisPorMes, P.ranki
             'registraVendas: junta sem mexer nos centavos (45,35 e 12,34), null apaga o cancelado e o pedido de mais de 400 dias sai');
         const pf = P.pedidosFrete(lido);
         ok(pf.lista.map(p => SHC.moeda(p.f)).join(' ') === 'R$ 12,34 R$ 45,35' && pf.normal === r2((12.34 + 45.35) / 2), '"Vendas × frete cobrado": a tabela mostra os mesmos R$ guardados');
+    }
+    console.log('J. Fundo (gravarFreteHist): estorno lido num mês depois da tarifa baixa o cobrado E o cheio (não vira "Desconto do ML")');
+    {
+        // Tarifa de 31/08 guardada na sincronização de agosto; em 25/09 só setembro é relido e traz o estorno PARCIAL de R$ 10,00 do mesmo pedido.
+        const CONTA = '123456789', MLB = 'MLB9800000777', PED = '2000000777', TX = 'Tarifa do Mercado Envios (Por sua conta)';
+        const monta = cheio => montaFundo({ hoje: HOJE, dados: { 'ml:conta': CONTA, ['ml:anuncios:' + CONTA]: { itens: [{ itemId: MLB, frete: 50 }] },
+            ['ml:cobrancas:' + CONTA]: { mesesLidos: ['2026-07', '2026-08', '2026-09'] },
+            ['frete:' + CONTA + ':pedidos']: { ts: 1, pedidos: { [PED]: { itemId: MLB, data: '2026-08-31', cobrado: 50, bruto: 50, cheio, formato: 'gratis', cancelado: false,
+                linhas: [{ t: TX, v: 50, d: '2026-08-31' }] } }, vendas: { [PED]: { itemId: MLB, data: '2026-08-31', cancelada: false } } } } });
+        const est = { tipo: 'frete_estorno', estorno: true, orderId: PED, itemId: MLB, data: '2026-09-02', valor: 10, texto: 'Cancelamento da tarifa do Mercado Envios', id: 'est-1' };
+        const ped = fu => fu.dados['frete:' + CONTA + ':pedidos'].pedidos[PED];
+        const junto = cheio => SHC.freteDasCobrancas([{ tipo: 'frete', orderId: PED, itemId: MLB, data: '2026-08-31', valor: 50, cheio, texto: TX }, est])[0];   // tarifa + estorno no mesmo lote
+        // Sem desconto do ML (cheio = cobrado = 50): separado dá o mesmo que junto — cobrado 40, cheio 40, nenhum desconto; reler não muda.
+        const a = monta(50), a1 = await a.ctx.gravarFreteHist(CONTA, [est], ['2026-09']), pa = ped(a), a2 = await a.ctx.gravarFreteHist(CONTA, [est], ['2026-09']);
+        ok(pa.cobrado === 40 && pa.cheio === 40 && junto(50).cobrado === 40 && junto(50).cheio === 40 && a1.conta.ult30.total === 40 && a1.conta.ult30.descontoML === 0
+            && ped(a).cobrado === 40 && ped(a).cheio === 40 && a2.conta.ult30.total === 40 && a2.conta.ult30.descontoML === 0,
+            'tarifa R$ 50,00 + estorno de R$ 10,00 lido em setembro: cobrado 40,00 e cheio 40,00 (igual a ler os dois juntos), "Desconto do ML" R$ 0,00 (antes R$ 10,00); reler não muda');
+        // Com desconto do ML de verdade (cheio 60, cobrado 50): o desconto continua R$ 10,00, e reler o mesmo estorno não desconta o cheio de novo.
+        const b = monta(60), b1 = await b.ctx.gravarFreteHist(CONTA, [est], ['2026-09']), pb = ped(b), b2 = await b.ctx.gravarFreteHist(CONTA, [est], ['2026-09']);
+        ok(pb.cobrado === 40 && pb.cheio === 50 && junto(60).cheio === 50 && b1.conta.ult30.descontoML === 10 && ped(b).cheio === 50 && b2.conta.ult30.descontoML === 10 && b2.conta.ult30.total === 40,
+            'com desconto do ML (cheio 60, cobrado 50) e estorno de 10: cobrado 40, cheio 50, desconto R$ 10,00 (antes R$ 20,00) — também na releitura');
     }
     console.log(f ? `\n${f} FALHA(S) em ${nChecks} conferências` : `\n${nChecks} conferências de centavos.\nTUDO OK`);
     process.exit(f ? 1 : 0);
