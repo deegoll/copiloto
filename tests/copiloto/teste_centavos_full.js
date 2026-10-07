@@ -16,7 +16,8 @@
 //   M. ícone × painel (SHC.alertasDe × P.saudeFull): o mesmo produto em alerta, com a mesma previsão (também a sazonal) e os mesmos dias;
 //   N. quantidades lidas da tela do ML (SHC.mlFullDoEstado / P.un): "1.234 un." = 1234, "—" = null (nunca 0);
 //   O. linha da sincronização (resumoFull, no fundo): mês sem cobrança não vira "R$ 0,00";
-//   P. SHC.recomendaSku (Faturamento por família): cobertura = ⌊estoque × dias ÷ vendas⌋ e a ação nos limites de 15 e 60 dias.
+//   P. SHC.recomendaSku (Faturamento por família): cobertura = ⌊estoque × dias ÷ vendas⌋ (dias inteiros e com 1 casa, em décimos inteiros),
+//      venda por dia com 1 casa e a ação nos limites de 15 e 60 dias.
 // Casos gerados com semente fixa (LCG): o resultado é o mesmo em toda execução (nada de Math.random). Ids e valores inventados.
 // Divergências achadas nesta auditoria (repro em scratchpad/centavos/ e no relatório da tarefa). As corrigidas viraram asserção (#n):
 //   1) #16 CORRIGIDA: o gasto do mês é um só (SHC.remessasPorMes) no cabeçalho do cartão, nas linhas "o ML cobrou" e na sincronização, com
@@ -35,7 +36,9 @@
 //   7) #21 CORRIGIDA: P.explicaFull sazonal mostra a conta que fecha: "usei 7 × 1,33 = 9,31 → 10 (arredondado para cima)" (antes "= 10",
 //      com 7 × 1,33 = 9,31 arredondado sem dizer) — seção J;
 //   8) #20 na irmã SHC.recomendaSku CORRIGIDA: cobertura = ⌊estoque × dias ÷ vendas⌋ (antes ⌊estoque ÷ (vendas ÷ dias)⌋: 33 em estoque,
-//      44 vendas em 20 dias → "14 dias", "Repor", em vez de 15 dias e "Manter") — seção P.
+//      44 vendas em 20 dias → "14 dias", "Repor", em vez de 15 dias e "Manter") — seção P. Revisão 2: no mês atual os dias têm 1 casa
+//      (diasCobertos) e a conta passou a ser em décimos inteiros (50 em estoque, 29 vendas em 8,7 dias: 14 dias e "Repor" → 15 e "Manter";
+//      33 vendas em 8,8 dias: "vende 3,7 por dia" → "3,8").
 // Rodar: node tests/copiloto/teste_centavos_full.js
 'use strict';
 require('./relogio').fixar();
@@ -835,6 +838,37 @@ console.log('P. Recomendação por SKU (SHC.recomendaSku, Faturamento por famíl
         });
     });
     okLote(l, `#20 (recomendaSku) contas exatas nos limites (${Object.keys(lim).map(t => lim[t] + ' em ' + t + ' dias').join(', ')}): cobertura = ⌊estoque × dias ÷ vendas⌋ e a ação certa (repor < 15; baixar com queda > 60)`);
+    // #20, revisão 2: no mês atual os dias têm 1 casa (SHC.familias(...).diasCobertos = ⌊ms ÷ 864e5 × 10⌉ ÷ 10) e 8,7 não é exato no ponto
+    // flutuante. Antes: 50 em estoque, 29 vendas em 8,7 dias → 50 × 8,7 ÷ 29 = 14,999… → "dá para 14 dias", "Repor" (em décimos: 50 × 87 ÷ 290 = 15).
+    const r87 = SHC.recomendaSku({ unidades: 29, variacaoPct: 0 }, { lido: true, total: 50, proprio: 50, full: 0 }, 87 / 10);
+    ok(r87.cobertura === 15 && r87.acao === 'manter' && r87.vendaDia === 3.3 && /estoque de 50 unidades dá para 15 dias\.$/.test(r87.motivo),
+        'à mão: 50 em estoque, 29 vendas em 8,7 dias (50 × 87 ÷ 290 = 15) → 15 dias e "Manter", não 14 e "Repor" — ' + r87.motivo);
+    const r51 = SHC.recomendaSku({ unidades: 17, variacaoPct: 0 }, { lido: true, total: 50, proprio: 50, full: 0 }, 51 / 10);
+    ok(r51.cobertura === 15 && r51.acao === 'manter', 'à mão: 50 em estoque, 17 vendas em 5,1 dias (50 × 51 ÷ 170 = 15) → 15 dias e "Manter"');
+    // Venda por dia na tela, com 1 casa: 33 vendas em 8,8 dias = 3.300 ÷ 88 = 37,5 décimos → "3,8" (antes 33 ÷ 8,8 × 10 = 37,499… → "3,7").
+    const r88 = SHC.recomendaSku({ unidades: 33, variacaoPct: 0 }, { lido: true, total: 0, proprio: 0, full: 0 }, 88 / 10);
+    ok(r88.vendaDia === 3.8 && r88.motivo === 'Sem estoque e vende 3,8 por dia.', 'à mão: 33 vendas em 8,8 dias = 3,75 por dia → "vende 3,8 por dia" (meio para cima), não "3,7" — ' + r88.motivo);
+    // Lote: dias de 1,0 a 31,0 de 0,1 em 0,1 (D décimos, dias = D ÷ 10 como o diasCobertos), contra o oráculo em inteiros:
+    // cobertura = ⌊estoque × D ÷ (vendas × 10)⌋, venda por dia = vendas × 100 ÷ D décimos (meio para cima), e a ação.
+    const dTxt = q => (q % 10 ? Math.floor(q / 10) + ',' + (q % 10) : String(q / 10));
+    const confere = (l2, D, un, tot, v) => {
+        const est = { lido: true, total: tot, proprio: v === 12 ? 0 : tot, full: v === 12 ? tot : 0 }, x = SHC.recomendaSku({ unidades: un, variacaoPct: v }, est, D / 10);
+        const cob = (tot * D - (tot * D) % (un * 10)) / (un * 10), q = (un * 100 - (un * 100) % D) / D + (2 * ((un * 100) % D) >= D ? 1 : 0);
+        const acao = cob < L.coberturaBaixa ? 'repor' : v <= L.caindo && cob > L.coberturaAlta && tot > 0 ? 'baixar' : 'manter';
+        const dura = 'dá para ' + SHC.qtd(cob, 'dia', 'dias');
+        return l2.conta(x.cobertura === cob && x.acao === acao && x.vendaDia === q / 10 && (tot > 0 ? x.motivo.indexOf(dura) >= 0 : /^Sem estoque e /.test(x.motivo))
+            && (acao !== 'repor' || x.motivo.indexOf('vende ' + dTxt(q) + ' por dia') >= 0), { dias: D / 10, un, tot, v, x: { cob: x.cobertura, acao: x.acao, vendaDia: x.vendaDia, motivo: x.motivo }, cob, acao, vendaDia: q / 10 });
+    };
+    const ld = lote(), limD = {};
+    for (let D = 10; D <= 310; D++) for (let un = 1; un <= 300; un++) [L.coberturaBaixa - 1, L.coberturaBaixa, L.coberturaAlta, L.coberturaAlta + 1].forEach(T => {
+        if ((T * un * 10) % D) return;   // só as contas exatas: estoque = T × vendas × 10 ÷ D
+        limD[T] = (limD[T] || 0) + 1;
+        [0, -25, 12].forEach(v => confere(ld, D, un, T * un * 10 / D, v));
+    });
+    okLote(ld, `#20 revisão 2 (recomendaSku) dias com 1 casa, contas exatas nos limites (${Object.keys(limD).map(t => limD[t] + ' em ' + t + ' dias').join(', ')}): cobertura, venda por dia e ação = o oráculo em décimos inteiros`);
+    const rD = lcg(870029), lg = lote();
+    for (let k = 0; k < 60000; k++) confere(lg, ent(rD, 10, 310), ent(rD, 1, 300), ent(rD, 0, 400), pega(rD, [0, -25, 12]));
+    okLote(lg, '#20 revisão 2 (recomendaSku) dias com 1 casa, casos gerados (dias 1,0 a 31,0; 1 a 300 vendas; 0 a 400 em estoque): = o oráculo em décimos inteiros');
 }
 
 console.log(`\n${nChecks} verificações (${nLote} conferências em lote, casos gerados com semente fixa)`);
