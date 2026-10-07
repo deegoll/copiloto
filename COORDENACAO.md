@@ -25,7 +25,8 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 
 ### Local (precisa do Chrome logado)
 
-A rotina da noite (P1–P9) vem primeiro. Estes, quando ela estiver esperando:
+A rotina da noite (P1–P9) vem primeiro. Estes, quando ela estiver esperando.
+**Regra da dona: nada de dado de cliente no GitHub.** Os retratos sobem só com a estrutura: ids e números inventados (o mesmo `anonimo()` do `sincronizar-github.py`), nunca valor real de conta, de comprador ou do vendedor.
 
 1. **M1 · Mercado Livre, experiência de compra:** abrir um anúncio amarelo ou vermelho ("Analisar desempenho" / experiência de compra), achar no estado da página o objeto com `reputation`, `metrics_details.problems` e `status` (formato oficial que `SHC.mlExperienciasDoEstado` já lê) e salvar o retrato em `tests/copiloto/fixtures/ml_experiencia_<data>.json`, sem dado de comprador. Anotar a URL e de onde vem o dado em Recados.
 2. **M2 · Shopee Seller Center:** pedidos, renda/financeiro, produtos (preço e estoque), desempenho da loja e devoluções. Salvar as respostas JSON que as telas recebem (como a captura passiva do TikTok), sem nome, endereço, CPF ou telefone do comprador, em `tests/copiloto/fixtures/shopee_<tela>_<data>.json`, e anotar a URL de cada tela e da resposta.
