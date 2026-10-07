@@ -21,7 +21,8 @@
 //   1) #16 CORRIGIDA: o gasto do mês é um só (SHC.remessasPorMes) no cabeçalho do cartão, nas linhas "o ML cobrou" e na sincronização, com
 //      remessa vencida, cancelada ou aberta já cobrada (antes: R$ 120,50 no cartão × R$ 200,50 na sincronização) — seção O;
 //   2) #17 CORRIGIDA: SHC.simulaRemessa usa só remessas recebidas (closed_ok/closed_with_changes) no custo da coleta, o filtro do cartão
-//      (antes REM_FECHADA, com cancelada e vencida: R$ 1,60/un. na simulação × R$ 1,21/un. no cartão) — seção G;
+//      (antes REM_FECHADA, com cancelada e vencida: R$ 1,60/un. na simulação × R$ 1,21/un. no cartão), e a tela diz essa base ("a média das
+//      suas últimas 5 remessas recebidas com cobrança"; antes "fechadas", e o cartão chama de fechada também a vencida) — seção G;
 //   3) #18 CORRIGIDA: custo por unidade do mês = cobrança ÷ unidades só das remessas recebidas COM unidades (antes R$ 2,00/un. em vez de
 //      R$ 1,00: somava o custo da remessa sem units_count e não as unidades dela) — seção D;
 //   4) #19 CORRIGIDA: SHC.alertasDe (número do ícone e sino) usa a MESMA previsão do painel (SHC.previsaoFull, com o índice sazonal e o parado
@@ -392,6 +393,20 @@ console.log('G. Próxima remessa: SHC.simulaRemessa (custo estimado da coleta) e
     const sv17 = SHC.simulaRemessa({ skus: [{ sku: 'S1', qtd: 5 }], remessasAnteriores: v17.slice(1) });
     ok(sv17.custoEstimado === null && /ainda não há remessa recebida com cobrança nesta conta\.$/.test(sv17.custoMotivo),
         'só vencida e cancelada cobradas: sem custo estimado e o motivo diz "nenhuma remessa recebida" (a vencida tem "o ML cobrou" na lista: não é "fechada sem cobrança")');
+    // #17 (o rótulo): a tela diz a base que a conta usou — "remessas RECEBIDAS". O cartão "Todas as remessas" chama de "fechada" também a
+    // vencida e mostra "o ML cobrou" nela: com uma vencida cobrada mais nova, "as últimas 5 fechadas com cobrança" seriam outras (R$ 1,20/un.).
+    // Antes: "R$ 1,00 por unidade, a média das suas últimas 5 remessas fechadas com cobrança."
+    const v17r = [1, 2, 3, 4, 5].map(i => ({ id: '910000' + i, status: 'closed_ok', recebida: '2026-09-0' + i, unidades: 100, custo: 100 }))
+        .concat([{ id: '9100009', status: 'expired', agendada: '2026-09-20', unidades: 40, custo: 80, multaFlag: true, multaTipo: 'NO_SHOW' }]);
+    const s17r = { total: v17r.length, remessas: v17r, porMes: SHC.remessasPorMes(v17r) }, ce17r = SHC.simulaRemessa({ skus: [{ sku: 'S1', qtd: 100 }], remessasAnteriores: s17r }).custoEstimado;
+    const tela17 = ce17r ? `${SHC.moeda(ce17r.porUnidade)} por unidade, ${ce17r.baseTxt}.` : '', lin17 = P.linhasRemessas(s17r, null)[0];   // o texto de cardProxRemessa
+    ok(ce17r && ce17r.base === 5 && tela17 === 'R$ 1,00 por unidade, a média das suas últimas 5 remessas recebidas com cobrança.'
+        && /(^| · )6 fechadas nos últimos 30 dias · /.test(P.remessasResumoTxt(SHC.remessasResumo(s17r, null, '2026-09', HOJE))) && lin17.id === '9100009' && lin17.custo === 80
+        && SHC.simulaRemessa({ skus: [{ sku: 'S1', qtd: 100 }], remessasAnteriores: v17 }).custoEstimado.baseTxt === 'o que o ML cobrou na sua última remessa recebida',
+        '5 recebidas (R$ 1,00/un.) + vencida cobrada mais nova (o cartão: "6 fechadas", a 1ª linha "o ML cobrou R$ 80,00"): "' + tela17 + '" (base = recebidas; 1 só: "o que o ML cobrou na sua última remessa recebida")');
+    const fonte17 = require('fs').readFileSync(path.join(EXT, 'painel-lateral.js'), 'utf8');
+    ok(/por unidade, \$\{esc\(s\.custoEstimado\.baseTxt\)\}\./.test(fonte17) && !/'remessas fechadas'/.test(fonte17),
+        'cardProxRemessa (painel) monta "… por unidade, <baseTxt>." com a base do simulador (sem o "remessas fechadas" solto na tela)');
     const r17 = lcg(1717), g17 = lote();
     let comPen = 0;
     for (let k = 0; k < 400; k++) {
