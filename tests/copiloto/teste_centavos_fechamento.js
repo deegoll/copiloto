@@ -9,7 +9,7 @@
 // Divergências encontradas no produto (registradas para a equipe, com repro em scratchpad/centavos/). As marcadas "corrigida" têm caso
 // próprio que falhava antes da correção; as outras ficam FORA das asserções:
 //   1. (corrigida) F.conferir + F.recuperar somavam 2 regras sobre a MESMA cobrança (repetida + sem estorno; repetida + tarifa acima) → recuperar > cobrado;
-//   2. F.recuperar conta o custo inteiro da remessa do Full (coleta) como "dá para recuperar";
+//   2. (corrigida) F.recuperar contava o custo inteiro da remessa do Full (coleta) como "dá para recuperar";
 //   3. SHC.r2 perde 1 centavo em parte dos empates de meio centavo (ex.: imposto de 5% sobre R$ 42,70 = 2,135 → R$ 2,13);
 //   4. F.recuperar usa a lista pagoAMais cortada em 200: o frete confirmado acima disso some do total;
 //   5. (corrigida) F.conferirFatura no modo exato (pela fatura) aceitava R$ 0,01 de diferença como "✓ bate" (tela: ML R$ 100,01 · Copiloto R$ 100,00 ✓);
@@ -373,7 +373,8 @@ console.log('F.recuperar: "Quanto dá para recuperar" = Σ das parcelas = Σ dos
 function basesRecuperar(rnd) {
     let ped = 3000000000 + inteiro(rnd, 0, 1000000);
     const prox = () => String(++ped);
-    const conc = { pagoAMais: [] }, conferir = [], inconformes = [], dev = { itens: [] }, esp = { frete: 0, cobrancas: 0, estorno: 0, full: 0, devolucao: 0, amarelo: 0 }, n = { frete: 0, cobrancas: 0, estorno: 0, full: 0, devolucao: 0 };
+    const conc = { pagoAMais: [] }, conferir = [], inconformes = [], dev = { itens: [] }, esp = { frete: 0, cobrancas: 0, estorno: 0, devolucao: 0, amarelo: 0 }, n = { frete: 0, cobrancas: 0, estorno: 0, devolucao: 0 };
+    let nFull = 0;   // remessas do Full com diferença: "para conferir", fora do total e sem valor (a cobrança é coleta e/ou penalidade)
     for (let i = inteiro(rnd, 0, 30); i > 0; i--) {
         const esperado = inteiro(rnd, 500, 9000), dif = inteiro(rnd, -300, 4000), talvez = rnd() < 0.25;
         conc.pagoAMais.push({ pedido: prox(), itemId: 'MLB9' + inteiro(rnd, 1e8, 9e8), data: '2026-09-' + String(inteiro(rnd, 10, 28)), cobrado: R(esperado + dif), esperado: R(esperado), diferenca: R(dif), talvezUnidades: talvez });
@@ -390,7 +391,7 @@ function basesRecuperar(rnd) {
     for (let i = inteiro(rnd, 0, 6); i > 0; i--) {
         const custo = rnd() < 0.2 ? null : inteiro(rnd, 0, 30000), pode = rnd() < 0.8, aberta = rnd() < 0.15;
         inconformes.push({ id: '6' + inteiro(rnd, 1e7, 9e7), quando: '2026-09-20', prazo: '2026-10-20', motivos: ['unidades diferentes das declaradas'], link: 'https://www.mercadolivre.com.br/x', custo: custo === null ? null : R(custo), podeReclamar: pode, reclamacaoAberta: aberta });
-        if (custo > 0 && pode && !aberta) { esp.full += custo; n.full++; }
+        if (custo > 0 && pode && !aberta) nFull++;
     }
     for (let i = inteiro(rnd, 0, 12); i > 0; i--) {
         const cor = escolhe(rnd, ['verde', 'amarelo', 'cinza']), valor = inteiro(rnd, 500, 9000), rec = cor === 'cinza' ? 0 : inteiro(rnd, 0, valor);
@@ -398,7 +399,7 @@ function basesRecuperar(rnd) {
         if (cor === 'verde' && rec > 0) { esp.devolucao += rec; n.devolucao++; }
         if (cor === 'amarelo' && rec > 0) esp.amarelo += rec;
     }
-    return { d: { conc, conferir, inconformes, devolucoes: dev }, esp, n };
+    return { d: { conc, conferir, inconformes, devolucoes: dev }, esp, n, nFull };
 }
 {
     const rnd = lcg(1717);
@@ -413,8 +414,9 @@ function basesRecuperar(rnd) {
         const tot = soma(Object.keys(x.n).map(k => x.esp[k]));
         if (C(r.total) !== tot || soma(r.parcelas.map(p => C(p.valor))) !== C(r.total)) return 'total ' + r.total + ' × ' + R(tot);
         if (C(r.devConferir.valor) !== x.esp.amarelo) return '🟡 ' + r.devConferir.valor;
+        if (r.parcelas.some(p => p.id === 'full') || r.fullConferir.itens.length !== x.nFull || r.fullConferir.itens.some(i => 'valor' in i)) return 'remessas do Full: ' + JSON.stringify(r.fullConferir);
         return true;
-    }, 'total = Σ parcelas = Σ itens (só diferença > 0; dúvida, "para conferir", devolução no Faturamento, remessa já reclamada e 🟡/⚪ fora)');
+    }, 'total = Σ parcelas = Σ itens (só diferença > 0; dúvida, "para conferir", devolução no Faturamento, remessa do Full, já reclamada ou não, e 🟡/⚪ fora)');
     todos(300, () => basesRecuperar(rnd), x => {
         const r = F.recuperar(x.d), h = F.htmlRecuperar(r, id => 'Título ' + id, true);
         if (!semLixo(h)) return 'lixo no HTML';
@@ -422,7 +424,7 @@ function basesRecuperar(rnd) {
         const tot = /<p class="rec-tot"><b>([^<]*)<\/b> em ([\d.]+) (itens|item)<\/p>/.exec(h);
         if (!tot || lerMoeda(tot[1]) !== C(r.total) || +tot[2].replace(/\./g, '') !== soma(r.parcelas.map(p => p.itens.length))) return 'cabeçalho ' + (tot && tot[0]);
         const blocos = h.split('<div class="parc ').slice(1);
-        const daParcela = blocos.filter(b => !/^devconf/.test(b));
+        const daParcela = blocos.filter(b => !/^(devconf|fullconf)/.test(b));
         if (daParcela.length !== r.parcelas.length) return daParcela.length + ' blocos';
         let somaTela = 0;
         for (let i = 0; i < daParcela.length; i++) {
@@ -433,13 +435,15 @@ function basesRecuperar(rnd) {
         if (somaTela !== lerMoeda(tot[1])) return 'Σ parcelas na tela ≠ total na tela';
         const dc = blocos.find(b => /^devconf/.test(b));
         if (dc) { const nums = [...dc.matchAll(/<b class="num">([^<]*)<\/b>/g)].map(m => lerMoeda(m[1])); if (nums[0] !== C(r.devConferir.valor) || soma(nums.slice(1)) !== nums[0]) return '🟡 na tela'; }
+        const fl = blocos.find(b => /^fullconf/.test(b));
+        if (!!fl !== x.nFull > 0 || (fl && (/R\$/.test(tiraTags(fl)) || (fl.match(/>Reclamar no ML</g) || []).length !== x.nFull))) return 'remessas do Full na tela';
         return true;
     }, 'tela: o total do topo = Σ dos valores das parcelas = Σ de cada item (também os escondidos no "Ver mais"); o 🟡 fecha à parte, fora do total');
     // O texto do chamado de cada item pede o mesmo valor que a tela mostra (cobrado − devido = diferença = o item).
     todos(300, () => basesRecuperar(rnd), x => {
         const r = F.recuperar(x.d);
         for (const p of r.parcelas) for (const it of p.itens) {
-            if (p.id === 'full' || p.id === 'devolucao') continue;
+            if (p.id === 'devolucao') continue;
             const t = p.id === 'frete' ? F.chamadoFrete(it, 'Produto') : F.textoChamado(F.itemDoChamado(it));
             const cob = /Valor cobrado: (\S+ [\d.,]+)/.exec(t), dev = /Valor (?:devido|esperado \(estimativa nossa\)): (\S+ [\d.,]+)/.exec(t), dif = /Diferença: (\S+ [\d.,]+)/.exec(t);
             if (!cob || !dev || !dif) return p.id + ': texto sem os 3 valores';
@@ -458,6 +462,14 @@ function basesRecuperar(rnd) {
     const r = F.recuperar({ conc, conferir });
     ok(r.total === 13.4 + 10 + 5 && r.parcelas.find(p => p.id === 'cobrancas').itens.length === 1, 'o frete já na conciliação (pelo número do frete ou por anúncio + data + valor) não entra de novo no "para conferir": ' + SHC.moeda(r.total));
     ok(F.recuperar({}).total === 0 && F.recuperar({}).parcelas.length === 0 && /Aparece depois/.test(F.htmlRecuperar(F.recuperar({}), null, false)), 'nada lido: total 0 sem parcelas e a tela diz que ainda não leu (não mostra "R$ 0,00 para recuperar")');
+    // Remessa do Full: 6 unidades faltando e R$ 27,00 cobrados (coleta e/ou penalidade). O chamado só pede o estorno "se a diferença se
+    // confirmar", sem valor; a tela não pode pôr os R$ 27,00 como "dá para recuperar" (antes: total R$ 27,00).
+    const rem = { id: '61234567', quando: '2026-09-28', prazo: '2026-10-12', motivos: ['unidades diferentes das declaradas'], link: 'https://www.mercadolivre.com.br/x', custo: 27, podeReclamar: true, reclamacaoAberta: false };
+    const rf = F.recuperar({ inconformes: [rem, Object.assign({}, rem, { id: '61234568', reclamacaoAberta: true })] }), hf = F.htmlRecuperar(rf, null, true);
+    ok(rf.total === 0 && !rf.parcelas.length && rf.fullConferir.itens.length === 1 && rf.fullConferir.itens[0].id === '61234567' && hf.indexOf('27,00') < 0
+        && /Remessas do Full com diferença: para conferir/.test(hf) && /reclamar até 12\/10/.test(hf) && /coleta e\/ou penalidade/.test(hf) && !/multa/i.test(hf)
+        && !/estorno de R\$ 27,00/.test(SHC.chamadoRemessa(rem)),
+        'remessa do Full com R$ 27,00 cobrados: fora do "dá para recuperar" (total R$ 0,00), listada "para conferir" sem valor e com o prazo; a já reclamada não aparece');
     // F.conferir → F.recuperar, cada pedido com UMA regra só: o que dá para recuperar nunca passa do que foi cobrado a mais.
     const cobs = [], porId = { MLB9100000001: { tarifa: 8, preco: 60, titulo: 'Bomba' } };
     const c = (o, it, texto, v, op, extra) => cobs.push(Object.assign({ orderId: o, itemId: it, data: '2026-09-1' + (cobs.length % 9), texto, valor: v, id: o + '|' + op + '|C' }, extra || {}));

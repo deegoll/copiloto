@@ -311,11 +311,14 @@
      *  - frete: frete:<conta>:hist.conciliacao.pagoAMais (últimos 30 dias; cobrado acima do frete do anúncio; fora pedido que pode ter 2+ unidades);
      *  - cobrancas: "Cobranças para conferir" (SHC.fech.conferir: tarifa acima, cobrança repetida, frete fora da curva — sem repetir pedido do frete);
      *  - estorno: venda cancelada/devolvida com a tarifa devolvida e outra cobrança não (regra 'sem_estorno');
-     *  - full: remessas do Full com inconformidade que ainda aceitam reclamação e já têm custo cobrado (SHC.remessasInconformes).
      * Devoluções do pós-venda ficam fora: o ML não diz se o dinheiro voltou (sem base = não entra).
-     * d = { conc (hist.conciliacao), conferir (lista de itens), inconformes (lista) } → { total, parcelas:[{id, rotulo, origem, valor, itens:[…]}] }
+     * Remessas do Full com inconformidade que ainda aceitam reclamação e já têm cobrança (SHC.remessasInconformes) ficam FORA do total,
+     * em fullConferir (sem valor): r.custo é o total_charged da remessa = coleta e/ou penalidade, não o valor da diferença, que o Copiloto
+     * não sabe (o mesmo do SHC.chamadoRemessa e do resumo). Revisão 07/10/2026: antes o custo inteiro entrava como "dá para recuperar".
+     * d = { conc (hist.conciliacao), conferir (lista de itens), inconformes (lista) }
+     * → { total, parcelas:[{id, rotulo, origem, valor, itens:[…]}], devConferir:{valor, itens}, fullConferir:{itens:[{id, quando, prazo, motivos, link}]} }
      */
-    const ORIGEM_CURTA = { frete: 'Faturamento × anúncio · 30 dias', cobrancas: '',estorno: 'venda cancelada', full: 'remessa com diferença', devolucao: 'devolução × pós-venda · 30 dias' };
+    const ORIGEM_CURTA = { frete: 'Faturamento × anúncio · 30 dias', cobrancas: '',estorno: 'venda cancelada', devolucao: 'devolução × pós-venda · 30 dias' };
     F.recuperar = function (d) {
         d = d || {};
         const parcelas = [], add = (id, rotulo, origem, itens) => {
@@ -341,15 +344,14 @@
             cf.filter(x => x.regra !== 'sem_estorno' && !doFrete(x)).map(x => Object.assign({}, x, { valor: x.diferenca, cobrado: x.valor })));
         add('estorno', 'Cancelada ou devolvida sem estorno', 'Venda cancelada: a tarifa voltou, outra cobrança do pedido não',
             cf.filter(x => x.regra === 'sem_estorno').map(x => Object.assign({}, x, { valor: x.diferenca, cobrado: x.valor })));
-        add('full', 'Remessas do Full com diferença', 'Custo cobrado da remessa com inconformidade (ainda dá para reclamar)',
-            (d.inconformes || []).filter(r => r && r.custo > 0 && SHC.remessaPendente(r)).map(r => ({ id: r.id, quando: r.quando, prazo: r.prazo, motivos: r.motivos, link: r.link, valor: r.custo })));
         // v3.2 (pedido da dona: "temos como questionar essa tarifa?"): tarifa de devolução × pós-venda (SHC.devolucoesContestar).
         // 🟢 entra no total; 🟡 fica à parte (devConferir), fora do total; ⚪ não aparece aqui.
         const dv = d.devolucoes && Array.isArray(d.devolucoes.itens) ? d.devolucoes.itens : [];
         const dvIt = x => ({ pedido: x.pedido, itemId: x.itemId, data: x.data, valor: x.recuperar, cobrado: x.valor, cor: x.cor, regra: x.regra, motivo: x.motivo, texto: x.texto, cobranca: 'Tarifa de devolução' });
         add('devolucao', 'Tarifa de devolução para questionar', 'Tarifa de devolução × pós-venda · últimos 30 dias', dv.filter(x => x.cor === 'verde' && x.recuperar > 0).map(dvIt));
         const am = dv.filter(x => x.cor === 'amarelo' && x.recuperar > 0).map(dvIt);
-        return { total: r2(parcelas.reduce((s, p) => s + p.valor, 0)), parcelas, devConferir: { valor: r2(am.reduce((s, x) => s + x.valor, 0)), itens: am } };
+        const fl = (d.inconformes || []).filter(r => r && r.custo > 0 && SHC.remessaPendente(r)).map(r => ({ id: r.id, quando: r.quando, prazo: r.prazo, motivos: r.motivos || [], link: r.link }));
+        return { total: r2(parcelas.reduce((s, p) => s + p.valor, 0)), parcelas, devConferir: { valor: r2(am.reduce((s, x) => s + x.valor, 0)), itens: am }, fullConferir: { itens: fl } };
     };
     /** v3.2: frete:<conta>:hist × posvenda:<conta> → SHC.devolucoesContestar (tarifas de devolução dos últimos 30 dias) | null (frete de devoluções não lido). */
     F.devolucoesDe = (fh, pv) => (fh && fh.devolucoes && Array.isArray(fh.devolucoes.lista) && SHC.devolucoesContestar
@@ -808,9 +810,15 @@
         const blocoDc = () => (dc ? `<div class="parc devconf"><div class="pc-cab"><b><span class="pt at"></span>Tarifa de devolução: vale conferir <small>fora do total</small></b><b class="num">${esc(SHC.moeda(dc.valor))}</b></div>`
             + '<span class="mini">Sem base para dizer que volta. Confira e, se fizer sentido, peça a revisão.</span>'
             + `<div data-vm-box><ul class="rec-it">${dc.itens.slice(0, 5).map((x, i) => item({ id: 'devconf' }, x, i)).join('')}</ul>${dc.itens.length > 5 ? `<ul class="rec-it vm-x">${dc.itens.slice(5).map((x, i) => item({ id: 'devconf' }, x, i + 5)).join('')}</ul>` : ''}${F.vmBotao(dc.itens.length, 5)}</div></div>` : '');
-        if (!rec || !rec.parcelas.length) return cab + `<p class="sub">${lido ? '✓ Nada para recuperar nas cobranças, fretes e remessas lidos.' : 'Aparece depois da próxima sincronização (Faturamento, frete e Full).'}</p>` + blocoDc() + rod;
+        // Revisão 07/10/2026: remessa do Full com diferença = para conferir, fora do total e SEM valor (a cobrança é coleta e/ou penalidade).
+        const fc = rec && rec.fullConferir && rec.fullConferir.itens && rec.fullConferir.itens.length ? rec.fullConferir.itens : null;
+        const blocoFull = () => (fc ? `<div class="parc fullconf"><div class="pc-cab"><b><span class="pt at"></span>Remessas do Full com diferença: para conferir <small>fora do total</small></b></div>`
+            + '<span class="mini">Ainda dá para reclamar. O ML cobrou a remessa (coleta e/ou penalidade), mas quanto a diferença custou o Copiloto não sabe.</span>'
+            + `<div data-vm-box><ul class="rec-it">${fc.slice(0, 5).map(x => item({ id: 'full' }, x)).join('')}</ul>${fc.length > 5 ? `<ul class="rec-it vm-x">${fc.slice(5).map(x => item({ id: 'full' }, x)).join('')}</ul>` : ''}${F.vmBotao(fc.length, 5)}</div></div>` : '');
+        if (!rec || !rec.parcelas.length) return cab + `<p class="sub">${!lido ? 'Aparece depois da próxima sincronização (Faturamento, frete e Full).' : fc ? '✓ Nada para recuperar nas cobranças e fretes lidos. As remessas abaixo são para conferir.'
+            : '✓ Nada para recuperar nas cobranças, fretes e remessas lidos.'}</p>` + blocoDc() + blocoFull() + rod;
         function item(p, x, i) {
-            if (p.id === 'full') return `<li><span><b>Remessa ${esc(x.id)}</b><small>${esc(x.motivos.join(' · '))}${x.prazo ? ' · reclamar até ' + esc(dataBR(x.prazo).slice(0, 5)) : ''}</small></span><b class="num">${esc(SHC.moeda(x.valor))}</b><a class="bt pq" href="${esc(x.link)}" target="_blank" rel="noopener">Reclamar no ML</a></li>`;
+            if (p.id === 'full') return `<li><span><b>Remessa ${esc(x.id)}</b><small>${esc((x.motivos || []).join(' · '))}${x.prazo ? ' · reclamar até ' + esc(dataBR(x.prazo).slice(0, 5)) : ''}</small></span><a class="bt pq" href="${esc(x.link)}" target="_blank" rel="noopener">Reclamar no ML</a></li>`;
             const sub = p.id === 'frete' ? 'cobrado ' + SHC.moeda(x.cobrado) + ' × ' + SHC.moeda(x.esperado) + ' do anúncio' : (p.id === 'devolucao' || p.id === 'devconf') ? x.motivo || '' : curto(x.cobranca || '', 60);
             return `<li><span><b>Pedido #${esc(x.pedido)} · ${t(x.itemId)}</b><small>${esc(sub)}</small></span><b class="num">${esc(SHC.moeda(x.valor))}</b>`
                 + `<span class="acoes"><button class="bt sec pq" data-copiar-rec="${p.id}:${i}">Copiar texto do chamado</button>`
@@ -818,7 +826,7 @@
         };
         return cab + `<p class="rec-tot"><b>${esc(SHC.moeda(rec.total))}</b> em ${esc(SHC.qtd(rec.parcelas.reduce((s, p) => s + p.itens.length, 0), 'item', 'itens'))}</p>`
             + rec.parcelas.map(p => `<div class="parc ${p.id}"><div class="pc-cab"><b>${p.id === 'devolucao' ? '<span class="pt ok"></span>' : ''}${esc(p.rotulo)}</b><b class="num">${esc(SHC.moeda(p.valor))}</b></div><span class="mini">Origem: ${esc(p.origem)}</span>`
-                + `<div data-vm-box><ul class="rec-it">${p.itens.slice(0, 5).map((x, i) => item(p, x, i)).join('')}</ul>${p.itens.length > 5 ? `<ul class="rec-it vm-x">${p.itens.slice(5).map((x, i) => item(p, x, i + 5)).join('')}</ul>` : ''}${F.vmBotao(p.itens.length, 5)}</div></div>`).join('') + blocoDc() + rod;
+                + `<div data-vm-box><ul class="rec-it">${p.itens.slice(0, 5).map((x, i) => item(p, x, i)).join('')}</ul>${p.itens.length > 5 ? `<ul class="rec-it vm-x">${p.itens.slice(5).map((x, i) => item(p, x, i + 5)).join('')}</ul>` : ''}${F.vmBotao(p.itens.length, 5)}</div></div>`).join('') + blocoDc() + blocoFull() + rod;
     };
     const curto = (s, n) => (String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s));
     /** v3.1: seção "Custo novo na fatura" (SHC.custosNovos de fat:<conta>). Sem 2 faturas lidas não compara → nada; sem custo novo → 1 linha verde. */
