@@ -373,6 +373,41 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         const um = S.consolidado(dc.map(x => Object.assign({}, x, { empresa: '' })), '2026-09');
         ok(!um.variasEmpresas && um.total && um.total.vendasBrutas === 8000 && P.contasJuntasGrupos(um, 'todas').length === 1 && P.contasJuntasGrupos(um, 'todas')[0].titulo === '',
             'sem conta separada (uma empresa só): o total de todas as contas continua (8.000)');
+
+        console.log('m) bloqueio 5: painel lateral, "Tiny · Puxar custos agora" — a empresa do clique e o token dela');
+        {   // O código de verdade do painel-lateral.js (do "let tinyToken" ao listener do botão), com um DOM mínimo.
+            const fs = require('fs'), src = fs.readFileSync(path.join(EXT, 'painel-lateral.js'), 'utf8');
+            const ini = src.indexOf("    let tinyToken = ''"), fim = src.indexOf("    $('#abrirTiny').addEventListener('click', abrirTiny);");
+            const els = {}, $ = s => els[s] || (els[s] = { style: {}, hidden: true, disabled: false, textContent: '', value: '', focus() {} });
+            let liberar = null;
+            const chromeT = { permissions: { request: () => new Promise(r => { liberar = r; }) } };
+            const T = new Function('SHC', '$', 'chrome', 'fetch', src.slice(ini, fim) + '\nreturn { abrirTiny, usa: t => { tinyToken = t; } };')(S, $, chromeT, async () => ({}));
+            const lidos = [];
+            S.tinyPuxar = async tok => { lidos.push(tok); return [{ sku: 'PECA-01', custo: tok === 'TOKEN-A' ? 11 : 22 }]; };
+            const tira = () => Object.keys(mem).filter(k => /^c\|sku(@\d+)?\|PECA-01$/.test(k) || /^erp(@\d+)?:tiny$/.test(k)).forEach(k => delete mem[k]);
+            const clica = async () => { const p = T.abrirTiny(); liberar(true); await p; };
+            // (1) o painel leu o Tiny com a A aberta (TOKEN-A na memória); o ML trocou para a OUTRA (com o Tiny DELA) antes do painel recarregar.
+            tira(); mem['erp:tiny'] = { token: 'TOKEN-A' }; mem['erp@' + OUTRA + ':tiny'] = { token: 'TOKEN-B' };
+            mem['ml:conta'] = OUTRA; await espera();
+            T.usa('TOKEN-A'); await clica();
+            ok(lidos[lidos.length - 1] === 'TOKEN-B' && mem['c|sku@' + OUTRA + '|PECA-01'].custo === 22 && !mem['c|sku|PECA-01'] && mem['erp@' + OUTRA + ':tiny'].token === 'TOKEN-B' && mem['erp:tiny'].token === 'TOKEN-A',
+                'clique com a OUTRA aberta: lê o Tiny DELA (token relido da empresa), grava na OUTRA e não sobrescreve o token de ninguém');
+            // (2) o clique foi com a A aberta; o ML troca para a OUTRA enquanto o Chrome pergunta a permissão → tudo vai para a empresa do clique.
+            tira(); mem['erp:tiny'] = { token: 'TOKEN-A' }; mem['erp@' + OUTRA + ':tiny'] = { token: 'TOKEN-B' };
+            mem['ml:conta'] = A; await espera();
+            T.usa('TOKEN-A');
+            const p2 = T.abrirTiny();
+            mem['ml:conta'] = OUTRA; await espera();
+            liberar(true); await p2;
+            ok(mem['c|sku|PECA-01'] && mem['c|sku|PECA-01'].custo === 11 && !mem['c|sku@' + OUTRA + '|PECA-01'] && mem['erp@' + OUTRA + ':tiny'].token === 'TOKEN-B',
+                'a conta trocou durante o pedido de permissão: custos e token ficam na empresa do clique (a A)');
+            // (3) a empresa aberta não tem Tiny: não usa o token da outra; pede o token dela.
+            tira(); mem['erp:tiny'] = { token: 'TOKEN-A' };
+            mem['ml:conta'] = OUTRA; await espera();
+            T.usa('TOKEN-A'); const n = lidos.length; await clica();
+            ok(lidos.length === n && !mem['c|sku@' + OUTRA + '|PECA-01'] && !mem['erp@' + OUTRA + ':tiny'] && $('#tinyBox').hidden === false, 'empresa sem Tiny: nada lido com o token da outra; o campo do token dela aparece');
+            mem['ml:conta'] = A; await espera();
+        }
     }
 
     // Importação pelo fundo: o ML troca para a conta da OUTRA empresa no meio da leitura do Tiny → tudo vai para a empresa do começo.
