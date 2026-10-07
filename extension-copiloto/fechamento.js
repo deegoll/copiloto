@@ -299,7 +299,9 @@
             xs.forEach(x => { if (o ? x !== o : x.regra !== 'repetida') fora.add(x); });
             if (o) {
                 if (t !== null && o.diferenca > t + 0.005) { fora.add(o); return; }   // nunca acima do cobrado (as regras já usam o líquido)
-                if (rep.length) troca.set(o, Object.assign({}, o, { motivo: (o.motivo || '') + ' Também aparece repetida neste pedido: ' + rep.map(y => SHC.moeda(y.esperado) + ' × ' + Math.round(y.valor / y.esperado)).join(', ') + '.' }));
+                // repetida = o fato para o texto do chamado (o da estimativa não leva o motivo); repetidaMin = as cópias a mais, quando certas.
+                const r = rep.map(y => SHC.moeda(y.esperado) + ' × ' + Math.round(y.valor / y.esperado)).join(', ');
+                if (rep.length) troca.set(o, Object.assign({}, o, { motivo: (o.motivo || '') + ' Também aparece repetida neste pedido: ' + r + '.', repetida: r }, cobre ? { repetidaMin: soma(rep, 'diferenca') } : {}));
                 return;
             }
             if (cobre) return;
@@ -657,7 +659,15 @@
         const REGRA = { devolucao: ['devolucao'] }, regra = REGRA[x.regra] || (/devolu/i.test(x.cobranca || '') ? ['devolucao'] : []);
         // Esperado ESTIMADO (tarifa pelo preço de hoje, frete pela mediana dos outros pedidos) ou item guardado por versão anterior ("pode estar
         // certo"): sem chamado, fica "para conferir" (regra da dona: chamado só com prova). Sem esta linha ele cairia na contestação abaixo.
-        if (x.estimado || /pode estar certo/i.test(x.motivo || '')) return '';
+        // Revisão C1 (07/10/2026), junção na 3.3.1: se a estimativa ganhou de uma cobrança REPETIDA (umaVezPorCobranca: x.repetida/x.repetidaMin),
+        // a cobrança em dobro é fato (prova) — o texto pede só o estorno da cópia a mais, nunca a diferença estimada.
+        if (x.estimado || /pode estar certo/i.test(x.motivo || '')) {
+            if (!(x.repetidaMin > 0)) return '';
+            return SHC.textoContestacao({ assunto: 'Contestação de cobrança em duplicidade: ' + x.cobranca, ids: [['Pedido', '#' + x.pedido], ['Anúncio', x.itemId || '']],
+                intro: 'Uma cobrança do Faturamento' + (x.data ? ' de ' + dataBR(x.data) : '') + (x.titulo ? ' (anúncio “' + x.titulo + '”)' : '') + ' foi lançada mais de uma vez neste pedido.',
+                fatos: [x.repetida ? 'A mesma cobrança foi lançada mais de uma vez neste pedido: ' + x.repetida : '', 'Valor lançado em duplicidade: ' + SHC.moeda(x.repetidaMin)],
+                regras: regra, pedido: 'o estorno da cobrança lançada em duplicidade (' + SHC.moeda(x.repetidaMin) + ') na nossa conta.' });
+        }
         return SHC.textoContestacao({ assunto: 'Contestação de cobrança indevida: ' + x.cobranca, ids: [['Pedido', '#' + x.pedido]].concat(x.pedidoFrete && x.pedidoFrete !== x.pedido ? [['Frete', '#' + x.pedidoFrete]] : [], [['Anúncio', x.itemId || '']]),
             intro: 'Identificamos uma cobrança acima do valor devido no Faturamento' + (x.data ? ' em ' + dataBR(x.data) : '') + (x.titulo ? ' (anúncio “' + x.titulo + '”)' : '') + '.',
             fatos: ['Valor cobrado: ' + SHC.moeda(x.valor), 'Valor devido: ' + SHC.moeda(x.esperado), 'Diferença: ' + SHC.moeda(x.diferenca), 'Por quê: ' + x.motivo],

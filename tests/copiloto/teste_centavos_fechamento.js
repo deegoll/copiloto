@@ -583,7 +583,7 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
         }
         return { cobs, porId };
     };
-    let nDuv = 0;
+    let nDuv = 0, nAbs = 0;
     todos(400, gera2, x => {
         const cf = F.conferir(x.cobs, x.porId), r = confere(x, cf, F.recuperar({ conferir: cf }));
         if (r !== true) return r;
@@ -595,11 +595,12 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
             const dv = /- Valor devido: (R\$ [\d.]+,\d{2})\n/.exec(t);
             if (dv && !lidos[k].has(lerMoeda(dv[1]))) return k + ': "Valor devido" ' + dv[1] + ' não foi lido em nenhuma cobrança';
             if (i.regra === 'repetida') repV[k] = (repV[k] || 0) + C(i.valor);
+            if (i.repetida) { nAbs++; if (t.indexOf(i.repetida) < 0) return k + ': o texto não cita a repetição (' + i.repetida + ')'; }
         }
         for (const k of Object.keys(repV)) if (repV[k] > net[k]) return k + ': repetida pedida com ' + net[k] + ' líquidos de ' + repV[k] + ' cobrados (houve estorno)';
         return true;
-    }, 'estorno de outro valor: "Valor devido" sempre lido, repetida só com o líquido cobrindo as cópias (e o resto de cima)');
-    ok(nDuv > 20, 'os casos gerados têm repetida que vira dúvida (' + nDuv + ')');
+    }, 'estorno de outro valor: "Valor devido" sempre lido, repetida só com o líquido cobrindo as cópias, a repetição absorvida no texto (e o resto de cima)');
+    ok(nDuv > 20 && nAbs > 20, 'os casos gerados têm repetida que vira dúvida (' + nDuv + ') e repetida absorvida por outra regra (' + nAbs + ')');
     // Os 2 casos do relatório (07/10/2026): cancelada + "Custo por cobrar" 2× (R$ 10 cobrados) e tarifa 2× com R$ 6 no anúncio (R$ 20 cobrados).
     const cob = (o, texto, valor, id, extra) => Object.assign({ orderId: o, itemId: 'MLB1000000001', data: '2026-09-10', texto, valor, id }, extra || {});
     const a = F.conferir([cob('9000000001', 'Custo por vender', 10, '9000000001|P1|CVVML'), cob('9000000001', 'Cancelamento do Custo por vender', 10, '9000000001|P1|BVVML', { estorno: true }),
@@ -637,6 +638,15 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
     ok(d3.length === 1 && d3[0].regra === 'repetida' && !!d3[0].duvida && F.recuperar({ conferir: d3 }).total === 0 && /^Olá! Tenho uma dúvida/.test(t3) && /R\$ 5,00 × 3/.test(t3)
         && /estorno/.test(t3) && !/Valor devido|Diferença|Solicitamos/.test(t3) && /ficaram R\$ 12,00 cobrados/.test(d3[0].motivo),
         '"Custo por cobrar" 3× de R$ 5 e estorno de R$ 3: o que o estorno acertou não se sabe → dúvida, o texto só pergunta (antes: pedia R$ 10,00 sem citar o estorno)');
+    // A "tarifa acima" (estimativa pelo preço de hoje) ganha da repetida (fato): o texto que fica cita a cobrança em dobro e pede ao menos a cópia.
+    const e1 = F.conferir([cob('9000000008', 'Custo por vender', 7.25, 'E5|9000000008|CVVML'), cob('9000000008', 'Custo por vender', 7.25, 'E6|9000000008|CVVML')],
+        { MLB1000000001: { tarifa: 6, preco: 50, titulo: 'X' } });
+    const te = e1.length === 1 ? F.textoChamado(e1[0]) : '', re = F.recuperar({ conferir: e1 }), tre = re.parcelas.length ? F.textoChamado(F.itemDoChamado(re.parcelas[0].itens[0])) : '';
+    ok(e1.length === 1 && e1[0].regra === 'tarifa' && e1[0].diferenca === 8.5 && /^Assunto: Pedido de revisão de cobrança/.test(te) && te === tre && re.total === 8.5
+        && /- Como estimamos: [^\n]*\n- A mesma cobrança foi lançada mais de uma vez neste pedido: R\$ 7,25 × 2\n/.test(te) && pedido(te) === 850
+        && /se a diferença se confirmar, o estorno de R\$ 8,50 na nossa conta\. Se não se confirmar, pedimos ao menos o estorno da cobrança lançada em duplicidade \(R\$ 7,25\)\./.test(te),
+        'tarifa de R$ 7,25 lançada 2× e R$ 6 no anúncio: 1 item (R$ 8,50, estimativa) e o texto cita a cobrança em dobro e pede ao menos R$ 7,25 (antes: a repetição ficava fora do texto)');
+    ok(/- A mesma cobrança foi lançada mais de uma vez neste pedido: R\$ 10,00 × 2\n/.test(F.textoChamado(b[0])), 'o mesmo no caso de R$ 10 × 2 com R$ 6 no anúncio');
 }
 
 console.log('F.comparaRepasse: o que entrou no Mercado Pago × o líquido estimado');
