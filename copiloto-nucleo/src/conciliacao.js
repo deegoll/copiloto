@@ -25,7 +25,7 @@
     /**
      * o = { pedidos: Pedido[], tarifas: Tarifa[] | naoLido, repasses: Repasse[] | naoLido, devolucoes?: Devolucao[],
      *       hoje: 'AAAA-MM-DD', tolerancia: 0.05 (R$), prazo_dias: {tiktok: 7} (sobrepõe o prazo padrão do canal) }
-     * → { pedidos: [{ pedido_id, status, esperado, recebido, a_liberar, diferenca, data_prevista, repasses: [ids], motivo }],
+     * → { pedidos: [{ pedido_id, status, esperado, recebido, a_liberar, diferenca, diferenca_prevista?, data_prevista, repasses: [ids], motivo }],
      *     grupos: [{ repasse_id, pedidos, esperado, recebido, diferenca, status }], sem_pedido: Repasse[],
      *     totais: { esperado, recebido, a_liberar, diferenca, por_status: {status: n} } }   (sem nenhum pedido: esperado/recebido/a_liberar/diferenca null)
      * Repasse com vários pedidos e sem por_pedido é conciliado pelo GRUPO (os pedidos ficam 'agrupado').
@@ -63,6 +63,13 @@
             if (noGrupo.has(p.id) && !ls.length) { out.status = 'agrupado'; out.grupo = noGrupo.get(p.id); return out; }
             if (esperado === null || repNaoLido) { out.status = 'nao_lido'; out.motivo = repNaoLido ? 'repasses não lidos' : 'tarifas não lidas'; return out; }
             if (lib.length) {
+                // Parte liquidada e parte ainda "Est." (venda paga + devolução em andamento): o que falta liberar entra na conta, e a diferença é a
+                // PREVISTA (recebido + a liberar − esperado), fora do total — como a do 'a_liberar'. Nada de "a maior/a menor" falso no meio do caminho.
+                if (pend.length && aLiberar !== 0) {
+                    out.status = 'parcial'; out.diferenca = U.r2(recebido + aLiberar - esperado); out.diferenca_prevista = true;
+                    out.motivo = pend[0].r.motivo || '';
+                    return out;
+                }
                 out.diferenca = U.r2(recebido - esperado);
                 if (Math.abs(out.diferenca) <= tol) out.status = 'ok';
                 else if (out.diferenca < 0 && pend.length) out.status = 'parcial';
@@ -73,7 +80,7 @@
                 const retido = pend.find(x => x.r.status === 'retido');
                 out.status = retido ? 'retido' : 'a_liberar';
                 out.motivo = (retido || pend[0]).r.motivo || '';
-                out.diferenca = U.r2(aLiberar - esperado);   // diferença PREVISTA (valores "Est." podem mudar até liquidar)
+                out.diferenca = U.r2(aLiberar - esperado); out.diferenca_prevista = true;   // diferença PREVISTA (valores "Est." podem mudar até liquidar)
                 return out;
             }
             if (p.status === 'cancelado' && Math.abs(esperado) <= tol) { out.status = 'cancelado'; return out; }
@@ -101,7 +108,7 @@
                 esperado: tot(U.soma(soLidos, l => l.esperado) + U.soma(gruposOut, g => g.esperado)),
                 recebido: tot(U.soma(linhas, l => l.recebido) + U.soma(gruposOut, g => g.recebido)),
                 a_liberar: tot(U.soma(linhas, l => l.a_liberar) + U.soma(gruposOut, g => g.a_liberar)),
-                diferenca: tot(U.soma(linhas, l => (l.status === 'ok' || l.status === 'a_menor' || l.status === 'a_maior' || l.status === 'parcial') ? l.diferenca : 0)
+                diferenca: tot(U.soma(linhas, l => (!l.diferenca_prevista && (l.status === 'ok' || l.status === 'a_menor' || l.status === 'a_maior' || l.status === 'parcial')) ? l.diferenca : 0)
                     + U.soma(gruposOut, g => (g.recebido !== null ? g.diferenca : 0))),
                 por_status: porStatus,
                 repasses_nao_lidos: repNaoLido,
