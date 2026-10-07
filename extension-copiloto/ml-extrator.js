@@ -1405,11 +1405,11 @@
             const k = String((c && c.pedido) || '').replace(/\D/g, '');
             // Revisão do grupo g: + o título do produto (o pedido de exclusão diz o produto/SKU de cada pedido, e não o de outro).
             if (k.length >= 6 && !novo[k]) novo[k] = { motivo: c.motivo || '', afetouReputacao: c.afetouReputacao === true ? true : c.afetouReputacao === false ? false : null, situacao: c.situacao || '', descricao: c.descricao || '',
-                titulo: String(c.titulo || '').slice(0, 120) };
+                titulo: String(c.titulo || '').slice(0, 120), atual: true };   // atual: visto nesta leitura (o pedido de exclusão só usa estes)
         });
         const velhos = ant && typeof ant === 'object' ? Object.keys(ant).filter(k => !novo[k]) : [];
         const out = {};
-        Object.keys(novo).concat(velhos).slice(0, 300).forEach(k => { out[k] = novo[k] || ant[k]; });
+        Object.keys(novo).concat(velhos).slice(0, 300).forEach(k => { out[k] = novo[k] || Object.assign({}, ant[k], { atual: false }); });
         return Object.keys(out).length ? out : null;
     };
     // ── v3.3 Textos de contestação (pedido da dona 07/10/2026: "usar os termos técnicos para brigar com a IA do Mercado Livre e ser mais
@@ -1481,7 +1481,7 @@
     // Revisão 3 (07/10/2026): o erro do PRÓPRIO comprador ("comprei o tamanho errado", "pedi 2 por engano") — entre o verbo e "errado/por
     // engano" só uma LISTA FECHADA de palavras: artigo, número, tamanho/cor/modelo/número/voltagem/peça/produto/item/quantidade, "duas vezes",
     // "duplicado". Qualquer outra ("o vendedor separou", "pela tabela", "com a descrição", "certo, separaram") deixa o motivo sem regra.
-    const ERRO_ENTRE = '(?:(?:duas|\\d+) vezes|em dobro|duplicad[oa]s?|o|a|os|as|um|uma|isso|isto|este|esse|esta|essa|\\d+|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|tamanho|cor|modelo|n[uú]mero|voltagem|pe[cç]as?|produtos?|itens|item|quantidade)';
+    const ERRO_ENTRE = '(?:(?:duas|\\d+) vezes|em dobro|duplicad[oa]s?|o|a|os|as|um|uma|isso|isto|este|esse|essa|\\d+|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|tamanho|cor|modelo|n[uú]mero|voltagem|pe[cç]as?|produtos?|itens|item|quantidade)';
     const ERRO_VERBO = '(?:compr(?:ei|ou|a|amos)|escolh(?:i|eu)|selecion(?:ei|ou)|pedi(?:u)?)';
     const EXCLUIVEL = [
         [qualquer(['arrepend\\w*', 'desist\\w*', NAO + ' (?:quero|quer|queria|desejo|vou querer) mais', 'mud(?:ou|ei|amos)(?: de)? ideia', 'engano (?:na|da) compra',
@@ -1525,7 +1525,7 @@
             '(?:atras|demor)\\w*(?: ' + LIG + '){0,3} (?:entreg\\w*|cheg\\w*|correios?|transportador\\w*|transporte|mercado envios|frete)',
             '(?:entreg\\w*|chegada|correios?|transportador\\w*|transporte|mercado envios)(?: ' + LIG + '){0,2} (?:atras\\w*|demor\\w*)', 'passou (?:d[oa] )?(?:prazo|data) (?:de|da) entrega',
             '(?:chegou|chegaram|entregue|entregaram|entregou|entregas?|chegada)(?: ' + LIG + '){0,2} com (?:mais de |quase )?' + QTD + ' (?:dias?|semanas?) de atraso']),
-            'a reclamação foi aberta pela demora do transporte, com o envio dentro do prazo estabelecido', 'você despachou dentro do prazo',
+            'a reclamação foi aberta pela demora do transporte, com o envio dentro do prazo estabelecido', 'você despachou dentro do prazo e a entrega não foi feita por você (Flex)',
             // "postado no prazo" só sem negação antes ("não foi postado no prazo" é do vendedor)
             ['(?<!(?:nao|naum|num|\\bn|nem) (?:foi |ja foi )?)(?:o produto |o pedido |a encomenda |o pacote )?(?:foi |ja foi )?(?:enviad|postad|despachad|coletad)[oa]s? (?:no prazo|dentro do prazo|a tempo|em dia|no dia certo)',
                 '(?:(?:ficou|esta|ta|estava|ficando) )?parad[oa] (?:n[oa]s? |em )?(?:correios?|agencia(?: dos correios)?|transportadora|centro de distribuicao|centro de tratamento|cd)',
@@ -1550,7 +1550,7 @@
     // Palavras de ligação que podem sobrar depois do núcleo e dos complementos (nenhuma nega nem diz o que aconteceu: "não" nunca sobra).
     const LIGACAO = new Set(('e mas porem entao pois que o a os as um uma uns umas de da do das dos em no na nos nas por pra pro pras pros para com eu me meu minha meus minhas mim '
         + 'ja so ok ai isso isto pq porque q tb tambem agora ele ela se muito bem demais bastante mesmo realmente infelizmente sinceramente comprador compradora cliente '
-        + 'quero queria gostaria preciso desejo poderia posso favor ola oi obrigado obrigada voce vc').split(' '));
+        + 'quero queria gostaria preciso desejo poderia posso favor ola oi obrigado obrigada pontuacaox').split(' '));   // revisão final: "você/vc" não é ligação (é o vendedor)
     // Revisão 07/10/2026: "Me arrependi porque veio com defeito" ou "o vendedor não postou nos Correios" casavam com a 1ª regra parecida.
     // Culpa do vendedor no motivo (a mesma DEV_CULPA das devoluções, fora o erro do próprio comprador; despacho; envio errado; dano no
     // transporte; estoque) VETA antes de qualquer regra. "Não chegou" só entra quando o rastreio diz entregue.
@@ -1603,7 +1603,7 @@
     // Revisão 3: agente (vendedor, loja, "vcs"), preparo/envio/cobrança e anúncio (tabela, descrição, foto, título) vetam ANTES de tirar o
     // trecho do comprador ("Comprei, o vendedor separou errado" não é arrependimento). Roda no texto sem os complementos neutros da regra
     // ("outra loja", "loja física", "outro anúncio" não vetam).
-    const EXCL_AGENTE = /vendedor|lojista|\bloja\b|\bvcs\b|\bvoces\b|\bsepar|despach|fatur|embal|\bcobr|tabela|descri|\bfotos?\b|titulo|anunci/i;
+    const EXCL_AGENTE = /vendedor|lojista|\bloja\b|\bvcs?\b|\bvoces?\b|\bsepar|despach|fatur|embal|\bcobr|tabela|descri|\bfotos?\b|titulo|anunci/i;
     // Ambíguo (na dúvida, sem regra): "foi engano no/do pedido" costuma ser o pedido que veio errado; o engano no produto, item, envio também.
     const EXCL_DUVIDA = /\bengano (?:n[oa]s?|d[oa]s?|de) (?:pedidos?|produtos?|itens|item|pe[cç]as?|mercadorias?|encomendas?|pacotes?|envio|entrega)\b/i;
     // Decisão da local (07/10, zero risco): demora ou atraso sem dizer quem atrasou (Correios, transportadora, Mercado Envios) pode ser o
@@ -1619,8 +1619,11 @@
     const semComprador = t => String(t || '').replace(BOM_ESTADO, ' ').replace(TRECHO_COMPRADOR, ' ');
     // Sem acento, sem pontuação e minúsculo: "Não", "nao" e "ñ" caem nas mesmas regras.
     const semAcento = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    // Revisão final (07/10): a vírgula e o ponto separam orações; sem eles, "Comprei o produto, está errado" virava "comprei o produto esta
+    // errado" e casava com o erro do comprador. O marcador fica fora das regras e conta como palavra de ligação na sobra.
+    const semAcentoOracoes = t => semAcento(String(t || '').replace(/[,.;:!?]+/g, ' pontuacaox '));
     const excluivel = t => {
-        const s = semAcento(t);
+        const s = semAcentoOracoes(t);
         if (!s || new RegExp(NAO + ' (chegou|recebi|recebeu|foi entregue)', 'i').test(s) && !EXCLUIVEL[3][0].test(s) || EXCL_DUVIDA.test(s)) return null;
         if (DEMORA_VAGA.test(s) && !QUEM_TRANSPORTA.test(s)) return null;
         for (const x of EXCLUIVEL) {
@@ -1702,25 +1705,31 @@
         // (every, não some: "declaradas 15; disponíveis 10" com as aptas de um produto não lidas seria número que o Copiloto não leu).
         // Detalhe incompleto: só pede a conferência, com os produtos completos e sem total, sem reclamação firme nem estorno.
         const completo = p => p && typeof p.declaradas === 'number' && typeof p.aptas === 'number';
-        if (!r.produtos.every(completo)) {
+        // Sem prova de diferença: só pede a conferência (produtos completos, sem total, sem reclamação firme nem estorno).
+        const conferencia = aviso => {
             const fc = ps.filter(completo).slice(0, 15).map(p => (p.sku ? 'SKU ' + p.sku : p.itemId || 'produto') + (p.itemId && p.sku ? ' (' + p.itemId + ')' : '') + ': declaradas ' + n(p.declaradas)
-                + ', processadas ' + n(p.processadas) + (p.naoAptas ? ', não aptas ' + p.naoAptas : '') + (p.resultado ? ' — ' + p.resultado : '') + '.');
-            fc.push('O detalhe desta remessa não traz as unidades declaradas e as disponíveis para venda de todos os produtos.');
+                + ', processadas ' + n(p.processadas) + ', disponíveis para venda ' + n(p.aptas) + (p.naoAptas ? ', não aptas ' + p.naoAptas : '') + (p.resultado ? ' — ' + p.resultado : '') + '.');
+            fc.push(aviso);
             if (r.custo) fc.push('Total cobrado pelo Mercado Livre nesta remessa (coleta e/ou penalidade): ' + SHC.moeda(r.custo) + '.');
             if (r.prazo) fc.push('Prazo para reclamar informado pelo ML: ' + dt(r.prazo) + '.');
             return SHC.textoContestacao({ assunto: 'Pedido de conferência da remessa do Full', ids: [['Remessa', '#' + r.id]],
                 intro: 'Gostaríamos de conferir as unidades desta remessa' + (r.quando ? ' (' + dt(r.quando) + ')' : '') + ', produto a produto.',
                 fatos: fc, regras: ['full_custos'], anexos: ['nota fiscal da remessa'],
                 pedido: 'a informação de quantas unidades de cada produto desta remessa foram declaradas, processadas e estão disponíveis para venda e, se houver diferença ou unidade não apta, o motivo.' });
-        }
+        };
+        if (!r.produtos.every(completo)) return conferencia('O detalhe desta remessa não traz as unidades declaradas e as disponíveis para venda de todos os produtos.');
+        const contagem = ps.some(p => (p.diferencas || 0) !== 0) || (!ps.length && r.declaradas !== null && r.aptas !== null && r.aptas < r.declaradas && !(r.motivos || []).every(m => /não aptas/.test(m)));
+        const naoAptas = ps.reduce((s, p) => s + (p.naoAptas || 0), 0), quando = r.quando ? ' (' + dt(r.quando) + ')' : '';
+        // Revisão final (07/10): "unidades não aptas" só com não aptas LIDAS (> 0); status de diferença sem número por produto = conferência.
+        if (!contagem && !(naoAptas > 0)) return conferencia('O ML marcou diferença nesta remessa, mas o detalhe não traz diferença de contagem nem unidade não apta por produto.');
+        if (!ps.length) fatos.push('Unidades declaradas: ' + n(r.declaradas) + '; disponíveis para venda: ' + n(r.aptas) + '.');
         // Auditoria da loja (07/10/2026) e regra da dona: r.custo é o total_charged da remessa = coleta e/ou penalidade — nunca "multa" nem
         // "cobrado pela inconformidade". Só unidade não apta (sem diferença de contagem) não é erro de contagem: pode ter vindo do nosso preparo.
         if (r.custo) fatos.push('Total cobrado pelo Mercado Livre nesta remessa (coleta e/ou penalidade): ' + SHC.moeda(r.custo) + '.');
         if (r.prazo) fatos.push('Prazo para reclamar informado pelo ML: ' + dt(r.prazo) + '.');
-        const contagem = ps.some(p => (p.diferencas || 0) !== 0);   // só com o detalhe por produto (sem ele já saiu acima)
-        const naoAptas = ps.reduce((s, p) => s + (p.naoAptas || 0), 0), quando = r.quando ? ' (' + dt(r.quando) + ')' : '';
+        const porDif = ps.some(p => (p.diferencas || 0) !== 0);
         return SHC.textoContestacao({ assunto: contagem ? 'Reclamação por diferenças na remessa do Full' : 'Pedido de revisão de unidades não aptas na remessa do Full', ids: [['Remessa', '#' + r.id]],
-            intro: contagem ? 'A remessa foi recebida com diferença entre as unidades que declaramos e as que o centro de distribuição processou' + quando + '.'
+            intro: contagem ? 'A remessa foi recebida com diferença entre as unidades que declaramos e as ' + (porDif ? 'que o centro de distribuição processou' : 'disponíveis para venda') + quando + '.'
                 : 'No processamento da remessa' + quando + ', ' + (naoAptas ? SHC.qtd(naoAptas, 'unidade foi considerada', 'unidades foram consideradas') : 'unidades foram consideradas') + ' não aptas para venda.',
             fatos, regras: ['full_custos'], anexos: contagem ? ['nota fiscal da remessa', 'etiquetas e romaneio das caixas', 'fotos das caixas fechadas antes da coleta'] : ['nota fiscal da remessa', 'fotos das unidades e das etiquetas antes da coleta'],
             pedido: contagem ? 'a recontagem e a conferência das unidades desta remessa, o ajuste do estoque disponível para venda e, se a diferença se confirmar, o estorno do que foi cobrado por ela.'
