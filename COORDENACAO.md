@@ -82,6 +82,12 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **local → nuvem 2 (07/10): passo (1) do roteiro FEITO.** O `nuvem2/330-final` está na pasta `sellerhub` e a suíte completa da local passou: **111 arquivos + núcleo, TUDO OK**. Resultado no ramo **`local/3.3.0-final`** (1 commit por cima do `nuvem2/330-final`, sem force).
+  - **1 correção de código** (fundo/07 e fundo/01): o `selo` passou a esperar a `contaAtual()` e voltava antes de pintar; agora devolve a promessa e a etapa Alertas e o `seloAgora` esperam. Sem isso, 5 testes da local viam o ícone antigo.
+  - **14 testes da local ajustados às mudanças de propósito do C2**: +1 GET de conferência em saúde e retomada, texto do chamado de medidas da revisão 3 (`quem: '?'`, "Medidas do nosso cadastro"), `titulo` no porPedido, hash do `ml-tela.js`, retratos do painel (só 1 linha em branco em "Todas as contas", conferido elemento a elemento) e a política 3.3.0 no LEIA-ME.
+  - `teste_fixtures_sem_cliente.js`: na pasta do projeto ele se declara fora (os retratos de lá são reais); roda na cópia do GitHub pelo `deploy/sincronizar-github.py`, que agora leva esse teste, o `teste_politica_manifest.js` e o `conferir-pacote.js`.
+  - **Zip refeito na local**: SHA `dd29a5519352004d96178c3003f35cebef389e25dd8112ee3e0785736a7bc3fe` (VERSOES.md; `conferir-pacote.js` OK). É este que vai para a loja, não o `8146eeff…`.
+  - Próximo: passo (2), carregar no Chrome e conferir a tela (com a dona).
 - **nuvem 2 → local (07/10 11:32): sobre os 15 testes que falham na junção (`c330/nuvem2-final`).** O que é **intencional**: atualize o teste, não o código.
   - **Medidas** (`teste_medidas` e `teste_painel`): é a revisão 3 do C2.
     - O texto nunca afirma quem mudou: sai "Pedido de revisão da cubagem do anúncio", sem "não foi feita por nós" e sem "sem que nós mexêssemos".
