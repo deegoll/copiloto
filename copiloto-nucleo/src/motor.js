@@ -18,6 +18,23 @@
     const valorItem = it => (it.total !== null && it.total !== undefined ? it.total : (it.preco_unit === null || it.preco_unit === undefined ? null : U.r2(it.preco_unit * it.qtd)));
 
     /**
+     * Divide um valor (R$) pelos pesos, pelo MAIOR RESTO: a soma das partes = o valor, no centavo; cada parte a menos de 1 centavo da
+     * exata (valor × peso ÷ Σ pesos) e nenhuma com o sinal trocado (R$ 0,05 em 10 partes iguais = 5 × 0,01 + 5 × 0,00, nunca −0,04 no último).
+     * Peso ≤ 0 ou inválido vale 0; todos 0 → partes iguais. Empate de resto: a ordem da lista. valor null → partes null (não lido).
+     */
+    function reparte(valor, pesos) {
+        const n = (pesos || []).length, v = U.r2(valor);
+        if (v === null) return Array.from({ length: n }, () => null);
+        let ws = (pesos || []).map(p => (typeof p === 'number' && isFinite(p) && p > 0 ? p : 0)), W = ws.reduce((a, b) => a + b, 0);
+        if (!(W > 0)) { ws = ws.map(() => 1); W = n; }
+        const C = Math.round(Math.abs(v) * 100), sinal = v < 0 ? -1 : 1;   // centavos inteiros
+        const exatas = ws.map(w => C * w / W), cs = exatas.map(e => Math.floor(e + 1e-9));
+        let falta = C - cs.reduce((a, b) => a + b, 0);
+        exatas.map((e, i) => ({ i, resto: e - cs[i] })).sort((a, b) => b.resto - a.resto || a.i - b.i).forEach(x => { if (falta > 0) { cs[x.i]++; falta--; } });
+        return cs.map(c => (c === 0 ? 0 : sinal * c / 100));
+    }
+
+    /**
      * Custo unitário de um SKU num dia, com vigência e kit (componentes somados, até 5 níveis).
      * custos = CustoSKU[] (chave = sku; para anúncio sem SKU o Copiloto guarda pelo id do anúncio).
      * → { custo, outros, fonte, kit } | null (sem custo informado).
@@ -201,10 +218,9 @@
             if (a.anuncio_id) validos.forEach(p => { if (!noDia(p)) return; const peso = U.soma(p.itens.filter(it => it.anuncio_id === a.anuncio_id), it => (valorItem(it) || 0)); if (peso > 0) alvo.push({ p, peso }); });
             const somaPeso = U.soma(alvo, x => x.peso);
             if (!alvo.length || !(somaPeso > 0)) { naoRateado.push(a); totN += a.custo; return; }
-            let resto = U.r2(a.custo);
+            const partes = reparte(a.custo, alvo.map(x => x.peso));   // maior resto: nenhuma parte negativa e a soma = o custo
             alvo.forEach((x, i) => {
-                const v = i === alvo.length - 1 ? resto : U.r2(a.custo * x.peso / somaPeso);   // o último leva o centavo que sobra
-                resto = U.r2(resto - v);
+                const v = partes[i];
                 const e = porPedido[x.p.id] || (porPedido[x.p.id] = { total: 0, porAnuncio: {} });
                 e.total = U.r2(e.total + v);
                 e.porAnuncio[a.anuncio_id] = U.r2((e.porAnuncio[a.anuncio_id] || 0) + v);
@@ -313,5 +329,5 @@
         return { total, aprox: motivos.length > 0, motivos, canais };
     }
 
-    return { custoUnitario, aliquota, lucroPedido, rateioAds, lucroPorProduto, fechamentoMes, somaCanais };
+    return { custoUnitario, aliquota, lucroPedido, rateioAds, lucroPorProduto, fechamentoMes, somaCanais, reparte };
 });

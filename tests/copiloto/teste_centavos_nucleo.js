@@ -22,8 +22,8 @@
 // Divergências achadas nesta auditoria (fora deste teste para a suíte seguir verde; repro mínimo de cada uma: scratchpad/centavos/nucleo_repro_NN_*.js):
 //   1) tiktok.pedidoDoDetalhe: vários SKUs → cada linha = r2(origem × total_sku / Σ) sem o resto no último: Σ itens ≠ preço de origem
 //      (R$ 100,00 em 3 × R$ 33,33 → 99,99). O bruto e o reembolso "total" do pedido saem 1 centavo (ou mais) errados.
-//   2) motor.rateioAds: o último pedido leva todo o arredondamento dos outros: a parte dele pode ficar NEGATIVA (Ads de R$ 0,05 em 10 pedidos
-//      iguais → 9 × 0,01 e o último −0,04) e, com dados normais, ≈1,7% das partes ficam mais de 1 centavo longe da parte exata.
+//   2) CORRIGIDA (#29/#31): motor.rateioAds dava ao último pedido todo o arredondamento dos outros (Ads de R$ 0,05 em 10 pedidos iguais →
+//      9 × 0,01 e o último −0,04). Agora reparte pelo maior resto: cada parte a < 1 centavo da exata, nenhuma negativa (seção D).
 //   3) motor.lucroPedido.por_item: receita, tarifas, imposto, outros e Ads do item = r2(total × participação) sem o resto no último: Σ itens ≠
 //      total do pedido em ≈40% dos pedidos com 2+ itens → lucroPorProduto (aba Produtos) não soma o lucro dos pedidos (KPI) por centavos.
 //   4) Extrato do TikTok com uma tarifa 'ads' (GMV Pay, mapeado por suposição): o TikTok desconta do repasse, o motor tira 'ads' do repasse →
@@ -408,27 +408,45 @@ console.log('D. Rateio do Ads por anúncio e dia: Σ partes + não rateado = Σ 
         L.pedido.conta(Object.keys(rat.porPedido).every(k => somaC(Object.keys(rat.porPedido[k].porAnuncio), an => cent(rat.porPedido[k].porAnuncio[an])) === cent(rat.porPedido[k].total)
             && pedidos.find(p => p.id === k).status !== 'cancelado'), { t });
         L.formato.conta(Object.keys(rat.porPedido).every(k => emCentavos(rat.porPedido[k].total)) && emCentavos(rat.total_rateado) && emCentavos(rat.total_nao_rateado), { t });
-        // Cada entrada sozinha: a parte de cada pedido perto da exata (custo × peso ÷ Σ pesos) — ½ centavo; o último leva o resto, a no máximo
-        // ½ centavo × (pedidos − 1) da exata (divergência 2: pode ficar negativa com Ads de centavos).
+        // Cada entrada sozinha (maior resto): a parte de CADA pedido a menos de 1 centavo da exata (custo × peso ÷ Σ pesos), nunca negativa,
+        // e Σ partes = custo. (Antes o último levava todo o arredondamento: −R$ 0,04 com Ads de centavos — divergência 2, corrigida.)
         rateados.forEach(a => {
             const alvo = pedidos.filter(p => p.status !== 'cancelado' && (a.dia ? p.data_venda === a.dia : p.data_venda >= a.periodo_de && p.data_venda <= a.periodo_ate))
                 .map(p => ({ p, peso: somaC(p.itens.filter(it => it.anuncio_id === a.anuncio_id), it => cent(it.preco_unit) * it.qtd) })).filter(x => x.peso > 0);
             const W = somaC(alvo, x => x.peso), so = MO.rateioAds([a], pedidos);
-            alvo.forEach((x, i) => {
-                const exato = cent(a.custo) * x.peso / W, v = cent(so.porPedido[x.p.id].porAnuncio[a.anuncio_id]), ultimo = i === alvo.length - 1;
-                L.perto.conta(Math.abs(v - exato) <= (ultimo ? 0.5 * (alvo.length - 1) : 0.5) + 1e-6 && emCentavos(so.porPedido[x.p.id].total), { a, exato, v, ultimo, n: alvo.length });
+            alvo.forEach(x => {
+                const exato = cent(a.custo) * x.peso / W, v = cent(so.porPedido[x.p.id].porAnuncio[a.anuncio_id]);
+                L.perto.conta(Math.abs(v - exato) < 1 - 1e-9 && v >= 0 && emCentavos(so.porPedido[x.p.id].total), { a, exato, v, n: alvo.length });
                 partes++; if (v < 0) negativas++;
             });
+            L.perto.conta(somaC(alvo, x => cent(so.porPedido[x.p.id].porAnuncio[a.anuncio_id])) === cent(a.custo), { a, n: alvo.length });
         });
     }
     okLote(L.total, 'total rateado + não rateado = Σ custo do Ads (custo 0 fica fora); Σ dos pedidos = total rateado; não rateado = Σ das entradas que sobraram');
     okLote(L.anuncio, 'por anúncio: Σ das partes nos pedidos = Σ custo das entradas rateadas daquele anúncio');
     okLote(L.pedido, 'por pedido: total = Σ por anúncio; pedido cancelado nunca recebe Ads');
     okLote(L.formato, 'partes e totais do rateio em centavos exatos');
-    okLote(L.perto, 'cada entrada sozinha: parte de cada pedido a ≤ ½ centavo da exata; a última (leva o resto) a ≤ ½ centavo × (pedidos − 1)');
+    okLote(L.perto, 'cada entrada sozinha (maior resto): parte de cada pedido a < 1 centavo da exata, nunca negativa, Σ partes = custo');
+    ok(partes > 0 && negativas === 0, `cobertura: ${partes} partes geradas, nenhuma negativa`);
     const pequenos = Array.from({ length: 10 }, (_, i) => M.garantir('pedido', Object.assign({}, O, { id: 'Z' + i, data_venda: '2026-09-10', status: 'entregue', itens: [{ sku: 'MEIA-01', anuncio_id: 'AN9', qtd: 1, preco_unit: 10 }] })));
     const rz = MO.rateioAds([M.garantir('ads', Object.assign({}, O, { anuncio_id: 'AN9', dia: '2026-09-10', custo: 0.05 }))], pequenos);
-    ok(cent(rz.total_rateado) === 5 && somaC(Object.keys(rz.porPedido), k => cent(rz.porPedido[k].total)) === 5, 'Ads de R$ 0,05 em 10 pedidos: a soma fecha (a parte negativa do último é a divergência 2) · ' + partes + ' partes, ' + negativas + ' negativas nos gerados');
+    const pz = pequenos.map(p => cent(rz.porPedido[p.id].total));
+    ok(cent(rz.total_rateado) === 5 && somaC(pz) === 5 && pz.join() === '1,1,1,1,1,0,0,0,0,0',
+        'Ads de R$ 0,05 em 10 pedidos iguais: 5 × R$ 0,01 + 5 × R$ 0,00 (nunca −R$ 0,04 no último) — #31');
+    const trinta = Array.from({ length: 30 }, (_, i) => ({ id: 'T' + i, status: 'pago', data_venda: '2026-09-10', itens: [{ anuncio_id: 'MLB9000000001', qtd: 1, preco_unit: 50, total: null }] }));
+    const r30 = MO.rateioAds([{ custo: 3.15, anuncio_id: 'MLB9000000001', periodo_de: '2026-09-01', periodo_ate: '2026-09-30' }], trinta), p30 = trinta.map(p => cent(r30.porPedido[p.id].total));
+    ok(somaC(p30) === 315 && p30.filter(c => c === 11).length === 15 && p30.filter(c => c === 10).length === 15 && p30.every(c => c >= 0),
+        'Ads de R$ 3,15 em 30 pedidos iguais: 15 × R$ 0,11 + 15 × R$ 0,10, todos ≥ 0 (antes: 29 × R$ 0,11 e o último −R$ 0,04) — #29');
+    // reparte (o maior resto do motor): soma = valor; cada parte a < 1 centavo da exata; sinal do valor; pesos 0 → partes iguais; null → null.
+    const rp = lote(), rr = lcg(2931);
+    for (let i = 0; i < 4000; i++) {
+        const C = ent(rr, -200000, 200000), pesos = Array.from({ length: ent(rr, 1, 12) }, () => (rr() < 0.15 ? 0 : din(rr, 0.01, 900))), W = pesos.reduce((a, b) => a + b, 0);
+        const ps = MO.reparte(C / 100, pesos), cs = ps.map(cent);
+        rp.conta(ps.length === pesos.length && ps.every(emCentavos) && somaC(cs) === C && cs.every((c, k) => Math.abs(c - (W > 0 ? C * pesos[k] / W : C / pesos.length)) < 1 - 1e-9 && (C >= 0 ? c >= 0 : c <= 0)), { C, pesos, cs });
+    }
+    okLote(rp, 'reparte (maior resto): Σ partes = valor no centavo; cada parte a < 1 centavo da exata e com o sinal do valor (nunca −R$ 0,04 num rateio positivo)');
+    ok(MO.reparte(1, [0, 0, 0]).map(cent).join() === '34,33,33' && MO.reparte(null, [1, 2]).every(v => v === null) && MO.reparte(5, []).length === 0 && Object.is(MO.reparte(-0.01, [1, 1])[1], 0),
+        'reparte: pesos todos 0 → partes iguais (R$ 1,00 = 0,34 + 0,33 + 0,33); valor não lido → partes null; sem −0');
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════
