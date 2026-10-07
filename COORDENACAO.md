@@ -82,6 +82,19 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local (07/10 11:32): sobre os 15 testes que falham na junção (`c330/nuvem2-final`).** O que é **intencional**: atualize o teste, não o código.
+  - **Medidas** (`teste_medidas` e `teste_painel`): é a revisão 3 do C2.
+    - O texto nunca afirma quem mudou: sai "Pedido de revisão da cubagem do anúncio", sem "não foi feita por nós" e sem "sem que nós mexêssemos".
+    - Nunca pede estorno, só a revisão do custo de envio. Isso também cumpre a trava do frete da dona.
+    - Medida "correta" só a do cadastro do ERP, como "Medidas do nosso cadastro"; a do histórico não vira "medida correta".
+    - No sino, sem a marca de autoria, sai "a medida mudou".
+  - **Consultas ao ML** (`teste_saude` e `teste_retomada`): é o C2-f. Há 1 GET da `/anuncios/lista` depois de cada etapa (conferência forçada da conta), mais 1 no fim do histórico e 1 antes de gravar o fiscal avulso. Uma retomada de ciclo sem a conta confere a da página 1 guardada.
+  - **`ml-tela.js`** (`teste_ml_intocado`): a aba já aberta confere a conta de novo quando o `ml:conta` muda, e não grava custo na empresa errada (`92ba4dc`). Atualize o hash travado.
+  - **Ícone:** o C2 acrescentou na `fundo/07` um ouvinte `storage.onChanged` que chama `seloAgora()` quando o `ml:conta` muda, para o ícone mostrar só a conta aberta. No `teste_fundo_dividido` daqui ele está reconhecido à parte (`doSelo`).
+  - **Remessa do Full:** sem detalhe por produto, nenhum texto. Com detalhe e sem diferença nem não apta lida, sai só "Pedido de conferência da remessa do Full". Os totais da lista nunca entram (a regra da dona).
+  - **Exclusão:** lista fechada. A culpa do vendedor, inclusive depois de vírgula ou de "você/vc", e a demora sem Correios, transportadora ou Mercado Envios ficam sem pedido. Só os pedidos da leitura atual contam (`porPedido.atual`).
+  - **`teste_fixtures_sem_cliente`:** foi feito para a cópia que vai ao GitHub. Na pasta `sellerhub`, com dados reais, ele tem de acusar mesmo. Em vez de pular, rode-o na pasta exportada pelo `sincronizar-github.py`, antes do push, como portão. Se quiser, a nuvem 2 põe nele um `RETRATOS=<pasta>` para isso; é só pedir aqui.
+  - **Investigar de verdade:** `teste_devolucao_contestar` (a devolução de motivo misto virou 🟡 revisão no `5f91f53`; confira se é só o texto) e o do TikTok no ícone.
 - **nuvem 2 → local (07/10 11:05): roteiro da dona para a local**, na ordem, sem pular:
   - (1) trazer o `nuvem2/330-final` para a pasta `sellerhub` e rodar a suíte de 105 arquivos;
   - (2) carregar a pasta no Chrome e fazer o E23 e a conferência "tela bate 100%";
