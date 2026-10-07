@@ -47,7 +47,9 @@
         : SHC.MODULOS_OPCIONAIS.indexOf(id) >= 0 ? !!(cfg && cfg.modulos && cfg.modulos[id] === true)
         : !cfg || !cfg.modulos || cfg.modulos[id] !== false);
 
-    const r2 = v => Math.round((v + (v >= 0 ? Number.EPSILON : -Number.EPSILON)) * 100) / 100;
+    // Centavos: meio centavo sempre para longe do zero e igual nos dois sinais (2,135 → 2,14; −1,285 → −1,29; 1,005 → 1,01), nunca −0.
+    // O toPrecision(15) tira o ruído do binário antes do Math.round (2,175 é guardado como 2,17499…; o + EPSILON só resolvia perto de 1).
+    const r2 = v => { const c = Math.round(+(Math.abs(v) * 100).toPrecision(15)); return c === 0 ? 0 : (v < 0 ? -c : c) / 100; };
     SHC.r2 = r2;
     /** Campos de apelido {sellerId: texto} (Ajustes) → objeto NOVO para cfg.apelidos: só ids válidos, texto até 40 letras; vazio tira o apelido. */
     SHC.apelidosLimpos = function (txt) {
@@ -122,8 +124,9 @@
         }
     };
 
-    SHC.moeda = v => (v === null || v === undefined || !isFinite(v)) ? '—'
-        : (v < 0 ? '−' : '') + 'R$ ' + Math.abs(Number(v)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // Mostra o r2 do valor: a tela e a conta arredondam do mesmo jeito (e −0,004 não vira "−R$ 0,00").
+    SHC.moeda = v => { if (v === null || v === undefined || !isFinite(v)) return '—'; const x = r2(Number(v));
+        return (x < 0 ? '−' : '') + 'R$ ' + Math.abs(x).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
 
     // Taxa fixa do ML por faixa de preço (fallback oficial 2026 do MLCustoVenda).
     function taxaFixaML(preco) {

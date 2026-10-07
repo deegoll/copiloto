@@ -22,8 +22,8 @@
 //      e 9,98% passa na meta de 10% (SHC.sobraAnuncio/sobraProposta comparam sem arredondar).
 //   3) Custo/outros/frete digitados com 3+ casas ("12,345": etiqueta, painel, planilha) entram crus na conta; a tela mostra o arredondado e
 //      as linhas não fecham com o resultado (1 centavo). SHC.kitDe arredonda com Math.round(x*100)/100 (1,005 → 1,00; SHC.r2 dá 1,01).
-//   4) SHC.r2 não arredonda o meio centavo do mesmo jeito: r2(2,145) = 2,15 mas r2(2,175) = 2,17 (imposto de 6% em R$ 36,25); SHC.moeda(2,175)
-//      mostra "R$ 2,18".
+//   4) [corrigida, #4/#13/#36] SHC.r2 não arredondava o meio centavo do mesmo jeito: r2(2,145) = 2,15 mas r2(2,175) = 2,17 (imposto de 6% em
+//      R$ 36,25) e r2(−1,285) = −1,28; SHC.moeda(2,175) mostrava "R$ 2,18". Agora r2, o r2 do núcleo e o SHC.moeda: meio centavo para longe do zero (A).
 //   5) SHC.recomendaPromo: precoMeta (fórmula fechada) erra até 2 centavos (≈12% dos casos fica 1 centavo abaixo da meta); e a proposta
 //      sem a tarifa do ML (sale_fee) vira tarifa 0% no preço mínimo para a meta.
 //   6) Balão da lista de Anúncios: "Você recebe" maior que preço − tarifa (aporte do ML) → frete deduzido 0 e a conta não fecha; tarifa não
@@ -88,6 +88,30 @@ console.log('A. Régua dos centavos: SHC.r2 e SHC.moeda (o texto da tela é o n�
     ok(NADA.every(v => SHC.moeda(v) === '—'), 'null, undefined, NaN e ±Infinity viram "—" (nunca "R$ NaN" nem "R$ 0,00")');
     ok(SHC.moeda(-0) === 'R$ 0,00' && SHC.moeda(r2(-0.004)) === 'R$ 0,00' && SHC.moeda(-0.01) === '−R$ 0,01', 'zero negativo aparece como R$ 0,00 (sem "−"); −0,01 mantém o sinal');
     ok(SHC.pctTxt(25.5) === '25,5%' && SHC.pctTxt(-5.94) === '−5,9%' && SHC.pctTxt(0.034) === '0,03%' && SHC.pctTxt(-0.001) === '0%', 'SHC.pctTxt: 1 casa, 2 casas abaixo de 1%, "−0%" nunca aparece');
+    // #4/#13/#36: meio centavo sempre para longe do zero e igual nos dois sinais — SHC.r2, o r2 do núcleo (as 2 cópias) e o SHC.moeda.
+    const U1 = require(path.join(EXT, 'nucleo/util.js')), U2 = require(path.join(__dirname, '../../copiloto-nucleo/src/util.js'));
+    const meios = [[2.135, 2.14], [-1.285, -1.29], [1.285, 1.29], [16.935, 16.94], [1.005, 1.01], [2.175, 2.18], [2.145, 2.15], [-2.175, -2.18], [0.005, 0.01], [-0.005, -0.01],
+        [617.135, 617.14], [36.25 * 6 / 100, 2.18], [282.25 * 6 / 100, 16.94], [42.7 * 5 / 100, 2.14], [1012.06 / 28, 36.15], [1000000.005, 1000000.01]];
+    ok(meios.every(([v, e]) => r2(v) === e && U1.r2(v) === e && U2.r2(v) === e && SHC.moeda(v) === reais(Math.round(e * 100))),
+        'meio centavo: 2,135 → 2,14; −1,285 → −1,29; 16,935 → 16,94; 1,005 → 1,01; 6% de 36,25 → 2,18; 1.012,06 ÷ 28 → 36,15 (r2, núcleo e SHC.moeda iguais)');
+    ok([-0.004, -0.0049, -1e-9, -0].every(v => Object.is(r2(v), 0) && Object.is(U1.r2(v), 0)) && SHC.moeda(-0.004) === 'R$ 0,00' && r2(null) === 0 && Number.isNaN(r2(undefined)) && U1.r2(null) === null,
+        'r2 nunca devolve −0 e SHC.moeda(−0,004) é "R$ 0,00" (nunca "−R$ 0,00"); r2(null) = 0 e r2(undefined) = NaN como antes; núcleo: null');
+    // Imposto/tarifa = preço × % ÷ 100 (a conta do produto) contra o arredondamento comercial exato em inteiros (BigInt), positivo e negativo.
+    const rm = lcg(36), M2 = lote(), T2 = lote();
+    let empates = 0;
+    for (const p100 of [400, 500, 600, 650, 800, 950, 1133, 1333, 1650])
+        for (let c = 1; c < 40000; c++) {
+            const v = c / 100 * (p100 / 100) / 100, n = BigInt(c) * BigInt(p100), q = n / 10000n, ex = Number(n % 10000n * 2n >= 10000n ? q + 1n : q);
+            if (n % 10000n === 5000n) empates++;
+            const bom = Math.round(r2(v) * 100) === ex && r2(-v) === -r2(v) && U1.r2(v) === r2(v) && U1.r2(-v) === -r2(v);
+            M2.conta(bom, bom || { c, pct: p100 / 100, v, r2: r2(v), menos: r2(-v), nucleo: U1.r2(v), esperado: ex / 100 });
+        }
+    for (let i = 0; i < 4000; i++) {
+        const c = ent(rm, 1, 99999999), p100 = um(rm, [500, 600, 1333]), v = c / 100 * (p100 / 100) / 100, n = BigInt(c) * BigInt(p100), q = n / 10000n, ex = Number(n % 10000n * 2n >= 10000n ? q + 1n : q);
+        T2.conta(SHC.moeda(v) === reais(ex) && SHC.moeda(-v) === reais(-ex) && SHC.moeda(v) === SHC.moeda(r2(v)), { c, v, tela: SHC.moeda(v), esperado: reais(ex) });
+    }
+    okLote(M2, `% de 4 a 16,5 sobre R$ 0,01 a R$ 399,99 (${empates} empates de meio centavo): r2 = arredondamento comercial exato, r2(−v) = −r2(v), núcleo = SHC.r2`);
+    okLote(T2, 'SHC.moeda(v) = o mesmo arredondamento do r2 (a tela e a conta nunca ficam 1 centavo longe), nos dois sinais');
 }
 
 console.log('B. SHC.calcular (Mercado Livre) — casos feitos à mão');
