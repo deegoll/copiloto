@@ -41,7 +41,8 @@
 
     /**
      * Métricas de campanha, anúncio ou resumo → números + ROAS/ACOS/TACOS/CTR/CPC.
-     * Usa o valor que o ML mandou quando existe; senão calcula. Sem venda, ACOS fica null (o ML manda 0, que engana).
+     * ACOS, ROAS, CTR e CPC: calculados da base, crus (o texto arredonda uma vez só, a mesma conta do painel); o valor do ML só quando falta a
+     * base (o ML e o fundo trazem 2 casas: arredondar de novo dava "43,2%" aqui e "43,1%" no painel). Sem venda, ACOS fica null (o ML manda 0, que engana).
      */
     A.metricas = function (o) {
         // resumo do fundo (SHC.adsResumo) = {total, diario}: as métricas ficam em total
@@ -52,8 +53,8 @@
         if (Object.keys(BASE).every(k => out[k] === null)) return null;
         out.ctr = imp > 0 && cli !== null ? cli / imp * 100 : n(m, 'ctr');
         out.cpc = cli > 0 && inv !== null ? inv / cli : (cli === 0 ? null : n(m, 'cpc'));
-        out.roas = inv > 0 ? (n(m, 'roas') ?? (rec !== null ? rec / inv : null)) : null;
-        out.acos = rec > 0 ? (n(m, 'acos') ?? (inv !== null ? inv / rec * 100 : null)) : null;
+        out.roas = inv > 0 ? (rec !== null ? rec / inv : n(m, 'roas')) : null;
+        out.acos = rec > 0 ? (inv !== null ? inv / rec * 100 : n(m, 'acos')) : null;
         // TACOS = Ads ÷ TODAS as vendas: o do ML; senão só com as orgânicas lidas. Sem elas fica null ("—"), nunca o próprio ACOS.
         const org = out.organicasValor, total = org === null ? null : (rec || 0) + org;
         out.tacos = ((rec || 0) + (org || 0) > 0 ? n(m, 'tacos') : null) ?? (total > 0 && inv !== null ? inv / total * 100 : null);
@@ -338,7 +339,8 @@
     // ── Texto e HTML (strings; todo texto externo passa por esc) ──
     const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     A.esc = esc;
-    A.xTxt = v => v === null || v === undefined || !isFinite(v) ? '—' : (Math.round(v * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'x';
+    // ROAS: 2 casas com SHC.r2 (201 ÷ 200 = 1,005 → "1,01x", como o painel, que guarda r2(receita ÷ gasto)); Math.round dava "1x".
+    A.xTxt = v => v === null || v === undefined || !isFinite(v) ? '—' : SHC.r2(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'x';
     const int = v => v === null || v === undefined ? '—' : Math.round(v).toLocaleString('pt-BR');
     const pct = v => v === null || v === undefined || !isFinite(v) ? '—' : SHC.pctTxt(v);
     const rs = v => v === null || v === undefined ? '—' : SHC.moeda(v);

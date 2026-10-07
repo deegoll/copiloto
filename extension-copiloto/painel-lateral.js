@@ -872,7 +872,8 @@
     const ESTRATEGIA = { PROFITABILITY: 'Rentabilidade', GROWTH: 'Crescimento', VISIBILITY: 'Visibilidade' };
     P.estrategiaTxt = e => ESTRATEGIA[String(e || '').toUpperCase()] || (e ? String(e).toLowerCase() : '');
     const ativoTxt = s => /^(a|active|ativo|ativa)$/i.test(String(s || '')) ? 'ativo' : (/^(p|paused|pausado|pausada)$/i.test(String(s || '')) ? 'pausado' : '');
-    // Métricas somadas + razões: CTR, CPC, ROAS, ACOS (sem venda pelo Ads: ACOS null, nunca 0).
+    // Métricas somadas + razões: CTR, CPC, ROAS, ACOS (sem venda pelo Ads: ACOS null, nunca 0). ACOS e CTR crus (o texto, SHC.pctTxt,
+    // arredonda uma vez só, como ads.html); ROAS com SHC.r2 = o mesmo texto de ads.html (A.xTxt arredonda o ROAS cru com SHC.r2).
     const razoes = m => Object.assign(m, {
         ctr: m.impressoes > 0 && m.cliques !== null ? m.cliques / m.impressoes * 100 : null, cpc: m.cliques > 0 ? SHC.r2(m.gasto / m.cliques) : null,
         roas: m.gasto > 0 ? SHC.r2(m.receita / m.gasto) : null, acos: m.receita > 0 ? m.gasto / m.receita * 100 : null });
