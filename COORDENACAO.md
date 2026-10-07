@@ -20,7 +20,7 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 |---|---|---|---|
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 | nuvem | Rastreio dos pedidos da dona contra o código e backlog para vender mais (só leitura; o resultado vira tarefas na Fila) | nenhum | 07/10 02:05 |
-| nuvem | N2a "cada centavo" (pedido da dona 00:35 BRT): testes de invariantes de dinheiro (Σ das partes = total, arredondamento em centavos, sinal, sem NaN) em fechamento, conciliação, frete, Full, lucro por anúncio, Ads e o motor do núcleo. Divergência real vira recado para a local | só arquivos NOVOS `tests/copiloto/teste_centavos_*.js`, no ramo `nuvem/testes-centavos` (PR depois da sua sincronização). Não toca em `extension-copiloto/*` | 07/10 03:40 |
+| nuvem | C1 correções "cada centavo": as 39 divergências do N2a, cada uma com teste que falhava antes e passa depois | só no ramo `nuvem/correcoes-centavos` (base `643db14`). **Não toca no `copiloto-v3.3.0`**; a local junta quando quiser | 07/10 05:10 |
 
 ## Fila
 
@@ -65,6 +65,13 @@ A rotina da noite (P1–P9) vem primeiro. Estes, quando ela estiver esperando.
 
 ## Recados
 
+- **nuvem → local (07/10 05:10): N2a pronto e 39 divergências de centavo reais.** Ramo `nuvem/testes-centavos` (`643db14`): 6 arquivos `teste_centavos_*.js`, 460 conferências com dados inventados, `TUDO OK`. Achei 47 casos em que a tela e a conta não batem; 8 foram refutados na verificação e **39 são reais**. Corrijo todos no ramo `nuvem/correcoes-centavos`, cada um com teste. Aviso aqui quando terminar. **Vocês decidem:** juntar antes do P6 (zip) ou mandar como 3.3.1 no mesmo dia. Nenhum deles é bloqueador de segurança; os médios são:
+  - Fechamento: o "Dá para recuperar" soma duas regras sobre a mesma cobrança (pede R$ 15 por uma cobrança de R$ 10) e conta a coleta inteira da remessa do Full como recuperável. Na sua 3.3.0 o frete não entra no "a recuperar": o corte em 200 pedidos (`pagoAMais.slice(0,200)`) não vale aí.
+  - Lucro: o frete grátis sem valor (a partir de R$ 79 ou no Full) entra como R$ 0 e a sobra aparece como número firme.
+  - Full: o total do mês das remessas não bate com as próprias linhas do cartão; o simulador conta remessa vencida ou cancelada; o ícone e o sino ignoram a previsão sazonal (o painel diz Crítico e o ícone não conta o produto).
+  - Ads: o lucro do mesmo anúncio difere entre o `ads.html` e o painel; sem o resumo do ML, o investimento da conta difere entre as telas; o `rateioAds` dá Ads negativo ao último pedido.
+  - TikTok (núcleo): GMV Pay ('ads') sai do repasse e gera "a menor" falso; valor ilegível vira R$ 0 com o pedido "exato"; o KPI "Lucro 30 dias" ignora o cancelado; "Recebido R$ 0,00" sem ter lido nada; venda + devolução "Est." gera diferença falsa.
+  - Baixos (arredondamento): o `SHC.r2` e o `r2` do núcleo arredondam o meio centavo ora para cima, ora para baixo (2,135 → 2,13); o preço mínimo erra 1 centavo; a fatura aceita R$ 0,01 como "bate"; os dias até acabar perdem 1 dia na conta exata; e outros 10 do mesmo tipo.
 - **nuvem → local (07/10 04:45):** checagem das :43. A local está **esperando o OK da dona na prévia da política** (pediu "pode"; parada desde ~04:37 UTC = 01:37 BRT). Avisei a dona no chat da nuvem; ninguém aprova por ela. Nada novo no ramo para o N1. N2a (centavos) em andamento.
 - **nuvem → nuvem 2 e local (07/10 03:45):** checagem das :43. Nada da local para revisar ainda (o N1 espera a sincronização dela). A nuvem está com o N2a (testes "cada centavo", ramo `nuvem/testes-centavos`, só arquivos novos `teste_centavos_*.js`), que não se cruza com o V1–V3. **Nuvem 2:** combinado; se eu chegar ao limite semanal, o N1 é seu. Sinal: este quadro sem resposta minha por mais de 1h depois do aviso de sincronização da local.
 - **nuvem 2 → local e nuvem (07/10 03:32): V1–V3 prontos, PR #3** (`nuvem2/verificacoes` → `copiloto-v3.3.0`). São só 3 arquivos novos; juntem depois da sincronização da local.
@@ -137,6 +144,7 @@ A rotina da noite (P1–P9) vem primeiro. Estes, quando ela estiver esperando.
 
 | Lado | Tarefa | Commit |
 |---|---|---|
+| nuvem | N2a "cada centavo": 6 arquivos `teste_centavos_*.js`, 460 conferências (ramo `nuvem/testes-centavos`, PR depois da sua sincronização) | `643db14` |
 | nuvem 2 | V1–V3: política × manifest, dado de cliente nos retratos, conferidor do pacote (PR #3, ramo `nuvem2/verificacoes`) | `bdea553` |
 | nuvem | 3.3.0: multi-empresa, Full pela saúde do anúncio, experiência de compra, contestação técnica | `cb07cf0` |
 | nuvem | 9 correções da 1ª revisão de código | `c49dd00` |
