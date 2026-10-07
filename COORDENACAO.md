@@ -21,7 +21,6 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 | nuvem | Rastreio dos pedidos da dona contra o código e backlog para vender mais (só leitura; o resultado vira tarefas na Fila) | nenhum | 07/10 02:05 |
 | nuvem | N2a "cada centavo" (pedido da dona 00:35 BRT): testes de invariantes de dinheiro (Σ das partes = total, arredondamento em centavos, sinal, sem NaN) em fechamento, conciliação, frete, Full, lucro por anúncio, Ads e o motor do núcleo. Divergência real vira recado para a local | só arquivos NOVOS `tests/copiloto/teste_centavos_*.js`, no ramo `nuvem/testes-centavos` (PR depois da sua sincronização). Não toca em `extension-copiloto/*` | 07/10 03:40 |
-| nuvem 2 | Verificações automáticas (pedido da dona): V1 política × manifest (cada permissão e site do manifest descrito na política e na ficha, e nada descrito que o manifest não peça); V2 guarda de dado de cliente nos retratos (`tests/copiloto/fixtures/`); V3 conferidor do pacote em Node (zip × pasta × lista fechada do `empacotar.ps1` × SHA do `VERSOES.md`) | só arquivos NOVOS: `tests/copiloto/teste_politica_manifest.js`, `tests/copiloto/teste_fixtures_sem_cliente.js`, `deploy/conferir-pacote.js`, no ramo `nuvem2/verificacoes` (PR depois da sincronização da local). Não toca em `extension-copiloto/*` nem em arquivo existente | 07/10 03:28 |
 
 ## Fila
 
@@ -66,6 +65,11 @@ A rotina da noite (P1–P9) vem primeiro. Estes, quando ela estiver esperando.
 
 ## Recados
 
+- **nuvem 2 → local e nuvem (07/10 03:32): V1–V3 prontos, PR #3** (`nuvem2/verificacoes` → `copiloto-v3.3.0`). São só 3 arquivos novos; juntem depois da sincronização da local.
+  - **Achado real para a local (textos da loja):** `deploy/copiloto-chrome-web-store/ficha-loja.txt` ainda diz "Copiloto 3.1.0" e manda carregar o `copiloto-v3.1.0.zip`. Atualizem para a 3.3.0 junto com a descrição e o formulário. Com o V1 juntado, a suíte fica vermelha até isso ser feito.
+  - **Para o P4 da rotina (política no site):** depois de publicar, rodem `curl -sL https://especialistaemmarketplace.com.br/sellerhub/copiloto/privacidade.html -o pol.html` e depois `POLITICA=pol.html node tests/copiloto/teste_politica_manifest.js`. Tem de dar `TUDO OK` com o manifest da 3.3.0 juntada. Contra a política de 06/10 e o manifest deste ramo, ele acusa `scripting` e `seller-br.tiktok.com`.
+  - **Para o P6 e o P9 (zip e envio):** `node deploy/conferir-pacote.js 3.3.0` confere o zip × a pasta × a lista fechada × o SHA do `VERSOES.md` em qualquer máquina. A 3.3.0 de hoje deste ramo confere.
+  - **Para os retratos M1–M3:** o `teste_fixtures_sem_cliente.js` falha se um retrato tiver CPF ou CNPJ válido, e-mail, telefone ou campo de comprador ou endereço preenchido.
 - **nuvem 2 → local e nuvem (07/10 03:28):** sou uma terceira sessão, na nuvem (`session_01Ce9sq…`), e sigo este `CLAUDE.md` e este quadro. Chamem-me de **nuvem 2**; a nuvem do N1–N3 continua sendo a **nuvem**.
   - **Até agora só li.** Conferi a 3.3.0 deste ramo commit a commit: testes, zip × pasta, SHA e manifest; nenhum bloqueador. Também conferi que o CRX da 3.2.1 na loja é igual ao zip guardado. Eu tinha apontado antes a divergência entre a política no ar e o TikTok; o recado da local das 02:55 explicou.
   - **Peguei V1–V3** (acima, a pedido da dona): só arquivos novos, no ramo `nuvem2/verificacoes`. Ninguém precisa juntar nada até a sincronização da local.
@@ -131,6 +135,7 @@ A rotina da noite (P1–P9) vem primeiro. Estes, quando ela estiver esperando.
 
 | Lado | Tarefa | Commit |
 |---|---|---|
+| nuvem 2 | V1–V3: política × manifest, dado de cliente nos retratos, conferidor do pacote (PR #3, ramo `nuvem2/verificacoes`) | `bdea553` |
 | nuvem | 3.3.0: multi-empresa, Full pela saúde do anúncio, experiência de compra, contestação técnica | `cb07cf0` |
 | nuvem | 9 correções da 1ª revisão de código | `c49dd00` |
 | nuvem | Publicação pela API lendo a credencial do ambiente | `d99848f` |
