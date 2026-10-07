@@ -37,8 +37,8 @@
 //   7) tarifas.simular: classe pela margem JÁ arredondada a 1 casa: prejuízo de −R$ 0,01 em R$ 300 (margem −0,003% → −0) sai "lucrativo".
 //   8) util.r2 (= SHC.r2) não arredonda o meio centavo sempre igual: 6% de R$ 282,25 = 16,935 → 16,93, mas a maioria dos empates sobe
 //      (≈4–9% dos empates de tarifa descem); SHC.moeda(16,935) mostra "R$ 16,94".
-//   9) Aba TikTok sem nenhum pedido do Financeiro lido (só o saldo, por exemplo): o card Repasse mostra "Recebido: R$ 0,00 · a liberar:
-//      R$ 0,00" ao lado de "Abra o Financeiro…" — zero inventado (conciliar() de nada devolve 0, e a aba só esconde null).
+//   9) CORRIGIDA (#37): sem nenhum pedido do Financeiro lido, o card Repasse mostrava "Recebido: R$ 0,00 · a liberar: R$ 0,00" (conciliar() de
+//      nada devolvia 0). Agora conciliar() sem pedido devolve os totais null e a aba não mostra a linha (seções F, I e K).
 //  10) SHC.tt.lucroDoPedido só marca status_repasse/data_prevista pela LISTA do Financeiro: o pedido "Est." lido só no detalhe do extrato
 //      entra no "a liberar" da conciliação, mas some da linha do tempo "Previsto" (a soma do Previsto fica menor que o "a liberar").
 //  11) conciliar(): pedido com uma linha já liquidada e outra "Est." (venda paga R$ 73 + devolução em andamento −R$ 30 = esperado R$ 43)
@@ -1034,10 +1034,10 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
     // Valor ausente no resumo inteiro: sem a receber/saldo/lucro → "—" (nunca "R$ 0,00").
     const vazio = TT.resumo({ conta: CONTA, peds: [], custos: {}, cfg: {}, falha: { tipo: 'saldo', tela: 'Financeiro', em: lidoEm } }, { hoje: HOJE });
     const hv = ABA.html(vazio, { hoje: HOJE });
-    const hvSemRecebido = hv.replace(/<p class="rs">Recebido: <b>R\$ 0,00<\/b> · a liberar: <b>R\$ 0,00<\/b><\/p>/, '');
     ok(vazio.kpis.lucro_30d === null && vazio.kpis.a_receber === null && vazio.kpis.saldo === null && /<div class="l">Lucro 30 dias<\/div><div class="v">—<\/div>/.test(hv)
-        && /<div class="l">A receber<\/div><div class="v">—<\/div>/.test(hv) && /<div class="l">Saldo disponível<\/div><div class="v">—<\/div>/.test(hv) && !/R\$ 0,00/.test(hvSemRecebido),
-        'nada lido: Lucro, A receber e Saldo aparecem "—" (o único R$ 0,00 é o "Recebido · a liberar" da divergência 9)');
+        && /<div class="l">A receber<\/div><div class="v">—<\/div>/.test(hv) && /<div class="l">Saldo disponível<\/div><div class="v">—<\/div>/.test(hv) && !/R\$ 0,00/.test(hv) && !/Recebido:/.test(hv)
+        && vazio.conciliacao.recebido === null && vazio.conciliacao.a_liberar === null && vazio.conciliacao.diferenca === null,
+        'nada lido: Lucro, A receber e Saldo aparecem "—" e sem a linha "Recebido · a liberar" (antes R$ 0,00 inventado: divergência 9, corrigida #37)');
     // Resposta que não se reconhece não grava nada (nunca vira zero).
     const antes = JSON.stringify(banco);
     const rr = await TT.gravarCaptura('saldo', { code: 0, data: { amount: { amount: 'abc' } } }, CONTA, lidoEm), r2x = await TT.gravarCaptura('pedidos_fin', { code: 0, data: {} }, CONTA, lidoEm);
@@ -1109,6 +1109,17 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         ok(v35.pedidos.map(x => x.status + ' ' + x.lucro_real).sort().join() === 'cancelado -8.5,ok 37' && v35.kpis.lucro_30d === 28.5 && somaC(v35.produtos, x => cent(x.lucro_real)) === 2850
             && v35.conciliacao.recebido === 64.5 && deMoeda(kpi35) === 2850 && man35 === 'Lucro de R$ 28,50 em 30 dias no TikTok.' && v35.kpis.receita_30d === 100 && v35.kpis.margem_pct === 28.5,
             'KPI com pedido cancelado (#35): Lucro 30 dias R$ 28,50 = Σ Produtos = R$ 37,00 − R$ 8,50 do frete que ficou (antes R$ 37,00); manchete igual; margem 28,5%');
+    }
+
+    {   // #37: só o saldo (e depois o a receber) lido, nenhum pedido do Financeiro: nada de "Recebido: R$ 0,00 · a liberar: R$ 0,00".
+        const v37 = TT.resumo({ conta: '7000000037', peds: [], custos: {}, cfg: {}, saldo: { valor: 500, lido_em: lidoEm } }, { hoje: HOJE }), h37 = ABA.html(v37, { hoje: HOJE });
+        const w37 = TT.resumo({ conta: '7000000037', peds: [], custos: {}, cfg: {}, saldo: { valor: 500, lido_em: lidoEm }, areceber: { total: 1200, motivos: [{ motivo: 'em_transito', codigo: 1, valor: 1200 }], lido_em: lidoEm } }, { hoje: HOJE });
+        const i37 = ABA.html(w37, { hoje: HOJE }), card37 = i37.slice(i37.indexOf('<h3>Repasse</h3>'), i37.indexOf('<h3>Saúde</h3>'));
+        ok(!v37.vazio && v37.conciliacao.recebido === null && v37.conciliacao.a_liberar === null && !/Recebido:/.test(h37) && !/R\$ 0,00/.test(h37)
+            && /A receber<\/b><\/td><td><b>R\$ 1\.200,00/.test(card37) && !/a liberar: /.test(card37) && !/R\$ 0,00/.test(card37),
+            'sem pedido do Financeiro lido (#37): o card Repasse não mostra "Recebido: R$ 0,00 · a liberar: R$ 0,00" (nem ao lado de "A receber R$ 1.200,00")');
+        const c0 = CO.conciliar({ pedidos: [], tarifas: [], repasses: [M.garantir('repasse', { canal: 'tiktok', conta: 'x', fonte: 'api', id: 'R1', valor: 10, pedidos: ['P9'], status: 'disponivel' })], hoje: HOJE });
+        ok(c0.totais.recebido === null && c0.totais.esperado === null && c0.totais.diferenca === null && c0.sem_pedido.length === 1, 'conciliar() sem pedido: totais null (desconhecido), o repasse solto vai para sem_pedido — #37');
     }
 
     console.log('\n' + nChecks + ' verificações.');

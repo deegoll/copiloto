@@ -27,7 +27,7 @@
      *       hoje: 'AAAA-MM-DD', tolerancia: 0.05 (R$), prazo_dias: {tiktok: 7} (sobrepõe o prazo padrão do canal) }
      * → { pedidos: [{ pedido_id, status, esperado, recebido, a_liberar, diferenca, data_prevista, repasses: [ids], motivo }],
      *     grupos: [{ repasse_id, pedidos, esperado, recebido, diferenca, status }], sem_pedido: Repasse[],
-     *     totais: { esperado, recebido, a_liberar, diferenca, por_status: {status: n} } }
+     *     totais: { esperado, recebido, a_liberar, diferenca, por_status: {status: n} } }   (sem nenhum pedido: esperado/recebido/a_liberar/diferenca null)
      * Repasse com vários pedidos e sem por_pedido é conciliado pelo GRUPO (os pedidos ficam 'agrupado').
      */
     function conciliar(o) {
@@ -93,13 +93,15 @@
         const porStatus = {};
         linhas.forEach(l => { porStatus[l.status] = (porStatus[l.status] || 0) + 1; });
         const soLidos = linhas.filter(l => l.esperado !== null && l.status !== 'agrupado');
+        const nada = !linhas.length;   // nenhum pedido para conciliar: os totais são desconhecidos (null), nunca "Recebido R$ 0,00" inventado
+        const tot = v => (nada ? null : U.r2(v));
         return {
             pedidos: linhas, grupos: gruposOut, sem_pedido: semPedido,
             totais: {
-                esperado: U.r2(U.soma(soLidos, l => l.esperado) + U.soma(gruposOut, g => g.esperado)),
-                recebido: U.r2(U.soma(linhas, l => l.recebido) + U.soma(gruposOut, g => g.recebido)),
-                a_liberar: U.r2(U.soma(linhas, l => l.a_liberar) + U.soma(gruposOut, g => g.a_liberar)),
-                diferenca: U.r2(U.soma(linhas, l => (l.status === 'ok' || l.status === 'a_menor' || l.status === 'a_maior' || l.status === 'parcial') ? l.diferenca : 0)
+                esperado: tot(U.soma(soLidos, l => l.esperado) + U.soma(gruposOut, g => g.esperado)),
+                recebido: tot(U.soma(linhas, l => l.recebido) + U.soma(gruposOut, g => g.recebido)),
+                a_liberar: tot(U.soma(linhas, l => l.a_liberar) + U.soma(gruposOut, g => g.a_liberar)),
+                diferenca: tot(U.soma(linhas, l => (l.status === 'ok' || l.status === 'a_menor' || l.status === 'a_maior' || l.status === 'parcial') ? l.diferenca : 0)
                     + U.soma(gruposOut, g => (g.recebido !== null ? g.diferenca : 0))),
                 por_status: porStatus,
                 repasses_nao_lidos: repNaoLido,
