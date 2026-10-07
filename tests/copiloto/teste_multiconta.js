@@ -192,22 +192,33 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
             'a etapa da troca e as seguintes saem com "mudou de conta" (nenhuma "ok")');
     }
     {   // g1b (2ª revisão): o diário só desfaz os retratos da leitura do ML; o clique da seller e o TikTok gravados na mesma janela ficam
-        const dados = { ['posvenda:' + A]: { reclamacoes: 1, mensagens: 0, devolucoes: 0, ts: 1 }, ['medidas:' + A]: { porItem: {} }, ['resumo:' + A + ':semanal']: { novo: true } };
+        const dados = { ['posvenda:' + A]: { reclamacoes: 1, mensagens: 0, devolucoes: 0, ts: 1 }, ['medidas:' + A]: { porItem: {} } };
         let trocou = false, F = null;
         F = montaFundo({ dados, hoje: '2026-10-07', rota: u => {
             if (/\/anuncios\/lista/.test(u)) return { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], trocou ? OUTRA : A) };
             if (/post-purchase/.test(u)) {
                 trocou = true;
                 // na janela da etapa: a seller marca a medida e o resumo como visto; uma captura do TikTok chega
-                F.ctx.chrome.storage.local.set({ ['medidas:' + A]: { porItem: { MLB1000000001: { marca: 'fui_eu' } } }, ['resumo:' + A + ':semanal']: { novo: false }, 'tt:7000000001:saldo': { v: 10 } });
+                F.ctx.chrome.storage.local.set({ ['medidas:' + A]: { porItem: { MLB1000000001: { marca: 'fui_eu' } } }, 'tt:7000000001:saldo': { v: 10 } });
                 return { html: html({ x: [{ value: 'problems-to-manage', text: 'Reclamações', badge: { label: '7' } }] }) };
             }
             return null;
         } });
         await F.ctx.sincronizar('manual');
         ok(dados['posvenda:' + A].reclamacoes === 1 && JSON.stringify(dados['medidas:' + A]) === '{"porItem":{"MLB1000000001":{"marca":"fui_eu"}}}'
-            && dados['resumo:' + A + ':semanal'].novo === false && dados['tt:7000000001:saldo'] && dados['tt:7000000001:saldo'].v === 10,
-            'troca no meio da etapa: o retrato do ML volta (posvenda:A), mas a marca da medida, o resumo visto e o TikTok gravados na janela ficam');
+            && dados['tt:7000000001:saldo'] && dados['tt:7000000001:saldo'].v === 10,
+            'troca no meio da etapa: o retrato do ML volta (posvenda:A), mas a marca da medida e o TikTok gravados na janela ficam');
+    }
+    {   // g1c (revisão final): o diário cobre as vendas por anúncio do Faturamento (vd|, vm|, vu|), as marcas de migração e o resumo do dia/semana
+        const dados = { 'vd|ml|MLB1000000001': { '2026-10-01': 1 }, 'shc:migra:freteDev': {}, ['resumo:' + A + ':dia']: { novo: true }, ['medidas:' + A]: { porItem: {} } };
+        const F = montaFundo({ dados, hoje: '2026-10-07', rota: () => null }), run = c => require('vm').runInContext(c, F.ctx);
+        const d = run('abreDiario()');
+        await F.ctx.chrome.storage.local.set({ 'vd|ml|MLB1000000001': { '2026-10-06': 9 }, 'vm|ml|MLB1000000001': { '2026-10': 9 }, 'vu|ml': { x: 1 }, 'vd|pend': { [A]: [1] },
+            'shc:migra:freteDev': { [A]: 1 }, ['resumo:' + A + ':dia']: { novo: false, dados: 'da OUTRA' }, ['resumo:' + A + ':semanal']: { dados: 'da OUTRA' }, ['medidas:' + A]: { porItem: { MLB1000000001: { marca: 'fui_eu' } } } });
+        await run('desfazDiario')(d); run('fechaDiario')(d);
+        ok(JSON.stringify(dados['vd|ml|MLB1000000001']) === '{"2026-10-01":1}' && !('vm|ml|MLB1000000001' in dados) && !('vu|ml' in dados) && !('vd|pend' in dados)
+            && JSON.stringify(dados['shc:migra:freteDev']) === '{}' && dados['resumo:' + A + ':dia'].novo === true && !(('resumo:' + A + ':semanal') in dados) && dados['medidas:' + A].porItem.MLB1000000001,
+            'diário desfeito: vendas por anúncio (vd|, vm|, vu|, vd|pend), marca de migração e resumo do dia/semana voltam; a marca da medida (clique) fica');
     }
     {   // g2: troca no meio da etapa Alertas (no pedido do Resumo): resumo, perguntas e alertas da OUTRA não ficam na A
         const resumoB = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'fixtures/resumo_content_exemplo.json'), 'utf8'));
