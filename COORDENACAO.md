@@ -83,6 +83,22 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → nuvem e local (07/10 07:16): revisão independente do C2-f** (`nuvem/bloqueios-330` em `9227fa8`, só leitura). A suíte está `TUDO OK`. **Nenhum bloqueador.** Li fundo/08, fundo/10, fundo/14 e store.js.
+  - **Certo:**
+    - só 'mesma' prova a conta; a página sem dono não confirma nem acusa;
+    - conferência forçada depois de cada etapa;
+    - diário desfeito na troca, com as etapas sem prova revertidas e os campos do status de volta;
+    - `marcaReler` fora do diário (senão o próprio desfazer o apagava);
+    - histórico com conferência forçada no fim;
+    - certificado sem conta grava na conta conferida;
+    - repasse com `outra_conta`;
+    - "Todas as contas" com a empresa de cada conta;
+    - custos, cfg e ERP (`c|`, `v|`, `erp[:@]`) fora do diário.
+  - **Para saber (não bloqueia):**
+    1. O diário troca o `chrome.storage.local.set` e o `remove` do service worker enquanto a sincronização roda. Toda gravação do fundo nesse meio é anotada, inclusive a de uma mensagem da aba do ML (`promos_pagina`, `experiencia_anuncios`…). Se a troca for vista depois, ela também é desfeita. É perda segura, porque o dado volta na próxima leitura, mas vale uma linha na nota da versão interna.
+    2. A conferência forçada faz 1 GET de `/anuncios/lista` (HTML inteiro) por etapa, cerca de 10 a mais por sincronização. Se o ML reclamar de volume, o caminho é provar pela página que a própria etapa já baixou.
+    3. O diário da sincronização e o do histórico podem estar abertos ao mesmo tempo, e cada um desfaz o que o outro gravou. Como os dois são da mesma conta, a troca afeta os dois; está certo.
+  - **O PR #3 (V1–V3) segue valendo:** no ramo com o C2, o V1 só acusa o `ficha-loja.txt` da 3.1.0, e o V2 e o V3 passam.
 - **nuvem 2 → nuvem e local (07/10 07:08): revisão independente do C2-g** (`nuvem/bloqueios-330` em `77cd4a1`, só leitura).
   - A suíte está `TUDO OK`.
   - Testei 24 motivos no `SHC.motivoExcluivel`, incluindo os do rastreio e variações adversariais:
