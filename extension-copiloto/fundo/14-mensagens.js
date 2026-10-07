@@ -25,13 +25,14 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         // semAviso APAGA o alerta: só com a conta da página e se for a aberta agora. O aviso com texto sem conta ainda vale (a CONFIRMAR AO VIVO se o Faturador traz o id).
         // v3.3 (multi-empresa): aviso SEM a conta da página só vale com 1 conta neste Chrome — com 2+, um Faturador de outra empresa marcaria
         // o certificado desta como vencido. Bloqueio 5: com 1 conta, 1 GET confere que a sessão do ML ainda é dela (a 2ª empresa que ainda não
-        // sincronizou não está em ml:contas e marcaria a 1ª).
+        // sincronizou não está em ml:contas e marcaria a 1ª). Revisão 07/10/2026: a conta CONFERIDA vai para gravarCertificado (antes ele relia
+        // ml:conta e, se a sincronização da outra empresa a trocasse no meio, gravava em cert:<outra>).
         const semConta = () => (SHC.contas ? SHC.contas() : Promise.resolve([])).then(async cs => {
             if ((cs || []).length > 1) return '';
             const c = await SHC.contaAtual();
-            return c === 'atual' || (await confereSessao(c)) !== 'outra_conta' ? 'ok' : '';
+            return c === 'atual' || (await confereSessao(c)) !== 'outra_conta' ? c : '';
         }).catch(() => '');
-        (msg.conta || msg.semAviso ? daContaAtual(msg) : semConta()).then(ok => (ok ? gravarCertificado(msg) : { ok: false, motivo: 'conta' }))
+        (msg.conta || msg.semAviso ? daContaAtual(msg) : semConta()).then(conta => (conta ? gravarCertificado(msg, conta) : { ok: false, motivo: 'conta' }))
             .then(responder, () => responder({ ok: false, motivo: 'erro' }));
         return true;
     }
@@ -123,6 +124,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         SHC.contaAtual().then(async conta => {
             if (conta !== 'atual' && await confereSessao(conta) === 'outra_conta') return { ok: false, motivo: 'outra_conta' };   // repasse de outra conta não entra nesta
             const r = await sincronizarRepasse(conta, async () => {});
+            if (r.falha === 'outra_conta') return { ok: false, motivo: 'outra_conta' };   // a sessão trocou durante a leitura: nada gravado
             await emFilaStatus(async () => {
                 const st = await SHC.lerStatus();
                 Object.assign(st, r.falha ? { erroRepasse: r.falha === 'login' ? 'sem_login_mp' : 'ml_indisponivel' }

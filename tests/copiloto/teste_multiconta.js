@@ -353,6 +353,44 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         x = mkF(s => s.dono, false);
         r = await x.F.envia({ acao: 'fiscal_agora' });
         ok(r && r.ok === true && x.dados['fiscal:' + A] && x.dados['fiscal:' + A].itens[0] === 'MLB2000000002', 'controle: mesma conta → grava (o teste enxerga a gravação)');
+        // Revisão 07/10: vendas brutas do mês ("Tentar agora") e repasse do Mercado Pago — a sessão vira a da OUTRA logo DEPOIS da 1ª conferência.
+        const MPH = '<html><body><div>22 de setembro</div><div>10:30</div><div>Venda no Mercado Livre</div><div>Produto teste</div><div>Transação 1234567890</div><div>Aprovado</div><div>+ R$ 249,29</div></body></html>';
+        const mkA = troca => {
+            const s = { dono: A }, dados = { 'ml:conta': A };
+            const F = montaFundo({ dados, hoje: '2026-10-07', rota: u => {
+                if (/\/anuncios\/lista/.test(u)) return { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], s.dono) };
+                if (/performance-data/.test(u)) { if (troca) s.dono = OUTRA; return { json: { dataset: [{ date: '2026-09-01', gross_sales: 999, sold_units: 1, sell_quantity: 1 }] } }; }
+                if (/mercadopago\.com\.br\/activities/.test(u)) { if (troca) s.dono = OUTRA; return { html: /page=1$/.test(u) ? MPH : '<html></html>' }; }
+                return null;
+            } });
+            F.ctx.chrome.permissions.contains = async () => true;
+            return { F, dados };
+        };
+        x = mkA(true);
+        r = await x.F.envia({ acao: 'vendas_brutas_mes', mes: '2026-09' });
+        const mesesVb = (((x.dados['shc:status'] || {}).etapas || {}).vendasBrutas || {}).meses || {};
+        ok(r && r.ok === false && r.motivo === 'outra_conta' && !x.dados['vb:' + A] && !mesesVb['2026-09'], '"Tentar agora" das vendas brutas com a troca logo depois da conferência: nada em vb:A (nem o diagnóstico "ok")');
+        x = mkA(false);
+        r = await x.F.envia({ acao: 'vendas_brutas_mes', mes: '2026-09' });
+        ok(r && r.ok === true && x.dados['vb:' + A], 'controle: mesma conta → vb:A gravado');
+        x = mkA(true);
+        r = await x.F.envia({ acao: 'sincronizar_repasse' });
+        ok(r && r.ok === false && r.motivo === 'outra_conta' && !x.dados['mp:repasse:' + A] && !(x.dados['shc:status'] || {}).repasseEm, 'repasse do Mercado Pago com a troca durante a leitura: nada em mp:repasse:A');
+        x = mkA(false);
+        r = await x.F.envia({ acao: 'sincronizar_repasse' });
+        ok(r && r.ok === true && x.dados['mp:repasse:' + A] && x.dados['mp:repasse:' + A].meses['2026-09'], 'controle: mesma conta → mp:repasse:A gravado');
+        // Certificado: a conta conferida é a gravada — ml:conta trocada entre a conferência e a gravação (a sincronização da OUTRA) não leva o aviso para cert:<OUTRA>.
+        const cert = { acao: 'certificado', titulo: 'Certificado digital vencido', texto: 'Seu certificado digital venceu.' };
+        // ml:conta vira a OUTRA logo depois da conferência: com a conta da página, depois da 1ª leitura de ml:conta; sem ela, depois do GET que confere a sessão.
+        for (const [nome, contas, msg] of [['com a conta da página', { [A]: { visto: 2 }, [OUTRA]: { visto: 1 } }, Object.assign({ conta: { sellerId: A } }, cert)], ['sem a conta da página (1 conta)', { [A]: { visto: 1 } }, cert]]) {
+            let virou = false;
+            const C = montaFundo({ dados: { 'ml:conta': A, 'ml:contas': contas }, rota: u => { if (!/\/anuncios\/lista/.test(u)) return null; virou = true; return { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], A) }; } });
+            const orig = C.ctx.SHC.contaAtual;
+            C.ctx.SHC.contaAtual = async () => { const c = virou ? OUTRA : A; if (msg.conta) virou = true; return c; };
+            const rc = await C.envia(msg, ABA);
+            C.ctx.SHC.contaAtual = orig;
+            ok(rc && rc.ok !== false && C.dados['cert:' + A] && !C.dados['cert:' + OUTRA], 'certificado ' + nome + ': grava na conta conferida (cert:A), nunca em cert:<OUTRA>');
+        }
     }
 
     console.log('k) bloqueio 5: o número do ícone é o da conta aberta');
