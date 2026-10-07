@@ -208,11 +208,12 @@
         const impostoRs = r2(preco * impPct / 100);
         const recebeRs = r2(preco - comissaoRs - taxaFixa - fr.rs);          // o que o canal repassa
         const sobraRs = temCusto ? r2(recebeRs - custo - outros - impostoRs) : null;
-        const sobraPct = sobraRs !== null ? Math.round(sobraRs / preco * 1000) / 10 : null;
+        const sobraPct = sobraRs !== null ? (Math.round(sobraRs / preco * 1000) / 10 || 0) : null;   // só a tela (1 casa, nunca −0)
         const alvo = num(cfg.margem_alvo_pct) || 0;
 
+        // #9: a classe sai da sobra e da margem SEM arredondar (como SHC.sobraAnuncio/sobraProposta): −R$ 0,07 é prejuízo e 9,98% não bate 10%.
         let classe = 'sem_custo';
-        if (sobraPct !== null) classe = sobraPct < 0 ? 'prejuizo' : (sobraPct < alvo ? 'apertado' : 'lucrativo');
+        if (sobraRs !== null) classe = sobraRs < 0 ? 'prejuizo' : (sobraRs / preco * 100 < alvo ? 'apertado' : 'lucrativo');
 
         return {
             canal, preco: r2(preco),
