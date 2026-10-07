@@ -284,24 +284,31 @@
 
     // Revisão 07/10/2026 ("cada centavo"): 2 regras sobre a MESMA cobrança (pedido + tipo + anúncio) — repetida + venda cancelada sem estorno,
     // repetida + tarifa acima, repetida + frete fora da curva — pediam de volta o mesmo dinheiro 2 vezes (R$ 15 de R$ 10 cobrados).
-    // Fica a regra que pede mais (a soma das repetidas ou a outra), nunca acima do cobrado (teto(chave, itens)); a repetição que sai vira
-    // fato no motivo. Dúvida fica como está: o texto dela só pergunta, sem pedir valor. teto null = cobrado não sabido (sem teto).
+    // Fica a regra que pede mais (a soma das repetidas ou a outra; no empate, a outra: "venda cancelada" é o motivo verdadeiro), nunca
+    // acima do cobrado líquido (teto(chave, itens); null = não sabido); a repetição que sai vira fato no motivo. Dúvida fica como está.
+    // A repetida pede as cópias a mais sobre 1 cobrança legítima (o esperado): só vale com o líquido cobrindo TODAS as cópias. Estorno que
+    // não casou com a cópia (outro valor) deixa o líquido menor e não dá para saber o que ele acertou: nunca um "valor devido" inventado
+    // (antes: esperado = cobrado − teto, R$ 8 que ninguém leu). Sobrou mais que 1 cobrança → dúvida (o texto só pergunta); não sobrou → sai.
     // → a lista sem as sobreposições (item mudado = objeto novo; nunca mexe nos de entrada)
     const umaVezPorCobranca = (lista, chave, teto) => {
-        const g = {}, fora = new Set(), troca = new Map();
+        const g = {}, fora = new Set(), troca = new Map(), soma = (l, c) => r2(l.reduce((s, x) => s + (x[c] || 0), 0));
         lista.forEach(x => { if (x && !x.duvida && x.diferenca > 0) { const k = chave(x); (g[k] || (g[k] = [])).push(x); } });
         Object.keys(g).forEach(k => {
-            const xs = g[k], rep = xs.filter(x => x.regra === 'repetida'), out = xs.filter(x => x.regra !== 'repetida').sort((a, b) => b.diferenca - a.diferenca);
-            const fica = out.length && (!rep.length || out[0].diferenca >= rep.reduce((s, x) => s + x.diferenca, 0)) ? [out[0]] : rep.slice().sort((a, b) => b.diferenca - a.diferenca);
-            const saiRep = rep.filter(x => fica.indexOf(x) < 0);
-            let resta = teto(k, xs);
-            xs.forEach(x => { if (fica.indexOf(x) < 0) fora.add(x); });
-            fica.forEach((x, i) => {
-                const d = resta === null ? x.diferenca : r2(Math.min(x.diferenca, Math.max(0, resta)));
-                if (resta !== null) resta = r2(resta - d);
-                if (!(d > 0)) { fora.add(x); return; }
-                const nota = i === 0 && saiRep.length ? ' Também aparece repetida neste pedido: ' + saiRep.map(y => SHC.moeda(y.esperado) + ' × ' + Math.round(y.valor / y.esperado)).join(', ') + '.' : '';
-                if (d < x.diferenca || nota) troca.set(x, Object.assign({}, x, d < x.diferenca ? { diferenca: d, esperado: r2(x.valor - d) } : {}, nota ? { motivo: (x.motivo || '') + nota } : {}));
+            const xs = g[k], t = teto(k, xs), rep = xs.filter(x => x.regra === 'repetida'), out = xs.filter(x => x.regra !== 'repetida').sort((a, b) => b.diferenca - a.diferenca);
+            const cobre = t === null || soma(rep, 'valor') <= t + 0.005, o = out.length && (!cobre || out[0].diferenca >= soma(rep, 'diferenca')) ? out[0] : null;
+            xs.forEach(x => { if (o ? x !== o : x.regra !== 'repetida') fora.add(x); });
+            if (o) {
+                if (t !== null && o.diferenca > t + 0.005) { fora.add(o); return; }   // nunca acima do cobrado (as regras já usam o líquido)
+                if (rep.length) troca.set(o, Object.assign({}, o, { motivo: (o.motivo || '') + ' Também aparece repetida neste pedido: ' + rep.map(y => SHC.moeda(y.esperado) + ' × ' + Math.round(y.valor / y.esperado)).join(', ') + '.' }));
+                return;
+            }
+            if (cobre) return;
+            if (!(t > soma(rep, 'esperado') + 0.005)) { rep.forEach(x => fora.add(x)); return; }
+            rep.forEach(x => {
+                const n = Math.round(x.valor / x.esperado), c = SHC.moeda(x.esperado) + ' × ' + n;
+                troca.set(x, Object.assign({}, x, { motivo: 'A mesma cobrança aparece ' + n + ' vezes neste pedido (' + c + '), mas houve estorno e ficaram ' + SHC.moeda(t)
+                    + ' cobrados. O estorno pode já ter acertado a repetição — confira no detalhe da venda.',
+                    duvida: 'Esta cobrança foi lançada ' + n + ' vezes neste pedido (' + c + ') e depois houve um estorno. Ela foi lançada em duplicidade? Se foi, o estorno já devolveu as cópias a mais?' }));
             });
         });
         return lista.filter(x => !fora.has(x)).map(x => troca.get(x) || x);
@@ -348,7 +355,7 @@
         // Lista guardada antes da revisão de 07/10/2026 pode ter 2 regras na mesma cobrança: conta 1 vez só (teto = o cobrado líquido da outra regra).
         const cf = umaVezPorCobranca((d.conferir || []).filter(x => x && !x.duvida && !F.freteSemChamado(x) && x.diferenca > 0 && SHC.tipoCustoFechamento(x.cobranca) !== 'devolucao'),
             x => x.pedido + '|' + SHC.tipoCustoFechamento(x.cobranca) + '|' + x.itemId,
-            (k, xs) => (xs.some(x => x.regra !== 'repetida') ? Math.max(...xs.filter(x => x.regra !== 'repetida').map(x => x.valor)) : null));
+            (k, xs) => (xs.some(x => x.regra !== 'repetida') ? Math.max(...xs.filter(x => x.regra !== 'repetida').map(x => x.valor)) : null)).filter(x => !x.duvida);
         add('cobrancas', 'Cobranças acima do esperado', 'Cobranças para conferir (tarifa acima do que a venda mostra, cobrança repetida)',
             cf.filter(x => x.regra !== 'sem_estorno').map(x => Object.assign({}, x, { cobrado: x.valor, valor: x.diferenca })));
         add('estorno', 'Cancelada ou devolvida sem estorno', 'Venda cancelada: a tarifa voltou, outra cobrança do pedido não',
