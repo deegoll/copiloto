@@ -733,6 +733,8 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         const CRU = [
             ['get(null)', /chrome\.storage\.local\.get\(\s*null\s*\)/],
             ['get do cfg', /chrome\.storage\.local\.get\(\s*\[?\s*['"`]cfg['"`]/],
+            // 2ª revisão: o cfg em qualquer posição da lista (get(['ml:conta', 'cfg'])) e na forma de objeto (get({ cfg: {} }))
+            ['get do cfg na lista', /chrome\.storage\.local\.get\(\s*\[[^\]]*,\s*['"`]cfg['"`]/], ['get do cfg em objeto', /chrome\.storage\.local\.get\(\s*\{[^}]*\bcfg\s*:/],
             ['get de custo/ERP', /chrome\.storage\.local\.get\(\s*\[?\s*['"`](c\||erp[:@])/],
             ['get das chaves de custo', /chrome\.storage\.local\.get\(\s*\[\s*\.\.\.\s*chaves/],
             ['getKeys', /chrome\.storage\.local\.getKeys\(/],
@@ -770,9 +772,10 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         };
         // O detector acusa cada padrão (as leituras que escapavam da trava antiga: rastreio cego_estatico.js).
         const amostras = { 'x.js': "chrome.storage.local.get('cfg')", 'y.js': "chrome.storage.local.get(['c|sku|KIT-01'])", 'z.js': 'chrome.storage.local.getKeys()', 'w.js': "SHC.lerChave('cfg')",
-            'v.js': 'chrome.storage.local.get([...chaves])', 'u.js': "chrome.storage.local.remove('erp:tiny')", 'fundo/q.js': 'chrome.storage.local.get(null)', 's.js': 'cfg: Object.assign({}, SHC.PADRAO, tudo.cfg || {})' };
+            'v.js': 'chrome.storage.local.get([...chaves])', 'u.js': "chrome.storage.local.remove('erp:tiny')", 'fundo/q.js': 'chrome.storage.local.get(null)', 's.js': 'cfg: Object.assign({}, SHC.PADRAO, tudo.cfg || {})',
+            'r.js': "const cfg = (await chrome.storage.local.get(['ml:conta', 'cfg'])).cfg || {}", 'p.js': 'const cfg = (await chrome.storage.local.get({ cfg: {} })).cfg' };
         ok(varre(Object.keys(amostras), a => amostras[a]).length === Object.keys(amostras).length && !varre(['ok.js'], () => "SHC.lerCfg(); SHC.areaEmpresa().get([...chaves]); chrome.storage.local.get('shc:ret:1')").length,
-            'a trava acusa get("cfg"), get(["c|sku|…"]), getKeys(), lerChave("cfg"), get([...chaves]), remove("erp:…") e o cfg cru (e não acusa a leitura pela camada)');
+            'a trava acusa get("cfg"), get(["ml:conta", "cfg"]), get({ cfg }), get(["c|sku|…"]), getKeys(), lerChave("cfg"), get([...chaves]), remove("erp:…") e o cfg cru (e não acusa a leitura pela camada)');
         // A liberação vale para a linha, não para o arquivo: a mesma leitura numa 2ª linha do painel lateral (o mutante da revisão) é acusada.
         const pl = "    const salvarCfgRobo = async patch => SHC.gravarChave('cfg', Object.assign({}, (await SHC.lerChave('cfg')) || {}, patch));\n"
             + "        const [c, st] = await Promise.all([SHC.lerChave('cfg'), SHC.lerStatus()]);";
