@@ -5049,11 +5049,15 @@
      */
     SHC.recomendaSku = function (s, est, dias) {
         const L = SHC.REC_SKU, un = numF(s && s.unidades), v = numF(s && s.variacaoPct), d = numF(dias) >= 1 ? dias : null;
-        const vendaDia = un !== null && d ? un / d : null, out = { vendaDia: vendaDia === null ? null : Math.round(vendaDia * 10) / 10, cobertura: null };
+        // Contas em inteiros pelos DÉCIMOS de dia (#20): diasCobertos tem 1 casa, e 8,7 não é exato no ponto flutuante.
+        // 50 em estoque, 29 vendas em 8,7 dias: 50 × 87 ÷ 290 = 15 dias (50 × 8,7 ÷ 29 dava 14,999… → 14, "Repor");
+        // 33 vendas em 8,8 dias: 3.300 ÷ 88 = 37,5 → "3,8 por dia" (33 ÷ 8,8 × 10 dava 37,499… → "3,7").
+        const D = d ? Math.round(d * 10) : null;
+        const vendaDia = un !== null && D ? un * 10 / D : null, out = { vendaDia: vendaDia === null ? null : Math.round(un * 100 / D) / 10, cobertura: null };
         if (!est || !est.lido) return Object.assign(out, { acao: 'sem_dado', cor: 'cinza', rotulo: 'Sem estoque lido', motivo: 'O estoque deste SKU ainda não foi lido (lista de Anúncios ou Full).' });
-        const cob = vendaDia > 0 ? Math.floor(est.total * d / un) : null;   // multiplica antes (#20): 33 × 20 ÷ 44 = 15 (33 ÷ (44 ÷ 20) dava 14,999…)
+        const cob = vendaDia > 0 ? Math.floor(est.total * D / (un * 10)) : null;   // multiplica antes: 33 × 200 ÷ 440 = 15 (33 ÷ (44 ÷ 20) dava 14,999…)
         out.cobertura = cob;
-        const ritmo = vendaDia > 0 ? 'vende ' + decTxt(vendaDia) + ' por dia' : 'sem venda neste mês', tend = v === null ? '' : 'vendas ' + (v >= 0 ? '▲ ' : '▼ ') + pctTxt(v) + ', ';
+        const ritmo = vendaDia > 0 ? 'vende ' + decTxt(out.vendaDia) + ' por dia' : 'sem venda neste mês', tend = v === null ? '' : 'vendas ' + (v >= 0 ? '▲ ' : '▼ ') + pctTxt(v) + ', ';
         const dura = cob === null ? '' : ' dá para ' + SHC.qtd(cob, 'dia', 'dias');
         // Vendendo e o estoque acaba em menos de 15 dias (ou já acabou) → repor, com vendas subindo ou caindo (sem estoque, a venda cai de qualquer jeito).
         if (vendaDia > 0 && cob < L.coberturaBaixa)
