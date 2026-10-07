@@ -1938,6 +1938,7 @@
     const n0 = v => SHC.num(v) || 0;
     const dia10 = v => { const s = String(v || ''); return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : ''; };
     // Métricas no nome do ML → nomes do Copiloto. ctr, acos, tacos, cvr, sov já vêm em % (0,32 = 0,32%); roas em "x".
+    // ACOS e ROAS calculados aqui ficam crus: o texto arredonda uma vez só (gravar r2 e arredondar de novo na tela dava "43,2%" × "43,1%").
     function metricasAds(m) {
         m = m || {};
         const alt = (a, b) => (m[a] !== undefined ? m[a] : m[b]);
@@ -1951,8 +1952,8 @@
             vendas: n0(alt('unitsQuantity', 'soldQuantityTotal')), vendasDiretas: n0(alt('directUnitsQuantity', 'soldQuantityDirect')),
             vendasIndiretas: n0(alt('indirectUnitsQuantity', 'soldQuantityIndirect')),
             vendasOrganicas: numOuNull(m.organicUnitsQuantity), receitaOrganica: numOuNull(m.organicUnitsAmount),
-            acos: ou(m.acos, receita > 0 ? SHC.r2(custo / receita * 100) : null),
-            tacos: numOuNull(m.tacos), roas: ou(m.roas, custo > 0 ? SHC.r2(receita / custo) : null),
+            acos: ou(m.acos, receita > 0 ? custo / receita * 100 : null),
+            tacos: numOuNull(m.tacos), roas: ou(m.roas, custo > 0 ? receita / custo : null),
             cvr: numOuNull(m.cvr), sov: numOuNull(m.sov),
         };
     }

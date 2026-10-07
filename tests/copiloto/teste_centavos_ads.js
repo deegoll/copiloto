@@ -24,8 +24,9 @@
 //      filtro "Acima do equilíbrio (0)" (selo só 'semVenda').
 //   4) [corrigida, #24] ads.js A.metricas: TACOS sem as vendas orgânicas lidas virava o próprio ACOS, e A.soma/A.kpis transformavam orgânicas
 //      ausentes em "0 un. · R$ 0,00". Agora sem as orgânicas (e sem o tacos do ML) TACOS e "Vendas orgânicas" = "—", como o painel.
-//   5) ACOS/ROAS arredondados duas vezes: o fundo grava r2(custo ÷ receita × 100) e r2(receita ÷ custo); a tabela por SKU e o painel
-//      calculam de novo → a mesma conta aparece "43,2%" (KPI e campanhas) e "43,1%" (SKU e painel); ROAS 201 ÷ 200 = "1,01x" × "1x".
+//   5) [corrigida, #25] ACOS/ROAS arredondados duas vezes: o fundo gravava r2(custo ÷ receita × 100) e r2(receita ÷ custo) e a tabela por SKU
+//      e o painel calculavam de novo → "43,2%" × "43,1%"; ROAS 201 ÷ 200 = "1,01x" × "1x". Agora o fundo grava cru, ads.html calcula da base
+//      (o do ML só sem a base) e o texto arredonda uma vez só (SHC.pctTxt; ROAS com SHC.r2, como o painel).
 //   6) Lucro depois do Ads do MESMO anúncio difere entre ads.html (margem % × receita do Ads, todos os anúncios do SKU) e o painel (sobra
 //      de hoje × unidades, só anúncio com gasto): vendido abaixo do preço de hoje → "Prejuízo R$ 3,00" × "Lucro R$ 3,00"; e a venda atribuída a
 //      um anúncio com gasto R$ 0 (outra campanha) entra só em ads.html → "Lucro R$ 50,00" × "Prejuízo R$ 10,00".
@@ -72,6 +73,8 @@ const dePct = t => { const m = /^(−?)(\d{1,3}(?:\.\d{3})*(?:,\d+)?)%$/.exec(St
 const deX = t => { const m = /^(\d+(?:\.\d{3})*(?:,\d+)?)x$/.exec(String(t).trim()); return m ? Number(m[1].replace(/\./g, '').replace(',', '.')) : NaN; };
 const deInt = t => (/^\d{1,3}(?:\.\d{3})*$/.test(String(t).trim()) ? Number(String(t).trim().replace(/\./g, '')) : NaN);
 const semLixo = v => v === null || (typeof v === 'number' && isFinite(v));   // número de verdade ou null; nunca NaN/Infinity/undefined
+// Texto do ROAS no painel: cópia do xTxt de painel-lateral.js (função local, não exportada).
+const xPainel = v => v === null || v === undefined || !isFinite(v) ? '—' : (Math.round(v * 100) / 100).toLocaleString('pt-BR') + 'x';
 const textoLimpo = h => !/NaN|undefined|Infinity|\bnull\b|R\$\s(?!\d)/.test(h);   // "R$ " sempre seguido de número ("em R$." é texto)
 const tiraTags = s => s.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 const celulas = linha => linha.split('</td>').map(tiraTags);
@@ -291,10 +294,10 @@ console.log('D. Σ por SKU = Σ anúncios = resumo do ML = Σ campanhas (ads.js 
         }
         return true;
     });
-    prop('ACOS/ROAS da conta: ACOS = Ads ÷ receita (gravado com 2 casas), ROAS = receita ÷ Ads; TACOS = Ads ÷ (receita + orgânicas) quando as orgânicas foram lidas', contas, c => {
-        const a = c.an.kpis.atual, x = c.tot, d = 0.005 + 1e-9;
-        const acos = x.recC ? Math.abs(a.acos - x.costC / x.recC * 100) <= d : a.acos === null;
-        const roas = x.costC ? Math.abs(a.roas - x.recC / x.costC) <= d : a.roas === null;
+    prop('ACOS/ROAS da conta: ACOS = Ads ÷ receita e ROAS = receita ÷ Ads, crus (sem as 2 casas do fundo, #25); TACOS = Ads ÷ (receita + orgânicas) quando as orgânicas foram lidas', contas, c => {
+        const a = c.an.kpis.atual, x = c.tot, d = 0.005 + 1e-9, e = 1e-9;
+        const acos = x.recC ? Math.abs(a.acos - x.costC / x.recC * 100) < e : a.acos === null;
+        const roas = x.costC ? Math.abs(a.roas - x.recC / x.costC) < e : a.roas === null;
         const tacos = !c.comOrganicas ? true : (x.recC + c.orgC ? Math.abs(a.tacos - x.costC / (x.recC + c.orgC) * 100) <= d : a.tacos === null);
         const org = !c.comOrganicas || (cent(a.organicasValor) === c.orgC && a.organicasUn === c.orgUn);
         return (acos && roas && tacos && org) || `conta ${c.k}: ${JSON.stringify(a)}`;
@@ -468,8 +471,10 @@ console.log('G. Painel lateral (aba Ads) e o cruzamento com ads.html');
             && (x.cli ? emCentavos(m.cpc) && Math.abs(m.cpc * 100 - x.costC / x.cli) <= 0.5 + 1e-9 : m.cpc === null) && (x.imp ? Math.abs(m.ctr - x.cli / x.imp * 100) < 1e-9 : m.ctr === null)
             && (c.tacosMl ? m.tacos !== null : m.tacos === null) && Object.keys(m).every(k => semLixo(m[k]))) || `conta ${c.k}: ${JSON.stringify(m)}`;
     });
-    prop('ACOS da conta: ads.html e painel diferem no máximo o arredondamento de 2 casas do fundo (a mesma conta; o texto pode diferir — divergência 5)', contas.filter(c => c.tot.recC), c =>
-        Math.abs(c.an.kpis.atual.acos - c.contaP.acos) <= 0.005 + 1e-9 || `conta ${c.k}: ${c.an.kpis.atual.acos} × ${c.contaP.acos}`);
+    prop('ACOS e ROAS da conta: ads.html e painel com o mesmo número e o mesmo texto (#25)', contas.filter(c => c.tot.recC), c => {
+        const a = c.an.kpis.atual, p = c.contaP;
+        return (Math.abs(a.acos - p.acos) < 1e-9 && SHC.pctTxt(a.acos) === SHC.pctTxt(p.acos) && A.xTxt(a.roas) === xPainel(p.roas)) || `conta ${c.k}: ${a.acos} × ${p.acos} · ${A.xTxt(a.roas)} × ${xPainel(p.roas)}`;
+    });
     prop('campanhas do painel (P.adsCampanhasLista): gasto/receita de cada linha = os da campanha e Σ linhas = linha "Total" (P.adsConta)', contas, c => {
         const rows = c.campsP, soma = rows.reduce((t, r) => t + cent(r.m.gasto), 0), somaR = rows.reduce((t, r) => t + cent(r.m.receita), 0);
         const cada = rows.every(r => { const x = c.porCamp.get(Number(r.id)); return cent(r.m.gasto) === x.costC && cent(r.m.receita) === x.recC && r.m.vendas === x.v; });
@@ -640,6 +645,27 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
         const a = c.an.kpis.atual, h = A.htmlKpis(c.an.kpis);
         return (a.tacos === null && a.organicasUn === null && a.organicasValor === null && kp(h, 'TACOS') === '—' && kp(h, 'Vendas orgânicas') === '—' && c.an.camps.every(k => !k.m || k.m.tacos === null))
             || `conta ${c.k}: TACOS ${a.tacos} · ${kp(h, 'Vendas orgânicas')}`;
+    });
+}
+{   // #25: ACOS e ROAS arredondados uma vez só, no texto: KPI, campanha, tabela por SKU e painel iguais
+    const tela = (cost, totalAmount, extra) => {
+        const snap = contaFixa([{ id: 'MLB9000000021', title: 'Produto D', campaignId: 5, cost, totalAmount, prints: 1000, clicks: 10, unitsQuantity: 1 }], { resumoExtra: extra });
+        const an = A.analisa(snap, [{ itemId: 'MLB9000000021', sku: 'TST-D', titulo: 'Produto D', preco: 100, recebe: 80 }], () => null, {}, []), p = P.adsConta(snap);
+        const k4 = /ROAS · ACOS ⓘ<\/div><div class="v">(.*?) <small>· (.*?)<\/small>/.exec(A.htmlKpis4(an)), cl = celulas(A.htmlCampanhas(an.camps).split('<tr><td class="tit">')[1].split('</tr>')[0]);
+        const sk = celulas(A.htmlSkusTabela(an.grupos).split('<tr><td class="tit">')[1]);
+        return { roas: [k4[1], cl[4], sk[8], xPainel(p.roas)], acos: [k4[2], cl[5], sk[9], SHC.pctTxt(p.acos)] };
+    };
+    const igual = l => l.every(t => t === l[0]);
+    const a = tela(43.21, 100.14), b = tela(200, 201), c = tela(43.21, 100.14, { acos: 43.15, roas: 2.32 });
+    ok(igual(a.acos) && a.acos[0] === '43,1%' && igual(a.roas) && a.roas[0] === '2,32x', `#25 Ads R$ 43,21 ÷ R$ 100,14: "43,1%" e "2,32x" no KPI, na campanha, no SKU e no painel (obtido: ${a.acos.join(' | ')} · ${a.roas.join(' | ')})`);
+    ok(igual(b.roas) && b.roas[0] === '1,01x' && igual(b.acos), `#25 ROAS 201 ÷ 200 = 1,005: "1,01x" nas quatro telas (obtido: ${b.roas.join(' | ')})`);
+    ok(igual(c.acos) && c.acos[0] === '43,1%', `#25 o ML manda o acos com 2 casas (43,15): a tela calcula de novo do custo e da receita → "43,1%" em todas (obtido: ${c.acos.join(' | ')})`);
+    const g = SHC.adsMetricas({ cost: 43.21, totalAmount: 100.14 });
+    ok(g.acos === 43.21 / 100.14 * 100 && g.roas === 100.14 / 43.21, '#25 o fundo grava ACOS e ROAS calculados crus (sem as 2 casas)');
+    const rnd = semente(725);
+    prop('#25 pares custo × receita em centavos: o texto do ACOS e do ROAS é o mesmo no KPI, na campanha, no SKU e no painel', vezes(300), () => {
+        const cC = I(rnd, 1, 500000), rC = I(rnd, 1, 2000000), t = tela(cC / 100, rC / 100);
+        return (igual(t.acos) && igual(t.roas) && Math.abs(dePct(t.acos[0]) - cC / rC * 100) <= 0.05 + 1e-9 && Math.abs(deX(t.roas[0]) - rC / cC) <= 0.005 + 1e-9) || `${cC} ÷ ${rC}: ${t.acos.join(' | ')} · ${t.roas.join(' | ')}`;
     });
 }
 
