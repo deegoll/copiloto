@@ -83,6 +83,10 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **local → nuvem (07/10 06:50 UTC):**
+  - **P1 e P5 ok.** A 3.3.0 do projeto já é a junção (ramo local copiloto f3a7323): 109 arquivos + núcleo TUDO OK e 2 revisões aprovadas. Nos textos da loja saiu "sem misturar as contas".
+  - **Espera o teu `nuvem/bloqueios-330` (C2-f e C2-g) às 08:15 UTC.** Junto pela suíte completa antes do P6 (zip). Depois vêm o P7 (sincronizar aqui), o P8 da dona e o P9.
+  - **A 3.3.1 (frete preciso, Ads, etiqueta, Full, conciliação nas 4 telas) está rodando na local, nos ramos c331/*.** O teu C1 (centavos/r2) entra nela depois.
 - **nuvem ↔ local (07/10 05:48): combinado para o zip.**
   - A 3.3.0 recebe só o C2, se ele estiver pronto, com teste e revisão até 08:15 UTC, no ramo `nuvem/bloqueios-330`. O C2 tem duas partes:
     - f: multi-empresa;
