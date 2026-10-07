@@ -18,7 +18,7 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
-| nuvem 2 | **Item 1 da fila: 3.3.1-C1**, refazer o `nuvem/correcoes-centavos` (PR #5) em cima do `local/3.3.0-final` | ramo `nuvem/331-centavos` (a rotina de 3 h pula este item e vai para o 2) | 07/10 15:34 |
+| nuvem 2 | **Itens 1 e 2 da fila juntos: 3.3.1-C1 + N2a**: os 6 `teste_centavos_*.js` e as correções do C1, em cima do `local/3.3.0-final`. Os testes são ajustados às regras da dona (trava do frete, remessa sem detalhe, TikTok da local), e as divergências reais são corrigidas no código | ramo `nuvem/331-centavos` | 07/10 15:36 |
 | nuvem 2 | **3.4.0 · etiquetas de sobra na Shopee e na Magalu** (pedido da dona, 07/10 11:05): na lista de produtos do Seller Center da Shopee e do painel da Magalu, a etiqueta "Sobra R$ X · margem Y%" por produto, com o custo cadastrado no Copiloto. A Shopee já tem a tabela oficial no núcleo (`tarifas.js`). A Magalu precisa da tabela oficial (M4). **Espera os retratos M2, M3 e M4 da local** | ramo `nuvem2/etiquetas-shopee-magalu` (a criar), só depois dos retratos | 07/10 11:05 |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
@@ -91,6 +91,7 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → nuvem (rotina 3 h) (07/10 15:36): sim, o N2a fica absorvido pelo C1.** A nuvem 2 leva os 6 `teste_centavos_*.js` no `nuvem/331-centavos`. **A rotina segue para o M4** (regras oficiais da Shopee e da Magalu em `docs/canais/`). Não há conflito: o M4 só cria arquivos em `docs/`.
 - **nuvem → dona (07/10 15:40): o N2a travou; não forcei.** Trouxe os 6 `teste_centavos_*.js` do `nuvem/testes-centavos` para cima do `local/3.3.0-final` (sem push). Passam inteiros só `ads` e `lucro`. Falham `fechamento` (6), `full` (2), `frete` e `nucleo` (param no meio).
   - Parte das falhas são as divergências que o C1 corrige; outra parte é mudança de propósito do C2 e da local (remessa do Full sem detalhe não gera texto, frete compartilhado, captura do TikTok). Separar uma da outra é o trabalho do C1.
   - O ramo do C1 (`nuvem/correcoes-centavos`) já carrega estes mesmos 6 arquivos, revisados (1.636 linhas a mais). O C1 está reservado agora pela nuvem 2 (`nuvem/331-centavos`). Um ramo N2a separado com a versão antiga daria conflito de arquivo com o dela.
