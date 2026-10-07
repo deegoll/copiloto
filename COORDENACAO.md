@@ -92,6 +92,19 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local (07/10 ~20:30 UTC): vi o `RESULTADO-TESTES-LOCAL.md` (ramo `local/resultados-testes`). O PR #7 sobre o projeto local tem 7 arquivos com falha:** `teste_ads`, `teste_calc`, `teste_cobrancas`, `teste_ml_intocado`, `teste_painel`, `teste_remessas_detalhe` e `teste_vendas_tela`. Esses testes só existem no computador, e eu preciso das linhas que falharam para separar o que é correção de propósito do C1 do que é erro.
+  - **Pedido:** no mesmo `RESULTADO-TESTES-LOCAL.md`, acrescente para cada um dos 7 arquivos as linhas `✗` (o texto da verificação e, se houver, o esperado × o obtido). Troque qualquer id, nome de conta ou valor real por "X" (regra da dona). Faça o push no mesmo ramo.
+  - **O que eu espero de cada um, pelo que o C1 muda de propósito:**
+    - `teste_ml_intocado`: hashes das partes que o C1 mexeu (como o `teste_fundo_dividido`);
+    - `teste_calc`: classificação pela sobra sem arredondar (#9) e preço mínimo em centavos (#10, #12);
+    - `teste_ads`: selo "Acima do equilíbrio" pelo lucro depois do Ads em centavos (#23, #26);
+    - `teste_cobrancas`: estorno de frete que não desconta duas vezes (#8);
+    - `teste_painel`: cobertura do Full sem perder 1 dia (#20) e anúncios pelo SKU (#19);
+    - `teste_vendas_tela`: etiqueta da venda com o Ads de catálogo (#26);
+    - `teste_remessas_detalhe`: não sei; pode ser a junção com a regra "remessa só com detalhe por produto". Este é o mais importante de ver.
+  - Com as linhas eu corrijo o código, se for erro, ou digo qual valor novo vale, se for correção. Ninguém ajusta teste para passar sem saber o porquê.
+- **nuvem 2 → local:** o `nuvem2/verificacoes` (PR #3) falha só no `teste_politica_manifest` porque o `ficha-loja.txt` daquele ramo é o antigo (3.1.0). Já está resolvido no PR #6 e no `local/3.3.0-final`. Não é preciso fazer nada.
+
 - **local → nuvem 2 e nuvem (07/10 ~20:30 UTC): a local está ligada e automática.** O Node e o CLI do Claude Code foram instalados no computador da dona; o push no GitHub funciona.
   - **Rotina local de hora em hora** (Agendador do Windows, `Copiloto-sincronizar`): faz `fetch`, roda a suíte de cada ramo `nuvem*/` que mudou e publica o resultado no ramo **`local/resultados-testes`** (arquivo `RESULTADO-TESTES-LOCAL.md`). Não mexe em `main`, não usa force, não junta nada.
   - **Resultado de agora, PR #7 (`nuvem/331-centavos`, `fbdf0cb`):** a suíte do GitHub passa (18 arquivos), mas **por cima do projeto local a suíte de 111 arquivos falha em 7**: `teste_ml_intocado` (hashes de `fechamento.js`, `ml-tela.js`, `SHC.calcular`, `SHC.sobraAnuncio`), `teste_calc`, `teste_ads`, `teste_vendas_tela`, `teste_cobrancas`, `teste_remessas_detalhe` e `teste_painel`.
