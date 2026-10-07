@@ -1620,6 +1620,21 @@
         const fatos = ps.slice(0, 15).map(p => (p.sku ? 'SKU ' + p.sku : p.itemId || 'produto') + (p.itemId && p.sku ? ' (' + p.itemId + ')' : '') + ': declaradas ' + n(p.declaradas)
             + ', processadas ' + n(p.processadas) + (p.naoAptas ? ', não aptas ' + p.naoAptas : '') + (p.resultado ? ' — ' + p.resultado : '') + '.');
         if (!ps.length && !(temQtd('declaradas') && temQtd('aptas'))) return '';
+        // Revisão 3 (07/10/2026): os totais da remessa e o "recebida com diferença" só com TODOS os produtos com declaradas E aptas em número
+        // (every, não some: "declaradas 15; disponíveis 10" com as aptas de um produto não lidas seria número que o Copiloto não leu).
+        // Detalhe incompleto: só pede a conferência, com os produtos completos e sem total, sem reclamação firme nem estorno.
+        const completo = p => p && typeof p.declaradas === 'number' && typeof p.aptas === 'number';
+        if (!r.produtos.every(completo)) {
+            const fc = ps.filter(completo).slice(0, 15).map(p => (p.sku ? 'SKU ' + p.sku : p.itemId || 'produto') + (p.itemId && p.sku ? ' (' + p.itemId + ')' : '') + ': declaradas ' + n(p.declaradas)
+                + ', processadas ' + n(p.processadas) + (p.naoAptas ? ', não aptas ' + p.naoAptas : '') + (p.resultado ? ' — ' + p.resultado : '') + '.');
+            fc.push('O detalhe desta remessa não traz as unidades declaradas e as disponíveis para venda de todos os produtos.');
+            if (r.custo) fc.push('Total cobrado pelo Mercado Livre nesta remessa (coleta e/ou penalidade): ' + SHC.moeda(r.custo) + '.');
+            if (r.prazo) fc.push('Prazo para reclamar informado pelo ML: ' + dt(r.prazo) + '.');
+            return SHC.textoContestacao({ assunto: 'Pedido de conferência da remessa do Full', ids: [['Remessa', '#' + r.id]],
+                intro: 'Gostaríamos de conferir as unidades desta remessa' + (r.quando ? ' (' + dt(r.quando) + ')' : '') + ', produto a produto.',
+                fatos: fc, regras: ['full_custos'], anexos: ['nota fiscal da remessa'],
+                pedido: 'a informação de quantas unidades de cada produto desta remessa foram declaradas, processadas e estão disponíveis para venda e, se houver diferença ou unidade não apta, o motivo.' });
+        }
         if (!ps.length) fatos.push('Unidades declaradas: ' + n(r.declaradas) + '; disponíveis para venda: ' + n(r.aptas) + '.');
         // Auditoria da loja (07/10/2026) e regra da dona: r.custo é o total_charged da remessa = coleta e/ou penalidade — nunca "multa" nem
         // "cobrado pela inconformidade". Só unidade não apta (sem diferença de contagem) não é erro de contagem: pode ter vindo do nosso preparo.

@@ -74,7 +74,7 @@ console.log('Devolução, medidas, Full');
     ok(/^Assunto: Pedido de correção da cubagem do anúncio/.test(desce) && !/aumenta/.test(desce) && !/estorno/.test(desce) && /Peso considerado no frete/.test(desce),
         'medida que DIMINUIU: só a correção do cadastro, sem "aumenta" e sem estorno');
     const rem = SHC.chamadoRemessa({ id: '61234567', quando: '2026-09-28', custo: 27, prazo: '2026-10-12', declaradas: 100, aptas: 94,
-        produtos: [{ itemId: 'MLB8000000004', sku: 'HA-14253', declaradas: 50, processadas: 44, diferencas: -6, naoAptas: 0, resultado: 'faltando' }, { itemId: 'MLB8000000005', sku: 'B2', declaradas: 50, processadas: 50, diferencas: 0 }] });
+        produtos: [{ itemId: 'MLB8000000004', sku: 'HA-14253', declaradas: 50, processadas: 44, diferencas: -6, aptas: 44, naoAptas: 0, resultado: 'faltando' }, { itemId: 'MLB8000000005', sku: 'B2', declaradas: 50, processadas: 50, diferencas: 0, aptas: 50 }] });
     ok(/Reclamação por diferenças na remessa do Full – Remessa: #61234567/.test(rem) && /SKU HA-14253 \(MLB8000000004\): declaradas 50, processadas 44/.test(rem) && !/SKU B2/.test(rem),
         'Full: só os produtos com diferença, declaradas × processadas');
     ok(/Total cobrado pelo Mercado Livre nesta remessa \(coleta e\/ou penalidade\): R\$ 27,00/.test(rem) && !/multa|por esta inconformidade/.test(rem) && /Prazo para reclamar informado pelo ML: 12\/10\/2026/.test(rem)
@@ -82,7 +82,7 @@ console.log('Devolução, medidas, Full');
         'Full: o total cobrado na remessa (coleta e/ou penalidade, nunca "multa"), o prazo e o estorno só do que a diferença causou');
     // Auditoria da loja: só unidade não apta (sem diferença de contagem) não é erro de contagem — pede o motivo de cada uma.
     const na = SHC.chamadoRemessa({ id: '61234568', quando: '2026-09-28', custo: 27, declaradas: 50, aptas: 47,
-        produtos: [{ itemId: 'MLB8000000004', sku: 'HA-14253', declaradas: 50, processadas: 50, diferencas: 0, naoAptas: 3, resultado: 'sem etiqueta' }] });
+        produtos: [{ itemId: 'MLB8000000004', sku: 'HA-14253', declaradas: 50, processadas: 50, diferencas: 0, aptas: 47, naoAptas: 3, resultado: 'sem etiqueta' }] });
     ok(/^Assunto: Pedido de revisão de unidades não aptas na remessa do Full/.test(na) && /3 unidades foram consideradas não aptas/.test(na) && !/recontagem/.test(na)
         && /se a inaptidão não decorreu do nosso preparo/.test(na), 'Full só com unidades não aptas: pede o motivo de cada uma, sem afirmar erro de contagem');
 }
@@ -137,6 +137,19 @@ console.log('Remessa do Full sem o detalhe por produto (rastreio 07/10, bloqueio
     ok(incSemQtd.length === 1 && !incSemQtd[0].semDetalhe && SHC.chamadoRemessa(incSemQtd[0]) === '', 'detalhe sem as quantidades por produto: nenhum texto (antes: "Unidades declaradas: 3; disponíveis para venda: 2", os números da lista)');
     const soDecl = SHC.remessasInconformes(lista2, { porId: { '61239101': { produtos: [{ itemId: 'MLB8000000031', sku: 'HA-77011', declaradas: 3 }], reclamacoesDisponiveis: ['diferencas'] } } }, '2026-09-25')[0];
     ok(soDecl && SHC.chamadoRemessa(soDecl) === '', 'produtos com as declaradas, mas sem as aptas nem diferença por produto: nenhum texto (as aptas seriam as da lista)');
+    // Revisão 3: os totais e o "recebida com diferença" só com TODOS os produtos com declaradas e aptas (every, não some).
+    const lista3 = { remessas: [{ id: '61239501', status: 'closed_with_changes', recebida: '2026-09-20', unidades: 2, aptas: 1, custo: 27 }] };
+    const r3txt = units => { const d = SHC.mlRemessaDetalheDoEstado({ inboundId: 61239501, status: 'closed_with_changes', unitsDetail: {}, units, claims: { typesClaimsAvailable: [{ type: 'RECOUNT', enabledToClaim: true }] } });
+        const i = SHC.remessasInconformes(lista3, { porId: { '61239501': d } }, '2026-09-25')[0]; return i ? SHC.chamadoRemessa(i) : ''; };
+    const firme = t => /Reclama[çc][ãa]o por diferen[çc]as|recebida com diferen[çc]a|Unidades declaradas:|estorno/i.test(t);
+    const c1 = r3txt([{ itemId: 'MLB8000000041', sku: 'HA-1', declaredQuantity: 10, processedQuantity: 10, readyToFullQuantity: 10 }, { itemId: 'MLB8000000042', sku: 'HA-2', declaredQuantity: 5 }]);
+    ok(!firme(c1) && !/15|disponíveis para venda: 10/.test(c1), 'um produto completo + um só com as declaradas: sem "declaradas 15; disponíveis 10", sem "recebida com diferença" nem estorno (antes: reclamação firme)');
+    const c2 = r3txt([{ itemId: 'MLB8000000041', sku: 'HA-1', declaredQuantity: 10 }, { itemId: 'MLB8000000042', sku: 'HA-2', readyToFullQuantity: 4 }]);
+    ok(!firme(c2) && !/declaradas: 10; dispon/.test(c2), 'declaradas de um produto e aptas de outro: sem os totais nem reclamação firme (antes: "declaradas: 10; disponíveis: 4")');
+    const c3 = r3txt([{ itemId: 'MLB8000000041', sku: 'HA-1', declaredQuantity: 10, processedQuantity: 8, differencesQuantity: -2, readyToFullQuantity: 8 }, { itemId: 'MLB8000000042', sku: 'HA-2', declaredQuantity: 5 }]);
+    ok(!firme(c3) && /SKU HA-1 \(MLB8000000041\): declaradas 10, processadas 8/.test(c3) && !/HA-2/.test(c3), 'produto com diferença + outro incompleto: só o produto completo, sem total e sem reclamação firme');
+    const c4 = r3txt([{ itemId: 'MLB8000000041', sku: 'HA-1', declaredQuantity: 10, processedQuantity: 8, differencesQuantity: -2, readyToFullQuantity: 8 }, { itemId: 'MLB8000000042', sku: 'HA-2', declaredQuantity: 5, processedQuantity: 5, readyToFullQuantity: 5 }]);
+    ok(/^Assunto: Reclamação por diferenças na remessa do Full/.test(c4) && /SKU HA-1 \(MLB8000000041\): declaradas 10, processadas 8/.test(c4), 'todos os produtos completos: a reclamação por diferenças continua saindo');
     // O botão e o clique do painel, como estão no arquivo.
     const fs = require('fs'), src = fs.readFileSync(path.join(EXT, 'painel-lateral.js'), 'utf8');
     ok(/const cop = pend && SHC\.chamadoRemessa\(r\) \?/.test(src), 'painel: o botão "Copiar texto da reclamação" só aparece quando há texto');
