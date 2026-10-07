@@ -39,8 +39,8 @@
 //      (≈4–9% dos empates de tarifa descem); SHC.moeda(16,935) mostra "R$ 16,94".
 //   9) CORRIGIDA (#37): sem nenhum pedido do Financeiro lido, o card Repasse mostrava "Recebido: R$ 0,00 · a liberar: R$ 0,00" (conciliar() de
 //      nada devolvia 0). Agora conciliar() sem pedido devolve os totais null e a aba não mostra a linha (seções F, I e K).
-//  10) SHC.tt.lucroDoPedido só marca status_repasse/data_prevista pela LISTA do Financeiro: o pedido "Est." lido só no detalhe do extrato
-//      entra no "a liberar" da conciliação, mas some da linha do tempo "Previsto" (a soma do Previsto fica menor que o "a liberar").
+//  10) CORRIGIDA (#38): SHC.tt.lucroDoPedido só marcava status_repasse/data_prevista pela LISTA do Financeiro: o "Est." lido só no detalhe do
+//      extrato sumia do "Previsto". Agora, sem a lista, vêm do detalhe do extrato (Σ Previsto = "a liberar"; seções I e K).
 //  11) conciliar(): pedido com uma linha já liquidada e outra "Est." (venda paga R$ 73 + devolução em andamento −R$ 30 = esperado R$ 43)
 //      compara só o recebido com o esperado: status "a maior" e, na tela, "diferença do esperado: R$ 30,00" em vermelho — alarme falso
 //      (com o sinal trocado vira "parcial" e a diferença entra no total do mesmo jeito).
@@ -942,9 +942,9 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
     const lt = vm.repasse.linha_do_tempo, pendR = vm.pedidos.filter(x => x.status_repasse === 'a_liberar' && x.repasse !== null), porDiaC = {};
     pendR.forEach(x => { const dd = x.data_prevista || 'sem data'; porDiaC[dd] = (porDiaC[dd] || 0) + cent(x.repasse); });
     const soExtrato = gs.filter(g => g.status === 1 && /^trans$/.test(modos[g.id])), ltC = somaC(lt, x => cent(x.valor));
-    ok(pendR.length > 0 && lt.every(x => emCentavos(x.valor) && cent(x.valor) === porDiaC[x.dia]) && lt.length === Object.keys(porDiaC).filter(dd => /^\d{4}/.test(dd)).length && ltC <= aLibC
-        && pendR.every(x => x.data_prevista === U.somaDias(gs.find(g => g.id === x.pedido_id).entrega, 7)),
-        `linha do tempo: cada dia = Σ dos pedidos a liberar com aquela data prevista (${SHC.moeda(ltC / 100)} de ${SHC.moeda(aLibC / 100)}; ${soExtrato.length} "Est." lido(s) só no extrato ficam fora: divergência 10)`);
+    ok(pendR.length > 0 && lt.every(x => emCentavos(x.valor) && cent(x.valor) === porDiaC[x.dia]) && lt.length === Object.keys(porDiaC).filter(dd => /^\d{4}/.test(dd)).length && ltC === aLibC
+        && pendR.every(x => x.data_prevista === U.somaDias(gs.find(g => g.id === x.pedido_id).entrega, 7)) && soExtrato.length > 0 && soExtrato.every(g => pendR.some(x => x.pedido_id === g.id)),
+        `linha do tempo: cada dia = Σ dos pedidos a liberar com aquela data prevista e Σ = o "a liberar" da conciliação (${SHC.moeda(ltC / 100)}), com os ${soExtrato.length} "Est." lidos só no extrato (#38)`);
     const ex = vm.repasse.extratos;
     ok(ex.length === recs.length && ex.every(e => {
         const s = stmts[e.id], lidos = s.filter(naLista);
@@ -1120,6 +1120,18 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
             'sem pedido do Financeiro lido (#37): o card Repasse não mostra "Recebido: R$ 0,00 · a liberar: R$ 0,00" (nem ao lado de "A receber R$ 1.200,00")');
         const c0 = CO.conciliar({ pedidos: [], tarifas: [], repasses: [M.garantir('repasse', { canal: 'tiktok', conta: 'x', fonte: 'api', id: 'R1', valor: 10, pedidos: ['P9'], status: 'disponivel' })], hoje: HOJE });
         ok(c0.totais.recebido === null && c0.totais.esperado === null && c0.totais.diferenca === null && c0.sem_pedido.length === 1, 'conciliar() sem pedido: totais null (desconhecido), o repasse solto vai para sem_pedido — #37');
+    }
+
+    {   // #38: pedido "Est." de R$ 50,00 lido só no detalhe do extrato, previsto para 30/09.
+        const C38 = '7000000038', a38 = v => ({ amount: v }), id38 = '5770000000000000777';
+        await TT.gravarCaptura('transacao', { code: 0, data: { order_record: { statement_detail_id: '7700000000000000038', trade_order_id: id38, placed_time: msDia('2026-09-20'),
+            settlement_status: 1, estimate_settle_time: msDia('2026-09-30'), settlement_amount: a38('50.00'), in_come: { fee_list: [{ type: 'subtotal_before_discount', amount: a38('62.00') }] },
+            out_come: { fee_list: [{ type: 'platform_commission', amount: a38('-12.00') }] } } } }, C38, lidoEm);
+        const v38 = TT.resumo(await TT.ler(C38), { hoje: '2026-09-25' }), p38 = v38.pedidos[0], h38 = ABA.html(v38, { hoje: '2026-09-25' });
+        const sub38 = (new RegExp('data-k="ped:' + id38 + '"><summary>.*?<small>([^<]*)</small>').exec(h38) || [])[1] || '';
+        ok(p38.exato && p38.status_repasse === 'a_liberar' && p38.data_prevista === '2026-09-30' && v38.conciliacao.a_liberar === 50 && JSON.stringify(v38.repasse.linha_do_tempo) === '[{"dia":"2026-09-30","valor":50}]'
+            && /Previsto: 30\/09 R\$ 50,00</.test(h38) && /a liberar/.test(sub38),
+            '"Est." lido só no detalhe do extrato (#38): entra no "Previsto: 30/09 R$ 50,00" igual ao "a liberar" e a linha do pedido diz "a liberar" (antes linha do tempo vazia)');
     }
 
     console.log('\n' + nChecks + ' verificações.');
