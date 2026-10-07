@@ -8,15 +8,22 @@
     // Os arquivos do mundo isolado: a conta (calc, store, núcleo, etiqueta) + o desenho + o canal privado com a página.
     const ISOLADO = ['calc.js', 'store.js', 'nucleo/util.js', 'nucleo/modelo.js', 'nucleo/tarifas.js', 'nucleo/etiqueta.js', 'nucleo/adaptador.js'];
     SHC.ETQ_CANAIS = {
-        shopee: { nome: 'Shopee', origem: 'https://seller.shopee.com.br/*',
+        shopee: { nome: 'Shopee', origens: ['https://seller.shopee.com.br/*'],
             scripts: [
                 { id: 'copiloto-etq-sp-pagina', js: ['shopee-pagina.js'], world: 'MAIN' },
                 { id: 'copiloto-etq-sp-tela', js: ISOLADO.concat(['nucleo/adaptadores/shopee.js', 'etiqueta-canal.js', 'etiqueta-tela.js', 'shopee-tela.js']) },
             ] },
+        // N-D: o Portal do Seller (seller.magalu.com, docs/canais/magalu.md) e o magalu-sellers.magalu.com (Financeiro, retrato M3).
+        // As APIs lidas (api-product*.magalu.com) não precisam de permissão: o script só vê a resposta que a própria página recebeu.
+        magalu: { nome: 'Magalu', origens: ['https://seller.magalu.com/*', 'https://magalu-sellers.magalu.com/*'],
+            scripts: [
+                { id: 'copiloto-etq-mg-pagina', js: ['magalu-pagina.js'], world: 'MAIN' },
+                { id: 'copiloto-etq-mg-tela', js: ISOLADO.concat(['nucleo/adaptadores/magalu.js', 'etiqueta-canal.js', 'etiqueta-tela.js', 'magalu-tela.js']) },
+            ] },
     };
-    SHC.etqPerm = canal => ({ permissions: ['scripting'], origins: [SHC.ETQ_CANAIS[canal].origem] });
+    SHC.etqPerm = canal => ({ permissions: ['scripting'], origins: SHC.ETQ_CANAIS[canal].origens.slice() });
     SHC.etqLigada = (cfg, canal) => !!(cfg && cfg.etiquetas && cfg.etiquetas[canal] === true);
-    const registro = c => SHC.ETQ_CANAIS[c].scripts.map(s => Object.assign({ matches: [SHC.ETQ_CANAIS[c].origem], runAt: 'document_start', persistAcrossSessions: true }, s));
+    const registro = c => SHC.ETQ_CANAIS[c].scripts.map(s => Object.assign({ matches: SHC.ETQ_CANAIS[c].origens.slice(), runAt: 'document_start', persistAcrossSessions: true }, s));
     let fila = Promise.resolve();
     const emFila = f => { const p = fila.then(() => f()); fila = p.catch(() => {}); return p; };
 

@@ -13,7 +13,7 @@
     const cor = c => COR[c] || NEUTRO;
     const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
     const PULA = /^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA|INPUT|SELECT|OPTION|SVG|CANVAS|IFRAME)$/;
-    let canal = '', itens = [], fechada = false, agendado = null, obs = null;
+    let canal = '', itens = [], fechada = false, agendado = null, obs = null, nomesRepetidos = new Set();
 
     // Texto da página que é deste produto: o nome inteiro (4+ letras) ou o SKU sozinho / depois de "SKU:" (2+ letras).
     // → 'nome' | 'sku' | '' (o nome manda: na linha que mostra o nome, o SKU não ganha outra etiqueta).
@@ -21,13 +21,25 @@
         const t = norm(txt);
         if (!t) return '';
         const n = norm(it.nome);
-        if (n.length >= 4 && t === n) return 'nome';
+        if (n.length >= 4 && t === n && !nomesRepetidos.has(n)) return 'nome';   // nome repetido (variações em SKUs separados, Magalu): só pelo SKU
         return (it.skus && it.skus.length ? it.skus : [it.sku]).some(s => { const k = norm(s); return k.length >= 2 && (t === k || new RegExp('(^|\\s|:)' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$').test(t)); }) ? 'sku' : '';
     }
+    // Extras (visitas e frete, como no ML): [{texto, classe}] em selos menores depois da etiqueta.
+    const COR_EXTRA = { cai: ['#fce8e6', '#c5221f'], sobe: ['#e6f4ea', '#137333'], alerta: ['#fef7e0', '#a05a00'] };
+    function selo(x) {
+        const [fundo, letra] = COR_EXTRA[x.classe] || NEUTRO, s = d.createElement('span');
+        s.textContent = x.texto;
+        if (x.titulo) s.title = x.titulo;
+        s.style.cssText = 'display:inline-block;margin-left:4px;padding:0 5px;border-radius:9px;font:500 10px/15px system-ui,sans-serif;background:' + fundo + ';color:' + letra;
+        return s;
+    }
+    const textoDe = it => (it.rotulo || it.texto) + (it.extras || []).map(x => x.texto).join('');
     function etiqueta(it) {
         const [fundo, letra] = cor(it.classe), s = d.createElement('span');
         s.setAttribute(ATTR, it.produto_id);
-        s.textContent = it.texto;
+        s.dataset.copilotoTexto = textoDe(it);
+        s.textContent = it.rotulo || it.texto;
+        (it.extras || []).forEach(x => s.appendChild(selo(x)));
         s.title = 'Copiloto · ' + it.texto + (it.detalhe && it.detalhe !== it.texto ? '\n' + it.detalhe : '') + (it.classe === 'sem_custo' ? '\nCadastre o custo pelo SKU no painel do Copiloto.' : '');
         s.style.cssText = 'display:inline-block;margin:2px 0 2px 6px;padding:1px 6px;border-radius:10px;font:600 11px/16px system-ui,sans-serif;white-space:nowrap;'
             + 'background:' + fundo + ';color:' + letra + ';border:1px solid ' + letra + '33;vertical-align:middle;cursor:help';
@@ -55,7 +67,7 @@
         let postas = 0;
         achados.forEach((a, it) => (a.nome.length ? a.nome : a.sku).forEach(el => {
             const prox = el.nextElementSibling;
-            if (prox && prox.getAttribute(ATTR) === it.produto_id && prox.textContent === it.texto) return;   // já está
+            if (prox && prox.getAttribute(ATTR) === it.produto_id && prox.dataset.copilotoTexto === textoDe(it)) return;   // já está
             if (prox && prox.hasAttribute(ATTR)) prox.remove();   // de uma lista anterior
             el.insertAdjacentElement('afterend', etiqueta(it));
             postas++;
@@ -96,10 +108,11 @@
             nome.textContent = it.nome || it.sku || 'Produto ' + it.produto_id;
             nome.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
             const v = d.createElement('span');
-            v.textContent = it.texto;
+            v.textContent = it.rotulo || it.texto;
             v.title = it.detalhe || it.texto;
             v.style.cssText = 'display:inline-block;padding:0 6px;border-radius:10px;font-weight:600;background:' + fundo + ';color:' + letra;
             li.append(nome, v);
+            (it.extras || []).forEach(x => li.appendChild(selo(x)));
             ul.appendChild(li);
         });
         cx.appendChild(ul);
@@ -126,6 +139,9 @@
             if (!d.body) { d.addEventListener('DOMContentLoaded', () => w.__copilotoEtq.mostra(c, lista), { once: true }); return; }
             canal = String(c || '');
             itens = (Array.isArray(lista) ? lista : []).filter(i => i && i.produto_id && i.texto);
+            const vistos = new Set();
+            nomesRepetidos = new Set();
+            itens.forEach(i => { const n = norm(i.nome); if (n) { if (vistos.has(n)) nomesRepetidos.add(n); vistos.add(n); } });
             d.querySelectorAll('[' + ATTR + ']').forEach(e => { if (!itens.some(i => i.produto_id === e.getAttribute(ATTR))) e.remove(); });
             if (!obs && d.body) obs = new MutationObserver(ms => { if (ms.some(m => [...m.addedNodes, ...m.removedNodes].some(n => !(n.nodeType === 1 && (n.hasAttribute(ATTR) || n.id === CAIXA))))) agenda(); });
             if (obs) { obs.disconnect(); obs.observe(d.body, { childList: true, subtree: true, characterData: true }); }

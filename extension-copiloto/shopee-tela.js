@@ -2,19 +2,29 @@
 // shopee-pagina.js. Canal PRIVADO como no tiktok-tela.js: entrega 1 porta (MessageChannel) e, depois do aperto de mão, só ela vale.
 // O que chega (a lista de "Meus Produtos", já cortada aos campos da etiqueta) vira etiqueta: adaptador da Shopee do núcleo → custo por SKU,
 // imposto e meta do cadastro (SHC.lerCustos, SHC.lerCfg) → SHC.etqDosProdutos → o desenho (etiqueta-tela.js). NADA é gravado e o fundo não
-// recebe nada: a lista da Shopee fica só nesta aba. O custo mudou no painel → a etiqueta refaz sozinha.
+// recebe nada: a lista fica só nesta aba. Só o total de visualizações de cada produto por dia é guardado (etq:hist:shopee, 15 dias), para as
+// visitas de 7 dias. O custo mudou no painel → a etiqueta refaz sozinha.
 (function () {
     'use strict';
-    const MAX = 2000000;
+    const MAX = 2000000, HIST = 'etq:hist:shopee';
     let ultima = null, conta = 0;
     async function desenha() {
         const SHC = globalThis.SHC, CN = globalThis.CopilotoNucleo, E = globalThis.__copilotoEtq;
         if (!ultima || !SHC || !CN || !CN.adaptadores || !CN.adaptadores.shopee || !E) return;
         const minha = ++conta, ps = CN.adaptadores.shopee.produtosDaLista(ultima);
         if (!Array.isArray(ps)) return;
-        const [custos, cfg] = await Promise.all([SHC.lerCustos(SHC.etqChaves(ps, 'shopee')), SHC.lerCfg()]);
+        const [custos, cfg, h] = await Promise.all([SHC.lerCustos(SHC.etqChaves(ps, 'shopee')), SHC.lerCfg(), chrome.storage.local.get(HIST)]);
         if (minha !== conta) return;   // chegou outra lista no meio: vale a nova
-        E.mostra('shopee', SHC.etqDosProdutos('shopee', ps, custos, cfg, SHC.hoje()));
+        // Visitas (pedido da dona 08/10): o total de visualizações de cada dia, para as visitas de 7 dias e a variação (SHC.etqVisitasAcumuladas)
+        const dia = SHC.hoje();
+        let hist = h[HIST] || {};
+        ps.forEach(p => { if (p.visualizacoes !== null) hist = SHC.etqHistGrava(hist, p.produto_id, 'vis', dia, p.visualizacoes); });
+        const ids = Object.keys(hist);
+        if (ids.length > 3000) ids.slice(0, ids.length - 3000).forEach(k => delete hist[k]);   // teto: lojas enormes
+        chrome.storage.local.set({ [HIST]: hist }).catch(() => {});
+        const es = SHC.etqDosProdutos('shopee', ps, custos, cfg, dia);
+        es.forEach(e => { const v = SHC.etqVisitasAcumuladas((hist[e.produto_id] || {}).vis, dia); if (v) e.extras.push(v); });
+        E.mostra('shopee', es);
     }
     function recebe(m) {
         try {

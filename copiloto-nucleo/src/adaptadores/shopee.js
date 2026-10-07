@@ -186,7 +186,7 @@
 
     /**
      * Lista de produtos do Seller Centre (GET /api/v3/opt/mpsku/list/v2/get_product_list, tela "Meus Produtos"; retrato M2 de 07/10/2026,
-     * tests/copiloto/fixtures/shopee_produtos_2026-10-07.json) → [{ produto_id, nome, sku, ativo, preco, preco_cheio, estoque, variacoes }] | naoLido.
+     * tests/copiloto/fixtures/shopee_produtos_2026-10-07.json) → [{ produto_id, nome, sku, ativo, preco, preco_cheio, estoque, visualizacoes (acumuladas), variacoes }] | naoLido.
      * preço = o que o comprador paga hoje (promoção em andamento quando há; senão o cheio). Variação: model_list[i] (o SKU da variação; sem SKU,
      * vale o do produto). Só sai o que a etiqueta precisa: nada de estatísticas, imagens ou campanhas.
      */
@@ -203,7 +203,8 @@
             });
             const cheio = dinheiro(pd.price_min), venda = dinheiro(pd.selling_price_min);
             return { produto_id: String(p.id), nome: typeof p.name === 'string' ? p.name : '', sku, ativo: !(p.tag && p.tag.unlist) && p.status === 1,
-                preco: venda !== null && venda > 0 ? venda : cheio, preco_cheio: cheio, estoque: U.num(sd.total_available_stock), variacoes };
+                preco: venda !== null && venda > 0 ? venda : cheio, preco_cheio: cheio, estoque: U.num(sd.total_available_stock),
+                visualizacoes: U.num((p.statistics || {}).view_count), variacoes };
         });
     }
 

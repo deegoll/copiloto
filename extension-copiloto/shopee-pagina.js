@@ -2,7 +2,7 @@
 // depois que a seller liga "Etiquetas na Shopee" em Ajustes (permissão opcional; registrado por SHC.etqSp.sincronizarScripts).
 // LEITURA PASSIVA, igual ao tiktok-pagina.js: embrulha o fetch e o XMLHttpRequest da própria página; a chamada original acontece igual e a
 // página recebe a mesma resposta. O Copiloto lê uma CÓPIA de UMA rota só, a lista de "Meus Produtos" (GET get_product_list), e dela só
-// os campos da etiqueta (id, nome, SKU, situação, preço, preço de promoção e estoque, do produto e das variações). Nunca cria requisição,
+// os campos da etiqueta (id, nome, SKU, situação, preço, preço de promoção, estoque e as visualizações, do produto e das variações). Nunca cria requisição,
 // nunca navega, nunca altera a página. A cópia vai ao shopee-tela.js só pela porta PRIVADA que ele entrega (MessageChannel).
 // Qualquer erro aqui dentro: o embrulho sai do caminho e a tela segue normal.
 (function (w) {
@@ -17,7 +17,7 @@
         const ps = j && j.data && Array.isArray(j.data.products) ? j.data.products : null;
         if (!ps) return null;
         return { code: j.code, data: { products: ps.slice(0, 200).filter(p => p && typeof p === 'object').map(p => Object.assign(so(p, ['id', 'name', 'status', 'parent_sku']), {
-            tag: so(p.tag, ['unlist']), price_detail: so(p.price_detail, PRECO), stock_detail: so(p.stock_detail, ['total_available_stock']),
+            tag: so(p.tag, ['unlist']), price_detail: so(p.price_detail, PRECO), stock_detail: so(p.stock_detail, ['total_available_stock']), statistics: so(p.statistics, ['view_count']),
             model_list: (Array.isArray(p.model_list) ? p.model_list : []).slice(0, 100).filter(m => m && typeof m === 'object').map(m => Object.assign(so(m, ['id', 'name', 'sku']),
                 { price_detail: so(m.price_detail, MPRECO), stock_detail: so(m.stock_detail, ['total_available_stock']) })) })) } };
     }

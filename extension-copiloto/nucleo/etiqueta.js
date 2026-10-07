@@ -27,7 +27,7 @@
         if (opc && typeof opc.calcular === 'function' && p > 0) {
             const r = opc.calcular(p, ctx || {});
             if (r) {
-                const base = { preco: U.r2(p), repasse: r.repasse, tarifas_rs: r.tarifas_rs, linhas: r.linhas || [], avisos: (r.avisos || []).slice(), frete_regra: r.frete_regra || null, confianca: r.confianca || null };
+                const base = { preco: U.r2(p), custo: U.num((ctx || {}).custo) > 0 ? U.r2(U.num(ctx.custo)) : null, repasse: r.repasse, tarifas_rs: r.tarifas_rs, linhas: r.linhas || [], avisos: (r.avisos || []).slice(), frete_regra: r.frete_regra || null, confianca: r.confianca || null };
                 if (r.lucro === null || r.lucro === undefined) return Object.assign(base, { classe: 'sem_custo', texto: 'Informe o custo', sobra: null, margem_pct: null });
                 return Object.assign(base, { classe: r.classe, sobra: r.lucro, margem_pct: r.margem_pct,
                     texto: (r.lucro < 0 ? 'Prejuízo ' : 'Sobra ') + moeda(r.lucro) + ' · margem ' + pct(r.margem_pct) });
@@ -42,7 +42,7 @@
             : T.simular(canal, p, ctx || {}, data);
         if (!s) return { classe: 'sem_preco', texto: 'Sem preço na lista', preco: null };
         if (M.ehNaoLido(s)) return { classe: 'nao_lido', texto: 'Tarifa da ' + (NOME[canal] || canal) + ' não lida', motivo: s.motivo, preco: U.r2(p) };
-        const base = { preco: s.preco, repasse: s.repasse, tarifas_rs: s.tarifas_rs, linhas: s.linhas, avisos: s.avisos.slice(), frete_regra: s.frete_regra, confianca: s.confianca };
+        const base = { preco: s.preco, custo: s.custo_rs, repasse: s.repasse, tarifas_rs: s.tarifas_rs, linhas: s.linhas, avisos: s.avisos.slice(), frete_regra: s.frete_regra, confianca: s.confianca };
         if (semTabela) base.avisos.push('comissão informada por você (a tabela da ' + (NOME[canal] || canal) + ' não foi lida)');
         if (s.lucro === null) return Object.assign(base, { classe: 'sem_custo', texto: 'Informe o custo', sobra: null, margem_pct: null });
         return Object.assign(base, { classe: s.classe, sobra: s.lucro, margem_pct: s.margem_pct,

@@ -1,0 +1,211 @@
+{
+  "canal": "magalu",
+  "tela": "metricas",
+  "lido_em": "2026-10-07",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/product-metrics",
+      "parametros": [
+        "sku",
+        "id"
+      ],
+      "status": 200,
+      "corpo": {
+        "visits": [],
+        "sales": [],
+        "conversion_rate": []
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/product-metrics",
+      "parametros": [
+        "sku",
+        "id"
+      ],
+      "status": 200,
+      "corpo": {
+        "visits": [
+          {
+            "days": 7,
+            "growth_rate": null,
+            "last_update": "2026-10-07T22:22:20",
+            "quantity": 1
+          }
+        ],
+        "sales": [],
+        "conversion_rate": []
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/product-metrics",
+      "parametros": [
+        "sku",
+        "id"
+      ],
+      "status": 200,
+      "corpo": {
+        "visits": [
+          {
+            "growth_rate": -29.63,
+            "quantity": 5,
+            "last_update": "2026-10-07T22:22:20",
+            "days": 7
+          }
+        ],
+        "sales": [],
+        "conversion_rate": []
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/product-metrics",
+      "parametros": [
+        "sku",
+        "id"
+      ],
+      "status": 200,
+      "corpo": {
+        "visits": [],
+        "sales": [],
+        "conversion_rate": []
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/product-metrics",
+      "parametros": [
+        "sku",
+        "id"
+      ],
+      "status": 200,
+      "corpo": {
+        "visits": [
+          {
+            "quantity": 4,
+            "last_update": "2026-10-07T22:22:20",
+            "growth_rate": 311,
+            "days": 7
+          }
+        ],
+        "sales": [],
+        "conversion_rate": []
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/product-metrics",
+      "parametros": [
+        "sku",
+        "id"
+      ],
+      "status": 200,
+      "corpo": {
+        "visits": [],
+        "sales": [],
+        "conversion_rate": []
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/product-metrics",
+      "parametros": [
+        "sku",
+        "id"
+      ],
+      "status": 200,
+      "corpo": {
+        "visits": [],
+        "sales": [],
+        "conversion_rate": []
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/product-metrics",
+      "parametros": [
+        "sku",
+        "id"
+      ],
+      "status": 200,
+      "corpo": {
+        "visits": [],
+        "sales": [],
+        "conversion_rate": []
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/product-metrics",
+      "parametros": [
+        "sku",
+        "id"
+      ],
+      "status": 200,
+      "corpo": {
+        "visits": [
+          {
+            "quantity": 2,
+            "growth_rate": -88.89,
+            "days": 7,
+            "last_update": "2026-10-07T22:22:20"
+          }
+        ],
+        "sales": [
+          {
+            "quantity": 1,
+            "growth_rate": 0,
+            "days": 7,
+            "last_update": "2026-10-07T22:22:20"
+          }
+        ],
+        "conversion_rate": [
+          {
+            "quantity": 104,
+            "growth_rate": 0,
+            "days": 7,
+            "last_update": "2026-10-07T22:22:20"
+          }
+        ]
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product.magalu.com/api/v1/product-metrics",
+      "parametros": [
+        "sku",
+        "id"
+      ],
+      "status": 200,
+      "corpo": {
+        "visits": [
+          {
+            "last_update": "2026-10-07T22:22:20",
+            "growth_rate": -62,
+            "days": 7,
+            "quantity": 12
+          }
+        ],
+        "sales": [
+          {
+            "last_update": "2026-10-07T22:22:20",
+            "growth_rate": 0,
+            "days": 7,
+            "quantity": 1
+          }
+        ],
+        "conversion_rate": [
+          {
+            "last_update": "2026-10-07T22:22:20",
+            "growth_rate": 0,
+            "days": 7,
+            "quantity": 34
+          }
+        ]
+      }
+    }
+  ]
+}
