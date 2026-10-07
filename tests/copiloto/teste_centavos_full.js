@@ -27,7 +27,8 @@
 //   3) #18 CORRIGIDA: custo por unidade do mês = cobrança ÷ unidades só das remessas recebidas COM unidades (antes R$ 2,00/un. em vez de
 //      R$ 1,00: somava o custo da remessa sem units_count e não as unidades dela) — seção D;
 //   4) #19 CORRIGIDA: SHC.alertasDe (número do ícone e sino) usa a MESMA previsão do painel (SHC.previsaoFull, com o índice sazonal e o parado
-//      da v3.3; variação pela mesma SHC.vmDaParte). Antes o painel dizia "Crítico, acaba em 4 dias" e o ícone não contava o produto — seção M;
+//      da v3.3; variação pela mesma SHC.vmDaParte) e os MESMOS anúncios do produto (SHC.idsDoProdutoFull: MLB do Full + os do mesmo SKU,
+//      também no vm|ml que o fundo lê). Antes o painel dizia "Crítico, acaba em 4 dias" e o ícone não contava o produto — seção M;
 //   5) #20 CORRIGIDA: dias até acabar = ⌊aptas × 30 ÷ previsão⌋ no painel, no plano e no ícone (antes ⌊aptas ÷ (previsão ÷ 30)⌋ perdia 1 dia
 //      na conta exata: 23 aptas, 23 vendas → 29 dias, não 30) — seções K e L;
 //   6) simulador: "R$ 5,24 por unidade" × 100 un. = R$ 524,00, mas o custo estimado mostrado é R$ 523,81 (média sem arredondar × un.);
@@ -698,6 +699,54 @@ console.log('M. Ícone × painel: SHC.alertasDe conta o mesmo produto que P.saud
     const an19 = await F19.ctx.atualizarAlertas(C19);
     ok(!F19.ctx.SHC.pl && typeof F19.ctx.SHC.previsaoFull === 'function' && an19.full === 1 && an19.lista[0].dias === 4 && F19.dados['shc:alertas'].full === 1,
         `fundo (service worker): a previsão sazonal vem do ml-extrator.js (sem o painel) — shc:alertas conta ${F19.dados['shc:alertas'] && F19.dados['shc:alertas'].full} produto do Full, acaba em 4 dias`);
+    // #19 (os anúncios do produto): o painel soma o vm|ml dos MLB do Full + os anúncios do mesmo SKU (P.anunciosDoFull); o ícone só lia os MLB do
+    // Full. Agora os dois usam SHC.idsDoProdutoFull, e o fundo lê o vm|ml desses anúncios. Painel = planoBase (idsDe e vmDe), ícone = SHC.alertasDe.
+    const idsPainel = (q, itens) => [...new Set(P.anunciosDoFull(q, itens).map(it => it.itemId).concat(P.idsDoFull(q)))];   // os anúncios do produto no painel
+    const painelDe = (prods, itens, vm, cad) => {
+        const idsDe = q => idsPainel(q, itens), pl = P.planoFull({ produtos: prods, espaco: [] }, { hoje: HOJE, dias: 30, idsDe,
+            vmDe: q => { const ids = idsDe(q); return ids.length ? P.somaMeses(ids.map(i => vm[i])) : null; }, lucroDe: () => null });
+        pl.linhas.forEach(x => { x.saude = P.saudeFull(x.p, x.prev.qtd, cad ? cad(x.p) : null, ''); });
+        return pl;
+    };
+    // Anúncio B ligado só pelo SKU (o produto do Full traz só o MLB A) com o histórico do ano passado: set/25 = 10, out/25 = 20 → índice 2.
+    const A1 = 'MLB7310000001', B1 = 'MLB7310000002', p1 = { produtoId: 'PS1', titulo: 'Produto S', sku: 'SKU-S1', itemId: A1, itemIds: [A1], aptas: 12, aCaminho: 0, vendas30: 40 };
+    const it1 = [{ itemId: A1, sku: 'SKU-S1', titulo: 'Produto S' }, { itemId: B1, sku: 'sku-s1 ', titulo: 'Produto S premium' }], vm1 = { [B1]: { '2025-09': 10, '2025-10': 20 } };
+    const pl1 = painelDe([p1], it1, vm1), a1 = SHC.alertasDe({ full: { produtos: [p1] }, vm: vm1, hoje: HOJE, itens: it1, custos: {} });
+    ok(pl1.linhas[0].prev.qtd === 80 && pl1.linhas[0].saude.dias === 4 && P.alertas(pl1.linhas, [], [], {}).full === 1 && a1.full === 1 && a1.lista[0].dias === 4,
+        `anúncio ligado só pelo SKU ("sku-s1 " = SKU-S1) com o ano passado: painel e ícone com previsão 80, acaba em 4 dias (ícone ${a1.full}; antes 0, previsão 40)`);
+    // Dois produtos do Full com o mesmo SKU (A clássico, B premium): os dois ficam com os anúncios A e B e dividem o vm somado pelas vendas de 30 dias.
+    const A2 = 'MLB7320000001', B2 = 'MLB7320000002';
+    const p2 = [{ produtoId: 'PA', titulo: 'Produto', sku: 'SKU-2', itemId: A2, itemIds: [A2], aptas: 12, aCaminho: 0, vendas30: 40 },
+        { produtoId: 'PB', titulo: 'Produto', sku: 'SKU-2', itemId: B2, itemIds: [B2], aptas: 200, aCaminho: 0, vendas30: 40 }];
+    const it2 = [{ itemId: A2, sku: 'SKU-2', titulo: 'Produto' }, { itemId: B2, sku: 'SKU-2', titulo: 'Produto' }], vm2 = { [A2]: { '2025-09': 10, '2025-10': 10 }, [B2]: { '2025-09': 10, '2025-10': 30 } };
+    const pl2 = painelDe(p2, it2, vm2), a2 = SHC.alertasDe({ full: { produtos: p2 }, vm: vm2, hoje: HOJE, itens: it2, custos: {} }), la = pl2.linhas.find(x => x.p.produtoId === 'PA');
+    ok(la.prev.qtd === 80 && la.saude.dias === 4 && P.alertas(pl2.linhas, [], [], {}).full === 1 && a2.full === 1 && a2.lista[0].itemId === A2 && a2.lista[0].dias === 4,
+        `dois produtos do Full com o mesmo SKU: cada um fica com metade de A + B (10 e 20, índice 2) → o de 12 aptas acaba em 4 dias no painel e no ícone (ícone ${a2.full}; antes 0)`);
+    // No fundo: lê o vm|ml do anúncio ligado pelo SKU (antes só o dos MLB do Full) e passa todos os anúncios ao SHC.alertasDe.
+    const C3 = '900000031', F3 = montaFundo({ hoje: HOJE, dados: { 'ml:conta': C3, ['ml:full:' + C3]: { produtos: [p1] }, ['ml:anuncios:' + C3]: { itens: it1 }, ['vm|ml|' + B1]: vm1[B1] } });
+    const an3 = await F3.ctx.atualizarAlertas(C3);
+    ok(an3.full === 1 && an3.lista[0].dias === 4 && F3.dados['shc:alertas'].full === 1, `fundo: o vm|ml do anúncio do mesmo SKU entra — shc:alertas conta ${an3.full} produto, acaba em ${an3.lista[0] && an3.lista[0].dias} dias`);
+    const fonteP = require('fs').readFileSync(path.join(EXT, 'painel-lateral.js'), 'utf8');
+    ok(/const idsDoPlano = p => SHC\.idsDoProdutoFull\(p, itens\);/.test(fonteP) && /P\.anunciosDoFull = \(p, itens\) => SHC\.anunciosDoFull\(p, itens\);/.test(fonteP),
+        'o painel (idsDoPlano e P.anunciosDoFull) usa a mesma regra do ícone: SHC.idsDoProdutoFull / SHC.anunciosDoFull');
+    // Lote: produtos com e sem MLB, SKU repetido entre produtos, anúncios só pelo SKU (com espaço e caixa diferentes) e só pelo título.
+    const rI = lcg(1919), gI = lote();
+    let porSku = 0, porTit = 0, emAlerta = 0;
+    for (let k = 0; k < 1500; k++) {
+        const mlb = j => 'MLB74' + String(k * 10 + j).padStart(8, '0'), skus = ['SKU-I' + k + 'A', 'SKU-I' + k + 'B', ''], tits = ['Kit ' + k + ' azul', 'Kit ' + k + ' verde'];
+        const itens = Array.from({ length: ent(rI, 0, 5) }, (_, j) => { const s = pega(rI, skus); return { itemId: mlb(j), sku: s && ent(rI, 0, 1) ? ' ' + s.toLowerCase() : s, titulo: pega(rI, tits) }; });
+        const vm = {}; itens.concat([{ itemId: mlb(7) }, { itemId: mlb(8) }]).forEach(i => { if (ent(rI, 0, 3)) vm[i.itemId] = { '2025-09': ent(rI, 0, 40), '2025-10': ent(rI, 0, 120) }; });
+        const prods = Array.from({ length: ent(rI, 1, 3) }, (_, j) => {
+            const ids = ent(rI, 0, 2) ? [pega(rI, [mlb(0), mlb(1), mlb(7), mlb(8)])] : [];
+            return { produtoId: 'PI' + k + '-' + j, titulo: pega(rI, tits), sku: pega(rI, skus), itemIds: ids, aptas: ent(rI, 0, 60), aCaminho: ent(rI, 0, 5) ? 0 : ent(rI, 1, 20), vendas30: ent(rI, 0, 9) ? ent(rI, 1, 120) : 0 };
+        });
+        prods.forEach(p => { const sem = P.idsDoFull(p), com = idsPainel(p, itens); if (com.length > sem.length) (p.sku ? porSku++ : porTit++); });
+        const pl = painelDe(prods, itens, vm), a = SHC.alertasDe({ full: { produtos: prods }, vm, hoje: HOJE, itens, custos: {} });
+        const doPainel = pl.linhas.filter(x => x.saude.alerta).map(x => 'full|' + x.p.produtoId + '|:' + x.saude.dias).sort().join(' '), doIcone = a.lista.map(x => x.chave + ':' + x.dias).sort().join(' ');
+        emAlerta += a.full;
+        gI.conta(doPainel === doIcone && a.full === P.alertas(pl.linhas, [], [], {}).full, { k, prods, itens, vm, doPainel, doIcone });
+    }
+    okLote(gI, `#19 anúncios do produto: ícone = painel (os mesmos ${emAlerta} produtos em alerta e os mesmos dias) com ${porSku} produtos ligados a mais anúncios pelo SKU e ${porTit} pelo título`);
 }
 
 console.log('N. Quantidades lidas da tela do ML (SHC.mlFullDoEstado, P.un)');
