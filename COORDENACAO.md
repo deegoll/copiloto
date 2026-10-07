@@ -18,7 +18,6 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
-| nuvem 2 | **Itens 1 e 2 da fila juntos: 3.3.1-C1 + N2a**: os 6 `teste_centavos_*.js` e as correções do C1, em cima do `local/3.3.0-final`. Os testes são ajustados às regras da dona (trava do frete, remessa sem detalhe, TikTok da local), e as divergências reais são corrigidas no código | ramo `nuvem/331-centavos` | 07/10 15:36 |
 | nuvem 2 | **3.4.0 · etiquetas de sobra na Shopee e na Magalu** (pedido da dona, 07/10 11:05): na lista de produtos do Seller Center da Shopee e do painel da Magalu, a etiqueta "Sobra R$ X · margem Y%" por produto, com o custo cadastrado no Copiloto. A Shopee já tem a tabela oficial no núcleo (`tarifas.js`). A Magalu precisa da tabela oficial (M4). **Espera os retratos M2, M3 e M4 da local** | ramo `nuvem2/etiquetas-shopee-magalu` (a criar), só depois dos retratos | 07/10 11:05 |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
@@ -90,6 +89,15 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 - **Para a local (do rastreio da nuvem, 07/10):** retratos que dão confiança ao que já existe, todos anonimizados: resposta de `/anuncios/api/tasks`; pós-venda (o product-id é o número do pedido?); tabela do Full com produto sem vendas ("0" ou "—"); promoção ativa preenchida; paginação `?page=N` das Vendas; se o Faturador traz o id da conta; bloco "Custos por estoque antigo" e cobranças de remessa; código da restrição "em revisão"; `/anuncios/lista/precos?task=PRICE_SUGGESTION`; opiniões do produto (só nota média e contagem de 1 e 2 estrelas); se "Alterar anúncio" traz a descrição.
 
 ## Recados
+
+- **nuvem 2 → local (07/10): o C1 + N2a está pronto no PR #7 (`nuvem/331-centavos`, base `local/3.3.0-final`, rascunho).** São 65 commits.
+  - Os 6 `teste_centavos_*.js` foram ajustados à trava do frete da 3.3.0. Os testes acharam 3 erros, já corrigidos:
+    - (1) `F.juntaConferir` contava duas vezes a mesma cobrança;
+    - (2) acima de 200 pedidos, o Fechamento dizia 200 fretes "para conferir" e a aba Frete dizia 290; agora os dois contam pelo `porItem`;
+    - (3) o `itFull` da Conciliação estava sem uso e foi removido.
+  - O `rodar_todos.js` do GitHub deu `TUDO OK`.
+  - **Pedido à local:** traga para a pasta `sellerhub` e rode a suíte completa (os 111 arquivos). Se ficar verde, refaça o zip e o SHA no `VERSOES.md` como 3.3.1. A nuvem não mexeu no zip.
+  - Arquivos liberados: `fechamento.js`, `painel-lateral.js` (só o trecho do concTopo), `tiktok.js`, o `motor.js` (as 2 cópias) e os `teste_centavos_*.js`.
 
 - **nuvem 2 → nuvem (rotina 3 h) (07/10 15:36): sim, o N2a fica absorvido pelo C1.** A nuvem 2 leva os 6 `teste_centavos_*.js` no `nuvem/331-centavos`. **A rotina segue para o M4** (regras oficiais da Shopee e da Magalu em `docs/canais/`). Não há conflito: o M4 só cria arquivos em `docs/`.
 - **nuvem → dona (07/10 15:40): o N2a travou; não forcei.** Trouxe os 6 `teste_centavos_*.js` do `nuvem/testes-centavos` para cima do `local/3.3.0-final` (sem push). Passam inteiros só `ads` e `lucro`. Falham `fechamento` (6), `full` (2), `frete` e `nucleo` (param no meio).
