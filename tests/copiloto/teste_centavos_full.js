@@ -17,10 +17,9 @@
 //   N. quantidades lidas da tela do ML (SHC.mlFullDoEstado / P.un): "1.234 un." = 1234, "—" = null (nunca 0);
 //   O. linha da sincronização (resumoFull, no fundo): mês sem cobrança não vira "R$ 0,00".
 // Casos gerados com semente fixa (LCG): o resultado é o mesmo em toda execução (nada de Math.random). Ids e valores inventados.
-// Divergências achadas nesta auditoria (fora das asserções para a suíte seguir verde; repro em scratchpad/centavos/ e no relatório da tarefa):
-//   1) SHC.remessasResumo.custoMes ("R$ X gastos em remessas este mês", aba Full) só soma closed_ok/closed_with_changes: a remessa vencida ou
-//      cancelada com total_charged (ex.: NO_SHOW) aparece na lista do MESMO cartão com "o ML cobrou R$ 80,00" e entra na linha da
-//      sincronização (resumoFull, via remessasPorMes), mas fica fora do total do cartão (R$ 120,50 no cartão × R$ 200,50 na sincronização);
+// Divergências achadas nesta auditoria (repro em scratchpad/centavos/ e no relatório da tarefa). As corrigidas viraram asserção (#n):
+//   1) #16 CORRIGIDA: o gasto do mês é um só (SHC.remessasPorMes) no cabeçalho do cartão, nas linhas "o ML cobrou" e na sincronização, com
+//      remessa vencida, cancelada ou aberta já cobrada (antes: R$ 120,50 no cartão × R$ 200,50 na sincronização) — seção O;
 //   2) SHC.simulaRemessa usa REM_FECHADA (inclui cancelada e vencida) na média do custo da coleta: a penalidade de uma remessa que nem foi
 //      coletada vira "custo da coleta" (R$ 1,60/un. na simulação × R$ 1,21/un. no cartão de remessas);
 //   3) SHC.remessasResumo.custoPorUnidade soma o custo da remessa sem units_count e não soma as unidades dela (R$ 2,00/un. em vez de R$ 1,00);
@@ -616,6 +615,36 @@ console.log('O. Linha da sincronização (resumoFull, no fundo): o R$ do mês e 
             : /ainda não cobrou coleta este mês$/.test(txt) && !/R\$/.test(txt) && rr.custoMes === null), { k, txt, c, custoMes: rr.custoMes });
     }
     okLote(l, 'só remessas recebidas: o R$ da sincronização = o R$ do cartão "Todas as remessas" (sem cobrança no mês: nenhum R$)');
+    // #16: o gasto do mês é um só — cabeçalho do cartão = Σ do "o ML cobrou" das linhas do mês = linha da sincronização, também com remessa
+    // vencida, cancelada ou aberta que o ML já cobrou (ex.: NO_SHOW). Antes o cartão dizia R$ 120,50 e a sincronização R$ 200,50.
+    const mes = SHC.hoje().slice(0, 7), venc = { id: '8520002', status: 'expired', agendada: '2026-09-15', unidades: 40, custo: 80, multaFlag: true, multaTipo: 'NO_SHOW' };
+    const v16 = [{ id: '8520001', status: 'closed_ok', recebida: '2026-09-10', unidades: 100, custo: 120.5 }, venc];
+    const s16 = { total: 2, remessas: v16, porMes: SHC.remessasPorMes(v16) }, r16 = SHC.remessasResumo(s16, null, mes, HOJE);
+    const l16 = P.linhasRemessas(s16, null).filter(x => x.quando.slice(0, 7) === mes && x.custo).map(x => 'o ML cobrou ' + SHC.moeda(x.custo)).join(' + ');
+    const sync16 = F.ctx.resumoFull({ temFull: true, produtos: [{}], remessas: s16 });
+    ok(r16.custoMes === 200.5 && P.remessasResumoTxt(r16).endsWith(' · R$ 200,50 gastos em remessas este mês') && l16 === 'o ML cobrou R$ 80,00 + o ML cobrou R$ 120,50'
+        && sync16.endsWith(' · R$ 200,50 em coletas este mês') && r16.custoPorUnidade === 1.21,
+        'recebida R$ 120,50 + vencida (NO_SHOW) R$ 80,00: cartão "R$ 200,50 gastos" = linhas R$ 80,00 + R$ 120,50 = sincronização "R$ 200,50" (R$ 1,21/un. só da recebida)');
+    const so16 = SHC.remessasResumo([venc], null, mes, HOJE);
+    ok(so16.custoMes === 80 && /R\$ 80,00 gastos em remessas este mês$/.test(P.remessasResumoTxt(so16)) && so16.custoPorUnidade === null
+        && F.ctx.resumoFull({ temFull: true, produtos: [{}], remessas: { total: 1, remessas: [venc], porMes: SHC.remessasPorMes([venc]) } }).endsWith(' · R$ 80,00 em coletas este mês'),
+        'só a vencida cobrada: o cartão diz "R$ 80,00 gastos" como a sincronização (nunca "ainda não cobrou" ao lado de "o ML cobrou R$ 80,00"); sem recebida, sem R$/un.');
+    const r16g = lcg(1616), g16 = lote();
+    let foraRec = 0;
+    for (let k = 0; k < 400; k++) {
+        const rs = Array.from({ length: ent(r16g, 1, 8) }, (_, j) => {
+            const st = pega(r16g, STS), c = ent(r16g, 0, 4) ? ent(r16g, 1, 200000) : pega(r16g, [null, 0]);
+            return { id: String(8530000 + k * 10 + j), status: st, [/^closed_/.test(st) ? 'recebida' : 'agendada']: dia(ent(r16g, -10, 50)), unidades: ent(r16g, 0, 3) ? ent(r16g, 0, 300) : null, custo: c === null ? null : c / 100 };
+        });
+        const snap = { total: rs.length, remessas: rs, porMes: SHC.remessasPorMes(rs) }, rr = SHC.remessasResumo(snap, null, mes, HOJE);
+        const doMes = rs.filter(x => (x.recebida || x.agendada).slice(0, 7) === mes && x.custo > 0), c = doMes.reduce((s, x) => s + cent(x.custo), 0);
+        if (doMes.some(x => !/^closed_(ok|with_changes)$/.test(x.status))) foraRec++;
+        const linhas = P.linhasRemessas(snap, null).filter(x => x.quando.slice(0, 7) === mes).reduce((s, x) => s + cent(x.custo), 0);
+        const tx = P.remessasResumoTxt(rr), sync = F.ctx.resumoFull({ temFull: true, produtos: [{}], remessas: snap });
+        g16.conta(linhas === c && (c > 0 ? emCentavos(rr.custoMes) && cent(rr.custoMes) === c && tx.endsWith(' · ' + reais(c) + ' gastos em remessas este mês') && sync.endsWith(' · ' + reais(c) + ' em coletas este mês')
+            : rr.custoMes === null && !/R\$/.test(tx) && /ainda não cobrou coleta este mês$/.test(sync)), { k, rs, c, linhas, custoMes: rr.custoMes, tx, sync });
+    }
+    okLote(g16, `#16 todos os status (${foraRec} meses com remessa não recebida cobrada): cartão = Σ das linhas do mês = sincronização, no centavo`);
 }
 
 console.log(`\n${nChecks} verificações (${nLote} conferências em lote, casos gerados com semente fixa)`);
