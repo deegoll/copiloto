@@ -122,19 +122,22 @@ function fiscalCompartilhado(conta, progresso) {
 }
 // {acao:'fiscal_agora'} → { ok:true, fiscal (fiscal:<conta>) } | { ok:false, motivo:'sem_conta'|'sem_sessao'|'ml_indisponivel', fiscal (o anterior, se houver) }
 // Leitura avulsa (fora da sincronização) grava na conta da ÚLTIMA sincronização (ml:conta). Se o ML aberto agora for outra conta, gravaria os
-// dados dela na errada. 1 GET da 1ª página de Anúncios diz a conta da sessão. → '' (mesma conta, ou a página não diz) | 'outra_conta' | 'login' | 'indisponivel'.
+// dados dela na errada. 1 GET da 1ª página de Anúncios diz a conta da sessão.
+// → 'mesma' (a página diz o dono e é esta conta) | '' (a página NÃO diz o dono: tela intermediária, verificação de segurança) | 'outra_conta' |
+//   'login' | 'indisponivel'. Revisão 07/10/2026: '' não prova nada — só 'mesma' confirma o que foi gravado (diário da sincronização, fundo/08).
 async function confereSessao(conta) {
     const b = await buscarHtml(BASE + '/anuncios/lista');
     if (!b) return 'indisponivel';
     if (b.login) return 'login';
     const c = SHC.mlContaDoEstado(SHC.mlExtraiEstado(b.html) || {}), id = c && c.sellerId;
-    return id && String(id) !== String(conta) ? 'outra_conta' : '';
+    return !id ? '' : String(id) !== String(conta) ? 'outra_conta' : 'mesma';
 }
 // v3.3 (multi-empresa, auditoria 07/10/2026): trocar o login do ML no meio da sincronização (ou do histórico em segundo plano) fazia a conta
 // nova ser gravada nas chaves da antiga — e o mês fechado lido assim não era mais relido. contaSegue(conta) confere a sessão (confereSessao)
 // no máximo 1 vez a cada CONTA_CONFERE_MS; false só com PROVA de outra conta (a página diz o dono e é outro). Sessão caída não é troca.
 const CONTA_CONFERE_MS = 60e3;
-// r = a resposta da última conferência ('' = a página é desta conta ou não diz o dono): só '' confirma o diário da sincronização (fundo/08).
+// r = a resposta da última conferência (confereSessao): só 'mesma' PROVA a conta e confirma o diário da sincronização (fundo/08); '' (página sem
+// dono), 'login' e 'indisponivel' não são troca (ok) nem prova.
 let contaConferida = { conta: '', ts: 0, ok: true, r: '' };
 async function contaSegue(conta, forcar) {
     if (!conta || conta === 'atual') return true;
