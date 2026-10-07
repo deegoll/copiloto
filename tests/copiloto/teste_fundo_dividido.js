@@ -176,7 +176,7 @@ function cargaTardia(partes) {
         // como o total do Fechamento; as cobranças e a fatura não mudam (era 181f0bba…)
         '03-faturamento.js': ['109498eba3b4bef74f42531fb84bbad53232697a76373f6a7f7231fe3dacd976', MOTIVO_NUVEM + '; trava do frete no R$ de conferir:<conta>'],
         '04-notas-e-vendas.js': ['15bfd6fe31e7e61973318ee370e9a2eba9aab2f4a0f3df3581dcad0fdb428b7f', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
-        '07-alertas-promocoes-full.js': ['3a5db45ac277a1d0f764f992ddf8b1c512664599f23911bc87dd253c1995e099', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
+        '07-alertas-promocoes-full.js': ['f61279d58e8ca504972e6f45c39b78a2c00ee536ff6dfda74266c250b5794d58', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login; junção local 07/10: o selo devolve a promessa e a etapa Alertas espera o ícone'],
         // revisão da junção (07/10): a conferência da conta depois de cada etapa e no fim do histórico é sem o guardado de 60 s (era 1983b6d8…)
         '08-sincronizacao.js': ['251591fcec20ef38dc461744d60b7ae46adf57a5b77a98eda53ea2ae3bcbfade', MOTIVO_NUVEM + '; conferência sem o guardado depois de cada etapa' + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
         '09-custos-erp.js': ['8d321ea6750a5572baf8bc3dba44515d8eaff3fffab88124eecd88856faf7c3c', MOTIVO_NUVEM],

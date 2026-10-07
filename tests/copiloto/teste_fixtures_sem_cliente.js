@@ -10,6 +10,13 @@
 const fs = require('fs'), path = require('path');
 const RAIZ = path.join(__dirname, '../..');
 const PASTAS = ['tests/copiloto/fixtures', 'copiloto-nucleo/testes/fixtures'];
+// Na pasta do projeto (sellerhub) os retratos são reais de propósito: o que vai ao GitHub sai pelo deploy/sincronizar-github.py, que tira
+// os retratos de cliente e roda ESTE teste na cópia que sobe. Aqui ele não se aplica (sem o filtro, falharia sempre).
+if (fs.existsSync(path.join(RAIZ, 'deploy', 'sincronizar-github.py'))) {
+    console.log('  - pasta do projeto: este teste roda na cópia do GitHub (deploy/sincronizar-github.py), não aqui');
+    console.log('\nTUDO OK');
+    process.exit(0);
+}
 let falhas = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) falhas++; };
 

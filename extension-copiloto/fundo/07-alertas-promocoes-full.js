@@ -14,7 +14,8 @@ const pintaSelo = a => {
 function selo(a) {
     if (!chrome.action || !chrome.action.setBadgeText) return;
     if (!(a && typeof a === 'object' && a.conta)) return pintaSelo(a);
-    SHC.contaAtual().then(async c => (c === 'atual' || c === String(a.conta) ? pintaSelo(a) : pintaSelo((await SHC.lerChave('shc:anomalias:' + c)) || 0))).catch(() => {});
+    // devolve a promessa: quem pinta o ícone espera ele (o selo fica certo quando a etapa Alertas termina)
+    return SHC.contaAtual().then(async c => (c === 'atual' || c === String(a.conta) ? pintaSelo(a) : pintaSelo((await SHC.lerChave('shc:anomalias:' + c)) || 0))).catch(() => {});
 }
 // Quem trocou de conta no ML (ml:conta) vê no ícone o número da conta nova logo, sem esperar a etapa Alertas dela.
 if (chrome.storage && chrome.storage.onChanged) chrome.storage.onChanged.addListener((m, area) => { if (area === 'local' && m && m['ml:conta']) seloAgora().catch(() => {}); });
@@ -80,7 +81,7 @@ async function atualizarAlertas(conta) {
     await chrome.storage.local.set(Object.assign({ ['shc:anomalias:' + c]: snapAnom }, aberta ? { 'shc:anomalias': snapAnom } : {}));
     const rp = await roboPromoPassada(c, cfg).catch(() => null);   // v2.9: robô de promoções (só sugere; nenhum GET a mais)
     const diaNovo = !!((await SHC.lerChave(chaveResumo(c, 'dia'))) || {}).novo;   // v3.2: resumo do dia ainda não visto
-    selo(Object.assign({}, anom, { semanalNovo: sem && sem.novo ? true : diaNovo ? 'dia' : false, promoNovo: !!(rp && rp.novo) }));
+    await selo(Object.assign({}, anom, { semanalNovo: sem && sem.novo ? true : diaNovo ? 'dia' : false, promoNovo: !!(rp && rp.novo) }));
     r.anomalias = anom;
     return r;
 }

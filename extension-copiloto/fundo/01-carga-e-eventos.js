@@ -96,7 +96,7 @@ async function seloAgora() {
     const a = await SHC.lerAnomalias(), c = (a && a.conta) || await SHC.contaAtual(), tem = c && c !== 'atual';
     const [sem, dn, rp] = tem ? await Promise.all([SHC.lerChave(chaveResumo(c, 'semana')), SHC.lerChave(chaveResumo(c, 'dia')), SHC.lerChave('robopromo:' + c)]) : [];
     const base = a || { total: (((await SHC.lerAlertas()) || {}).criticos) || 0 }, sn = !!(sem && sem.novo), dnv = !!(dn && dn.novo), rn = sn && dnv ? 'ambos' : sn ? true : dnv ? 'dia' : false;
-    selo(rn || (rp && rp.novo) ? Object.assign({}, base, { semanalNovo: rn, promoNovo: !!(rp && rp.novo) }) : (a || base.total));
+    await selo(rn || (rp && rp.novo) ? Object.assign({}, base, { semanalNovo: rn, promoNovo: !!(rp && rp.novo) }) : (a || base.total));
 }
 const horaResumo = cfg => { const n = SHC.num(cfg && cfg.resumo_hora); return n !== null && n >= 0 && n <= 23 ? Math.floor(n) : 8; };
 // Passou da hora de hoje (dia) ou da segunda nessa hora (semana) e o guardado é de antes disso, não existe ou é do formato antigo
