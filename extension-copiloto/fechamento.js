@@ -332,9 +332,10 @@
     const ORIGEM_CURTA = { cobrancas: '', estorno: 'venda cancelada', devolucao: 'devolução × pós-venda · 30 dias' };
     F.recuperar = function (d) {
         d = d || {};
-        const parcelas = [], add = (id, rotulo, origem, itens) => {
-            const valor = r2(itens.reduce((s, x) => s + (x.valor || 0), 0));
-            if (itens.length && valor > 0) parcelas.push({ id, rotulo, origem, curta: ORIGEM_CURTA[id], valor, itens });
+        // resto = {n, valor}: o que fica fora da lista de itens (só o frete, acima do corte de 200) — entra no valor e na contagem.
+        const parcelas = [], add = (id, rotulo, origem, itens, resto) => {
+            const valor = r2(itens.reduce((s, x) => s + (x.valor || 0), 0) + (resto ? resto.valor : 0));
+            if (itens.length && valor > 0) parcelas.push(Object.assign({ id, rotulo, origem, curta: ORIGEM_CURTA[id], valor, n: itens.length + (resto ? resto.n : 0), itens }, resto ? { resto } : {}));
         };
         // 3.3.0 (trava do frete): o frete cobrado acima da régua fica à parte, com o valor COBRADO (nunca a diferença como "a recuperar").
         // Todos, com ou sem a dúvida de 2+ unidades: a mesma contagem do cartão "Frete para conferir" da aba Frete (P.freteCobrado).
@@ -921,7 +922,9 @@
                 + `<span class="acoes"><button class="bt sec pq" data-copiar-rec="${p.id}:${i}">Copiar texto do chamado</button>`
                 + (p.id === 'estorno' ? `<a class="lnk" href="${esc(SHC.POSVENDA_URL || F.URL.faturamento)}" target="_blank" rel="noopener">Ver no pós-venda</a>` : `<a class="lnk" href="${esc(F.URL.cobranca(x.pedido))}" target="_blank" rel="noopener">Abrir a cobrança</a>`) + '</span></li>';
         };
-        return cab + `<p class="rec-tot"><b>${esc(SHC.moeda(rec.total))}</b> em ${esc(SHC.qtd(rec.parcelas.reduce((s, p) => s + p.itens.length, 0), 'item', 'itens'))}</p>`
+        // Frete acima do corte de 200: 1 linha com os que ficaram fora da lista (a soma da tela fecha com o valor da parcela).
+        const resto = p => (p.resto ? `<ul class="rec-it"><li><span><b>Mais ${esc(SHC.qtd(p.resto.n, 'pedido', 'pedidos'))}</b><small>Os de menor diferença: a lista mostra os ${p.itens.length} maiores. O total é o mesmo da aba Frete.</small></span><b class="num">${esc(SHC.moeda(p.resto.valor))}</b></li></ul>` : '');
+        return cab + `<p class="rec-tot"><b>${esc(SHC.moeda(rec.total))}</b> em ${esc(SHC.qtd(rec.parcelas.reduce((s, p) => s + (p.n || p.itens.length), 0), 'item', 'itens'))}</p>`
             + rec.parcelas.map(p => `<div class="parc ${p.id}"><div class="pc-cab"><b>${p.id === 'devolucao' ? '<span class="pt ok"></span>' : ''}${esc(p.rotulo)}</b><b class="num">${esc(SHC.moeda(p.valor))}</b></div><span class="mini">Origem: ${esc(p.origem)}</span>`
                 + `<div data-vm-box><ul class="rec-it">${p.itens.slice(0, 5).map((x, i) => item(p, x, i)).join('')}</ul>${p.itens.length > 5 ? `<ul class="rec-it vm-x">${p.itens.slice(5).map((x, i) => item(p, x, i + 5)).join('')}</ul>` : ''}${F.vmBotao(p.itens.length, 5)}</div></div>`).join('') + blocoFq() + blocoFu() + blocoDc() + rod;
     };
