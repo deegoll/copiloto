@@ -5,12 +5,64 @@
 // (e) conta marcada como "outra empresa": custos por SKU, imposto/margem/despesas e ERP só dela (store.js, SHC.empresaSeparada).
 // (f) revisão de 07/10/2026: "Esquecer" o ERP numa empresa não apaga o da outra; configurado é da empresa; a importação do ERP grava na
 //     empresa do COMEÇO mesmo se o ML trocar de conta no meio; nenhuma tela lê custos/cfg/ERP cru (sem a camada da empresa).
+// Bloqueio 5 (rastreio de 07/10/2026): (g) troca no meio de uma etapa / dentro do minuto guardado / na leitura de Anúncios; (h) histórico;
+// (i) retomada; (j) leitura avulsa; (k) número do ícone; (l) "Todas as contas" por empresa; (m) Tiny do painel lateral; (n) etiqueta numa
+// aba do ML já aberta; (o) as correções que já existiam continuam protegidas (o teste falha se cada uma for desfeita).
 // Rodar: node tests/copiloto/teste_multiconta.js
 'use strict';
 require('./relogio').fixar();
 const montaFundo = require('./fundo_falso'), { B, paginaAnuncios, html } = montaFundo;
 // Ordem das etapas da sincronização (SHC.SYNC_ETAPAS do fundo).
 const SHC_ETAPAS = F => F.ctx.SHC.SYNC_ETAPAS.map(e => e.id);
+// ml-tela.js (a parte do navegador: etiquetas na página do ML) num vm com um DOM mínimo de mentira. op = { dados, url, script (texto do
+// __NORDIC_RENDERING_CTX__) }. querySelector de um elemento devolve sempre o mesmo filho por seletor (o '.outra' do aviso, o '.pop input').
+function montaTela(op) {
+    const fs = require('fs'), path = require('path'), vm = require('vm'), EXT = path.join(__dirname, '../../extension-copiloto');
+    const mem = op.dados, cp = v => (v === undefined ? undefined : JSON.parse(JSON.stringify(v))), ouvStorage = [], enviados = [], criados = [];
+    const novo = tag => {
+        const e = { tagName: String(tag || 'div').toUpperCase(), style: {}, dataset: {}, attrs: {}, filhos: [], ouv: {}, textContent: '', value: '', hidden: false, isConnected: true,
+            offsetWidth: 0, offsetHeight: 0, parentElement: null, nextElementSibling: null, memo: new Map(),
+            classList: { s: new Set(), add(...c) { c.forEach(x => this.s.add(x)); }, remove(...c) { c.forEach(x => this.s.delete(x)); }, toggle(c, f) { if (f === undefined ? !this.s.has(c) : f) this.s.add(c); else this.s.delete(c); }, contains(c) { return this.s.has(c); } },
+            setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }, removeAttribute(k) { delete this.attrs[k]; },
+            appendChild(c) { this.filhos.push(c); c.parentElement = this; return c; }, append(...c) { c.forEach(x => this.appendChild(x)); }, prepend(c) { this.filhos.unshift(c); }, insertBefore(c) { this.filhos.push(c); return c; },
+            insertAdjacentElement(p, c) { return c; }, remove() { this.isConnected = false; },
+            addEventListener(t, f) { (this.ouv[t] = this.ouv[t] || []).push(f); }, removeEventListener() {},
+            querySelector(sel) { if (!this.memo.has(sel)) this.memo.set(sel, novo('div')); return this.memo.get(sel); }, querySelectorAll() { return []; },
+            closest() { return null; }, contains() { return false; }, getBoundingClientRect() { return { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 }; }, getClientRects() { return []; },
+            focus() {}, blur() {}, attachShadow() { return novo('#shadow'); }, get childElementCount() { return this.filhos.length; }, get children() { return this.filhos; } };
+        Object.defineProperty(e, 'innerHTML', { get() { return ''; }, set() {} });
+        criados.push(e);
+        return e;
+    };
+    const linha = novo('div');   // a linha do anúncio na lista do ML (SHC.telaLinhaAnuncio)
+    const document = { body: novo('body'), documentElement: novo('html'), readyState: 'complete', createElement: novo, createTextNode: t => ({ textContent: t }),
+        getElementById: id => (id === '__NORDIC_RENDERING_CTX__' ? { textContent: op.script } : null),
+        querySelector: sel => (/sll-list-grid-row--/.test(sel) ? linha : null), querySelectorAll: () => [], addEventListener() {}, removeEventListener() {} };
+    const chrome = { runtime: { id: 'ext', sendMessage: async m => { enviados.push(m); return {}; } },
+        storage: { local: {
+            get: async k => { const o = {}; (k === null ? Object.keys(mem) : [].concat(k)).forEach(x => { if (x in mem) o[x] = cp(mem[x]); }); return o; },
+            set: async o => { Object.keys(o).forEach(x => { mem[x] = cp(o[x]); }); },
+            remove: async k => { [].concat(k).forEach(x => delete mem[x]); } },
+            onChanged: { addListener: f => ouvStorage.push(f), removeListener() {} } } };
+    const ctx = { console, chrome, document, location: { href: op.url, assign() {} }, performance: { now: () => Date.now(), timeOrigin: Date.now() }, innerWidth: 1200, innerHeight: 800,
+        MutationObserver: class { observe() {} disconnect() {} }, setTimeout, clearTimeout, fetch: async () => ({ ok: false }), addEventListener() {}, removeEventListener() {}, URL };
+    ctx.window = ctx; ctx.globalThis = ctx;
+    vm.createContext(ctx);
+    ['calc.js', 'store.js', 'ml-extrator.js', 'ml-tela.js'].forEach(a => vm.runInContext(fs.readFileSync(path.join(EXT, a), 'utf8'), ctx, { filename: a }));
+    const sr = () => criados.find(e => e.tagName === '#SHADOW'), aviso = () => (sr() ? sr().querySelector('.outra') : null);
+    return { criados, enviados, mem, aviso,
+        espera: ms => new Promise(r => setTimeout(r, ms || 400)),
+        trocaConta: c => { const v = mem['ml:conta']; mem['ml:conta'] = c; ouvStorage.forEach(f => f({ 'ml:conta': { oldValue: v, newValue: c } }, 'local')); },
+        // "＋ Informar custo" da etiqueta → digita o valor → "Salvar" (o popover do host). → o texto de erro do popover ('' = salvou).
+        salva: async (bt, valor) => {
+            (bt.ouv.click || []).forEach(f => f({ preventDefault() {}, stopPropagation() {} }));
+            const s = sr();
+            s.querySelector('.pop input').value = valor; s.querySelector('.err').textContent = '';
+            (s.ouv.click || []).forEach(f => f({ stopPropagation() {}, target: { closest: () => ({ getAttribute: () => 'salvar' }) } }));
+            await new Promise(r => setTimeout(r, 300));
+            return s.querySelector('.err').textContent;
+        } };
+}
 let falhas = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) falhas++; };
 const A = '900000001', OUTRA = '900000002';
@@ -267,6 +319,26 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         (F.ctx.__mudou || []).forEach(f => f({ 'ml:conta': { oldValue: OUTRA, newValue: A } }, 'local'));
         await F.tique(20);
         ok(F.selos[F.selos.length - 1] === '9', 'trocou a conta aberta (ml:conta): o ícone refaz com o número da conta nova (9)');
+    }
+
+    console.log('n) bloqueio 5: aba do ML já aberta quando a conta do Copiloto (ml:conta) muda');
+    {
+        const pag = paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20, sku: 'KIT-01' }], A), script = /<script id="__NORDIC_RENDERING_CTX__">([\s\S]*?)<\/script>/.exec(pag)[1];
+        const T = montaTela({ dados: { 'ml:conta': A, cfg: { empresaSeparada: { [OUTRA]: true } } }, url: B + '/anuncios/lista', script });
+        await T.espera(800);
+        const botoes = () => T.criados.filter(e => e.textContent === '＋ Informar custo'), bt = botoes()[0];
+        ok(bt && (!T.aviso() || T.aviso().style.display !== 'block'), 'página da A com o Copiloto na A: a etiqueta aparece, sem aviso');
+        T.trocaConta(OUTRA);   // a sincronização da OUTRA (outra empresa) gravou ml:conta com esta aba aberta
+        await T.espera(800);
+        ok(T.aviso() && T.aviso().style.display === 'block' && /final 0001/.test(T.aviso().querySelector('.t').textContent) && botoes().length === 1,
+            'a conta da página é conferida de novo: aviso "outra conta" e nenhuma etiqueta nova com os números da OUTRA');
+        const erro = await T.salva(bt, '25');
+        ok(/outra conta/.test(erro) && !Object.keys(T.mem).some(k => /^c\|/.test(k)), 'custo digitado na etiqueta que já estava na tela: não grava (nem na empresa da OUTRA, nem na da A)');
+        T.trocaConta(A);
+        await T.espera(800);
+        ok(T.aviso().style.display === 'none', 'a conta volta a bater: o aviso some sozinho');
+        const erro2 = await T.salva(bt, '25');
+        ok(!erro2 && T.mem['c|sku|KIT-01'] && T.mem['c|sku|KIT-01'].custo === 25 && !T.mem['c|sku@' + OUTRA + '|KIT-01'], 'controle: com a conta certa o custo grava na empresa da página (a A)');
     }
 
     console.log('e) empresa separada: custos por SKU, números da empresa e ERP só da conta marcada');

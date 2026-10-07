@@ -398,6 +398,15 @@
         const cx = r.left + r.width / 2, x = Math.max(m, Math.min(cx - w / 2, vw - w - m));
         return { x: Math.round(x), y: Math.round(y), lado: baixo ? 'baixo' : 'cima', seta: Math.round(Math.max(14, Math.min(cx - x, w - 14))) };
     };
+    /**
+     * v3.3 multi-empresa: de quem é a página aberta (estado do ML, r) × a conta aberta no Copiloto (ml:conta). → '' (a mesma, a página não diz
+     * o dono ou o Copiloto ainda não leu conta nenhuma) | o id da OUTRA conta. A etiqueta confere ao montar a página E na hora de gravar.
+     */
+    SHC.telaOutraConta = async function (r) {
+        let id = '', atual = '';
+        try { const c = SHC.mlContaDoEstado(r); id = String((c && typeof c === 'object' ? c.sellerId : c) || ''); atual = String(await SHC.contaAtual()); } catch (e) { return ''; }
+        return /^\d{6,15}$/.test(id) && atual && atual !== 'atual' && id !== atual ? id : '';
+    };
     /** Grava feitos.lucro (etapa "Ver o lucro nos seus anúncios") só se ainda não estiver gravado. */
     SHC.telaMarcaLucro = async function () {
         const g = await SHC.lerGuia();
@@ -902,6 +911,10 @@
         if (!(v > 0)) { err.textContent = 'Digite um valor maior que zero. Ex.: 250,00'; return; }
         bt.disabled = true;
         try {
+            // v3.3 multi-empresa (bloqueio 5): a conta da página é conferida de novo na hora de gravar — a conta do Copiloto pode ter trocado com
+            // esta página aberta, e o custo iria para a empresa da conta nova (SHC.salvarCustoSku grava na empresa de ml:conta).
+            const r = estado && estado.url === location.href ? estado.r : location.href === hrefCarga ? estadoDoScript() : null;
+            if (r && await SHC.telaOutraConta(r)) { err.textContent = 'Esta página é de outra conta do Mercado Livre: o custo não foi salvo, para não misturar as empresas. Sincronize com esta conta aberta.'; return; }
             const titulo = popItem.titulo;
             // V12: digitado na etiqueta = 'manual' (o Tiny e a planilha nunca trocam por cima)
             if (popItem.sku) await SHC.salvarCustoSku(popItem.sku, SHC.telaCustoDigitado(v, titulo));
@@ -1560,7 +1573,12 @@
         }
     }
     async function garanteEstado(tela) {
-        if (estado && estado.url === location.href && estado.tela === tela) return true;
+        if (estado && estado.url === location.href && estado.tela === tela) {
+            if (!estado.reconferir) return true;
+            if (!(await mesmaConta(estado.r))) return false;   // a conta do Copiloto trocou e a página é de outra: sem etiqueta, com o aviso
+            estado.reconferir = false;
+            return true;
+        }
         let r = location.href === hrefCarga ? estadoDoScript() : null, lidoEm;
         if (r) lidoEm = Math.round((typeof performance !== 'undefined' && performance.timeOrigin) || cargaEm);
         else r = await buscaEstado();
@@ -1572,14 +1590,14 @@
     // v3.3 (multi-empresa, auditoria 07/10/2026): com o login do ML trocado, a página era de uma empresa e as etiquetas (custo, lucro, frete,
     // alertas) eram de outra. Página de OUTRA conta (o dono que ela diz ≠ ml:conta) não ganha etiqueta nenhuma e avisa 1 vez por página.
     // Página que não diz o dono, ou Copiloto que ainda não leu conta nenhuma: segue como antes.
+    // Bloqueio 5: a conta conferida vale até a conta do Copiloto (ml:conta) mudar (aoMudarStorage zera o estado) e o aviso some quando volta a bater.
     let avisoConta = '';
     async function mesmaConta(r) {
-        let id = '', atual = '';
-        try { const c = SHC.mlContaDoEstado(r); id = String((c && typeof c === 'object' ? c.sellerId : c) || ''); atual = String(await SHC.contaAtual()); } catch (e) { return true; }
-        if (!/^\d{6,15}$/.test(id) || !atual || atual === 'atual' || id === atual) return true;
+        const id = await SHC.telaOutraConta(r);
+        if (!id) { if (SR) SR.querySelector('.outra').style.display = 'none'; return true; }
         if (avisoConta !== location.href) {
             avisoConta = location.href;
-            const sr = host(), el = sr.querySelector('.outra');
+            const sr = host(), el = sr.querySelector('.outra'), atual = String(await SHC.contaAtual());
             el.querySelector('.t').textContent = 'Esta página é de outra conta do Mercado Livre (final ' + id.slice(-4) + '). Os números do Copiloto são da conta final '
                 + atual.slice(-4) + ': não mostro aqui para não misturar as empresas. Sincronize com esta conta aberta para ver os números dela.';
             el.style.display = 'block';
@@ -1595,7 +1613,7 @@
         const r = await buscaEstado();
         if (SHC.telaDe(location.href) !== 'anuncios' || location.href !== url) return;
         if (r === null) { semSolucao.add(url); return agenda(0); }   // buscou e não veio: as linhas faltando ganham a faixa só da tela
-        if (!r) return;
+        if (!r || !(await mesmaConta(r))) return;
         usaEstado('anuncios', r);
         if (mlbFaltando().length) semSolucao.add(url);   // não insiste: no máx. 1 busca extra por URL
         agenda(0);
@@ -1982,6 +2000,9 @@
         if (!vivo()) return parar();
         const ks = Object.keys(mud);
         if (ks.some(k => CHAVES_GUIA.test(k))) agendaCartao();
+        // v3.3 multi-empresa (bloqueio 5): a conta do Copiloto trocou com esta página aberta → a conta da página é conferida de novo (o estado foi
+        // conferido com a conta de antes) e as etiquetas, os custos e o imposto da empresa de antes saem.
+        if (ks.indexOf('ml:conta') >= 0) { if (estado) estado.reconferir = true; avisoConta = ''; limpaPagina(); invalida('tudo'); return agenda(100); }
         let o = null;
         if (ks.some(k => k === 'cfg' || k.indexOf('c|') === 0)) o = 'custos';
         if (ks.some(k => k.indexOf('ml:anuncios:') === 0)) o = o ? 'tudo' : 'sku';
