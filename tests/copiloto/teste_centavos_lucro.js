@@ -16,8 +16,9 @@
 //   J. catálogo e opções de compra (SHC.telaCatalogo, SHC.compCatAcoes, SHC.telaOpcoesCompra, P.resumoSku, SHC.adsEquilibrio).
 // Casos gerados com semente fixa (LCG): o resultado é o mesmo em toda execução (nada de Math.random).
 // Divergências achadas nesta auditoria (fora deste teste para a suíte seguir verde; repro no relatório da tarefa):
-//   1) SHC.precoMinimo (calc.js): o 1º preço testado não passa por r2 → às vezes devolve um preço 1 centavo abaixo da meta (a R$ 163,30
-//      sobram R$ 8,16 e 5% são R$ 8,17) ou alguns centavos acima do menor (273,41 em vez de 273,40). O CopilotoNucleo.tarifas.precoMinimo acerta.
+//   1) [corrigida, #10] SHC.precoMinimo (calc.js): o 1º preço testado não passava por r2 → às vezes devolvia um preço 1 centavo abaixo da meta
+//      (a R$ 163,30 sobram R$ 8,16 e 5% são R$ 8,17) ou alguns centavos acima do menor. Agora busca centavo a centavo entre um piso e um teto
+//      honestos e dá o menor preço exato, igual ao CopilotoNucleo.tarifas.precoMinimo (E).
 //   2) [corrigida, #9] SHC.calcular: a classe usava a margem JÁ arredondada: prejuízo pequeno (−R$ 0,07 em R$ 227,15 = −0,03% → "−0") virava
 //      "lucrativo"/"apertado" e 9,98% passava na meta de 10%. Agora compara sem arredondar, como SHC.sobraAnuncio/sobraProposta (B e C).
 //   3) [corrigida, #11] Custo/outros/frete digitados com 3+ casas ("12,345": etiqueta, painel, planilha) entravam crus na conta; a tela mostrava
@@ -25,8 +26,9 @@
 //      gravados em centavos (SHC.r2): SHC.calcular, sobraAnuncio/Atacado/Proposta, kitDe, salvarCustoSku, lerTabela e a etiqueta (B, C, F, G).
 //   4) [corrigida, #4/#13/#36] SHC.r2 não arredondava o meio centavo do mesmo jeito: r2(2,145) = 2,15 mas r2(2,175) = 2,17 (imposto de 6% em
 //      R$ 36,25) e r2(−1,285) = −1,28; SHC.moeda(2,175) mostrava "R$ 2,18". Agora r2, o r2 do núcleo e o SHC.moeda: meio centavo para longe do zero (A).
-//   5) SHC.recomendaPromo: precoMeta (fórmula fechada) erra até 2 centavos (≈12% dos casos fica 1 centavo abaixo da meta); e a proposta
-//      sem a tarifa do ML (sale_fee) vira tarifa 0% no preço mínimo para a meta.
+//   5) [corrigida, #12] SHC.recomendaPromo: precoMeta (fórmula fechada) errava até 2 centavos (≈12% dos casos ficava 1 centavo abaixo da meta) e a
+//      proposta sem a tarifa do ML (sale_fee) virava tarifa 0%. Agora é o menor preço em centavos pela mesma conta da proposta; sem sale_fee a
+//      tarifa sai de preço − frete − você recebe, e sem esses números não há preço (I).
 //   6) Balão da lista de Anúncios: "Você recebe" maior que preço − tarifa (aporte do ML) → frete deduzido 0 e a conta não fecha; tarifa não
 //      lida → "Frete por sua conta − R$ 0,00" inventado.
 //   7) SHC.calcular: frete grátis sem valor (≥ R$ 79 ou Full) entra como R$ 0,00 e a sobra sai como número firme (só com "⚠").
@@ -264,8 +266,8 @@ console.log('E. SHC.precoMinimo: o menor preço que deixa a meta (busca centavo 
             comissao_pct: item.comissao_pct, imposto_pct: cfg.imposto_pct }, alvo, '2026-09-30');
         N.conta(menor !== null && pn === menor, { item, cfg, alvo, nucleo: pn, menor });
         const pm = SHC.precoMinimo('ml', item, cfg, alvo);
-        // calc.js: a divergência exata (1 centavo abaixo da meta ou alguns centavos acima do menor) está registrada como bug; aqui vale o que ele garante hoje.
-        C.conta(emCentavos(pm) && pm > 0 && falta('ml', pm, item, cfg, alvo) <= 0.01 && cent(pm) - cent(menor) >= -2 && cent(pm) - cent(menor) <= 10, { item, cfg, alvo, pm, menor });
+        // #10: o calc.js (popup) dá exatamente o menor preço em centavos que bate a meta (antes: até 1 centavo abaixo ou alguns acima).
+        C.conta(pm === menor && falta('ml', pm, item, cfg, alvo) <= 0 && falta('ml', r2(pm - 0.01), item, cfg, alvo) > 0, { item, cfg, alvo, pm, menor });
     }
     for (let i = 0; i < 60; i++) {
         const item = { custo: din(r, 1, 250), outros: r() < 0.3 ? din(r, 0, 8) : 0, frete: r() < 0.3 ? din(r, 0, 30) : null };
@@ -274,7 +276,13 @@ console.log('E. SHC.precoMinimo: o menor preço que deixa a meta (busca centavo 
         S.conta(menor !== null && SHC.precoMinimo('sp', item, cfg, alvo) === menor, { item, cfg, alvo, menor, pm: SHC.precoMinimo('sp', item, cfg, alvo) });
     }
     okLote(N, 'ML pelo núcleo (tarifas.precoMinimo): exatamente o menor preço em centavos que deixa a meta');
-    okLote(C, 'ML pelo calc.js (popup): em centavos, > 0, no máximo 1 centavo abaixo da meta e entre −2 e +10 centavos do menor preço');
+    okLote(C, 'ML pelo calc.js (popup): exatamente o menor preço em centavos que deixa a meta (1 centavo abaixo já não deixa)');
+    // #10: os casos do relatório. A R$ 273,40 a meta de 17,5% é 47,845 → R$ 47,85 (meio centavo para cima, #4) e sobram 47,84: o menor é 273,41.
+    const i1 = { custo: 77.9, outros: 5.38, tipo: 'premium' }, f1 = { imposto_pct: 13.33, ml_frete_padrao: 23.15 }, i2 = { custo: 167.78, frete: 22.24 };
+    const p1 = SHC.precoMinimo('ml', i1, f1, 5), p2 = SHC.precoMinimo('ml', i2, {}, 17.5);
+    ok(p1 === 163.32 && SHC.calcular('ml', 163.3, i1, f1).sobra_rs < r2(0.05 * 163.3) && SHC.calcular('ml', 163.31, i1, f1).sobra_rs < r2(0.05 * 163.31)
+        && p2 === 273.41 && SHC.calcular('ml', 273.4, i2, {}).sobra_rs === 47.84 && r2(0.175 * 273.4) === 47.85 && p2 === TARIFAS.precoMinimo('ml', { custo: 167.78, frete: 22.24 }, 17.5, '2026-09-30'),
+        '"Para sobrar 5%": R$ 163,32 (a 163,30 sobram 8,16 contra 8,17); 17,5%: R$ 273,41 (a 273,40 sobram 47,84 contra 47,85), igual ao núcleo');
     okLote(S, 'Shopee (calc.js → núcleo): exatamente o menor preço em centavos que deixa a meta');
     ok(SHC.precoMinimo('ml', {}, {}, 0) === null && SHC.precoMinimo('ml', { custo: 0 }, {}, 0) === null && SHC.precoMinimo('ml', { custo: 10 }, { imposto_pct: 50 }, 40) === null,
         'sem custo ou meta impossível (comissão + imposto + meta ≥ 100%): sem preço (null), nunca R$ 0,00');
@@ -500,16 +508,25 @@ console.log('E. SHC.precoMinimo: o menor preço que deixa a meta (busca centavo 
             const espTipo = bate.length ? 'ideal' : Math.max(...lsI.map(l => l.pct)) >= 0 && lsI.reduce((a, b) => (b.pct > a.pct ? b : a)).sobra >= 0 ? 'aproximada' : 'nenhuma';
             Q.conta(recI.tipo === espTipo && recI.atingem === bate.length && (bate.length ? recI.escolha.p.preco === Math.min(...bate.map(l => l.p.preco)) && bate.indexOf(recI.escolha) >= 0
                 : recI.escolha.pct === Math.max(...lsI.map(l => l.pct))), { cfgI, props, tipo: recI.tipo, esp: espTipo });
-            if (recI.precoMeta !== null) {
-                const pe = recI.escolha.p, rr = pe.tarifa / pe.preco, den = 1 - rr - cfgI.imposto_pct / 100 - cfgI.margem_alvo_pct / 100;
+            const pe = recI.escolha.p, rr = pe.tarifa / pe.preco, den = 1 - rr - cfgI.imposto_pct / 100 - cfgI.margem_alvo_pct / 100;
+            if (den > 0) {
                 const bateEm = q => { const s = SHC.sobraProposta({ preco: q, recebe: r2(q - r2(q * rr) - envio) }, cd, cfgI); return s.sobra / q * 100 >= cfgI.margem_alvo_pct; };
                 let menor = null; for (let c = Math.max(1, Math.floor((envio + cd.custo + cd.outros - 0.0151) / den * 100) - 2), fim = c + 200000; c < fim; c++) if (bateEm(c / 100)) { menor = c / 100; break; }
-                R.conta(emCentavos(recI.precoMeta) && menor !== null && Math.abs(cent(recI.precoMeta) - cent(menor)) <= 2, { pe, cd, cfgI, precoMeta: recI.precoMeta, menor });
+                R.conta(menor !== null && recI.precoMeta === menor, { pe, cd, cfgI, precoMeta: recI.precoMeta, menor });
             }
         }
         okLote(E, 'gerados: sobra = você recebe − custo − outros − imposto (sobre o preço da promoção); % e classe da sobra exata; chip e frase com o mesmo R$ e %');
         okLote(Q, 'gerados: "★ Melhor opção" = a de menor preço entre as que batem a meta; sem nenhuma, a de maior margem (aproximada/nenhuma)');
-        okLote(R, 'gerados: "Preço mínimo para a meta" (estimativa: mesma tarifa % e mesmo frete) a até 2 centavos do menor preço que bate a meta');
+        okLote(R, 'gerados: "Preço mínimo para a meta" (estimativa: mesma tarifa % e mesmo frete) = exatamente o menor preço em centavos que bate a meta');
+        // #12: os casos do relatório; sem a tarifa lida (sale_fee) ela sai da conta do ML (preço − frete − você recebe), nunca 0%.
+        const pq = { preco: 133.68, tarifa: 19.38, envio: 0, recebe: r2(133.68 - 19.38), promo: 'X' }, cq = { custo: 148.64 }, fq = { margem_alvo_pct: 5 };
+        const rq = SHC.recomendaPromo([Object.assign({ p: pq }, SHC.sobraProposta(pq, cq, fq))], fq, cq), em = q => SHC.sobraProposta({ preco: q, recebe: r2(q - r2(q * 19.38 / 133.68)) }, cq, fq);
+        const semFee = { preco: 90, tarifa: null, envio: 15, recebe: 63.3, promo: 'Y' }, c30 = { custo: 30 }, f10 = { margem_alvo_pct: 10 };
+        const rs = SHC.recomendaPromo([Object.assign({ p: semFee }, SHC.sobraProposta(semFee, c30, f10))], f10, c30);
+        const semNada = Object.assign({}, semFee, { envio: null }), rn = SHC.recomendaPromo([Object.assign({ p: semNada }, SHC.sobraProposta(semNada, c30, f10))], f10, c30);
+        const aporte = Object.assign({}, semFee, { recebe: 80 }), ra = SHC.recomendaPromo([Object.assign({ p: aporte }, SHC.sobraProposta(aporte, c30, f10))], f10, c30);
+        ok(rq.precoMeta === 184.65 && em(184.64).sobra / 184.64 * 100 < 5 && em(184.65).sobra / 184.65 * 100 >= 5 && rs.precoMeta === 58.45 && rn.precoMeta === null && ra.precoMeta === null,
+            '"Preço mínimo para a meta de 5%": R$ 184,65 (a 184,64 a margem é 4,9989%); sem sale_fee: 90 − 15 − 63,30 = 11,70 (13%) → R$ 58,45; sem frete lido ou com "recebe" acima de preço − frete: sem preço (null)');
         const sug = SHC.roboPromoSugestoes({ familias: [{ chave: 'F9600000001', titulo: 'Produto promo A' }], propostas: ps.slice(0, 2) }, () => custo, cfg);
         ok(sug.length === 1 && sug[0].preco === 90 && sug[0].sobra === ls[1].sobra && sug[0].pct === ls[1].pct, 'robô de promoções: a sugestão leva a mesma sobra (23,90) e % da proposta');
         // Agenda do canal: lucro no preço da promoção (mesma % de tarifa, mesmo frete) e no preço do retrato.
