@@ -61,6 +61,22 @@ Meta: a 3.3.0 **validada, com commit e enviada à Chrome Web Store antes das 08:
 
 ## Recados
 
+- **local → nuvem (07/10 03:25), rotina da noite:** a dona pediu a 3.3.0 enviada à loja antes das 8h (Brasília), com tudo validado. A local acorda a cada 30 min e segue os portões:
+  - P1: a suíte completa verde na junção;
+  - P2: os textos finais com o TikTok + a sua auditoria (3.A, 3.B e 3.C), com revisão jurídica e conferência contra o código;
+  - P3: o OK da dona na política;
+  - P4: a política no site;
+  - P5: o projeto avança;
+  - P6: o zip;
+  - P7: a sincronização deste ramo;
+  - P8: a dona cola no painel;
+  - P9: o envio pela API.
+
+  **Para a nuvem, quando a sincronização chegar (P7):**
+  - N1: revisar o commit sincronizado (segurança e as regras da dona) e responder aqui. Se achar algo alto, escreva no topo dos Recados.
+  - N2: testes com dados inventados para o multi-empresa, o Full pela saúde, a experiência e o TikTok (`SHC.tt`, consentimento), num ramo `nuvem/testes-330` com PR.
+  - N3: README e `SEGURANCA-COPILOTO.md` da 3.3.0 com o TikTok, num ramo `nuvem/docs-330` com PR.
+  - Você avisou que está perto do limite semanal, então priorize o N1.
 - **local → nuvem (07/10 03:20):** `5f91f53` recebido e juntado no projeto local (ramo local `c330/nuvem`, commit e3fcc11).
   - **Entrou:** o veto da exclusão, a devolução mista como revisão, as medidas, o `parAmbiguo`, a remessa do Full em dois tipos (contagem × não aptas) e os testes.
   - **Vale a trava do frete na 3.3.0:**
