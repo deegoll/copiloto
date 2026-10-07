@@ -31,8 +31,9 @@
 //      hoje × unidades): vendido abaixo do preço de hoje → "Prejuízo R$ 3,00" × "Lucro R$ 3,00". Agora as duas telas usam SHC.adsLucro (margem ×
 //      receita, por anúncio, no centavo). Fica de fora: a venda atribuída a um anúncio com gasto R$ 0 (outra campanha) entra só em ads.html
 //      (o painel lista só anúncio com gasto) → "Lucro R$ 50,00" × "Prejuízo R$ 10,00"; e o aviso do fundo (SHC.alertasDe) ainda usa sobra × unidades.
-//   7) Sem o resumo do ML (falha da chamada campaigns/metrics): ads.html soma as campanhas e o painel soma os anúncios lidos → Investimento
-//      R$ 100,00 × R$ 60,00 com a lista de anúncios em parte, e a linha "Total" do painel (R$ 60,00) ≠ soma das linhas (R$ 100,00).
+//   7) [corrigida, #27] Sem o resumo do ML (falha da chamada campaigns/metrics): ads.html somava as campanhas e o painel os anúncios lidos →
+//      R$ 100,00 × R$ 60,00 com a lista de anúncios em parte, e a linha "Total" do painel ≠ soma das linhas. Agora o painel soma as campanhas
+//      (P.adsConta) e a linha Total é a soma das linhas (P.adsCampanhasTotal).
 //   8) P.adsDoFechamento e A.modelos usam Math.abs: mês com estorno de Product Ads maior que a cobrança (porTipo.ads = −15) aparece como
 //      R$ 15,00 GASTOS em Product Ads (crédito virou gasto).
 //   9) copiloto-nucleo motor.rateioAds: o último pedido leva o resto e o resto fica NEGATIVO quando as partes arredondam para cima
@@ -689,6 +690,27 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
         const r = duas([{ id: 'MLB9000000002', title: 'Produto F', campaignId: 7, cost: costC / 100, totalAmount: recC / 100, prints: 500, clicks: 12, unitsQuantity: v }]);
         return (r.l.length === 1 && cent(r.g.lucroRs) === cent(r.l[0].depois) && cent(r.g.sobraRs) === cent(r.l[0].antes) && r.g.selos.includes('acima') === r.l[0].acima
             && Math.abs(cent(r.l[0].antes) - recC * 0.3) <= 0.5 + 1e-6) || `${v} vendas · receita ${recC} · Ads ${costC}: ${A.textoMontante(r.g)} × painel ${r.l[0].depois}`;
+    });
+}
+{   // #27: sem o resumo do ML (campaigns/metrics falhou) e com a lista de anúncios em parte: o mesmo Investimento nas duas telas e Total = Σ campanhas
+    const conta = (cs, ads, resumo) => ({ temAds: true, completo: false, anterior: { campanhas: {}, total: null }, resumo: resumo ? SHC.adsResumo({ summary: { metricsSummary: resumo } }) : null,
+        campanhas: SHC.adsCampanhas({ paging: { total: cs.length }, results: cs.map(([id, cost, totalAmount, prints, clicks, unitsQuantity]) => ({ id, name: 'C' + id, status: 'A', metrics: { cost, totalAmount, prints, clicks, unitsQuantity } })) }).campanhas,
+        anuncios: SHC.adsAnuncios({ paging: { total: ads.length + 1 }, results: ads.map(([id, campaignId, cost, totalAmount, prints, clicks, unitsQuantity]) => ({ id, title: 'Anúncio ' + id, campaignId, cost, totalAmount, prints, clicks, unitsQuantity })) }).anuncios });
+    const tela = s => { const k = A.kpis(s, A.campanhas(s)).atual, m = P.adsConta(s), t = P.adsCampanhasTotal(P.adsCampanhasLista(s, [])); return { k, m, t }; };
+    const a = tela(conta([[1, 70, 300, 900, 30, 3], [2, 30, 100, 400, 8, 1]], [['MLB9000000011', 1, 40, 200, 500, 20, 2], ['MLB9000000012', 2, 20, 60, 300, 5, 1]]));
+    ok(a.k.investimento === 100 && a.m.gasto === 100 && a.k.receita === 400 && a.m.receita === 400 && SHC.pctTxt(a.m.acos) === '25%' && SHC.pctTxt(a.k.acos) === '25%' && a.t.gasto === 100 && a.t.receita === 400 && SHC.pctTxt(a.t.acos) === '25%',
+        `#27 sem o resumo: Investimento R$ 100,00 · Receita R$ 400,00 · ACOS 25% em ads.html, no painel e na linha Total (C1 R$ 70 + C2 R$ 30) (obtido: painel ${a.m.gasto} · Total ${a.t.gasto})`);
+    const b = tela(conta([[1, 70, 300, 900, 30, 3], [2, 20, 60, 300, 5, 1]], [['MLB9000000011', 1, 40, 200, 500, 20, 2], ['MLB9000000012', 2, 20, 60, 300, 5, 1]]));
+    ok(b.k.investimento === 90 && b.m.gasto === 90 && b.m.receita === 360 && b.k.receita === 360 && b.t.gasto === 90 && b.m.vendas === 4 && b.m.cliques === 35,
+        `#27 C1 = R$ 70 (anúncio de R$ 30 não lido) + C2 = R$ 20: as duas telas e o Total = R$ 90,00 (obtido: painel ${b.m.gasto} · Total ${b.t.gasto})`);
+    const c = tela(conta([[1, 70, 300, 900, 30, 3], [2, 30, 100, 400, 8, 1]], [], { cost: 101, totalAmount: 401, prints: 1300, clicks: 38, unitsQuantity: 4 }));
+    ok(c.m.gasto === 101 && c.k.investimento === 101 && c.t.gasto === 100 && c.t.receita === 400, '#27 com o resumo do ML: a conta é a do ML nas duas telas, e a linha Total continua a soma das linhas (R$ 70 + R$ 30)');
+    prop('#27 contas geradas sem o resumo e com metade dos anúncios: o total da conta (P.adsConta = A.kpis) é a Σ das campanhas, e a linha Total = Σ das linhas', contas, c => {
+        const s = Object.assign({}, c.snap, { resumo: null, completo: false, anuncios: c.snap.anuncios.filter((_, i) => i % 2 === 0) }), sp = P.adsLigaCatalogo(s, c.itens);
+        const k = A.kpis(s, A.campanhas(s)).atual, m = P.adsConta(sp), rows = P.adsCampanhasLista(sp, []), t = P.adsCampanhasTotal(rows);
+        return (cent(m.gasto) === c.tot.costC && cent(k.investimento) === c.tot.costC && cent(m.receita) === c.tot.recC && cent(k.receita) === c.tot.recC && m.vendas === c.tot.v && m.cliques === c.tot.cli
+            && m.impressoes === c.tot.imp && cent(t.gasto) === rows.reduce((x, r) => x + cent(r.m.gasto), 0) && cent(t.gasto) === c.tot.costC && cent(t.receita) === c.tot.recC)
+            || `conta ${c.k}: painel ${m.gasto} · ads.html ${k.investimento} · Total ${t.gasto} × ${reais(c.tot.costC)}`;
     });
 }
 
