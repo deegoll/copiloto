@@ -68,7 +68,7 @@ test('conta completa Shopee: 2 SKUs, desconto do vendedor, estorno parcial, impo
     assert.equal(camisa.ads, 9, 'Ads do AN1 fica só na camisa');
     assert.equal(meia.ads, 0);
     assert.equal(camisa.unidades, 2);
-    assert.ok(Math.abs(camisa.lucro_real + meia.lucro_real - 18.16) <= 0.02, 'soma dos produtos = lucro do pedido (±centavo de rateio)');
+    assert.equal(U.r2(camisa.lucro_real + meia.lucro_real), 18.16, 'soma dos produtos = lucro do pedido, no centavo (rateio pelo maior resto)');
     const fech = MO.fechamentoMes({ mes: '2026-09', resultados: [r], tarifas: tarifas.concat([M.garantir('tarifa', Object.assign({}, O, { data: '2026-09-30', tipo: 'assinatura', valor: 49.9, origem_pagamento: 'fatura' }))]), adsNaoRateado: rat.naoRateado });
     assert.equal(fech.lucro_pedidos, 18.16);
     assert.deepEqual(fech.sem_pedido.porTipo, { assinatura: 49.9 });

@@ -24,8 +24,8 @@
 //      (R$ 100,00 em 3 × R$ 33,33 → 99,99). O bruto e o reembolso "total" do pedido saem 1 centavo (ou mais) errados.
 //   2) CORRIGIDA (#29/#31): motor.rateioAds dava ao último pedido todo o arredondamento dos outros (Ads de R$ 0,05 em 10 pedidos iguais →
 //      9 × 0,01 e o último −0,04). Agora reparte pelo maior resto: cada parte a < 1 centavo da exata, nenhuma negativa (seção D).
-//   3) motor.lucroPedido.por_item: receita, tarifas, imposto, outros e Ads do item = r2(total × participação) sem o resto no último: Σ itens ≠
-//      total do pedido em ≈40% dos pedidos com 2+ itens → lucroPorProduto (aba Produtos) não soma o lucro dos pedidos (KPI) por centavos.
+//   3) CORRIGIDA (#32): motor.lucroPedido.por_item fazia r2(total × participação) em cada item, sem o resto (Σ itens ≠ pedido em ≈40% dos
+//      pedidos com 2+ itens; Produtos ≠ KPI por centavos). Agora pelo maior resto: Σ itens = o pedido (seções C, E e I).
 //   4) Extrato do TikTok com uma tarifa 'ads' (GMV Pay, mapeado por suposição): o TikTok desconta do repasse, o motor tira 'ads' do repasse →
 //      repasse do motor ≠ settlement (fixture tarifa_gmv_pay_suposicao: 84 × 54), a conciliação acusa "a menor" −R$ 30 falso e, na tela, a
 //      conta do pedido não mostra a linha de Ads (Repasse − custo − imposto ≠ Lucro).
@@ -332,15 +332,16 @@ function gerarPedidoMotor(r, i) {
         if (canc) L.cancelado.conta(res.bruto === 0 && res.receita === 0 && res.reembolso === 0 && (res.custo_rs === 0 || res.custo_rs === null) && (res.repasse === null || cent(res.repasse) === -cent(res.tarifas_rs))
             && ['ok', 'nao_lido', 'cancelado'].indexOf(res.status) >= 0 && !res.linhas.some(l => /^Venda/.test(l.rotulo)), { p: p.id, res: [res.status, res.bruto, res.repasse, res.custo_rs] });
 
-        // Rateio por item (lucro por produto): 1 item = o pedido inteiro; 2+ itens: Σ itens a no máximo ½ centavo × itens (divergência 3).
-        const pi = res.por_item, campoItem = [['receita', 'receita_liquida'], ['tarifas', 'tarifas_rs'], ['imposto', 'imposto_rs'], ['outros', 'outros_rs']];
+        // Rateio por item (lucro por produto), pelo maior resto: Σ itens = o pedido no centavo (receita, tarifas, imposto, outros, Ads) e cada
+        // parte a < 1 centavo da exata (total × participação). Antes: r2(total × participação) sem o resto (divergência 3, corrigida: #32).
+        const pi = res.por_item, campoItem = [['receita', 'receita_liquida'], ['tarifas', 'tarifas_rs'], ['imposto', 'imposto_rs'], ['outros', 'outros_rs'], ['ads', 'ads_rs']];
         if (res.status === 'ok' && !M.ehNaoLido(adsCtx)) {
-            const dif = campoItem.map(([a, b]) => Math.abs(somaC(pi, x => cent(x[a] || 0)) - cent(res[b] || 0))).concat([Math.abs(somaC(pi, x => cent(x.ads)) - cent(res.ads_rs))]);
+            const dif = campoItem.map(([a, b]) => Math.abs(somaC(pi, x => cent(x[a] || 0)) - cent(res[b] || 0)));
+            const perto = campoItem.every(([a, b]) => pi.every(x => Math.abs(cent(x[a] || 0) - cent(res[b] || 0) * x.participacao) < 1 - 1e-9));
             if (pi.length === 1) L.porItem1.conta(dif.every(d => d === 0) && cent(pi[0].custo) === cent(res.custo_rs), { p: p.id, pi, res: campoItem.map(([, b]) => res[b]) });
             else {
                 multi++; if (dif.some(d => d > 0)) porItemDiverge++;
-                // o Ads só de 'ads' do pedido (sem porAnuncio) segue a mesma regra; ½ centavo por item é o teto do arredondamento
-                L.porItemN.conta(dif.every(d => d <= Math.ceil(pi.length / 2)) && somaC(pi, x => cent(x.custo)) === cent(res.custo_rs) && Math.abs(pi.reduce((a, x) => a + x.participacao, 0) - 1) < 1e-9,
+                L.porItemN.conta(dif.every(d => d === 0) && perto && somaC(pi, x => cent(x.custo)) === cent(res.custo_rs) && Math.abs(pi.reduce((a, x) => a + x.participacao, 0) - 1) < 1e-9,
                     { p: p.id, dif, itens: pi.length });
             }
         }
@@ -359,8 +360,8 @@ function gerarPedidoMotor(r, i) {
     okLote(L.sinais, 'sinais das linhas: venda +, desconto/reembolso/custo/outros/imposto/Ads −, tarifa = −valor (estorno aparece +)');
     okLote(L.cancelado, 'cancelado: sem venda, sem receita e sem custo; o repasse é só o que o canal não devolveu (−tarifas)');
     okLote(L.porItem1, 'por item, pedido de 1 item: receita, tarifas, imposto, outros, Ads e custo = os do pedido, no centavo');
-    okLote(L.porItemN, 'por item, 2+ itens: custo exato, participações somam 1, e o resto no máximo ½ centavo por item longe do pedido');
-    ok(multi > 0, `cobertura: ${multi} pedidos com 2+ itens (${porItemDiverge} com Σ itens ≠ pedido por centavos: divergência 3)`);
+    okLote(L.porItemN, 'por item, 2+ itens (maior resto): Σ receita, tarifas, imposto, outros e Ads dos itens = os do pedido no centavo, cada parte a < 1 centavo da exata; custo exato');
+    ok(multi > 0 && porItemDiverge === 0, `cobertura: ${multi} pedidos com 2+ itens, nenhum com Σ itens ≠ pedido (#32)`);
 
     // Casos escritos à mão: estorno maior que a tarifa, reembolso maior que a receita, Ads por anúncio, devolução só com frete de volta.
     const O = { canal: 'tiktok', conta: 'conta-teste', fonte: 'api' };
@@ -486,17 +487,24 @@ console.log('E. Lucro por produto e fechamento do mês');
         const un = {}; res.filter(x => x.status === 'ok').forEach(x => x.por_item.forEach(it => { un[it.sku] = (un[it.sku] || 0) + it.qtd; }));
         L.prodUn.conta(prods.every(pr => pr.unidades === (un[pr.sku] || 0) && ['receita', 'tarifas', 'custo', 'outros', 'imposto', 'ads', 'lucro_real'].every(k => emCentavos(pr[k])))
             && somaC(prods, pr => pr.pendentes) === somaC(res.filter(x => x.status !== 'ok' && x.status !== 'cancelado'), x => x.por_item.length), { t });
-        // Σ produtos × Σ pedidos: exato quando todo pedido tem 1 item; com 2+ itens, no máximo 2 centavos por item (divergência 3).
-        const umItem = okRes.every(x => x.por_item.length === 1), teto = somaC(okRes.filter(x => x.por_item.length > 1), x => 2 * x.por_item.length);
+        // Σ produtos × Σ pedidos: exato, também com pedidos de 2+ itens (antes até 2 centavos por item: divergência 3, corrigida #32).
+        const umItem = okRes.every(x => x.por_item.length === 1);
         const d = Math.abs(somaC(prods, pr => cent(pr.lucro_real)) - somaC(okRes, x => cent(x.lucro_real))), dr = Math.abs(somaC(prods, pr => cent(pr.receita)) - somaC(okRes, x => cent(x.receita_liquida)));
-        (umItem ? L.prodUm : L.prodSoma).conta(umItem ? d === 0 && dr === 0 : d <= teto && dr <= teto, { t, d, dr, teto });
+        (umItem ? L.prodUm : L.prodSoma).conta(d === 0 && dr === 0, { t, d, dr });
     }
     okLote(L.semPedido, 'tarifas SEM pedido do mês: Σ por tipo, total e estornos (os negativos); "ads" sem pedido só quando ads_rateados = false; tarifa de pedido fica fora');
     okLote(L.fech, 'fechamento: lucro do mês = lucro dos pedidos − tarifas sem pedido − Ads não rateado; receita, repasse, custo, imposto e Ads = Σ dos pedidos ok/cancelados do mês');
     okLote(L.completo, 'fechamento "completo" só sem pendentes e com as tarifas lidas (tarifas não lidas → completo = false)');
     okLote(L.prodUn, 'por produto: unidades = Σ qtd dos pedidos ok; dinheiro em centavos; pendentes = itens de pedidos sem custo/não lidos');
     okLote(L.prodUm, 'por produto (só pedidos de 1 item): Σ lucro e Σ receita dos produtos = Σ dos pedidos, no centavo');
-    okLote(L.prodSoma, 'por produto (com pedidos de 2+ itens): Σ lucro/receita dos produtos a no máximo 2 centavos por item dos pedidos (divergência 3)');
+    okLote(L.prodSoma, 'por produto (com pedidos de 2+ itens): Σ lucro e Σ receita dos produtos = Σ dos pedidos, no centavo (#32)');
+    // O caso do relatório (#32): 3 itens de R$ 10,00 e comissão de R$ 1,00 → tarifas dos itens 0,34 + 0,33 + 0,33 e Σ produtos = lucro do pedido.
+    const p32 = M.garantir('pedido', { canal: 'shopee', conta: 'x', fonte: 'api', id: 'P32', data_venda: '2026-09-10', status: 'entregue',
+        itens: [{ sku: 'A', qtd: 1, preco_unit: 10 }, { sku: 'B', qtd: 1, preco_unit: 10 }, { sku: 'C', qtd: 1, preco_unit: 10 }] });
+    const r32 = MO.lucroPedido(p32, { tarifas: [{ pedido_id: 'P32', tipo: 'comissao', valor: 1 }], custos: [{ sku: 'A', custo: 2 }, { sku: 'B', custo: 2 }, { sku: 'C', custo: 2 }], imposto_pct: 0 });
+    const pr32 = MO.lucroPorProduto([r32]);
+    ok(r32.lucro_real === 23 && r32.por_item.map(x => cent(x.tarifas)).join() === '34,33,33' && somaC(pr32, x => cent(x.lucro_real)) === 2300 && somaC(pr32, x => cent(x.tarifas)) === 100,
+        '3 itens de R$ 10,00 e comissão de R$ 1,00: tarifas por item 0,34 + 0,33 + 0,33 = R$ 1,00 e Σ lucro dos produtos = R$ 23,00 do pedido (antes 0,99 e R$ 23,01) — #32');
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -905,12 +913,11 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
             && e.pedidos_fecham === (lidos.length ? lidos.length === s.length : null);
     }), 'extratos: valor = Σ repasses das linhas do extrato; Σ das linhas lidas na lista; "fecha" só quando todas foram lidas');
     ok(cent(vm.kpis.a_receber) === somaC(mot) && cent(d.areceber.confere) === 0 && cent(vm.kpis.saldo) === saldoC, 'a receber = Σ motivos (confere 0) e saldo = o do TikTok');
-    // Produtos: repasse = receita − tarifas; Σ unidades; Σ lucro ≈ Σ pedidos (2+ SKUs: divergência 3; cancelado: divergência 6).
+    // Produtos: repasse = receita − tarifas; Σ unidades; Σ lucro = Σ pedidos ok e cancelados, no centavo (também com 2+ SKUs: #32).
     const prods = vm.produtos, okOuC = mes.filter(x => x.status === 'ok' || x.status === 'cancelado');
-    const teto = somaC(okOuC.filter(x => x.por_item.length > 1), x => 2 * x.por_item.length);
     ok(prods.every(p => cent(p.repasse) === cent(p.receita) - cent(p.tarifas) && emCentavos(p.lucro_real) && (p.afiliado_pct === null || isFinite(p.afiliado_pct)))
-        && somaC(prods, p => p.unidades) === somaC(okP, x => somaC(x.por_item, it => it.qtd)) && Math.abs(somaC(prods, p => cent(p.lucro_real)) - somaC(okOuC, x => cent(x.lucro_real))) <= teto,
-        'produtos: repasse = receita − tarifas; Σ unidades = Σ qtd dos pedidos ok; Σ lucro dos produtos a ≤ 2 centavos por item dos pedidos');
+        && somaC(prods, p => p.unidades) === somaC(okP, x => somaC(x.por_item, it => it.qtd)) && somaC(prods, p => cent(p.lucro_real)) === somaC(okOuC, x => cent(x.lucro_real)) && okOuC.some(x => x.por_item.length > 1),
+        'produtos: repasse = receita − tarifas; Σ unidades = Σ qtd dos pedidos ok; Σ lucro dos produtos = Σ lucro dos pedidos, no centavo (com pedidos de 2+ SKUs)');
     const okUm = okP.filter(x => x.por_item.length === 1);
     ok(okUm.length > 0 && TT.porProduto(okUm).every(p => { const dele = okUm.filter(x => x.por_item[0].sku === p.sku); return cent(p.lucro_real) === somaC(dele, x => cent(x.lucro_real)) && cent(p.receita) === somaC(dele, x => cent(x.receita_liquida)); }),
         'produtos (pedidos de 1 SKU): lucro e receita do produto = Σ dos pedidos dele, no centavo');
