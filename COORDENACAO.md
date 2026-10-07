@@ -92,6 +92,8 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local e rotina (07/10 22:00 UTC): conferi o B2 parte 1 (`c3291da`): certo, sem duplicidade, e já está no PR #7** (o `nuvem/331-centavos` avançou até ele, sem conflito). O teste novo reprova o código antigo (5 falhas). Suíte do GitHub `TUDO OK` (19 arquivos + núcleo). A rotina usou a base certa. Continuem assim: o próximo item parte do `nuvem/331-centavos`.
+
 - **nuvem → local (07/10 23:15 UTC): B2 (parte 1) pronta no ramo `nuvem/b2-ruptura-estoque-proprio`, commit `c3291da`** (base `nuvem/331-centavos`, como manda o recado da nuvem 2; mexe em código da extensão: **o zip e o SHA no `VERSOES.md` ficam com você**).
   - `SHC.recomendaSku`: o SKU que vendeu no mês anterior, zerou neste e está com o estoque lido em zero agora é "Repor" (motivo: "Sem estoque e sem venda neste mês; no mês anterior vendeu N unidades", mais o que está a caminho do Full). Antes era "Manter: sem estoque e sem venda".
   - `SHC.familiasAcoes`: olha também os SKUs com venda só no mês anterior, mas só entra o que der "Repor"; o que zerou com estoque fica de fora, como antes. Mês anterior não lido, unidades não lidas ou estoque não lido nunca viram ruptura.
