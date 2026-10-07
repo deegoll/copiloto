@@ -129,6 +129,14 @@ console.log('Remessa do Full sem o detalhe por produto (rastreio 07/10, bloqueio
     const comDet = SHC.remessasInconformes(lista, det, '2026-09-25')[0], t = SHC.chamadoRemessa(comDet);
     ok(/SKU HA-77001 \(MLB8000000021\): declaradas 40, processadas 37/.test(t) && /\(coleta e\/ou penalidade\): R\$ 27,00/.test(t) && !/multa/i.test(t) && !/Unidades declaradas: 3/.test(t),
         'com o detalhe por produto: o texto sai com as unidades do detalhe e o total cobrado como coleta e/ou penalidade (nunca "multa")');
+    // Revisão do grupo g: detalhe lido, mas os produtos vieram sem as quantidades (só itemId e SKU): declaradas e aptas voltam a ser as da lista.
+    const lista2 = { remessas: [{ id: '61239101', status: 'closed_with_changes', recebida: '2026-09-20', unidades: 3, aptas: 2, custo: 27 }] };
+    const dSem = SHC.mlRemessaDetalheDoEstado({ inboundId: 61239101, status: 'closed_with_changes', unitsDetail: {}, units: [{ itemId: 'MLB8000000031', sku: 'HA-77011' },
+        { itemId: 'MLB8000000032', sku: 'HA-77012' }, { itemId: 'MLB8000000033', sku: 'HA-77013' }], claims: { typesClaimsAvailable: [{ type: 'RECOUNT', enabledToClaim: true }] } });
+    const incSemQtd = SHC.remessasInconformes(lista2, { porId: { '61239101': dSem } }, '2026-09-25');
+    ok(incSemQtd.length === 1 && !incSemQtd[0].semDetalhe && SHC.chamadoRemessa(incSemQtd[0]) === '', 'detalhe sem as quantidades por produto: nenhum texto (antes: "Unidades declaradas: 3; disponíveis para venda: 2", os números da lista)');
+    const soDecl = SHC.remessasInconformes(lista2, { porId: { '61239101': { produtos: [{ itemId: 'MLB8000000031', sku: 'HA-77011', declaradas: 3 }], reclamacoesDisponiveis: ['diferencas'] } } }, '2026-09-25')[0];
+    ok(soDecl && SHC.chamadoRemessa(soDecl) === '', 'produtos com as declaradas, mas sem as aptas nem diferença por produto: nenhum texto (as aptas seriam as da lista)');
     // O botão e o clique do painel, como estão no arquivo.
     const fs = require('fs'), src = fs.readFileSync(path.join(EXT, 'painel-lateral.js'), 'utf8');
     ok(/const cop = pend && SHC\.chamadoRemessa\(r\) \?/.test(src), 'painel: o botão "Copiar texto da reclamação" só aparece quando há texto');
@@ -139,9 +147,10 @@ console.log('Remessa do Full sem o detalhe por produto (rastreio 07/10, bloqueio
         const f = new Function('t', 'incRemessas', 'navigator', 'SHC', 'aba', 'desenhaFull', 'let remCopiada = ""; return (async () => { ' + bloco + ' })().then(() => remCopiada);');
         return f(t, () => rs, nav, SHC, 'full', () => {}).then(rc => ({ copiado, rc }));
     };
-    pendentes.push(() => Promise.all([clique(inc, '61239001'), clique([comDet], '61239001')]).then(([a, b]) => {
+    pendentes.push(() => Promise.all([clique(inc, '61239001'), clique([comDet], '61239001'), clique(incSemQtd, '61239101')]).then(([a, b, c]) => {
         console.log('Remessa do Full: o clique do painel');
         ok(ini > 0 && a.copiado === null && a.rc === '' && b.copiado === t && b.rc === '61239001', 'painel: o clique sem detalhe não copia nada; com detalhe copia o texto');
+        ok(c.copiado === null && c.rc === '', 'painel: o clique com o detalhe sem as quantidades por produto não copia nada');
     }));
 }
 

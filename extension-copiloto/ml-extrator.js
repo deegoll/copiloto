@@ -1526,13 +1526,18 @@
      * v3.3 Remessa do Full com inconformidade (SHC.remessasInconformes) → texto da reclamação por diferenças, produto a produto.
      * Rastreio 07/10/2026 (bloqueio 4, regra da local): sem o detalhe por produto não sai texto ('') — na lista do Full o units_count conta
      * PRODUTOS, não unidades, e "declaradas 3; disponíveis 2" seria uma reclamação firme com número que o Copiloto não leu.
+     * Revisão do grupo g: o detalhe lido sem as quantidades por produto (declaredQuantity/processedQuantity, formato A CONFIRMAR) também não
+     * gera texto — os totais da remessa voltariam a ser os da lista. Os totais só entram quando os produtos trazem declaradas E aptas.
      */
     SHC.chamadoRemessa = function (r) {
         if (!r || !r.id || r.semDetalhe || !(r.produtos || []).length) return '';
+        const temQtd = k => r.produtos.some(p => p && typeof p[k] === 'number');
+        if (!temQtd('declaradas') && !temQtd('processadas')) return '';
         const n = v => (typeof v === 'number' ? String(v) : '—'), dt = x => (/^\d{4}-\d{2}-\d{2}/.test(String(x || '')) ? x.slice(8, 10) + '/' + x.slice(5, 7) + '/' + x.slice(0, 4) : '');
         const ps = (r.produtos || []).filter(p => p && ((p.diferencas || 0) !== 0 || (p.naoAptas || 0) > 0));
         const fatos = ps.slice(0, 15).map(p => (p.sku ? 'SKU ' + p.sku : p.itemId || 'produto') + (p.itemId && p.sku ? ' (' + p.itemId + ')' : '') + ': declaradas ' + n(p.declaradas)
             + ', processadas ' + n(p.processadas) + (p.naoAptas ? ', não aptas ' + p.naoAptas : '') + (p.resultado ? ' — ' + p.resultado : '') + '.');
+        if (!ps.length && !(temQtd('declaradas') && temQtd('aptas'))) return '';
         if (!ps.length) fatos.push('Unidades declaradas: ' + n(r.declaradas) + '; disponíveis para venda: ' + n(r.aptas) + '.');
         // Auditoria da loja (07/10/2026) e regra da dona: r.custo é o total_charged da remessa = coleta e/ou penalidade — nunca "multa" nem
         // "cobrado pela inconformidade". Só unidade não apta (sem diferença de contagem) não é erro de contagem: pode ter vindo do nosso preparo.
