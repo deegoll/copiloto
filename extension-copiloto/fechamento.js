@@ -467,7 +467,8 @@
             Object.keys(totais).forEach(gt => { const T = totais[gt]; T.sobra = T.c - T.e - T.ops; });
             // Revisão 2 (07/10/2026): a própria cobrança = texto|MLB (sem valor nem conceptId). liq = as cobranças − os estornos dela;
             // solto = o estorno dela que não casou com cobrança de mesmo valor (parcial, de cópia ou não: não se sabe o que acertou).
-            // Estorno solto de um texto sem cobrança no pedido (órfão) pode ser de qualquer cobrança do mesmo tipo|MLB.
+            // Estorno solto de um texto sem cobrança no pedido (órfão) pode ser de qualquer cobrança do mesmo tipo|MLB; com nome que não diz o
+            // tipo ('outro'), de qualquer cobrança do MLB.
             const doTx = {}, orfao = {};
             Object.keys(totais).forEach(gt => { const T = totais[gt], d = doTx[T.tx] || (doTx[T.tx] = { liq: 0, solto: 0, c: 0 });
                 d.liq = r2(d.liq + (T.c - T.e) * T.v); d.c += T.c; if (T.e > T.c) d.solto = r2(d.solto + (T.e - T.c) * T.v); });
@@ -489,7 +490,7 @@
                     // duvida = a pergunta do chamado (texto para o ML; o motivo acima é para a dona).
                     duvida ? { duvida: 'Esta cobrança aparece ' + n + ' vezes neste pedido, com o mesmo valor. O pedido teve ' + n + ' ' + porOp + 's (uma cobrança para cada) ou ela foi lançada em duplicidade?' } : {}));
                 out.push(it);
-                proprias.set(it, { k: o + '|' + T.tx, liq: d.liq, solto: d.solto, orfao: !!orfao[SHC.tipoCustoFechamento(x.cob.texto, x.cob.id) + '|' + x.cob.itemId] });
+                proprias.set(it, { k: o + '|' + T.tx, liq: d.liq, solto: d.solto, orfao: !!(orfao[SHC.tipoCustoFechamento(x.cob.texto, x.cob.id) + '|' + x.cob.itemId] || orfao['outro|' + x.cob.itemId]) });
             });
             // Venda cancelada: tarifa de venda estornada por inteiro, outra cobrança do MESMO pedido sem estorno.
             const cancelada = cs.some(c => c.estorno && SHC.tipoCustoFechamento(c.texto, c.id) === 'tarifa_venda')

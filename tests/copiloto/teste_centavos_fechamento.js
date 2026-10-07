@@ -706,8 +706,12 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
     // Estorno de um texto sem cobrança no pedido (órfão): pode ser de qualquer cobrança do tipo → dúvida, sem citar "ficaram" (não se sabe de qual).
     const f6 = F.conferir([cob('9000000016', 'Custo por cobrar', 5, 'K1|PAG1|CVVPRC'), cob('9000000016', 'Custo por cobrar', 5, 'K2|PAG1|CVVPRC'),
         cob('9000000016', 'Cancelamento do Custo por cobrar no Mercado Pago', 3, 'K3|PAG1|BVVPRC', { estorno: true })], {});
-    ok(f6.length === 1 && !!f6[0].duvida && F.recuperar({ conferir: f6 }).total === 0 && /mas houve estorno\. /.test(f6[0].motivo) && !/ficaram/.test(f6[0].motivo),
-        'estorno de outro valor com um nome que não casa com cobrança do pedido: dúvida, e o motivo não inventa quanto ficou');
+    // O mesmo com nome e código que nem dizem o tipo ("dos Custos por cobrar", código novo: 'outro'): pode ser de qualquer cobrança do anúncio.
+    const f7 = F.conferir([cob('9000000017', 'Custo por cobrar', 5, 'L1|PAG1|CVVPRC'), cob('9000000017', 'Custo por cobrar', 5, 'L2|PAG1|CVVPRC'),
+        cob('9000000017', 'Cancelamento dos Custos por cobrar', 2, 'L3|PAG1|BZZNOVO', { estorno: true })], {});
+    ok(f6.length === 1 && !!f6[0].duvida && F.recuperar({ conferir: f6 }).total === 0 && /mas houve estorno\. /.test(f6[0].motivo) && !/ficaram/.test(f6[0].motivo)
+        && f7.length === 1 && !!f7[0].duvida && F.recuperar({ conferir: f7 }).total === 0,
+        'estorno de outro valor com um nome que não casa com cobrança do pedido (do mesmo tipo, ou que nem diz o tipo): dúvida, e o motivo não inventa quanto ficou');
     // A "tarifa acima" (estimativa pelo preço de hoje) ganha da repetida (fato): o texto que fica cita a cobrança em dobro e pede ao menos a cópia.
     const e1 = F.conferir([cob('9000000008', 'Custo por vender', 7.25, 'E5|9000000008|CVVML'), cob('9000000008', 'Custo por vender', 7.25, 'E6|9000000008|CVVML')],
         { MLB1000000001: { tarifa: 6, preco: 50, titulo: 'X' } });
