@@ -15,7 +15,8 @@
 //   L. P.saudeFull, P.acaoParado e SHC.fullMinimo (unidades sobrando, faltam, sugerido; armazenagem sem R$ inventado);
 //   M. ícone × painel (SHC.alertasDe × P.saudeFull): o mesmo produto em alerta, com a mesma previsão (também a sazonal) e os mesmos dias;
 //   N. quantidades lidas da tela do ML (SHC.mlFullDoEstado / P.un): "1.234 un." = 1234, "—" = null (nunca 0);
-//   O. linha da sincronização (resumoFull, no fundo): mês sem cobrança não vira "R$ 0,00".
+//   O. linha da sincronização (resumoFull, no fundo): mês sem cobrança não vira "R$ 0,00";
+//   P. SHC.recomendaSku (Faturamento por família): cobertura = ⌊estoque × dias ÷ vendas⌋ e a ação nos limites de 15 e 60 dias.
 // Casos gerados com semente fixa (LCG): o resultado é o mesmo em toda execução (nada de Math.random). Ids e valores inventados.
 // Divergências achadas nesta auditoria (repro em scratchpad/centavos/ e no relatório da tarefa). As corrigidas viraram asserção (#n):
 //   1) #16 CORRIGIDA: o gasto do mês é um só (SHC.remessasPorMes) no cabeçalho do cartão, nas linhas "o ML cobrou" e na sincronização, com
@@ -31,7 +32,9 @@
 //      na conta exata: 23 aptas, 23 vendas → 29 dias, não 30) — seções K e L;
 //   6) simulador: "R$ 5,24 por unidade" × 100 un. = R$ 524,00, mas o custo estimado mostrado é R$ 523,81 (média sem arredondar × un.);
 //   7) #21 CORRIGIDA: P.explicaFull sazonal mostra a conta que fecha: "usei 7 × 1,33 = 9,31 → 10 (arredondado para cima)" (antes "= 10",
-//      com 7 × 1,33 = 9,31 arredondado sem dizer) — seção J.
+//      com 7 × 1,33 = 9,31 arredondado sem dizer) — seção J;
+//   8) #20 na irmã SHC.recomendaSku CORRIGIDA: cobertura = ⌊estoque × dias ÷ vendas⌋ (antes ⌊estoque ÷ (vendas ÷ dias)⌋: 33 em estoque,
+//      44 vendas em 20 dias → "14 dias", "Repor", em vez de 15 dias e "Manter") — seção P.
 // Rodar: node tests/copiloto/teste_centavos_full.js
 'use strict';
 require('./relogio').fixar();
@@ -761,6 +764,28 @@ console.log('O. Linha da sincronização (resumoFull, no fundo): o R$ do mês e 
             : rr.custoMes === null && !/R\$/.test(tx) && /ainda não cobrou coleta este mês$/.test(sync)), { k, rs, c, linhas, custoMes: rr.custoMes, tx, sync });
     }
     okLote(g16, `#16 todos os status (${foraRec} meses com remessa não recebida cobrada): cartão = Σ das linhas do mês = sincronização, no centavo`);
+}
+
+console.log('P. Recomendação por SKU (SHC.recomendaSku, Faturamento por família): cobertura = ⌊estoque × dias ÷ vendas⌋');
+{
+    // A mesma causa do #20 na função irmã: ⌊estoque ÷ (vendas ÷ dias)⌋ perdia 1 dia na conta exata e, no limite de 15 dias, mandava repor.
+    // Antes: 33 em estoque, 44 vendas em 20 dias → "dá para 14 dias", "Repor".
+    const r33 = SHC.recomendaSku({ unidades: 44, variacaoPct: 0 }, { lido: true, total: 33, proprio: 0, full: 33 }, 20);
+    ok(r33.cobertura === 15 && r33.acao === 'manter' && r33.vendaDia === 2.2 && /estoque de 33 unidades dá para 15 dias\.$/.test(r33.motivo),
+        'à mão: 33 em estoque, 44 vendas em 20 dias (2,2 por dia) → 15 dias e "Manter", não "Repor" — ' + r33.motivo);
+    const L = SHC.REC_SKU, l = lote(), lim = {};
+    for (let d = 1; d <= 31; d++) for (let un = 1; un <= 300; un++) [L.coberturaBaixa - 1, L.coberturaBaixa, L.coberturaAlta, L.coberturaAlta + 1].forEach(T => {
+        if ((T * un) % d) return;   // só as contas exatas: estoque = T × vendas ÷ dias
+        const tot = T * un / d;
+        [0, -25, 12].forEach(v => {
+            const est = { lido: true, total: tot, proprio: v === 12 ? 0 : tot, full: v === 12 ? tot : 0 }, x = SHC.recomendaSku({ unidades: un, variacaoPct: v }, est, d);
+            const cob = (tot * d - (tot * d) % un) / un;   // oráculo em inteiros (= T)
+            const acao = cob < L.coberturaBaixa ? 'repor' : v <= L.caindo && cob > L.coberturaAlta && tot > 0 ? 'baixar' : 'manter';
+            lim[T] = (lim[T] || 0) + 1;
+            l.conta(cob === T && x.cobertura === cob && x.acao === acao && x.motivo.indexOf('dá para ' + SHC.qtd(cob, 'dia', 'dias')) >= 0, { d, un, tot, v, x: { cob: x.cobertura, acao: x.acao }, cob, acao });
+        });
+    });
+    okLote(l, `#20 (recomendaSku) contas exatas nos limites (${Object.keys(lim).map(t => lim[t] + ' em ' + t + ' dias').join(', ')}): cobertura = ⌊estoque × dias ÷ vendas⌋ e a ação certa (repor < 15; baixar com queda > 60)`);
 }
 
 console.log(`\n${nChecks} verificações (${nLote} conferências em lote, casos gerados com semente fixa)`);
