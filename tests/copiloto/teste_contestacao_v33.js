@@ -44,6 +44,9 @@ console.log('Frete do anúncio (P.textoChamado) no formato novo');
     ok(/Solicitamos a revisão da cubagem \(peso e medidas\).*a correção para os envios futuros e o estorno da diferença cobrada nos pedidos acima \(R\$ 26,80\)/.test(t),
         'pede revisão da cubagem, correção para os envios futuros e o estorno (o modelo da dona)');
     ok(/ajuda\/40538/.test(t) && /Seguem em anexo: especificações técnicas do fabricante/.test(t), 'com a regra do ML e os anexos');
+    const sc = P.textoChamado(item, h, vendas, false, '');
+    ok(/^Assunto: Pedido de revisão do custo de envio do anúncio/.test(sc) && /se houver erro na cubagem, a correção para os envios futuros e o estorno/.test(sc) && !/indevida/.test(sc),
+        'sem o seller confirmar que não mexeu em peso e medidas: pedido de revisão, estorno só se houver erro na cubagem');
 }
 
 console.log('Cobrança do Fechamento (SHC.fech.textoChamado)');
@@ -65,12 +68,38 @@ console.log('Devolução, medidas, Full');
         em: Date.parse('2026-09-18T12:00:00Z'), vistoAte: Date.parse('2026-09-11T12:00:00Z'), correta: { ordenadas: [9, 7, 39], pesoKg: 1.76 }, corretaDe: 'erp' });
     ok(/Contestação de cubagem alterada no anúncio – SKU: HA-14253 – Anúncio: MLB8000000003/.test(md) && /revisão da cubagem do anúncio, a correção das medidas para/.test(md)
         && /especificações técnicas do fabricante/.test(md), 'medidas: cubagem, correção para os envios futuros e as especificações do fabricante em anexo');
+    const desce = SHC.medidasChamado({ itemId: 'MLB8000000003', sku: 'HA-14253', antes: { ordenadas: [15, 20, 45], pesoKg: 3.2 }, depois: { ordenadas: [7, 9, 39], pesoKg: 1.76 },
+        em: Date.parse('2026-09-18T12:00:00Z'), vistoAte: Date.parse('2026-09-11T12:00:00Z'), correta: null, corretaDe: '' });
+    ok(/^Assunto: Pedido de correção da cubagem do anúncio/.test(desce) && !/aumenta/.test(desce) && !/estorno/.test(desce) && /Peso considerado no frete/.test(desce),
+        'medida que DIMINUIU: só a correção do cadastro, sem "aumenta" e sem estorno');
     const rem = SHC.chamadoRemessa({ id: '61234567', quando: '2026-09-28', custo: 27, prazo: '2026-10-12', declaradas: 100, aptas: 94,
         produtos: [{ itemId: 'MLB8000000004', sku: 'HA-14253', declaradas: 50, processadas: 44, diferencas: -6, naoAptas: 0, resultado: 'faltando' }, { itemId: 'MLB8000000005', sku: 'B2', declaradas: 50, processadas: 50, diferencas: 0 }] });
     ok(/Reclamação por diferenças na remessa do Full – Remessa: #61234567/.test(rem) && /SKU HA-14253 \(MLB8000000004\): declaradas 50, processadas 44/.test(rem) && !/SKU B2/.test(rem),
         'Full: só os produtos com diferença, declaradas × processadas');
-    ok(/cobrado pelo Mercado Livre por esta inconformidade: R\$ 27,00/.test(rem) && /Prazo para reclamar informado pelo ML: 12\/10\/2026/.test(rem) && /cancelamento da cobrança de R\$ 27,00/.test(rem),
-        'Full: o que o ML cobrou, o prazo e o pedido de cancelamento da cobrança');
+    ok(/Total cobrado pelo Mercado Livre nesta remessa \(coleta e\/ou penalidade\): R\$ 27,00/.test(rem) && !/multa|por esta inconformidade/.test(rem) && /Prazo para reclamar informado pelo ML: 12\/10\/2026/.test(rem)
+        && /se a diferença se confirmar, o estorno do que foi cobrado por ela/.test(rem) && !/cancelamento da cobrança de R\$ 27/.test(rem),
+        'Full: o total cobrado na remessa (coleta e/ou penalidade, nunca "multa"), o prazo e o estorno só do que a diferença causou');
+    // Auditoria da loja: só unidade não apta (sem diferença de contagem) não é erro de contagem — pede o motivo de cada uma.
+    const na = SHC.chamadoRemessa({ id: '61234568', quando: '2026-09-28', custo: 27, declaradas: 50, aptas: 47,
+        produtos: [{ itemId: 'MLB8000000004', sku: 'HA-14253', declaradas: 50, processadas: 50, diferencas: 0, naoAptas: 3, resultado: 'sem etiqueta' }] });
+    ok(/^Assunto: Pedido de revisão de unidades não aptas na remessa do Full/.test(na) && /3 unidades foram consideradas não aptas/.test(na) && !/recontagem/.test(na)
+        && /se a inaptidão não decorreu do nosso preparo/.test(na), 'Full só com unidades não aptas: pede o motivo de cada uma, sem afirmar erro de contagem');
+}
+
+console.log('Frete casado pela data (auditoria da loja): só o par sem ambiguidade é contestável');
+{
+    const fd = { MLB8000000001: { '2026-09-01': 45.35, '2026-09-19': 45.35, '2026-09-20': 58.75, '2026-10-01': 58.75 } };
+    const ret = { MLB8000000001: { frete: 58.75 } };
+    const dois = SHC.conciliaFrete([{ pedido: '9100000001', itemId: 'MLB8000000001', data: '2026-09-22', cobrado: 45.35, formato: 'gratis' },
+        { pedido: '9100000002', itemId: 'MLB8000000001', data: '2026-09-22', cobrado: 58.75, formato: 'gratis' }],
+        ret, [{ pedido: '2000000018', itemId: 'MLB8000000001', data: '2026-09-18' }, { pedido: '2000000021', itemId: 'MLB8000000001', data: '2026-09-21' }], '2026-10-06', fd);
+    ok(dois.pagoAMais.every(p => p.talvezUnidades) && dois.totalAMais === 0 && !(SHC.fech.recuperar({ conc: dois }).parcelas.find(x => x.id === 'frete')),
+        '2 vendas e 2 fretes do anúncio com outro número: nada vai para "cobrado a mais (confirmado)" nem vira chamado (antes: "cobrança indevida" falsa de R$ 13,40)');
+    const um = SHC.conciliaFrete([{ pedido: '9100000003', itemId: 'MLB8000000001', data: '2026-09-23', cobrado: 58.75, formato: 'gratis' }],
+        ret, [{ pedido: '2000000019', itemId: 'MLB8000000001', data: '2026-09-18' }], '2026-10-06', fd);
+    const p1 = SHC.fech.recuperar({ conc: um }).parcelas.find(x => x.id === 'frete');
+    ok(um.pagoAMais.length === 1 && !um.pagoAMais[0].talvezUnidades && p1 && /– Pedido: #2000000019 – Frete: #9100000003/.test(SHC.fech.chamadoFrete(p1.itens[0], 'Bomba')),
+        'par único (1 venda e 1 frete do anúncio no período): contestável, e o texto cita o número do frete');
 }
 
 console.log('Exclusão de reclamação e experiência de compra: só o que as regras do ML aceitam');
@@ -80,8 +109,10 @@ console.log('Exclusão de reclamação e experiência de compra: só o que as re
     ok(sim.every(m => SHC.motivoExcluivel(m)), 'excluíveis: arrependimento, engano, não reconhece, consta entregue, demora do transporte, troca de tamanho');
     ok(nao.every(m => !SHC.motivoExcluivel(m)), 'NÃO excluíveis: defeito, diferente do anunciado, faltando, não despachou, sem estoque, falsificado');
     const ex = SHC.chamadoExclusao({ motivo: 'Me arrependi da compra', casos: 3, naReputacao: 2, produtos: ['Bomba d’água 12V'] });
-    ok(/Pedido de exclusão de reclamações da reputação/.test(ex) && /regras-de-exclusao-de-reclamacoes/.test(ex) && /arrependeu da compra e o produto está em perfeitas condições/.test(ex)
-        && /\(3 casos, 2 contando na reputação\)/.test(ex), 'pedido de exclusão com a regra em que se enquadra e os números');
+    ok(/Pedido de análise de reclamações para exclusão da reputação/.test(ex) && /regras-de-exclusao-de-reclamacoes/.test(ex) && /Regra de exclusão em que pode se enquadrar: o comprador se arrependeu/.test(ex)
+        && /\(3 casos, 2 contando na reputação\)/.test(ex) && !/se enquadram nas regras/.test(ex), 'pedido de exclusão: pede a análise, com a regra em que PODE se enquadrar e os números');
+    const exp = SHC.chamadoExclusao({ motivo: 'Me arrependi da compra', casos: 2, naReputacao: 2, pedidos: ['2000000901', '2000000902'] });
+    ok(/- Pedidos: #2000000901, #2000000902\./.test(exp) && /a análise de cada pedido acima e, nos que se enquadrarem, a exclusão/.test(exp), 'com os números dos pedidos: análise de cada um, exclusão só dos que se enquadrarem');
     ok(SHC.chamadoExclusao({ motivo: 'Produto com defeito', casos: 5 }) === '', 'defeito: nenhum pedido de exclusão (corrigir a causa)');
     const x = SHC.mlExperienciaCompra({ item_id: 'MLB8000000006', reputation: { color: 'orange', value: 55 }, metrics_details: { problems: [{ tag: 'PROBLEMA PRINCIPAL', claims: 3, level_three: { key: 'X', title: { text: 'Arrependimento do comprador' } } }], distribution: { from: '2026-04-01T00:00:00Z', to: '2026-10-01T00:00:00Z' } } });
     const te = SHC.chamadoExperiencia(x, [{ pedido: '2000000777', motivo: 'Me arrependi' }, { pedido: '2000000778', motivo: 'Produto com defeito' }]);
@@ -99,6 +130,14 @@ console.log('Exclusão de reclamação e experiência de compra: só o que as re
     const veto2 = ['Desisti porque demorou para despachar', 'Me arrependi, demorou demais para postar', 'Desisti, o vendedor não respondeu', 'Mensagem sem resposta, desisti', 'Engano no envio'];
     const vazou = veto2.filter(m => SHC.motivoExcluivel(m));
     ok(!vazou.length, 'despacho demorado, vendedor que não respondeu e engano no envio: sem pedido de exclusão' + (vazou.length ? ': ' + vazou.join(' | ') : ''));
+    // Auditoria da loja: erro do comprador + culpa do vendedor no mesmo motivo → veta; transporte só com demora/atraso explícitos.
+    const veto3 = ['Comprei errado e veio com defeito', 'Comprei errado e veio faltando peça', 'Escolhi o tamanho errado, e o produto é falsificado', 'Selecionei o tamanho errado e veio manchado',
+        'Me arrependi, o produto não funcionou', 'Me arrependi, veio sem a caixa', 'Desisti porque o vendedor demorou', 'Correios: vendedor postou com atraso',
+        'Pacote violado pelos Correios', 'Chegou aberto pela transportadora', 'Os Correios não entregaram'];
+    const vazou3 = veto3.filter(m => SHC.motivoExcluivel(m));
+    ok(!vazou3.length, 'erro do comprador não anula a culpa do vendedor; pacote violado/aberto/não entregue não é "demora do transporte"' + (vazou3.length ? ': ' + vazou3.join(' | ') : ''));
+    ok(/arrependeu/.test(SHC.motivoExcluivel('Comprei por engano')) && /arrependeu/.test(SHC.motivoExcluivel('Engano na compra')) && /reclamação por engano/.test(SHC.motivoExcluivel('Abri a reclamação por engano'))
+        && /meio de contato/.test(SHC.motivoExcluivel('Só queria perguntar sobre a garantia')), 'erro na compra é arrependimento; reclamação aberta por engano e meio de contato têm a regra deles');
     const comprador = ['Me arrependi, o produto não foi usado', 'Me arrependi, nunca usado', 'Escolhi o tamanho errado', 'Engano na compra', 'Foi engano'];
     const travou = comprador.filter(m => !SHC.motivoExcluivel(m));
     ok(!travou.length, 'erro ou arrependimento do comprador ("não foi usado", "escolhi errado", "foi engano"): excluível' + (travou.length ? ': ' + travou.join(' | ') : ''));
@@ -118,6 +157,9 @@ console.log('Caso incerto: pede a conferência, nunca afirma cobrança indevida'
     const vd = SHC.devolucoesContestar([{ pedido: '2000000997', itemId: 'MLB1', data: '2026-09-10', valor: 20, linhas: [{ v: 20 }] }], { '2000000997': { motivo: 'Me arrependi', afetouReputacao: false } }, false).itens[0];
     ok(vd.cor === 'verde' && /^Assunto: Contestação de tarifa de devolução/.test(vd.texto) && /estorno de R\$ 20,00 na nossa conta, por não ser de nossa responsabilidade/.test(vd.texto),
         'arrependimento do comprador (🟢): a contestação firme continua');
+    const mx = SHC.devolucoesContestar([{ pedido: '2000000996', itemId: 'MLB1', data: '2026-09-10', valor: 25.9, linhas: [{ v: 25.9 }] }], { '2000000996': { motivo: 'Comprei errado e veio com defeito', afetouReputacao: null } }, false).itens[0];
+    ok(mx.cor === 'amarelo' && mx.regra === 'motivo_misto' && /^Assunto: Pedido de revisão de tarifa de devolução/.test(mx.texto) && !/por não ser de nossa responsabilidade/.test(mx.texto),
+        'motivo misto ("comprei errado e veio com defeito"): 🟡 e pedido de revisão (antes: arrependimento com contestação firme)');
     const base = { pedido: '2000000123', data: '2026-09-20', itemId: 'MLB8000000002', cobranca: 'Tarifa de venda', regra: 'tarifa', valor: 30, esperado: 20, diferenca: 10,
         motivo: 'No preço de hoje (R$ 150,00), este anúncio paga R$ 20,00 de tarifa por unidade. Se o preço da venda foi outro, pode estar certo.' };
     const ta = SHC.fech.textoChamado(Object.assign({ estimado: 'Pelo preço atual do anúncio (R$ 150,00), a tarifa de venda seria de R$ 20,00 por unidade.' }, base));

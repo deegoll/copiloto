@@ -1299,6 +1299,13 @@
         }
         if (fora.length) fatos.push(`Deixei de fora ${SHC.qtd(fora.length, 'pedido', 'pedidos')} com frete bem maior, que podem ter mais de uma unidade.`);
         if (confirmouMedidas) fatos.push('Não alterei peso, medidas nem embalagem.' + (medidas ? ` Peso e medidas da embalagem no meu cadastro: ${medidas}.` : ''));
+        // Auditoria da loja (07/10/2026): o frete também muda com o preço e com a medida que o próprio seller troca. "Contestação de cobrança
+        // indevida" só com a confirmação dele (a caixa) e com a régua da lista de Anúncios; senão, pedido de revisão com o estorno condicional.
+        if (!confirmouMedidas || b.fonte !== 'lista') return SHC.textoContestacao({ assunto: 'Pedido de revisão do custo de envio do anúncio', ids: [['SKU', item.sku || ''], ['Anúncio', item.itemId]].concat(peds.length === 1 ? [['Pedido', '#' + peds[0].orderId]] : []),
+            intro: `O custo de envio deste anúncio passou a ser cobrado acima da faixa de ${SHC.moeda(b.base)}. Gostaríamos de confirmar se o peso e as medidas considerados no cálculo estão corretos.`,
+            fatos, regras: ['frete_tabela', 'frete_calculo'],
+            pedido: 'a revisão da cubagem (peso e medidas) considerada no cálculo do frete deste anúncio e, se houver erro na cubagem, a correção para os envios futuros'
+                + (peds.length ? ` e o estorno da diferença cobrada nos pedidos acima (${SHC.moeda(soma)}) na nossa conta.` : '.') });
         return SHC.textoContestacao({ assunto: 'Contestação de cobrança indevida de frete', ids: [['SKU', item.sku || ''], ['Anúncio', item.itemId]].concat(peds.length === 1 ? [['Pedido', '#' + peds[0].orderId]] : []),
             intro: `Identificamos uma divergência no custo de envio do anúncio: o frete passou a ser cobrado acima da faixa de ${SHC.moeda(b.base)}${confirmouMedidas ? ', sem mudança no produto nem na embalagem' : ''}.`,
             fatos, regras: ['frete_tabela', 'frete_calculo'],
@@ -1685,7 +1692,8 @@
         if (!(p.linhas || []).length) out.push({ rot: 'Detalhe por linha: aparece quando este mês for lido de novo no Faturamento', val: '', cls: 'fora' });
         out.push({ rot: 'Frete da venda cobrado (tarifas − estornos)', val: m(p.cobrado), cls: 'tot' });
         if (typeof p.esperado === 'number') out.push({ rot: p.base === 'dia' ? 'Frete do anúncio no dia da venda' : p.base === 'hoje' ? 'Frete do anúncio hoje (o do dia da venda não foi guardado)' : 'Frete do anúncio', val: m(p.esperado), cls: '' });
-        if (typeof p.diferenca === 'number') out.push({ rot: p.vezes ? `A mais (cobrado ${p.vezes}× o frete do anúncio: pode ser ${p.vezes} unidades, confira)` : p.talvezUnidades && p.base === 'hoje' && p.cobrado < 1.6 * p.esperado ? 'A mais (comparado com o frete de hoje: confira se o frete do anúncio mudou)'
+        if (typeof p.diferenca === 'number') out.push({ rot: p.vezes ? `A mais (cobrado ${p.vezes}× o frete do anúncio: pode ser ${p.vezes} unidades, confira)` : p.parAmbiguo ? 'A mais (o frete veio com outro número e há mais de uma venda ou frete do anúncio no período: confira de qual venda ele é)'
+            : p.talvezUnidades && p.base === 'hoje' && p.cobrado < 1.6 * p.esperado ? 'A mais (comparado com o frete de hoje: confira se o frete do anúncio mudou)'
             : p.talvezUnidades ? 'A mais (pode ter mais de 1 unidade: confira)' : 'A mais', val: '+' + m(p.diferenca), cls: 'mais' });
         if (p.dev > 0) out.push({ rot: 'Tarifa de devolução (frete de volta do produto): fora desta conta', val: m(p.dev), cls: 'fora' });
         return out;
@@ -3840,7 +3848,8 @@
             + a.motivos.slice(0, nMot).map((x, i) => `<div class="hb"><div class="l"><b>${esc(curtoTxt(x.motivo, 40))}</b><span class="v">${x.casos}${x.valor > 0 ? ' · <small>' + SHC.moeda(x.valor) + '</small>' : ''}</span></div>`
                 + `<div class="medidor"><i class="${i === 0 ? 'pr' : x.casos > 1 ? 'at' : ''}" style="width:${Math.max(4, Math.round(x.casos / max * 100))}%"></i></div>`
                 // v3.3: motivo que as regras de exclusão do ML aceitam → o pedido de exclusão pronto (reputação e experiência de compra).
-                + (SHC.motivoExcluivel(x.motivo) ? `<small class="det" style="display:block">Pode sair da reputação: ${esc(SHC.motivoExcluivel(x.motivo))}. Envie só se ${esc(SHC.confereExclusao(x.motivo))}. <button class="lnk" data-pos-excluir="${esc(x.motivo)}">${posCopiado === x.motivo ? '✓ Texto copiado' : 'Copiar pedido de exclusão'}</button></small>` : '')
+                // Auditoria da loja: só quando algum caso desse motivo CONTA na reputação (pedir a exclusão do que não conta não tem sentido).
+                + (SHC.motivoExcluivel(x.motivo) && (posvenda.casos || []).some(c => c && c.motivo === x.motivo && c.afetouReputacao === true) ? `<small class="det" style="display:block">Pode sair da reputação: ${esc(SHC.motivoExcluivel(x.motivo))}. Envie só se ${esc(SHC.confereExclusao(x.motivo))}. <button class="lnk" data-pos-excluir="${esc(x.motivo)}">${posCopiado === x.motivo ? '✓ Texto copiado' : 'Copiar pedido de exclusão'}</button></small>` : '')
                 + '</div>').join('')
             + (a.motivos.length > 5 ? `<p class="rs">${btVer('pos:motivos', `Ver mais (${a.motivos.length - 5})`)}</p>` : '')
             + `<p class="rs">${esc(a.naReputacao + ' de ' + a.total)} contaram na sua reputação.</p></div>`;
@@ -5799,7 +5808,9 @@
         const pex = t.closest('[data-pos-excluir]');   // v3.3: pedido de exclusão de reclamações (SHC.chamadoExclusao)
         if (pex) {
             const mot = pex.dataset.posExcluir, cs = ((posvenda && posvenda.casos) || []).filter(c => c && c.motivo === mot);
-            const g = { motivo: mot, casos: cs.length, naReputacao: cs.filter(c => c.afetouReputacao === true).length, produtos: [...new Set(cs.map(c => c.titulo).filter(Boolean))] };
+            // Os números dos pedidos (posvenda.porPedido): os do mesmo motivo que não estão marcados como "não contou na reputação".
+            const pp = SHC.posvendaPorPedido(posvenda) || {}, pedidos = Object.keys(pp).filter(n => pp[n] && pp[n].motivo === mot && pp[n].afetouReputacao !== false);
+            const g = { motivo: mot, casos: cs.length, naReputacao: cs.filter(c => c.afetouReputacao === true).length, produtos: [...new Set(cs.map(c => c.titulo).filter(Boolean))], pedidos };
             try { await navigator.clipboard.writeText(SHC.chamadoExclusao(g)); posCopiado = mot; } catch (e) { posCopiado = ''; }
             desenhaPos();
             return;

@@ -306,7 +306,7 @@
         const doFrete = x => x.regra === 'frete' && (pedFrete.has(String(x.pedido)) || chFrete.has(x.itemId + '|' + x.data + '|' + r2(x.valor)));
         // "(confirmado)": aqui só entra o confirmado; o cartão da aba Frete soma também o "para conferir" (mesmo nome, outro total).
         add('frete', 'Frete cobrado a mais (confirmado)', 'Faturamento × frete do anúncio · últimos 30 dias',
-            fr.map(p => Object.assign({ pedido: p.pedido, itemId: p.itemId, data: p.data, valor: p.diferenca, cobrado: p.cobrado, esperado: p.esperado }, p.dev > 0 ? { dev: p.dev } : {})));
+            fr.map(p => Object.assign({ pedido: p.pedido, itemId: p.itemId, data: p.data, valor: p.diferenca, cobrado: p.cobrado, esperado: p.esperado }, p.dev > 0 ? { dev: p.dev } : {}, p.pedidoFrete ? { pedidoFrete: p.pedidoFrete } : {})));
         // v3.1: "para conferir" gravado pela versão anterior pode ter a tarifa de devolução: ela nunca entra no que dá para recuperar.
         // v3.3: dúvida (pode ser legítima: 1 cobrança por pagamento/envio, frete de venda cancelada já despachada) fica só no "para conferir".
         const cf = (d.conferir || []).filter(x => x && !x.duvida && x.diferenca > 0 && SHC.tipoCustoFechamento(x.cobranca) !== 'devolucao');
@@ -329,7 +329,7 @@
         ? SHC.devolucoesContestar(fh.devolucoes.lista, SHC.posvendaPorPedido(pv), !!(pv && pv.paginas > 1)) : null);   // F12: só a 1ª página lida
     /** Texto do chamado de um frete cobrado a mais (mesmo formato de F.textoChamado; só pede a revisão). */
     // v3.1: é só o frete de ENVIO da venda; a tarifa de devolução do mesmo pedido (dev) fica fora e o texto diz isso (nunca pede revisão dela).
-    F.chamadoFrete = (p, titulo) => F.textoChamado({ pedido: p.pedido, data: p.data, itemId: p.itemId, titulo: titulo || '', cobranca: 'Frete de envio da venda (Mercado Envios)',
+    F.chamadoFrete = (p, titulo) => F.textoChamado({ pedido: p.pedido, pedidoFrete: p.pedidoFrete || '', data: p.data, itemId: p.itemId, titulo: titulo || '', cobranca: 'Frete de envio da venda (Mercado Envios)',
         valor: p.cobrado, esperado: p.esperado, diferenca: p.valor, regra: 'frete',   // regra: cita as regras do frete do ML (40538 e 4413)
         motivo: 'O frete cobrado ficou acima do custo de envio que o anúncio mostra (' + SHC.moeda(p.esperado) + ').'
             + (p.dev > 0 ? ' A tarifa de devolução deste pedido (' + SHC.moeda(p.dev) + ') não está nesta conta.' : '') });
@@ -536,7 +536,7 @@
             intro: 'Uma cobrança do Faturamento' + (x.data ? ' de ' + dataBR(x.data) : '') + (x.titulo ? ' (anúncio “' + x.titulo + '”)' : '') + ' ficou acima do valor que esperávamos. Gostaríamos de confirmar se ela está correta.',
             fatos: ['Valor cobrado: ' + SHC.moeda(x.valor), 'Valor esperado (estimativa nossa): ' + SHC.moeda(x.esperado), 'Diferença: ' + SHC.moeda(x.diferenca), 'Como estimamos: ' + est],
             regras: regra, pedido: 'a conferência desta cobrança e, se a diferença se confirmar, o estorno de ' + SHC.moeda(x.diferenca) + ' na nossa conta.' });
-        return SHC.textoContestacao({ assunto: 'Contestação de cobrança indevida: ' + x.cobranca, ids: [['Pedido', '#' + x.pedido], ['Anúncio', x.itemId || '']],
+        return SHC.textoContestacao({ assunto: 'Contestação de cobrança indevida: ' + x.cobranca, ids: [['Pedido', '#' + x.pedido]].concat(x.pedidoFrete && x.pedidoFrete !== x.pedido ? [['Frete', '#' + x.pedidoFrete]] : [], [['Anúncio', x.itemId || '']]),
             intro: 'Identificamos uma cobrança acima do valor devido no Faturamento' + (x.data ? ' em ' + dataBR(x.data) : '') + (x.titulo ? ' (anúncio “' + x.titulo + '”)' : '') + '.',
             fatos: ['Valor cobrado: ' + SHC.moeda(x.valor), 'Valor devido: ' + SHC.moeda(x.esperado), 'Diferença: ' + SHC.moeda(x.diferenca), 'Por quê: ' + x.motivo],
             regras: regra, pedido: 'a revisão desta cobrança e o estorno da diferença de ' + SHC.moeda(x.diferenca) + ' na nossa conta.' });

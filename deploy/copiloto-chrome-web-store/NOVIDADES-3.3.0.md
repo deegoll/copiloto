@@ -54,6 +54,20 @@ Uma segunda revisão independente confirmou as 9 correções sem regressão para
 - **Permissão do ERP:** sobra de conta desmarcada não segura mais a permissão.
 - **Fechamento (bug antigo):** o texto copiado em "Como pedir de volta" dizia "Valor cobrado" com o valor da diferença. Agora usa o valor cobrado (`F.itemDoChamado`).
 
+### Auditoria de prontidão para a loja (07/10/2026)
+
+Uma auditoria de 49 agentes (pacote, permissões, privacidade, ficha e conformidade, cada achado conferido por céticos) deu **"enviar depois de corrigir"**. Nada no pacote viola política da loja. O que foi corrigido:
+
+- **Frete casado pela data (alto).** O ML costuma lançar o frete com outro número que o da venda; o Copiloto casa pelo anúncio e pela data. Com 2 ou mais vendas ou fretes do anúncio no período, o par pode trocar, e um frete certo virava "cobrança indevida". Agora o par ambíguo vai para "para conferir" (`parAmbiguo`); só o par único é contestável, e o texto cita o número do frete.
+- **Pedido de exclusão.** O erro do comprador não anula mais a culpa do vendedor ("comprei errado e veio com defeito" veta). Também vetam: não funcionou, sem a caixa ou peça, postagem atrasada, falsificado, manchado, pacote violado ou aberto, não entregue. Erro na compra ("comprei por engano") usa a regra de arrependimento; a do transporte exige demora ou atraso. O texto pede a **análise** de cada pedido, com o número, e a exclusão só dos que se enquadrarem; o botão só aparece quando algum caso conta na reputação.
+- **Tarifa de devolução com motivo misto** (erro do comprador e problema do produto): 🟡 e pedido de revisão, não contestação firme.
+- **Frete do anúncio** sem a confirmação "Não alterei peso, medidas nem embalagem": pedido de revisão, com o estorno só se houver erro na cubagem.
+- **Medidas:** "aumenta o custo de envio" e o estorno só quando o peso considerado (físico × volumétrico) subiu.
+- **Remessa do Full:** o valor é o `total_charged` da remessa (coleta e/ou penalidade, nunca "multa"), e o texto não pede mais o cancelamento dele. Só unidades não aptas viram "Pedido de revisão de unidades não aptas", com o motivo de cada uma.
+- A estatística "responder em 1 hora vende 10% mais" (sem fonte) saiu da tela.
+
+**Textos da loja:** a auditoria olhou o pacote DESTE ramo (sem o TikTok). A 3.3.0 que vai para a loja é a do projeto local, com o TikTok Shop ligado, e a política no ar já descreve essa versão. Por isso os textos da loja não foram trocados aqui: o relatório completo, com os achados de privacidade e de ficha que continuam valendo (dado de identificação da conta no formulário, a experiência de compra na política, a aba do Mercado Ads aberta em segundo plano na justificativa de host, a estatística sem fonte, as credenciais de ERP sem cifra), está em `AUDITORIA-LOJA-3.3.0.md`.
+
 ## O que mudou, por arquivo
 
 - `store.js`:
