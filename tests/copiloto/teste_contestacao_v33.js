@@ -69,12 +69,13 @@ console.log('Devolução, medidas, Full');
     ok(/Contestação de tarifa de devolução – Pedido: #2000000555/.test(dv) && /devolucoes_3285/.test(dv) && /estorno de R\$ 23,90/.test(dv), 'devolução: pedido, regra da devolução e o estorno');
     const md = SHC.medidasChamado({ itemId: 'MLB8000000003', sku: 'HA-14253', antes: { ordenadas: [9, 7, 39], pesoKg: 1.76 }, depois: { ordenadas: [20, 15, 45], pesoKg: 3.2 },
         em: Date.parse('2026-09-18T12:00:00Z'), vistoAte: Date.parse('2026-09-11T12:00:00Z'), correta: { ordenadas: [9, 7, 39], pesoKg: 1.76 }, corretaDe: 'erp', quem: 'ml' });
-    ok(/Contestação de cubagem alterada no anúncio – SKU: HA-14253 – Anúncio: MLB8000000003/.test(md) && /revisão da cubagem do anúncio, a correção das medidas para/.test(md)
-        && /especificações técnicas do fabricante/.test(md), 'medidas: cubagem, correção para os envios futuros e as especificações do fabricante em anexo');
+    ok(/Pedido de revisão da cubagem do anúncio – SKU: HA-14253 – Anúncio: MLB8000000003/.test(md) && /pedimos também a correção das medidas para 39×7×9 cm e 1,76 kg nos envios futuros/.test(md)
+        && /especificações técnicas do fabricante/.test(md) && !/não foi feita por nós|sem que nós mexêssemos|Contestação|estorno/.test(md),
+        'medidas: pedido de revisão, correção condicionada à medida do cadastro, especificações do fabricante; nem com quem "ml" afirma autoria ou pede estorno');
     const desce = SHC.medidasChamado({ itemId: 'MLB8000000003', sku: 'HA-14253', antes: { ordenadas: [15, 20, 45], pesoKg: 3.2 }, depois: { ordenadas: [7, 9, 39], pesoKg: 1.76 },
         em: Date.parse('2026-09-18T12:00:00Z'), vistoAte: Date.parse('2026-09-11T12:00:00Z'), correta: null, corretaDe: '', quem: 'ml' });
-    ok(/^Assunto: Pedido de correção da cubagem do anúncio/.test(desce) && !/aumenta/.test(desce) && !/estorno/.test(desce) && /Peso considerado no frete/.test(desce),
-        'medida que DIMINUIU: só a correção do cadastro, sem "aumenta" e sem estorno');
+    ok(/^Assunto: Pedido de revisão da cubagem do anúncio/.test(desce) && !/subiu|aumenta/.test(desce) && !/estorno|custo de envio cobrado/.test(desce) && /Peso considerado no frete/.test(desce),
+        'medida que DIMINUIU: só a revisão da cubagem, sem "subiu" e sem estorno');
     const rem = SHC.chamadoRemessa({ id: '61234567', quando: '2026-09-28', custo: 27, prazo: '2026-10-12', declaradas: 100, aptas: 94,
         produtos: [{ itemId: 'MLB8000000004', sku: 'HA-14253', declaradas: 50, processadas: 44, diferencas: -6, aptas: 44, naoAptas: 0, resultado: 'faltando' }, { itemId: 'MLB8000000005', sku: 'B2', declaradas: 50, processadas: 50, diferencas: 0, aptas: 50 }] });
     ok(/Reclamação por diferenças na remessa do Full – Remessa: #61234567/.test(rem) && /SKU HA-14253 \(MLB8000000004\): declaradas 50, processadas 44/.test(rem) && !/SKU B2/.test(rem),
@@ -89,34 +90,44 @@ console.log('Devolução, medidas, Full');
         && /se a inaptidão não decorreu do nosso preparo/.test(na), 'Full só com unidades não aptas: pede o motivo de cada uma, sem afirmar erro de contagem');
 }
 
-console.log('Medidas (rastreio 07/10, R13): "o ML mudou" e "não foi feita por nós" só com a marca de autoria no dado');
+console.log('Medidas (revisão 3): o Copiloto não sabe quem mudou — nunca "o ML mudou" nem "não foi feita por nós"; diz o que mudou e pede a revisão');
 {
-    const D = d => Date.parse(d + 'T12:00:00Z'), A = { ordenadas: [7, 9, 39], pesoKg: 1.76 }, B = { ordenadas: [15, 20, 45], pesoKg: 3.2 };
+    const D = d => Date.parse(d + 'T12:00:00Z'), A = { ordenadas: [7, 9, 39], pesoKg: 1.76 }, B = { ordenadas: [15, 20, 45], pesoKg: 3.2 }, C = { ordenadas: [10, 12, 40], pesoKg: 2 };
+    const AUTORIA = /não foi feita por nós|sem que nós mexêssemos|Mercado Livre (mudou|alterou)|ML (mudou|alterou)|Contestação/;
     const base = { itemId: 'MLB8000000013', sku: 'HA-90001', antes: A, depois: B, em: D('2026-09-18'), vistoAte: D('2026-09-11') };
     const sem = SHC.medidasChamado(Object.assign({ quem: '?', correta: null, corretaDe: '' }, base)), semCampo = SHC.medidasChamado(Object.assign({ correta: null, corretaDe: '' }, base));
-    ok(/^Assunto: Pedido de revisão da cubagem do anúncio – SKU: HA-90001 – Anúncio: MLB8000000013/.test(sem) && !/A alteração não foi feita por nós\.|sem que nós mexêssemos|Contestação/.test(sem),
-        'sem saber quem mudou: pedido de revisão, sem afirmar que não fomos nós');
-    ok(/Gostaríamos de entender quem fez a alteração/.test(sem) && /Solicitamos a informação de quem alterou as medidas e de qual medida está sendo usada no cálculo do frete/.test(sem)
-        && /Se a alteração não foi feita por nós, pedimos também a revisão do frete cobrado desde 11\/09\./.test(sem), 'o texto pergunta quem alterou; a revisão do frete só se a alteração não foi nossa (trava do frete: nunca estorno)');
-    ok(semCampo === sem, 'sem o campo de autoria vale o mesmo (na dúvida, pergunta)');
+    ok(/^Assunto: Pedido de revisão da cubagem do anúncio – SKU: HA-90001 – Anúncio: MLB8000000013/.test(sem) && !AUTORIA.test(sem),
+        'sem saber quem mudou: pedido de revisão, sem afirmar autoria');
+    ok(/Medidas da embalagem: de 39×9×7 cm e 1,76 kg para 45×20×15 cm e 3,20 kg entre 11\/09 e 18\/09\./.test(sem) && /Solicitamos a revisão da cubagem do anúncio e a confirmação de qual medida está sendo usada no cálculo do frete\./.test(sem)
+        && /Se a medida anterior for a correta, pedimos também a revisão do custo de envio cobrado desde 11\/09\./.test(sem) && !/estorno/.test(sem), 'o texto diz o que mudou (de X para Y, quando) e pede a revisão, sem estorno firme');
+    ok(semCampo === sem && SHC.medidasChamado(Object.assign({ quem: 'ml', correta: null, corretaDe: '' }, base)) === sem, 'com ou sem o campo de autoria (até "ml"), o texto é o mesmo');
     const comErp = SHC.medidasChamado(Object.assign({ quem: '?', correta: { ordenadas: [8, 9, 39], pesoKg: 1.8 }, corretaDe: 'erp' }, base));
-    ok(/Medidas corretas \(do nosso cadastro\): 39×9×8 cm e 1,80 kg\./.test(comErp) && /pedimos também a correção das medidas para 39×9×8 cm e 1,80 kg nos envios futuros e a revisão do frete/.test(comErp)
-        && !/A alteração não foi feita por nós\./.test(comErp), 'medida certa do cadastro conhecida, autoria não: a correção e a revisão do frete ficam condicionadas');
-    // Pelo histórico (SHC.medidasMudadas): a medida certa era a de antes → marca 'ml'; sem referência → '?'.
+    ok(/Medidas do nosso cadastro: 39×9×8 cm e 1,80 kg\./.test(comErp) && /Se a medida do nosso cadastro for a correta, pedimos também a correção das medidas para 39×9×8 cm e 1,80 kg nos envios futuros e a revisão do custo de envio cobrado desde 11\/09\./.test(comErp)
+        && !AUTORIA.test(comErp) && !/estorno/.test(comErp), 'medida do cadastro conhecida: entra como "Medidas do nosso cadastro", a correção fica condicionada, sem autoria nem estorno');
+    const comSeller = SHC.medidasChamado(Object.assign({ quem: '?', correta: A, corretaDe: 'seller' }, base));
+    ok(!/Medidas do nosso cadastro|Medidas corretas/.test(comSeller) && !AUTORIA.test(comSeller), 'medida "confirmada" deduzida do histórico não vira "medida correta" no texto');
+    // Caso 1 do revisor: o seller troca a caixa direto no site do ML e o ERP ainda tem a velha → antes saía "A alteração não foi feita por nós" e o estorno.
     const porItem = { MLB8000000013: { sku: 'HA-90001', atual: Object.assign({ de: D('2026-09-18'), ts: D('2026-10-05') }, B),
         historico: [Object.assign({ de: D('2026-08-01'), ate: D('2026-09-18'), vistoAte: D('2026-09-11') }, A)] } };
-    const mlMarca = SHC.medidasMudadas(porItem, D('2026-09-01'), { erpDe: () => A })[0], semMarca = SHC.medidasMudadas(porItem, D('2026-09-01'))[0];
-    ok(mlMarca.quem === 'ml' && /A alteração não foi feita por nós\./.test(mlMarca.chamado) && semMarca.quem === '?' && !/não foi feita por nós\./.test(semMarca.chamado)
-        && /Pedido de revisão da cubagem/.test(semMarca.chamado), 'pelo histórico: com a marca de autoria afirma, sem ela pergunta');
-    // Sino: sem a marca, "a medida mudou" (e o seller confere); com a marca (a medida que o seller confirmou era a de antes), "o Mercado Livre mudou".
+    const comErpH = SHC.medidasMudadas(porItem, D('2026-09-01'), { erpDe: () => A })[0], semRef = SHC.medidasMudadas(porItem, D('2026-09-01'))[0];
+    ok(comErpH.quem === '?' && !AUTORIA.test(comErpH.chamado) && /Medidas do nosso cadastro: 39×9×7 cm/.test(comErpH.chamado) && semRef.quem === '?' && !AUTORIA.test(semRef.chamado),
+        'pelo histórico, com o ERP igual à medida de antes: nunca marca "ml" nem afirma autoria (antes: "A alteração não foi feita por nós")');
+    // Sino: nunca "o Mercado Livre mudou"; diz de X para Y e quando.
     const sino = pi => SHC.anomalias('1', { medidas: { porItem: pi }, agora: D('2026-10-07'), titulos: { MLB8000000013: 'Bomba HA' } }).itens.filter(i => i.tipo === 'medidas').map(i => i.texto);
     const s1 = sino(porItem);
-    ok(s1.length === 1 && /^Bomba HA: a medida da embalagem mudou para 45×20×15 cm e 3,20 kg\. Se não foi você/.test(s1[0]) && !/Mercado Livre mudou/.test(s1[0]), 'sino sem a marca de autoria: "a medida mudou", sem culpar o ML');
+    ok(s1.length === 1 && /^Bomba HA: a medida da embalagem mudou de 39×9×7 cm e 1,76 kg para 45×20×15 cm e 3,20 kg entre 11\/09 e 18\/09\. Se não foi você/.test(s1[0]) && !AUTORIA.test(s1[0]),
+        'sino: "a medida mudou de X para Y entre dd/mm e dd/mm", sem culpar o ML');
+    // Caso 2 do revisor: A → B → volta para A (vira "confirmada") → o próprio seller muda para C. Antes o sino dizia "o Mercado Livre mudou … para C".
+    const volta = { MLB8000000013: { sku: 'HA-90001', atual: Object.assign({ de: D('2026-09-25'), ts: D('2026-10-05') }, C),
+        historico: [Object.assign({ de: D('2026-07-01'), ate: D('2026-08-01'), vistoAte: D('2026-07-30') }, A), Object.assign({ de: D('2026-08-01'), ate: D('2026-08-20'), vistoAte: D('2026-08-18') }, B),
+            Object.assign({ de: D('2026-08-20'), ate: D('2026-09-25'), vistoAte: D('2026-09-24') }, A)] } };
+    const s2 = sino(volta);
+    ok(s2.length === 1 && !AUTORIA.test(s2[0]) && /mudou de 39×9×7 cm e 1,76 kg para 40×12×10 cm e 2,00 kg/.test(s2[0]), 'sino com histórico que volta a uma medida antiga: sem "o Mercado Livre mudou"');
     const conf = { MLB8000000013: { sku: 'HA-90001', atual: Object.assign({ de: D('2026-09-18'), ts: D('2026-10-05') }, B),
         historico: [Object.assign({ de: D('2026-07-01'), ate: D('2026-08-01'), vistoAte: D('2026-07-30') }, { ordenadas: [7, 9, 30], pesoKg: 1.5 }),
             Object.assign({ de: D('2026-08-01'), ate: D('2026-09-18'), vistoAte: D('2026-09-11'), quem: 'seller' }, A)] } };
-    const s2 = sino(conf);
-    ok(s2.length === 1 && /^Bomba HA: o Mercado Livre mudou as medidas da embalagem para 45×20×15 cm e 3,20 kg\.$/.test(s2[0]), 'sino com a marca de autoria (medida confirmada pelo seller era a de antes): "o Mercado Livre mudou"');
+    const s3 = sino(conf), m3 = SHC.medidasMudadas(conf.MLB8000000013 ? conf : {}, D('2026-09-01'))[0];
+    ok(s3.length === 1 && !AUTORIA.test(s3[0]) && m3 && m3.quem === '?' && !AUTORIA.test(m3.chamado), '"Fui eu" na medida de ANTES não prova quem fez a mudança seguinte: sem "o Mercado Livre mudou"');
 }
 
 console.log('Remessa do Full sem o detalhe por produto (rastreio 07/10, bloqueio 4): nenhum texto de contestação');

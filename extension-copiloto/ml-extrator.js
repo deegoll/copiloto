@@ -3100,10 +3100,10 @@
         const pv = d.posvenda || {};
         if (pv.reclamacoes > 0) add('posvenda', SHC.qtd(pv.reclamacoes, 'reclamação ou mediação em aberto', 'reclamações ou mediações em aberto') + ' no pós-venda.', { chave: 'anom|pv|reclamacoes', qtd: pv.reclamacoes, link: SHC.POSVENDA_URL, vermelho: true });
         if (pv.devolucoes > 0) add('posvenda', SHC.qtd(pv.devolucoes, 'devolução pendente', 'devoluções pendentes') + ' no pós-venda.', { chave: 'anom|pv|devolucoes', qtd: pv.devolucoes, link: SHC.POSVENDA_URL });
-        // Medidas da embalagem mudadas nos últimos 30 dias (fora as do próprio seller): 1 por anúncio. Rastreio 07/10: "o Mercado Livre mudou" só
-        // com a marca de autoria (quem 'ml'); sem ela, a medida mudou e o seller confere se foi ele.
+        // Medidas da embalagem mudadas nos últimos 30 dias (fora as do próprio seller): 1 por anúncio. Revisão 3: o Copiloto não sabe quem
+        // mudou — o sino diz o que mudou (de X para Y, quando) e o seller confere se foi ele; nunca "o Mercado Livre mudou".
         const mm = d.medidas && d.medidas.porItem && SHC.medidasMudadas ? SHC.medidasMudadas(d.medidas.porItem, agora - 30 * 864e5) : [], mIds = new Set();
-        mm.forEach(m => { if (mIds.has(m.itemId)) return; mIds.add(m.itemId); add('medidas', nome(m.itemId) + (m.quem === 'ml' ? ': o Mercado Livre mudou as medidas da embalagem para ' + SHC.medidaTxt(m.depois) + '.' : ': a medida da embalagem mudou para ' + SHC.medidaTxt(m.depois) + '. Se não foi você, peça a revisão ao ML (texto pronto na aba Saúde).'), { chave: 'anom|medidas|' + m.itemId, itemId: m.itemId }); });
+        mm.forEach(m => { if (mIds.has(m.itemId)) return; mIds.add(m.itemId); add('medidas', nome(m.itemId) + ': a medida da embalagem mudou de ' + SHC.medidaTxt(m.antes) + ' para ' + SHC.medidaTxt(m.depois) + ' ' + SHC.medidasQuando(m) + '. Se não foi você, peça a revisão ao ML (texto pronto na aba Saúde).', { chave: 'anom|medidas|' + m.itemId, itemId: m.itemId }); });
         // v2.7: remessas do Full com inconformidade ou multa (SHC.remessasResumo): 1 por remessa.
         const rm = d.remessas || {}, porRem = {};
         (rm.comInconformidade || []).forEach(r => { porRem[r.id] = (r.textos || []).slice(); });
@@ -4358,30 +4358,29 @@
     // Auditoria da loja (07/10/2026): "aumenta o custo de envio" e o estorno só quando o peso CONSIDERADO (o maior entre o físico e o
     // volumétrico) subiu; medida que diminuiu ou ficou igual pede só a correção do cadastro.
     // Rastreio 07/10/2026 (R13): "não foi feita por nós" e "sem que nós mexêssemos" só com a marca de autoria no dado (quem 'ml' de
-    // SHC.medidasMudadas). Sem ela, o texto diz que a medida mudou, PERGUNTA quem alterou e pede a revisão.
-    // Junção com a 3.3.0 local (trava do frete, regra da dona): o pedido é a REVISÃO do frete cobrado, nunca a devolução do valor; e o
-    // "aumenta o custo" não sai (não há o número da diferença do frete).
+    // SHC.medidasMudadas). Sem ela, o texto diz que a medida mudou, PERGUNTA quem alterou e pede a revisão — o estorno só se não foi nossa.
+    // Revisão 3 (07/10/2026): o Copiloto não tem prova de quem alterou (não há "Não fui eu" por mudança; a igualdade com o ERP ou com o
+    // histórico diz qual medida vale, nunca quem mudou). Nenhum texto afirma que o ML mudou nem que "não foi feita por nós": diz o que mudou
+    // (de X para Y, quando), quais medidas o nosso cadastro tem e PEDE a revisão — sem estorno firme (só a revisão do custo de envio).
     SHC.medidasChamado = (mu) => {
-        const subiu = SHC.medidaConsiderada(mu.depois) > SHC.medidaConsiderada(mu.antes) + 0.001, ml = mu.quem === 'ml';
-        const corrige = mu.correta ? 'a correção das medidas para ' + SHC.medidaTxt(mu.correta) + ' nos envios futuros' : '', desde = ddmm(mu.vistoAte || mu.em);
-        return SHC.textoContestacao({ assunto: !ml ? 'Pedido de revisão da cubagem do anúncio' : subiu ? 'Contestação de cubagem alterada no anúncio' : 'Pedido de correção da cubagem do anúncio',
-            ids: [['SKU', mu.sku || ''], ['Anúncio', mu.itemId]],
-            intro: ml ? 'As medidas da embalagem deste anúncio foram alteradas sem que nós mexêssemos.'
-                : 'As medidas da embalagem deste anúncio mudaram' + (subiu ? ' e o peso considerado no frete subiu' : '') + '. Gostaríamos de entender quem fez a alteração e qual medida vale para o cálculo do frete.',
-            fatos: ['Medidas da embalagem: de ' + SHC.medidaTxt(mu.antes) + ' para ' + SHC.medidaTxt(mu.depois) + ' ' + SHC.medidasQuando(mu) + '.' + (ml ? ' A alteração não foi feita por nós.' : ''),
+        const subiu = SHC.medidaConsiderada(mu.depois) > SHC.medidaConsiderada(mu.antes) + 0.001, desde = ddmm(mu.vistoAte || mu.em);
+        const cad = mu.correta && mu.corretaDe === 'erp' ? mu.correta : null;
+        const extra = [cad ? 'a correção das medidas para ' + SHC.medidaTxt(cad) + ' nos envios futuros' : '', subiu ? 'a revisão do custo de envio cobrado desde ' + desde : ''].filter(Boolean);
+        return SHC.textoContestacao({ assunto: 'Pedido de revisão da cubagem do anúncio', ids: [['SKU', mu.sku || ''], ['Anúncio', mu.itemId]],
+            intro: 'As medidas da embalagem deste anúncio mudaram' + (subiu ? ' e o peso considerado no frete subiu' : '') + '. Pedimos a revisão da cubagem e a confirmação de qual medida está sendo usada no cálculo do frete.',
+            fatos: ['Medidas da embalagem: de ' + SHC.medidaTxt(mu.antes) + ' para ' + SHC.medidaTxt(mu.depois) + ' ' + SHC.medidasQuando(mu) + '.',
                 'Peso considerado no frete (o maior entre o físico e o volumétrico): de ' + kgTxt(SHC.medidaConsiderada(mu.antes)) + ' kg para ' + kgTxt(SHC.medidaConsiderada(mu.depois)) + ' kg.',
-                mu.correta ? 'Medidas corretas (' + (mu.corretaDe === 'erp' ? 'do nosso cadastro' : 'as que deixamos no anúncio') + '): ' + SHC.medidaTxt(mu.correta) + '.' : ''],
+                cad ? 'Medidas do nosso cadastro: ' + SHC.medidaTxt(cad) + '.' : ''],
             regras: ['frete_tabela', 'frete_calculo'], anexos: ['especificações técnicas do fabricante (medidas e peso)', 'foto da embalagem com trena e balança', 'nota fiscal do item'],
-            pedido: ml ? 'a revisão da cubagem do anúncio' + (corrige ? ', ' + corrige : '') + (subiu ? ' e a revisão do frete cobrado desde ' + desde + '.' : '.')
-                : 'a informação de quem alterou as medidas e de qual medida está sendo usada no cálculo do frete, e a revisão da cubagem do anúncio.'
-                    + (subiu || corrige ? ' Se a alteração não foi feita por nós, pedimos também ' + [corrige, subiu ? 'a revisão do frete cobrado desde ' + desde : ''].filter(Boolean).join(' e ') + '.' : '') });
+            pedido: 'a revisão da cubagem do anúncio e a confirmação de qual medida está sendo usada no cálculo do frete.'
+                + (extra.length ? ' Se a medida ' + (cad ? 'do nosso cadastro' : 'anterior') + ' for a correta, pedimos também ' + extra.join(' e ') + '.' : '') });
     };
     SHC.MEDIDAS_SELLER_MS = 48 * 36e5;   // mudança vista até 48 h depois de um clique em "Alterar no ML" = provavelmente do seller
     /**
      * Mudanças de medida desde `desde` (ms), tiradas do histórico de cada anúncio → [{ itemId, sku, antes, depois, em, vistoAte, fonte,
      * quem:'ml'|'?', correta, corretaDe:'erp'|'seller'|'', chamado }], da mais nova à mais velha. Ficam de fora as que parecem do seller:
      * marcadas "Fui eu", volta a uma medida que o anúncio já teve, igual à do ERP, igual à de todos os outros anúncios do SKU, ou vista
-     * até 48 h depois de um clique em "Alterar no ML". quem 'ml' = a medida certa (a do ERP ou a última do seller) era a de antes; '?' = não dá para saber.
+     * até 48 h depois de um clique em "Alterar no ML". quem é sempre '?' (revisão 3: o Copiloto não tem prova de quem alterou; não há "Não fui eu" por mudança).
      * opc = { erpDe: (sku, itemId) → {ordenadas, pesoKg} | null (medidas do ERP), itemId: só esse anúncio }
      */
     SHC.medidasMudadas = function (porItem, desde, opc) {
@@ -4402,7 +4401,8 @@
                 if (!(em >= d0)) continue;
                 const ref = erp || confirmada;
                 const mu = { itemId: id, sku: (e && e.sku) || '', antes: soMedida(a), depois: soMedida(d), em, vistoAte, fonte: d.fonte || 'tela',
-                    quem: ref && SHC.medidasIguais(a, ref) ? 'ml' : '?', correta: ref ? soMedida(ref) : null, corretaDe: erp ? 'erp' : ref ? 'seller' : '' };
+                    quem: '?',   // revisão 3: sem prova de autoria lida, nunca 'ml' (a referência diz qual medida vale, não quem mudou)
+                     correta: ref ? soMedida(ref) : null, corretaDe: erp ? 'erp' : ref ? 'seller' : '' };
                 out.push(Object.assign(mu, { chamado: SHC.medidasChamado(mu) }));
             }
         });
