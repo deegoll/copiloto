@@ -185,18 +185,20 @@ async function sincronizar(origem) {
             await gravar();
         };
         // v2.10: etapa concluída (ok/pulada) fica marcada no ciclo com a hora e os campos do status (patch); as respostas guardadas dela saem.
+        // → os campos do status de ANTES do patch (a troca de conta vista depois desfaz a etapa: desfazTroca os devolve).
         const termina = async (id, estado, resumo, erroCod, r) => {
-            const e = st.etapas[id];
+            const e = st.etapas[id], antes = {};
             Object.assign(e, { estado, resumo: resumo || null, erro: erroCod ? (O_QUE_FAZER[erroCod] || O_QUE_FAZER.ml_indisponivel) : null, fim: Date.now() });
             if (e.de && estado === 'ok') e.feito = st.progresso.feito = e.de;   // contagem fechada (a próxima etapa já começa em seguida)
             if (cic && estado !== 'erro') {
                 const patch = r && PATCH_ETAPA[id] ? PATCH_ETAPA[id](r) : null;
-                if (patch) Object.assign(st, patch);
+                if (patch) { Object.keys(patch).forEach(k => { antes[k] = st[k]; }); Object.assign(st, patch); }
                 cic.feitas[id] = { estado, resumo: e.resumo, inicio: e.inicio, fim: e.fim, feito: e.feito, de: e.de, unidade: e.unidade, patch };
                 await limpaCiclo(cic, id).catch(() => {});
                 await salvaCiclo();
             }
             await gravar();
+            return antes;
         };
         await gravar(true);
         stSync = st;
@@ -227,18 +229,28 @@ async function sincronizar(origem) {
         // v2.10: etapa já feita neste ciclo não roda de novo (os campos do status dela voltam do ciclo no fim).
         // v3.3 (multi-empresa): antes de cada etapa, a sessão do ML ainda é da conta desta sincronização (contaSegue, guardado de 1 min).
         // Bloqueio 5 (07/10/2026): DEPOIS de cada etapa a conferência é FORÇADA (1 GET leve por etapa): a troca no meio da etapa, ou dentro do
-        // minuto guardado, não passa. Trocou: o que foi gravado desde a última conferência boa é desfeito (diário), a etapa sai com erro e as
-        // próximas param ('outra_conta'), e os meses lidos nesta rodada voltam para a fila (marcaReler, também sem o diário).
-        let contaSync = null, trocou = false, diario = null;
-        const conferirConta = async forcar => {
-            if (trocou) return false;
-            if (!contaSync || await contaSegue(contaSync, forcar)) {
-                if (forcar && diario && contaConferida.r === '') diario.antes = new Map();   // prova de que a sessão é desta conta: o gravado fica
-                return true;
-            }
+        // minuto guardado, não passa. Trocou: o que foi gravado desde a última conferência que PROVOU a conta é desfeito (diário), as etapas
+        // terminadas nesse meio e a da troca saem com erro, as próximas param ('outra_conta') e, no fim, FORA do diário, os meses lidos nesta
+        // rodada voltam para a fila (marcaReler). Revisão 07/10/2026: só a página que diz o dono e é esta conta ('mesma') prova; a página sem
+        // dono (verificação de segurança, tela intermediária) não confirma nada — o diário continua aberto até a próxima prova.
+        let contaSync = null, trocou = false, diario = null, provada = false, semProva = [];   // semProva: [{id, antes}] terminadas sem prova depois
+        const provou = c => contaConferida.conta === c && contaConferida.r === 'mesma';
+        const desfazTroca = async () => {
             trocou = true;
             await desfazDiario(diario).catch(() => {});
-            await marcaReler(contaSync, st.inicio || Date.now()).catch(() => {});
+            // O que estas etapas gravaram acabou de sair: nenhuma fica "ok" (nem conta como feita numa retomada); os campos do status voltam.
+            semProva.slice().reverse().forEach(x => { Object.assign(st.etapas[x.id], { estado: 'erro', erro: O_QUE_FAZER.outra_conta, resumo: null }); Object.assign(st, x.antes || {}); if (cic) delete cic.feitas[x.id]; });
+            if (semProva.length && cic) await salvaCiclo().catch(() => {});
+            semProva = [];
+        };
+        const conferirConta = async forcar => {
+            provada = false;
+            if (trocou) return false;
+            if (!contaSync || await contaSegue(contaSync, forcar)) {
+                if (forcar && contaSync && provou(contaSync)) { provada = true; semProva = []; if (diario) diario.antes = new Map(); }   // PROVA: o gravado fica
+                return true;
+            }
+            await desfazTroca();
             return false;
         };
         const etapa = async (id, fn, resumo, erroDe) => {
@@ -250,11 +262,14 @@ async function sincronizar(origem) {
             // A própria etapa viu página de outro dono (prova) ou a conferência forçada acusou: as respostas guardadas no ciclo saem.
             if (e.erro === 'outra_conta' || !(await conferirConta(true))) {
                 e = { erro: 'outra_conta' };
-                if (!trocou) { trocou = true; await desfazDiario(diario).catch(() => {}); await marcaReler(contaSync, st.inicio || Date.now()).catch(() => {}); }
+                if (!trocou) await desfazTroca();
                 if (cic) await limpaCiclo(cic, id).catch(() => {});
             }
             if (e.erro) await termina(id, 'erro', null, erroDe && e.erro !== 'outra_conta' ? erroDe(e.erro) : e.erro);
-            else await termina(id, e.r && (e.r.semPermissao || e.r.pulado) ? 'pulado' : 'ok', resumo(e.r || {}), null, e.r);
+            else {
+                const antes = await termina(id, e.r && (e.r.semPermissao || e.r.pulado) ? 'pulado' : 'ok', resumo(e.r || {}), null, e.r);
+                if (!provada) semProva.push({ id, antes });   // sem prova depois dela: a troca vista mais tarde desfaz esta também
+            }
             return e;
         };
         const Q = SHC.qtd, mpErro = x => (x === 'sem_sessao' ? 'sem_login_mp' : x);
@@ -272,12 +287,12 @@ async function sincronizar(origem) {
                     await desfazDiario(diario).catch(() => {});
                     if (cic) await limpaCiclo(cic, 'anuncios').catch(() => {});
                     an = { falha: 'outra_conta' };
-                } else if (!an.falha && contaConferida.r === '') diario.antes = new Map();
+                } else if (!an.falha && provou(an.sellerId)) { provada = true; diario.antes = new Map(); }   // só 'mesma' prova (página sem dono não)
             }
             if (an.falha) { erro = codigo(an.falha); await termina('anuncios', 'erro', null, erro); }   // 'sem_sessao' só quando o ML mandou para o login
             else {
                 if (cic && !an.retomada) cic.conta = an.sellerId;
-                if (!an.retomada) await termina('anuncios', 'ok', SHC.resumoLeituraAnuncios(an.snap), null, an);   // F20: "… · li X de Y linhas do ML"
+                if (!an.retomada) { const antes = await termina('anuncios', 'ok', SHC.resumoLeituraAnuncios(an.snap), null, an); if (!provada) semProva.push({ id: 'anuncios', antes }); }   // F20: "… · li X de Y linhas do ML"
                 const conta = an.sellerId;
                 contaSync = conta;
                 // v2.5.3 (D6): 1ª sincronização depois de instalar/atualizar, ou conta ainda sem dados fiscais → a parte fiscal começa JÁ, junto
@@ -351,6 +366,9 @@ async function sincronizar(origem) {
         // Diário: com a troca, o que ainda foi gravado depois dela (entre etapas) também sai; o ícone volta ao número guardado.
         if (trocou) { await desfazDiario(diario).catch(() => {}); seloAgora().catch(() => {}); }
         fechaDiario(diario);
+        // Revisão 07/10/2026: os meses lidos nesta rodada voltam para a fila só agora, com o diário FECHADO (dentro dele, o desfazDiario do fim
+        // desfazia o próprio marcaReler e o mês lido com a sessão da outra conta continuava "lido").
+        if (trocou && contaSync) await marcaReler(contaSync, st.inicio || Date.now()).catch(() => {});
 
         // Fim: etapa que ficou lendo (exceção) vira erro; as da fila (anúncios não lidos) viram puladas.
         const fim = Date.now();
@@ -374,7 +392,7 @@ async function sincronizar(origem) {
         // Campos de cada etapa que deu certo, lida agora ou antes neste ciclo (PATCH_ETAPA, guardados no ciclo); sem ciclo, os lidos agora.
         if (cic) ETAPAS.forEach(({ id }) => { const f = cic.feitas[id]; if (f && f.patch) Object.assign(st, f.patch); });
         else [['anuncios', an], ['promos', pr], ['faturamento', co], ['full', fu], ['ads', ad], ['repasse', rp], ['afiliados', af], ['alertas', al], ['posvenda', pv]]
-            .forEach(([id, r]) => { const x = r && !r.falha && !r.retomada ? PATCH_ETAPA[id](r) : null; if (x) Object.assign(st, x); });
+            .forEach(([id, r]) => { const x = r && !r.falha && !r.retomada && st.etapas[id].estado !== 'erro' ? PATCH_ETAPA[id](r) : null; if (x) Object.assign(st, x); });   // desfeita pela troca: fora
         // Chegou ao fim (com ou sem erro em alguma etapa): o ciclo fecha e a próxima sincronização lê tudo de novo.
         if (cic && ciclo === cic) {
             cic.fechado = true;
@@ -450,7 +468,8 @@ function lerHistorico() {
         if (!h.falta || rodadas >= HIST_RODADAS_MAX) { alarmeHist(false); await gravaHistorico(Object.assign(h, { lendo: false, rodadas })); return h; }
         // 1 GET: a sessão do ML aberta agora ainda é desta conta (nunca grava o histórico de uma conta na outra).
         // Sessão caída (login/indisponível/outra conta): conta a rodada e desliga o alarme no teto (antes: 1 GET a cada 5 min sem fim).
-        if (await confereSessao(conta)) { await gravaHistorico(Object.assign(h, { lendo: false, rodadas: rodadas + 1 })); if (rodadas + 1 >= HIST_RODADAS_MAX) alarmeHist(false); return h; }
+        const sessao0 = await confereSessao(conta);
+        if (sessao0 && sessao0 !== 'mesma') { await gravaHistorico(Object.assign(h, { lendo: false, rodadas: rodadas + 1 })); if (rodadas + 1 >= HIST_RODADAS_MAX) alarmeHist(false); return h; }
         alarmeHist(true);
         await gravaHistorico(Object.assign(h, { lendo: true, rodadas }));
         // Andamento: recalcula "N de 12" no máximo a cada 3 s; nas outras chamadas só mantém o worker acordado. O diagnóstico por mês

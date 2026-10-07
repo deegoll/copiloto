@@ -89,6 +89,10 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
     ok(await F.ctx.contaSegue(A, true) === false, 'página de outra conta → trocou');
     dono = '';
     ok(await F.ctx.contaSegue(A, true) === true, 'página que não diz o dono não é prova de troca');
+    ok(await F.ctx.confereSessao(A) === '', 'página que não diz o dono: confereSessao → "" (nem troca, nem prova da conta)');
+    dono = A;
+    ok(await F.ctx.confereSessao(A) === 'mesma', 'página que diz o dono e é a conta: confereSessao → "mesma" (a única prova)');
+    dono = '';
     ok(await F.ctx.contaSegue('atual') === true && await F.ctx.contaSegue('') === true, 'sem conta conhecida: nada a conferir');
 
     console.log('b) marcaReler: meses lidos depois da troca voltam para a fila');
@@ -242,6 +246,49 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         ok(dados['ml:anuncios:' + A].ts === 1 && !Object.keys(dados).some(k => !/^shc:/.test(k) && (k.indexOf('MLB2000000005') >= 0 || JSON.stringify(dados[k]).indexOf('MLB2000000005') >= 0)),
             'pausado da OUTRA (lido depois da troca) não entra no retrato da A: o que a etapa gravou foi desfeito');
         ok(dados['ml:conta'] === A && st.etapas.anuncios.estado === 'erro' && st.erro === 'outra_conta', 'a conta aberta continua a A e a etapa Anúncios sai com erro');
+    }
+    {   // g6 (revisão 07/10): a conferência depois do Full recebe a lista SEM o dono (verificação de segurança, tela intermediária) e a da etapa
+        // seguinte já vem da OUTRA. Página sem dono não prova a conta: o que o Full gravou com a sessão da OUTRA sai e o Full não fica "ok".
+        const fullAntes = { ts: 1, produtos: [{ id: 'DA-A' }] }, cobAntes = { mesesLidos: ['2026-04'], lidoEm: { '2026-04': '2026-05-02' }, releer: [] };
+        const mk = (dados, s) => {
+            const F = montaFundo({ dados, hoje: '2026-10-07', rota: u => {
+                if (/\/anuncios\/lista/.test(u)) return s.modo === 'sem' ? { html: '<html><body>Confirme que é você</body></html>' } : { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], s.modo === 'B' ? OUTRA : A) };
+                return null;
+            } });
+            const S = F.ctx.SHC;
+            F.ctx.sincronizarVendasBrutas = async () => ({ meses: 0, dias: 0 });
+            F.ctx.sincronizarCobrancas = async () => ({ meses: 0, lidas: 0, pedidos: 0, incompletos: [], naoLidos: [] });
+            const leMes = async (conta, m) => {   // o mês do Faturamento lido agora (lidoEm = hoje), como o sincronizarCobrancas grava
+                const k = 'ml:cobrancas:' + conta, mc = (await S.lerChave(k)) || { mesesLidos: [], lidoEm: {}, releer: [] };
+                await S.gravarChave(k, Object.assign({}, mc, { mesesLidos: (mc.mesesLidos || []).concat(m), lidoEm: Object.assign({}, mc.lidoEm, { [m]: S.hoje() }) }));
+            };
+            return { F, S, leMes };
+        };
+        let dados = { 'ml:conta': A, ['full:' + A]: fullAntes, ['ml:cobrancas:' + A]: cobAntes };
+        let s = { modo: 'A' }, x = mk(dados, s);
+        x.F.ctx.sincronizarFullERemessas = async conta => {
+            s.modo = 'sem';   // a pessoa entrou na outra empresa: a lista ainda não diz o dono
+            await x.S.gravarChave('full:' + conta, { ts: Date.now(), produtos: [{ id: 'DA-OUTRA' }] });
+            await x.leMes(conta, '2026-05');
+            await x.S.gravarChave('fech:' + conta + ':2026-05', { mes: '2026-05', total: 999 });
+            return { temFull: true, produtos: [] };
+        };
+        x.F.ctx.sincronizarAds = async () => { s.modo = 'B'; return { semAba: true }; };
+        await x.F.ctx.sincronizar('manual');
+        let st = dados['shc:status'] || {}, mc = dados['ml:cobrancas:' + A] || {};
+        ok(JSON.stringify(dados['full:' + A]) === JSON.stringify(fullAntes) && !dados['fech:' + A + ':2026-05'], 'full:A volta ao que era e o fechamento lido com a sessão da OUTRA não fica na A');
+        ok(mc.mesesLidos.indexOf('2026-05') < 0 || (mc.releer || []).indexOf('2026-05') >= 0, 'o mês lido com a sessão da OUTRA não fica como lido (ou volta para a fila)');
+        ok(st.erro === 'outra_conta' && st.etapas.full.estado === 'erro' && /mudou de conta/.test(st.etapas.full.erro || '') && !st.fullEm,
+            'a etapa Full (sem prova da conta depois dela) sai com "mudou de conta", não "ok", e o status não diz "Full lido agora"');
+        // g6b: marcaReler fica FORA do diário — o mês lido nesta rodada ANTES da última prova volta para a fila (o desfazDiario do fim o desfazia).
+        dados = { 'ml:conta': A, ['ml:cobrancas:' + A]: cobAntes };
+        s = { modo: 'A' }; x = mk(dados, s);
+        x.F.ctx.sincronizarVendasBrutas = async conta => { await x.leMes(conta, '2026-06'); return { meses: 1, dias: 30 }; };   // conferida depois: A
+        x.F.ctx.sincronizarFullERemessas = async () => { s.modo = 'B'; return { temFull: true, produtos: [] }; };
+        await x.F.ctx.sincronizar('manual');
+        st = dados['shc:status'] || {}; mc = dados['ml:cobrancas:' + A] || {};
+        ok(st.erro === 'outra_conta' && st.etapas.vendasBrutas.estado === 'ok' && (mc.releer || []).indexOf('2026-06') >= 0 && (mc.releer || []).indexOf('2026-04') < 0,
+            'troca vista no Full: o mês lido nesta rodada vai para releer e fica lá (' + JSON.stringify(mc.releer) + '); o lido em maio não');
     }
 
     console.log('h) bloqueio 5: histórico em segundo plano com a troca no último minuto');
