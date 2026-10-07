@@ -33,7 +33,7 @@ node deploy/conferir-crx.js 3.2.1
 
 O script baixa o CRX da loja e confere arquivo por arquivo. A loja só acrescenta `_metadata/` e a linha `update_url` no manifest. Conferido em 07/10/2026: os 43 arquivos são iguais.
 
-**Versão 3.3.0:** a política de privacidade no ar foi atualizada em 06/10/2026 para a 3.3.0 (TikTok Shop ligável). O código da 3.3.0 ainda **não está** neste repositório nem na loja.
+**Versão 3.3.0:** o código está no branch `copiloto-v3.3.0` e ainda não foi para a loja. Atenção: a política de privacidade no ar foi atualizada em 06/10/2026 "para a versão 3.3.0" e descreve o TikTok Shop ligável, com as permissões opcionais `scripting` e `seller-br.tiktok.com`. A 3.3.0 do branch não tem nada disso: o TikTok continua travado e o manifest não pede essas permissões.
 
 ## Estrutura
 
