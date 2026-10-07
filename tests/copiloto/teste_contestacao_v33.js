@@ -358,12 +358,13 @@ console.log('Exclusão (revisão 3): entre o verbo do comprador e "errado/por en
         'pedi certo separaram errado', 'Comprei na loja errada', 'Me arrependi, vcs demoraram', 'Desisti, o vendedor demorou', 'Comprei o tamanho certo, separaram errado'];
     const vazou = culpa.filter(m => ex(m));
     ok(!vazou.length, culpa.length + ' frases com vendedor, loja, preparo, envio, cobrança ou anúncio entre o verbo e "errado/por engano": nenhuma é excluível' + (vazou.length ? ' — vazou: ' + vazou.join(' | ') : ''));
-    const duvida = ['Foi engano no pedido', 'Foi engano do pedido', 'Engano no pedido', 'Foi engano no produto', 'Engano no envio'];
+    const duvida = ['Foi engano no pedido', 'Foi engano do pedido', 'Engano no pedido', 'Foi engano nos pedidos', 'Foi engano no produto', 'Engano no envio', 'Engano de produto',
+        'Comprei o tamanho errado porque a tabela tava errada', 'Pedi a cor errada pq a foto engana'];
     ok(duvida.every(m => !ex(m)), '"foi engano no/do pedido" é ambíguo (costuma ser o pedido que veio errado): sem regra');
     const legit = ['Reclamação aberta por engano', 'Desisti, comprei em outro lugar', 'Me arrependi, vou comprar outro', 'Desisti, comprei na loja física', 'Desisti, comprei em outra loja',
         'Comprei por engano', 'Comprei errado', 'Comprei a cor errada', 'Comprei o tamanho errado', 'Escolhi a voltagem errada', 'Comprei o número errado', 'Comprei o modelo errado', 'Comprei o produto errado',
         'Comprei a peça errada', 'Pedi a quantidade errada', 'Comprei 3 por engano', 'Comprei duas vezes por engano', 'Comprei 2 vezes por engano', 'Comprei em dobro por engano', 'Comprei duplicado por engano',
-        'Comprei isso por engano', 'Pedi errado', 'Engano na compra', 'Foi engano', 'Me arrependi da compra', 'Desisti, achei em outro anúncio mais barato'];
+        'Comprei isso por engano', 'Pedi errado', 'Engano na compra', 'Foi engano', 'Me arrependi da compra', 'Desisti, achei em outro anúncio mais barato', 'Foi engano, o pedido chegou certinho'];
     const travou = legit.filter(m => !ex(m));
     ok(!travou.length, legit.length + ' motivos legítimos continuam excluíveis (os 4 que o revisor viu travar voltaram)' + (travou.length ? ' — travou: ' + travou.join(' | ') : ''));
     ok(ex('Reclamação aberta por engano') === 'o comprador iniciou a reclamação por engano' && /arrependeu/.test(ex('Desisti, comprei na loja física')), 'cada legítimo cai na regra certa');
