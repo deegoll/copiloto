@@ -634,28 +634,10 @@
     const semAcento = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     P.normTitulo = t => SHC.normalizaTitulo ? SHC.normalizaTitulo(t) : semAcento(t).replace(/[^a-z0-9]+/g, ' ').trim();
     // Mês que mais pesa nos próximos 30 dias (hoje + 15 dias), um ano antes: 24/09/2026 → '2025-10'.
-    P.mesAnoPassado = hoje => P.mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') + 15 * 864e5).toISOString().slice(0, 7), 12);
-    // Previsão de 30 dias = o maior entre as vendas dos últimos 30 dias (ML) e as do mesmo mês do ano passado (vm|ml).
-    // Campo que o ML não mostrou fica null (não vira 0): sem os dois números → qtd null (sem sugestão).
-    // lidos = meses lidos inteiros no Faturamento (ml:cobrancas mesesLidos): lá, mês sem a chave no vm = 0 vendas.
-    // v3.3 (pedido da dona 07/10/2026: "sugerir pelo estoque, pelo giro e pela sazonalidade"):
-    //  · PARADO (opc.aptas > 0 e nenhuma venda em 30 dias) não usa o ano passado: com estoque e sem venda o problema é o anúncio (exposição,
-    //    experiência, preço), não a época — mandar mais só empaca e gera armazenagem. fonte 'parado', qtd 0.
-    //  · Sazonalidade: vendas de 30 dias × índice do ano passado (mês alvo ÷ mês destes 30 dias, os dois de um ano antes). Só entra com 3+ vendas
-    //    no mês base e só para subir (até 3×): queda de época já aparece nas vendas de 30 dias. Vale o maior entre 30 dias, ano passado e índice.
-    P.SAZONAL_MAX = 3;
-    P.previsaoFull = function (vendas30, vm, hoje, lidos, opc) {
-        const u = P.un(vendas30), ult30 = u === null ? null : Math.max(0, u), mes = P.mesAnoPassado(hoje);
-        const doMes = m => (vm && vm[m] !== undefined && vm[m] !== null ? P.un(vm[m]) : (vm && (lidos || []).indexOf(m) >= 0 ? 0 : null));
-        const a = doMes(mes), ano = a === null ? null : Math.max(0, a);
-        if (ult30 === 0 && P.un(opc && opc.aptas) > 0) return { qtd: 0, fonte: 'parado', ult30, mes, anoPassado: ano, base: null, baseAno: null, indice: null };
-        const base = P.mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') - 15 * 864e5).toISOString().slice(0, 7), 12), b = base === mes ? null : doMes(base);
-        const indice = ult30 > 0 && ano !== null && b >= 3 && ano > b ? Math.min(P.SAZONAL_MAX, SHC.r2(ano / b)) : null;
-        const saz = indice ? Math.ceil(ult30 * indice - 1e-9) : null;
-        const qtd = ult30 === null && ano === null ? null : Math.max(ult30 || 0, ano || 0, saz || 0);
-        const fonte = saz !== null && qtd === saz && saz > Math.max(ult30 || 0, ano || 0) ? 'sazonal' : ano !== null && (ult30 === null || ano > ult30) ? 'anoPassado' : 'ult30';
-        return { qtd, fonte, ult30, mes, anoPassado: ano, base: indice ? base : null, baseAno: indice ? b : null, indice };
-    };
+    P.mesAnoPassado = hoje => SHC.mesAnoPassado(hoje);
+    // Previsão de 30 dias = o maior entre as vendas dos últimos 30 dias, as do mesmo mês do ano passado e 30 dias × índice sazonal (v3.3);
+    // parado = 0. A conta fica em SHC.previsaoFull (ml-extrator.js) — a MESMA do ícone e do sino (SHC.alertasDe, no service worker) (#19).
+    P.previsaoFull = (vendas30, vm, hoje, lidos, opc) => SHC.previsaoFull(vendas30, vm, hoje, lidos, opc);
     /**
      * v3.3 Saúde do anúncio antes de mandar estoque ao Full (pedido da dona 07/10/2026: "se o anúncio estiver no vermelho ou abaixo da média,
      * ele não sai mais, empaca e começa a girar custo de armazenamento"). its = anúncios do produto (P.anunciosDoFull).
@@ -735,7 +717,7 @@
             if (ir.length > 1) {
                 const tot = ir.reduce((a, q) => a + Math.max(0, P.un(q.vendas30) || 0), 0), u = P.un(p.vendas30);
                 parte = { n: ir.length, pct: tot > 0 && u !== null ? Math.max(0, u) / tot * 100 : null };
-                vm = parte.pct === null ? null : Object.keys(vm || {}).reduce((o, m) => { const v = P.un(vm[m]); if (v !== null) o[m] = Math.round(v * parte.pct / 100); return o; }, {});
+                vm = SHC.vmDaParte(vm, parte.pct);   // a mesma divisão do ícone (SHC.alertasDe)
             }
             const prev = Object.assign(P.previsaoFull(p.vendas30, vm, ctx.hoje, ctx.mesesLidos, { aptas: p.aptas }), { parte });
             const ua = P.un(p.aptas), uc = P.un(p.aCaminho);

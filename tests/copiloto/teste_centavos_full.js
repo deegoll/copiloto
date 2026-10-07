@@ -13,7 +13,7 @@
 //   J. P.previsaoFull (oráculo em inteiros: 30 dias, ano passado, índice sazonal, parado);
 //   K. P.planoFull + P.explicaFull: quantidade = alvo − aptas − a caminho (nunca negativa), espaço livre, e o texto da conta;
 //   L. P.saudeFull, P.acaoParado e SHC.fullMinimo (unidades sobrando, faltam, sugerido; armazenagem sem R$ inventado);
-//   M. ícone × painel (SHC.alertasDe × P.saudeFull) quando a previsão é a mesma;
+//   M. ícone × painel (SHC.alertasDe × P.saudeFull): o mesmo produto em alerta, com a mesma previsão (também a sazonal) e os mesmos dias;
 //   N. quantidades lidas da tela do ML (SHC.mlFullDoEstado / P.un): "1.234 un." = 1234, "—" = null (nunca 0);
 //   O. linha da sincronização (resumoFull, no fundo): mês sem cobrança não vira "R$ 0,00".
 // Casos gerados com semente fixa (LCG): o resultado é o mesmo em toda execução (nada de Math.random). Ids e valores inventados.
@@ -24,8 +24,8 @@
 //      (antes REM_FECHADA, com cancelada e vencida: R$ 1,60/un. na simulação × R$ 1,21/un. no cartão) — seção G;
 //   3) #18 CORRIGIDA: custo por unidade do mês = cobrança ÷ unidades só das remessas recebidas COM unidades (antes R$ 2,00/un. em vez de
 //      R$ 1,00: somava o custo da remessa sem units_count e não as unidades dela) — seção D;
-//   4) SHC.alertasDe (número do ícone e sino) recalcula a previsão sem o índice sazonal da v3.3 (P.previsaoFull): o painel diz "Crítico,
-//      acaba em 4 dias" e o ícone não conta o produto;
+//   4) #19 CORRIGIDA: SHC.alertasDe (número do ícone e sino) usa a MESMA previsão do painel (SHC.previsaoFull, com o índice sazonal e o parado
+//      da v3.3; variação pela mesma SHC.vmDaParte). Antes o painel dizia "Crítico, acaba em 4 dias" e o ícone não contava o produto — seção M;
 //   5) #20 CORRIGIDA: dias até acabar = ⌊aptas × 30 ÷ previsão⌋ no painel, no plano e no ícone (antes ⌊aptas ÷ (previsão ÷ 30)⌋ perdia 1 dia
 //      na conta exata: 23 aptas, 23 vendas → 29 dias, não 30) — seções K e L;
 //   6) simulador: "R$ 5,24 por unidade" × 100 un. = R$ 524,00, mas o custo estimado mostrado é R$ 523,81 (média sem arredondar × un.);
@@ -618,7 +618,7 @@ console.log('L. Saúde do estoque (P.saudeFull, P.acaoParado, SHC.fullMinimo): u
 console.log('M. Ícone × painel: SHC.alertasDe conta o mesmo produto que P.saudeFull marca como alerta (mesma previsão)');
 {
     const r = lcg(8086), l = lote();
-    let sazonais = 0, divergem = 0;
+    let sazonais = 0;
     for (let k = 0; k < 2500; k++) {
         const id = 'MLB79' + String(k).padStart(8, '0'), ap = ent(r, 0, 120), v = ent(r, 0, 5) ? ent(r, 0, 150) : null, ac = ent(r, 0, 40);
         const vm = { [id]: {} }; if (ent(r, 0, 2)) vm[id]['2025-10'] = ent(r, 0, 200); if (ent(r, 0, 2)) vm[id]['2025-09'] = ent(r, 0, 100);
@@ -626,12 +626,38 @@ console.log('M. Ícone × painel: SHC.alertasDe conta o mesmo produto que P.saud
         const p = { produtoId: 'P' + k, titulo: 'Produto M' + k, sku, itemId: id, itemIds: [id], aptas: ap, aCaminho: ac, vendas30: v, diasAteEsgotar: ent(r, 0, 4) ? null : ent(r, 0, 60) };
         const prev = P.previsaoFull(v, vm[id], HOJE, [], { aptas: ap }), s = P.saudeFull(p, prev.qtd, cad, '');
         const a = SHC.alertasDe({ full: { produtos: [p] }, vm, hoje: HOJE, itens: [], custos: cad ? { [SHC.chaveSku(sku)]: cad } : {} });
-        if (prev.fonte === 'sazonal') { sazonais++; if ((a.full > 0) !== s.alerta) divergem++; continue; }
+        if (prev.fonte === 'sazonal') sazonais++;
         l.conta((a.full > 0) === s.alerta && a.full <= 1, { p, prev, s: { classe: s.classe, dias: s.dias, alerta: s.alerta }, icone: a.lista.map(x => x.texto) });
-        if (a.full) { const it = a.lista[0]; l.conta(it.aptas === ap && it.aCaminho === ac && inteiroNN(it.faltam), { it }); }
+        if (a.full) { const it = a.lista[0]; l.conta(it.aptas === ap && it.aCaminho === ac && inteiroNN(it.faltam) && it.dias === s.dias && it.sugerido === s.sugerido, { it, s }); }
     }
-    okLote(l, 'previsão sem índice sazonal: o ícone conta exatamente os produtos em alerta no painel, com as mesmas unidades');
-    console.log(`  · (registro) previsão sazonal: ${divergem} de ${sazonais} casos com ícone ≠ painel — divergência 4 (SHC.alertasDe não usa o índice da v3.3)`);
+    // #19: antes o lote pulava os casos sazonais (71 de 395 com ícone ≠ painel); agora eles entram na asserção.
+    okLote(l, `#19 ícone = painel em todos os casos, também nos ${sazonais} com previsão sazonal: o mesmo produto em alerta, as mesmas unidades e os mesmos dias`);
+    // À mão (o repro): 12 aptas, 40 vendas em 30 dias; out/25 = 20 e set/25 = 10 → índice 2, previsão 80, acaba em ⌊12 × 30 ÷ 80⌋ = 4 dias.
+    // Pelo caminho de verdade de cada lado: painel = P.planoFull → P.saudeFull → P.alertas; ícone = SHC.alertasDe.
+    const id19 = 'MLB7300000001', p19 = { produtoId: 'P19', titulo: 'Produto X', sku: 'SKU-X19', itemId: id19, itemIds: [id19], aptas: 12, aCaminho: 0, vendas30: 40 };
+    const vm19 = { [id19]: { '2025-09': 10, '2025-10': 20 } }, ctx19 = { hoje: HOJE, dias: 30, vmDe: q => P.somaMeses(P.idsDoFull(q).map(i => vm19[i])), lucroDe: () => null };
+    const pl19 = P.planoFull({ produtos: [p19], espaco: [] }, ctx19); pl19.linhas.forEach(x => { x.saude = P.saudeFull(x.p, x.prev.qtd, null, ''); });
+    const pa19 = P.alertas(pl19.linhas, [], [], {}), a19 = SHC.alertasDe({ full: { produtos: [p19] }, vm: vm19, hoje: HOJE, itens: [], custos: {} }), x19 = pl19.linhas[0];
+    ok(x19.prev.qtd === 80 && x19.prev.fonte === 'sazonal' && x19.saude.classe === 'critico' && x19.saude.dias === 4 && pa19.full === 1
+        && a19.full === 1 && a19.lista[0].dias === 4 && a19.lista[0].texto === 'Acaba no Full em 4 dias.',
+        `à mão: previsão sazonal 80 (índice 2) → painel "Crítico, acaba em 4 dias" e o ícone conta o produto (ícone ${a19.full}, painel ${pa19.full}; antes o ícone dava 0)`);
+    // Variações do mesmo anúncio: o vm|ml é do anúncio inteiro e cada uma fica com a parte dela nas vendas de 30 dias, nos dois lados.
+    // 30 + 10 vendas; o anúncio vendeu 8 em set/25 e 24 em out/25 → a de 30 fica com 6 e 18 (índice 3, previsão 90: 20 aptas = 6 dias, crítico);
+    // a de 10 fica com 2 e 6 (mês base < 3: sem índice; previsão 10: 60 dias). Antes o ícone dava previsão 30 (20 dias) para a primeira.
+    const idv = 'MLB7300000002', vmv = { [idv]: { '2025-09': 8, '2025-10': 24 } };
+    const pv = [{ produtoId: 'PV', variacao: 'Azul', titulo: 'Produto V Azul', sku: 'SKU-VA', itemId: idv, itemIds: [idv], aptas: 20, aCaminho: 0, vendas30: 30 },
+        { produtoId: 'PV', variacao: 'Verde', titulo: 'Produto V Verde', sku: 'SKU-VV', itemId: idv, itemIds: [idv], aptas: 20, aCaminho: 0, vendas30: 10 }];
+    const plv = P.planoFull({ produtos: pv, espaco: [] }, Object.assign({}, ctx19, { vmDe: q => P.somaMeses(P.idsDoFull(q).map(i => vmv[i])) }));
+    plv.linhas.forEach(x => { x.saude = P.saudeFull(x.p, x.prev.qtd, null, ''); });
+    const av = SHC.alertasDe({ full: { produtos: pv }, vm: vmv, hoje: HOJE, itens: [], custos: {} }), az = plv.linhas.find(x => x.p.variacao === 'Azul'), ve = plv.linhas.find(x => x.p.variacao === 'Verde');
+    ok(az.prev.qtd === 90 && az.prev.indice === 3 && az.saude.alerta && az.saude.dias === 6 && ve.prev.qtd === 10 && !ve.saude.alerta
+        && av.full === 1 && av.lista[0].sku === 'SKU-VA' && av.lista[0].dias === 6 && P.alertas(plv.linhas, [], [], {}).full === 1,
+        'variações (30 + 10 vendas, anúncio com set/25 = 8 e out/25 = 24): a Azul fica com 6 e 18 (índice 3, previsão 90, 6 dias) no painel e no ícone; a Verde, previsão 10, sem alerta');
+    // No service worker (fundo/07, sem o painel carregado): atualizarAlertas lê ml:full e vm|ml e chega ao mesmo número do painel.
+    const C19 = '900000019', F19 = montaFundo({ hoje: HOJE, dados: { 'ml:conta': C19, ['ml:full:' + C19]: { produtos: [p19] }, ['vm|ml|' + id19]: vm19[id19] } });
+    const an19 = await F19.ctx.atualizarAlertas(C19);
+    ok(!F19.ctx.SHC.pl && typeof F19.ctx.SHC.previsaoFull === 'function' && an19.full === 1 && an19.lista[0].dias === 4 && F19.dados['shc:alertas'].full === 1,
+        `fundo (service worker): a previsão sazonal vem do ml-extrator.js (sem o painel) — shc:alertas conta ${F19.dados['shc:alertas'] && F19.dados['shc:alertas'].full} produto do Full, acaba em 4 dias`);
 }
 
 console.log('N. Quantidades lidas da tela do ML (SHC.mlFullDoEstado, P.un)');
