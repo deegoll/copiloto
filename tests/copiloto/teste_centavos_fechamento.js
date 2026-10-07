@@ -6,12 +6,13 @@
 //     F.custosTopicos, F.gargalo, F.somaDias/F.htmlCiclo, F.conferirFatura (pela fatura de cada cobrança), F.faturaVsAnterior e os textos de chamado.
 //   • Cada conta é refeita aqui em CENTAVOS INTEIROS (sem ponto flutuante) e comparada com a do Copiloto e com o texto da tela.
 // Casos gerados: gerador congruencial (LCG) com semente fixa — o teste dá sempre o mesmo resultado. Ids e valores são inventados.
-// Divergências encontradas no produto ficam FORA das asserções (registradas para a equipe, com repro em scratchpad/centavos/):
+// Divergências encontradas no produto (registradas para a equipe, com repro em scratchpad/centavos/). As marcadas "corrigida" têm caso
+// próprio que falhava antes da correção; as outras ficam FORA das asserções:
 //   1. F.conferir + F.recuperar somam 2 regras sobre a MESMA cobrança (repetida + sem estorno; repetida + tarifa acima) → recuperar > cobrado;
 //   2. F.recuperar conta o custo inteiro da remessa do Full (coleta) como "dá para recuperar";
 //   3. SHC.r2 perde 1 centavo em parte dos empates de meio centavo (ex.: imposto de 5% sobre R$ 42,70 = 2,135 → R$ 2,13);
 //   4. F.recuperar usa a lista pagoAMais cortada em 200: o frete confirmado acima disso some do total;
-//   5. F.conferirFatura no modo exato (pela fatura) aceita R$ 0,01 de diferença como "✓ bate" (tela: ML R$ 100,01 · Copiloto R$ 100,00 ✓);
+//   5. (corrigida) F.conferirFatura no modo exato (pela fatura) aceitava R$ 0,01 de diferença como "✓ bate" (tela: ML R$ 100,01 · Copiloto R$ 100,00 ✓);
 //   6. F.motivoTotal só cita o resto que passa de R$ 1: total ✗ por R$ 0,50 com o motivo "Diferença nos custos (+R$ 0,00).";
 //   7. Rateio (SHC.rateioFaturas → F.htmlRateio): "✓ bate com o total da fatura" com até R$ 1,00 de diferença (partes por mês ≠ total mostrado).
 // Rodar: node tests/copiloto/teste_centavos_fechamento.js
@@ -590,7 +591,7 @@ console.log('Confere com a fatura do ML (pela fatura de cada cobrança): cada li
         if (r.modo !== 'fatura' || !r.ok || !r.linhas.every(l => l.ok && l.dif === 0) || (r.cancel && r.cancel.dif !== 0) || r.total.dif !== 0) return 'não bate: ' + r.manchete;
         if (C(r.total.cop) !== soma(r.linhas.map(l => C(l.cop))) - (r.cancel ? C(r.cancel.cop) : 0)) return 'Σ linhas − cancelamentos ≠ total (Copiloto)';
         if (C(r.total.ml) !== soma(r.linhas.map(l => C(l.ml))) - (r.cancel ? C(r.cancel.ml) : 0)) return 'Σ linhas − cancelamentos ≠ total (ML)';
-        // 2 centavos a mais numa categoria do ML: a linha e o total não batem, e a tela diz R$ 0,02 (1 centavo: ver as divergências no topo).
+        // 2 centavos a mais numa categoria do ML: a linha e o total não batem, e a tela diz R$ 0,02 (1 centavo: caso feito à mão logo abaixo).
         const um = JSON.parse(JSON.stringify(cat)); um.categorias[0].valor = SHC.r2(um.categorias[0].valor + 0.02); um.total = SHC.r2(um.total + 0.02);
         const r1 = F.conferirFatura(um, null, '2026-09', soma0, null, [], null);
         if (r1.ok || r1.linhas.filter(l => !l.ok).length !== 1 || r1.linhas.find(l => !l.ok).dif !== -0.02 || r1.total.ok || r1.total.dif !== -0.02 || !/^Diferença de R\$ 0,02 em /.test(r1.manchete)) return '2 centavos: ' + r1.manchete;
@@ -599,6 +600,22 @@ console.log('Confere com a fatura do ML (pela fatura de cada cobrança): cada li
         const linhasTela = r.linhas.length + (r.cancel ? 1 : 0) + 1;
         return ns.length === linhasTela && ns.every(([m, c]) => m === c) && /bate linha por linha/.test(h) && semLixo(h) ? true : 'tela ' + JSON.stringify(ns);
     }, 'fatura montada das mesmas cobranças: todas as linhas e o total batem (ML = Copiloto na tela); 2 centavos a mais viram "Diferença de R$ 0,02"');
+    // Pela fatura, 1 centavo já não bate (a folga de R$ 1 é só do que é estimado): antes saía "✓ bate · ML R$ 100,01 · Copiloto R$ 100,00".
+    const cobs1 = [{ texto: 'Custo por vender', valor: 100, data: '2026-08-15', orderId: '2000000001', itemId: 'MLB9000000001', fatura: FECH },
+        { texto: 'Tarifa de envio', valor: 50, data: '2026-08-16', orderId: '2000000002', itemId: 'MLB9000000002', fatura: FECH }];
+    const f1 = SHC.fechamentoDasCobrancas(cobs1);
+    f1['2026-09'] = { mes: '2026-09', porTipo: {}, porFatura: {}, estornos: 0, total: 0 };
+    const s1 = F.somaFatura(f1, FECH, null), cat1 = (venda, envio, total) => ({ nome: 'Setembro', fechamento: FECH,
+        categorias: [{ nome: 'Tarifas de venda', valor: venda }, { nome: 'Tarifas de envios', valor: envio }], cancelamentos: 0, total });
+    const um1 = F.conferirFatura(cat1(100.01, 50, 150.01), null, '2026-09', s1, null, [], null), lv = um1.linhas.find(l => l.id === 'venda'), h1 = F.htmlConfere(um1);
+    ok(um1.modo === 'fatura' && !um1.ok && !lv.ok && lv.dif === -0.01 && !um1.total.ok && um1.total.dif === -0.01 && um1.manchete === 'Diferença de R$ 0,01 em tarifas de venda.'
+        && /✗<\/span><b>Tarifas de venda<\/b><span class="cf-v">−R\$ 0,01<\/span>/.test(h1) && !/bate linha por linha/.test(h1)
+        && h1.split('<div class="cf-l ').filter(x => /<b>(Tarifas de venda|Total da fatura)<\/b>/.test(x)).every(x => /^x/.test(x) && !/>bate</.test(x)),
+        'pela fatura, R$ 0,01 de diferença não "bate": ✗ em Tarifas de venda e no total (−R$ 0,01), sem "bate linha por linha"');
+    const troca = F.conferirFatura(cat1(100.01, 49.99, 150), null, '2026-09', s1, null, [], null);
+    ok(!troca.ok && troca.linhas.filter(l => !l.ok).length === 2 && troca.total.ok, '1 centavo trocado de linha (+0,01 em venda, −0,01 em envios, total igual): as 2 linhas ✗ e a fatura não bate');
+    const igual = F.conferirFatura(cat1(100, 50, 150), null, '2026-09', s1, null, [], null);
+    ok(igual.ok && igual.linhas.every(l => l.ok && l.dif === 0) && igual.total.ok && /bate linha por linha/.test(F.htmlConfere(igual)), 'os mesmos centavos: tudo ✓ e "bate linha por linha"');
 }
 
 console.log('Fatura × a anterior (F.faturaVsAnterior): agora − antes, linha a linha e no total');

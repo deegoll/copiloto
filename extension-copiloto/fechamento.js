@@ -1036,7 +1036,9 @@
         if (!soma && (!fech || fech.parcial || (fech.ate && fech.ate < fimMesISO(mes)))) return Object.assign(base, { semFech: true });
         const pt = soma ? soma.porTipo : fech.porTipo || {}, ept = soma ? null : fech.estornosPorTipo || null;
         const modo = soma ? (soma.modo === 'fatura' ? 'fatura' : 'ciclo') : ept ? 'bruto' : cat.categorias.length && cat.categorias.every(c => typeof c.cancelado === 'number') ? 'liquido' : 'misto';
-        const exato = modo === 'fatura', bateL = (dif, m) => (exato ? Math.abs(dif) < 0.015 : F.bate(dif, m));
+        // Pela fatura: os 2 lados já em centavos inteiros (r2) → "bate" só com diferença menor que meio centavo (R$ 0,01 já é ✗).
+        // A folga de R$ 1 / 0,5% (F.bate) é só dos modos estimados (ciclo por data, mês do calendário).
+        const exato = modo === 'fatura', bateL = (dif, m) => (exato ? Math.abs(dif) < 0.005 : F.bate(dif, m));
         // Ciclo por data com a fatura anterior lida: tira do Copiloto as notas de crédito da fatura anterior (antPrev) em vez de somar o "ant" desta.
         const cicloAnt = modo === 'ciclo' && typeof antPrev === 'number';
         // v3.4: a mesma "Taxa de parcelamento" o ML às vezes põe em "Tarifas de venda" e às vezes em "Taxas de parcelamento" (ao vivo, maio
@@ -1094,7 +1096,7 @@
         // "Cancelamentos de tarifas em estornos" (nos pagamentos): tarifas desta fatura canceladas depois do fechamento. Informativa (fora do total
         // da fatura): o Copiloto confere pelas notas de crédito com a data da fatura seguinte (só no modo 'fatura').
         const estornos = sub && ant > 0 ? (() => { const c = exato && typeof soma.ncProx === 'number' ? soma.ncProx : null;
-            return { id: 'estornos', rotulo: 'Cancelamentos de tarifas em estornos', ml: ant, cop: c, info: true, ok: c !== null && Math.abs(c - ant) < 0.015,
+            return { id: 'estornos', rotulo: 'Cancelamentos de tarifas em estornos', ml: ant, cop: c, info: true, ok: c !== null && Math.abs(c - ant) < 0.005,
                 motivo: 'São tarifas desta fatura canceladas depois do fechamento. O ML devolve nos pagamentos e o Copiloto conta na fatura seguinte.' }; })() : null;
         // Total. Pela fatura: custos − cancelamentos dela. Ciclo com antPrev: o líquido do ciclo + as notas de crédito da fatura anterior (que a
         // fatura não tira). Senão: o Copiloto tira todo cancelamento; a fatura, só os dela → soma de volta o "ant".
@@ -1103,8 +1105,8 @@
             const liq = soma ? soma.total : SHC.TIPOS_FECHAMENTO.reduce((s, id) => s + (SHC.num(pt[id]) || 0), 0);
             const c = r2(liq + (exato ? 0 : cicloAnt ? antPrev : ant)), dif = r2(c - cat.total);
             // "✓ bate" no total só com diferença de até R$ 1, ou dentro dos 0,5% E com todas as linhas batendo (0,5% de um total grande
-            // escondia uma linha ✗ de R$ 61). Pela fatura: ao centavo.
-            const ok = exato ? Math.abs(dif) < 0.015 : Math.abs(dif) <= F.BATE_RS || (F.bate(dif, cat.total) && linhas.every(l => l.ok) && (!cancel || cancel.ok));
+            // escondia uma linha ✗ de R$ 61). Pela fatura: ao centavo (R$ 0,01 de diferença = ✗).
+            const ok = exato ? Math.abs(dif) < 0.005 : Math.abs(dif) <= F.BATE_RS || (F.bate(dif, cat.total) && linhas.every(l => l.ok) && (!cancel || cancel.ok));
             total = { id: 'total', rotulo: 'Total da fatura', ml: cat.total, cop: c, dif, ok, motivo: ok ? '' : F.motivoTotal(modo, linhas, cancel, ant, dif) };
         }
         // A manchete fala primeiro de custo (o que pode ser cobrança a mais); o cancelamento que não bate só vem depois.
