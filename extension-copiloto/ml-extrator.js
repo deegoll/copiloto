@@ -188,8 +188,9 @@
      */
     SHC.sobraProposta = function (prop, custoFam, cfg) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
-        const custo = custoFam ? SHC.num(custoFam.custo) : null;
-        const outros = custoFam ? (SHC.num(custoFam.outros) || 0) : 0;
+        // #11: custo e outros em centavos (como a tela mostra): "você recebe − custo − outros − imposto" fecha com a sobra.
+        const custo = custoFam ? SHC.r2(SHC.num(custoFam.custo)) : null;
+        const outros = custoFam ? SHC.r2(SHC.num(custoFam.outros) || 0) : 0;
         const impPct = SHC.num(cfg.imposto_pct) || 0;
         const imposto = SHC.r2(prop.preco * impPct / 100);
         if (!(custo > 0)) return { imposto, sobra: null, pct: null, classe: 'sem_custo' };
@@ -792,8 +793,8 @@
     SHC.sobraAnuncio = function (item, custoDados, cfg) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
         if (!(item.preco > 0) || item.recebe == null) return null;   // null ou undefined: sem "Você recebe" único
-        const custo = custoDados ? SHC.num(custoDados.custo) : null;
-        const outros = custoDados ? (SHC.num(custoDados.outros) || 0) : 0;
+        const custo = custoDados ? SHC.r2(SHC.num(custoDados.custo)) : null;          // #11: em centavos, como a etiqueta mostra
+        const outros = custoDados ? SHC.r2(SHC.num(custoDados.outros) || 0) : 0;
         const imposto = SHC.r2(item.preco * (SHC.num(cfg.imposto_pct) || 0) / 100);
         if (!(custo > 0)) return { imposto, sobra: null, pct: null, classe: 'sem_custo' };
         const sobra = SHC.r2(item.recebe - custo - outros - imposto);
@@ -822,9 +823,9 @@
      *  (visto ao vivo 25/09: R$ 8,75 num anúncio a R$ 68,44). */
     SHC.sobraAtacado = function (item, degrau, custoDados, cfg, itens) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
-        const custo = custoDados ? SHC.num(custoDados.custo) : null;
+        const custo = custoDados ? SHC.r2(SHC.num(custoDados.custo)) : null;          // #11: custo e outros em centavos, como a tabela mostra
         if (!(custo > 0) || !(item.preco > 0) || item.tarifa == null) return null;
-        const outros = SHC.num(custoDados.outros) || 0;
+        const outros = SHC.r2(SHC.num(custoDados.outros) || 0);
         const tt = SHC.taxaTarifaFora(item, itens), taxa = tt.taxa;
         const tarifa = SHC.r2(degrau.preco * taxa), frete = item.freteComprador ? 0 : (item.frete || 0);
         const taxaOp = item.freteComprador && SHC.num(item.taxaOperacional) > 0 ? SHC.r2(SHC.num(item.taxaOperacional)) : 0;

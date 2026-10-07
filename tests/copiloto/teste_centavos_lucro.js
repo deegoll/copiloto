@@ -20,8 +20,9 @@
 //      sobram R$ 8,16 e 5% são R$ 8,17) ou alguns centavos acima do menor (273,41 em vez de 273,40). O CopilotoNucleo.tarifas.precoMinimo acerta.
 //   2) [corrigida, #9] SHC.calcular: a classe usava a margem JÁ arredondada: prejuízo pequeno (−R$ 0,07 em R$ 227,15 = −0,03% → "−0") virava
 //      "lucrativo"/"apertado" e 9,98% passava na meta de 10%. Agora compara sem arredondar, como SHC.sobraAnuncio/sobraProposta (B e C).
-//   3) Custo/outros/frete digitados com 3+ casas ("12,345": etiqueta, painel, planilha) entram crus na conta; a tela mostra o arredondado e
-//      as linhas não fecham com o resultado (1 centavo). SHC.kitDe arredonda com Math.round(x*100)/100 (1,005 → 1,00; SHC.r2 dá 1,01).
+//   3) [corrigida, #11] Custo/outros/frete digitados com 3+ casas ("12,345": etiqueta, painel, planilha) entravam crus na conta; a tela mostrava
+//      o arredondado e as linhas não fechavam (1 centavo). SHC.kitDe arredondava com Math.round(x*100)/100 (1,005 → 1,00). Agora entram e são
+//      gravados em centavos (SHC.r2): SHC.calcular, sobraAnuncio/Atacado/Proposta, kitDe, salvarCustoSku, lerTabela e a etiqueta (B, C, F, G).
 //   4) [corrigida, #4/#13/#36] SHC.r2 não arredondava o meio centavo do mesmo jeito: r2(2,145) = 2,15 mas r2(2,175) = 2,17 (imposto de 6% em
 //      R$ 36,25) e r2(−1,285) = −1,28; SHC.moeda(2,175) mostrava "R$ 2,18". Agora r2, o r2 do núcleo e o SHC.moeda: meio centavo para longe do zero (A).
 //   5) SHC.recomendaPromo: precoMeta (fórmula fechada) erra até 2 centavos (≈12% dos casos fica 1 centavo abaixo da meta); e a proposta
@@ -157,6 +158,12 @@ console.log('B. SHC.calcular (Mercado Livre) — casos feitos à mão');
     ok(c12.sobra_rs === -0.07 && Object.is(c12.sobra_pct, 0) && c12.classe === 'prejuizo' && c13.classe === 'prejuizo'
         && c14.sobra_rs === 18.35 && c14.sobra_pct === 10 && c14.classe === 'apertado' && c15.classe === 'lucrativo',
         'R$ 227,15 com sobra −R$ 0,07 (−0,03%, a tela mostra 0%) é prejuízo; margem de 9,977% (a tela mostra 10%) fica abaixo da meta de 10% e passa na de 9,97%');
+    // #11: custo, outros e frete com 3+ casas entram em centavos (o que a tela mostra), e as linhas fecham com o resultado.
+    const c16 = SHC.calcular('ml', 100, { custo: 10, frete: 12.345 }, {}), c17 = SHC.calcular('ml', 100, { custo: '10,004', outros: 10.004 }, {}), c18 = SHC.calcular('ml', 100, { custo: 1.005 }, {});
+    const c19 = SHC.calcular('ml', 150, { custo: 50 }, { ml_frete_padrao: '22,905' });
+    ok(c16.frete_rs === 12.35 && c16.recebe_rs === 74.65 && c17.custo_rs === 10 && c17.outros_rs === 10 && c17.recebe_rs === 87 && c17.sobra_rs === 67
+        && c18.custo_rs === 1.01 && c18.sobra_rs === 85.99 && c19.frete_rs === 22.91 && c19.recebe_rs === 107.59,
+        'frete 12,345 → 12,35 e recebe 100 − 13 − 12,35 = 74,65; custo e outros 10,004 → 10,00 e sobra 87 − 10 − 10 = 67,00; custo 1,005 → 1,01 (sobra 85,99); frete médio 22,905 → 22,91');
 }
 
 console.log('C. SHC.calcular (Mercado Livre) — casos gerados: as contas em centavos inteiros e a calculadora do popup');
@@ -195,6 +202,18 @@ console.log('C. SHC.calcular (Mercado Livre) — casos gerados: as contas em cen
     okLote(K, 'margem da tela = sobra ÷ preço (1 casa, nunca −0); classe pela sobra e pela margem SEM arredondar (sobra < 0 = prejuízo; abaixo da meta = apertado)');
     okLote(T, 'popup: os R$ da tela (comissão, taxa fixa, frete, imposto, custo, outros) somam exatamente a "Sobra no final"');
     okLote(S, 'sem custo: sobra, custo e % ficam null (a tela mostra "—"/"＋ custo"), o "você recebe" continua em centavos');
+    // #11 gerados: custo, outros e frete com 3 ou 4 casas (planilha do ERP, custo de caixa ÷ unidades).
+    const r3 = lcg(1111), Q = lote();
+    for (let i = 0; i < 3000; i++) {
+        const preco = um(r3, [din(r3, 20, 78.99), din(r3, 79, 900)]), casas = um(r3, [1000, 10000]), d4 = (a, b) => ent(r3, a * casas, b * casas) / casas;
+        const item = { custo: d4(1, 500), outros: r3() < 0.5 ? d4(0, 20) : 0, frete: d4(5, 60), full: r3() < 0.2 }, cfg = { imposto_pct: um(r3, [0, 6, 13.33]) };
+        const c = SHC.calcular('ml', preco, item, cfg), linhas = [c.comissao_rs, c.taxa_fixa_rs, c.frete_rs, c.imposto_rs, c.custo_rs, c.outros_rs];
+        Q.conta(linhas.every(emCentavos) && c.custo_rs === r2(item.custo) && c.outros_rs === r2(item.outros) && (c.frete_rs === 0 || c.frete_rs === r2(item.frete))
+            && cent(c.recebe_rs) === cent(preco) - cent(c.comissao_rs) - cent(c.taxa_fixa_rs) - cent(c.frete_rs)
+            && cent(c.sobra_rs) === cent(c.recebe_rs) - cent(c.custo_rs) - cent(c.outros_rs) - cent(c.imposto_rs)
+            && deMoeda(SHC.moeda(c.sobra_rs)) === cent(preco) - linhas.reduce((t, v) => t + deMoeda(SHC.moeda(v)), 0), { preco, item, cfg, c });
+    }
+    okLote(Q, 'custo/outros/frete com 3 ou 4 casas: cada linha da tela em centavos e as linhas (R$ da tela) somam exatamente o "você recebe" e a sobra');
 }
 
 console.log('D. Shopee: SHC.calcular(\'sp\') = CopilotoNucleo.tarifas.simular (a mesma tabela, a mesma conta)');
@@ -295,6 +314,19 @@ console.log('E. SHC.precoMinimo: o menor preço que deixa a meta (busca centavo 
                 && cent(s.sobra) === cent(recebe) - esp - cent(outros) - cent(s.imposto), { kit, outros, custo: d && d.dados.custo, esp });
         }
         okLote(G, 'kits gerados (1 a 6 itens, 1 a 12 unidades): custo = Σ custo × q em centavos inteiros e o lucro tira custo + outros do kit');
+        // #11: componente com 3+ casas entra pelo valor da tela (SHC.r2): 1 × 1,005 = 1,01 (antes 1,00); 0,145 → 0,15; 3 × 0,285 = 3 × 0,29.
+        const ck = { 'c|sku|A': { custo: 1.005 }, 'c|sku|B': { custo: 0.145 }, 'c|sku|C': { custo: 0.285 }, 'c|sku|D': { custo: '12,3449' } };
+        const kd = (...xs) => SHC.kitDe(ck, { kit: xs.map(([sku, q]) => ({ sku, q })) }).custo;
+        ok(kd(['A', 1]) === 1.01 && kd(['B', 1]) === 0.15 && kd(['C', 3]) === 0.87 && kd(['A', 2], ['B', 1], ['D', 1]) === 14.51 && SHC.moeda(kd(['A', 1])) === SHC.moeda(1.005),
+            'kit com componente de 3+ casas: soma o valor que a tela mostra (1 × 1,005 = 1,01; 0,145 → 0,15; 3 × 0,285 = 0,87; 2 × 1,01 + 0,15 + 12,34 = 14,51)');
+        const r4 = lcg(7702), G4 = lote();
+        for (let i = 0; i < 1500; i++) {
+            const n = ent(r4, 1, 5), cs4 = {}, kit = [];
+            for (let j = 0; j < n; j++) { const sku = 'Q' + i + '-' + j; cs4['c|sku|' + sku] = { custo: ent(r4, 1, 9999999) / 10000 }; kit.push({ sku, q: ent(r4, 1, 12) }); }
+            const esp = kit.reduce((t, c) => t + cent(r2(cs4['c|sku|' + c.sku].custo)) * c.q, 0), k = SHC.kitDe(cs4, { kit });
+            G4.conta(k.custo !== null && emCentavos(k.custo) && cent(k.custo) === esp && deMoeda(SHC.moeda(k.custo)) === kit.reduce((t, c) => t + deMoeda(SHC.moeda(cs4['c|sku|' + c.sku].custo)) * c.q, 0), { kit, cs4, custo: k.custo, esp });
+        }
+        okLote(G4, 'kits gerados com custos de 4 casas: custo do kit = Σ (R$ que a tela mostra do componente) × q, em centavos inteiros');
         // Gravado no chrome.storage: o kit e os componentes (SHC.custosDe busca os componentes que a tela não pediu).
         banco['c|sku|PEÇA-1'] = { custo: 7.35, origem: 'manual' }; banco['c|sku|PEÇA-2'] = { custo: 2.1, origem: 'erp', custoErp: 2.1 };
         await SHC.salvarKit('kit-azul', [{ sku: 'peça-1', q: 2 }, { sku: 'PEÇA-2', q: 4 }], '0,80');
@@ -304,6 +336,14 @@ console.log('E. SHC.precoMinimo: o menor preço que deixa a meta (busca centavo 
         await SHC.salvarCustoSku('PEÇA-2', { custo: 0 });
         const y = [...(await SHC.custosDe([{ sku: 'KIT-AZUL' }])).values()][0];
         ok(y === null, 'apagou o custo de um componente: o kit volta a ficar sem custo (null), não vira 2 × 7,35');
+        // #11: o que é gravado já vai em centavos (etiqueta, painel, planilha): o custo guardado é o que a tela mostra.
+        await SHC.salvarCustoSku('CX-1', { custo: '12,345', outros: 0.125, origem: 'manual' });
+        await SHC.salvarCustoSku('CX-2', { custo: 0.004 });
+        const tb = SHC.lerTabela([['SKU', 'Custo médio', 'Outros'], ['AB-1', '10,0040', '0,1250'], ['AB-2', '0,0040', '']]);
+        const ta = SHC.lerTabela([['canal', 'id', 'custo', 'outros', 'frete'], ['ml', 'MLB9100000009', '7,777', '1,005', '19,995']]);
+        ok(banco['c|sku|CX-1'].custo === 12.35 && banco['c|sku|CX-1'].outros === 0.13 && !('c|sku|CX-2' in banco)
+            && tb.itens.length === 1 && tb.itens[0].custo === 10 && tb.itens[0].outros === 0.13 && ta.itens[0].custo === 7.78 && ta.itens[0].outros === 1.01 && ta.itens[0].frete === 20,
+            'grava em centavos: custo "12,345" → 12,35 e outros 0,125 → 0,13; custo 0,004 vira 0 (não é custo); planilha "10,0040" → 10,00, "1,005" → 1,01, frete "19,995" → 20,00');
     }
 
     console.log('G. Lista de Anúncios → balão "Resultado de 1 venda" → etiqueta (números do ML + custo e imposto do seller)');
@@ -337,6 +377,13 @@ console.log('E. SHC.precoMinimo: o menor preço que deixa a meta (busca centavo 
         const sp = SHC.sobraAnuncio(a, { custo: 80 }, cfgG), cp = SHC.telaChip(sp);
         ok(sp.sobra === -16 && sp.classe === 'prejuizo' && cp.cls === 'pre' && cp.st === 'Prejuízo' && cp.vl === '−R$ 16,00 · −16%' && /perde R\$ 16,00 por venda/.test(SHC.telaExplica('anuncio', { item: a, s: sp }, cfgG).frase),
             'prejuízo: 70 − 80 − 6 = −16,00 → "Prejuízo −R$ 16,00 · −16%" (o sinal vai junto do número)');
+        // #11: custo e outros com 3+ casas: a etiqueta tira o que mostra (R$ 30,00 e R$ 2,50), e a frase "somam" fecha com a sobra.
+        const s3 = SHC.sobraAnuncio(c, { custo: 30.004, outros: '2,4951' }, cfgG), x3 = SHC.telaExplica('anuncio', { item: c, s: s3 }, cfgG).frase;
+        const sa3 = SHC.sobraAtacado({ preco: 100, tarifa: 13, frete: 17, recebe: 70, sku: 'AT-3', tipo: 'Clássico' }, { qtd: 2, preco: 90 }, { custo: 40.005, outros: 1.994 }, cfgG, []);
+        const sp3 = SHC.sobraProposta({ preco: 100, tarifa: 13, envio: 17, recebe: 70 }, { custo: 30.005, outros: 0.125 }, cfgG);
+        ok(s3.custo === 30 && s3.outros === 2.5 && s3.sobra === 7.45 && /somam R\$ 36,10\./.test(x3) && sa3.custo === 40.01 && sa3.outros === 1.99 && sa3.sobra === 13.9
+            && sp3.sobra === r2(70 - 30.01 - 0.13 - 6) && sp3.sobra === 33.86,
+            'custo 30,004 e outros 2,4951 → 30,00 e 2,50: etiqueta R$ 7,45 e "somam R$ 36,10"; atacado 40,005/1,994 → 40,01/1,99 (sobra 13,90); proposta 70 − 30,01 − 0,13 − 6 = 33,86');
         ok(SHC.sobraAnuncio(e, { custo: 50 }, cfgG) === null && SHC.telaChip(null).vl === '' && SHC.sobraAnuncio(a, null, cfgG).sobra === null && SHC.sobraAnuncio(a, { custo: 0 }, cfgG).classe === 'sem_custo'
             && SHC.telaChip(SHC.sobraAnuncio(a, null, cfgG)).st === '＋ Informar custo',
             'sem "Você recebe" único (família) ou sem custo: nenhum número na etiqueta ("＋ Informar custo"), nunca R$ 0,00');

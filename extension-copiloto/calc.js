@@ -170,13 +170,13 @@
         };
     }
 
-    // Frete que o SELLER paga. ML: abaixo de R$ 79 (fora do Full) quem paga é o comprador.
+    // Frete que o SELLER paga. ML: abaixo de R$ 79 (fora do Full) quem paga é o comprador. Em centavos (#11: "12,345" entra 12,35, como a tela mostra).
     function freteSeller(canal, preco, item, cfg) {
-        const informado = num(item.frete);
+        const informado = num(item.frete) === null ? null : r2(num(item.frete));
         if (canal === 'ml') {
             if (!item.full && preco < LIMITE_FRETE_GRATIS_ML) return { rs: 0, regra: 'Comprador paga o frete (abaixo de R$ 79)', desconhecido: false };
             if (informado !== null) return { rs: informado, regra: item.full ? 'Full: frete que você informou' : 'Frete grátis: valor que você informou', desconhecido: false };
-            const padrao = num(cfg.ml_frete_padrao) || 0;
+            const padrao = r2(num(cfg.ml_frete_padrao) || 0);
             if (padrao > 0) return { rs: padrao, regra: 'Frete grátis: seu frete médio (configurações)', desconhecido: false };
             return { rs: 0, regra: 'Frete grátis: informe quanto você paga', desconhecido: true };
         }
@@ -194,9 +194,10 @@
         preco = num(preco);
         if (!(preco > 0)) return null;
 
-        const custo = num(item.custo);
-        const outros = num(item.outros) || 0;
-        const temCusto = custo !== null && custo > 0;
+        // #11: custo e outros em centavos antes da conta: as linhas da tela (cada uma com 2 casas) somam exatamente a sobra.
+        const custo = r2(num(item.custo));
+        const outros = r2(num(item.outros) || 0);
+        const temCusto = custo > 0;
         const impPct = num(cfg.imposto_pct) || 0;
         const tab = canal === 'sp' ? tarifaSpTabela(preco, item, cfg) : null;
         const usaTab = !!(tab && tab.comRs !== undefined);
@@ -206,7 +207,7 @@
 
         const comissaoRs = usaTab ? tab.comRs : r2(preco * comPct / 100);
         const impostoRs = r2(preco * impPct / 100);
-        const recebeRs = r2(preco - comissaoRs - taxaFixa - fr.rs);          // o que o canal repassa
+        const recebeRs = r2(preco - comissaoRs - taxaFixa - fr.rs);          // o que o canal repassa (fr.rs já em centavos)
         const sobraRs = temCusto ? r2(recebeRs - custo - outros - impostoRs) : null;
         const sobraPct = sobraRs !== null ? (Math.round(sobraRs / preco * 1000) / 10 || 0) : null;   // só a tela (1 casa, nunca −0)
         const alvo = num(cfg.margem_alvo_pct) || 0;
@@ -235,18 +236,17 @@
     SHC.precoMinimo = function (canal, item, cfg, alvoPct) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
         item = item || {};
-        const custo = num(item.custo);
+        const custo = r2(num(item.custo)), outros = r2(num(item.outros) || 0);   // #11: em centavos, como no calcular()
         if (!(custo > 0)) return null;
         // Shopee pela tabela: o núcleo resolve faixa a faixa (o fixo muda de degrau) com a MESMA conta do calcular().
         if (canal === 'sp') {
             const tab = tarifaSpTabela(100, item, cfg);
             if (tab && tab.comRs !== undefined) {
                 const pc = num(item.comissao_pct);
-                return root.CopilotoNucleo.tarifas.precoMinimo('shopee', { custo, outros: num(item.outros) || 0, frete: num(item.frete),
+                return root.CopilotoNucleo.tarifas.precoMinimo('shopee', { custo, outros, frete: num(item.frete) === null ? null : r2(num(item.frete)),
                     imposto_pct: num(cfg.imposto_pct) || 0, comissao_pct: pc !== null && pc >= 0 ? pc : undefined }, alvoPct);
             }
         }
-        const outros = num(item.outros) || 0;
         const alvo = (num(alvoPct) || 0) / 100;
         const imp = (num(cfg.imposto_pct) || 0) / 100;
         const com = comissaoPct(canal, item, cfg) / 100;
