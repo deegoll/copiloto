@@ -1134,6 +1134,14 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         ok(t34.status === 'nao_lido' && t34.faltando.indexOf('preco') >= 0 && t34.repasse === null && t34.lucro_real === null && x34.kpis.lucro_30d === null && kx34 === '—'
             && valorDe(lx34, 'Preço') === null && lx34.some(l => l.rot === 'Preço') && !lx34.some(l => l.c === 0) && !/prejuízo/i.test(hx34),
             'visto só em Pedidos com o preço de origem vazio (#34): "não lido", Preço "—", fora do KPI e dos alertas (antes Preço R$ 0,00, tarifa −R$ 4,00 e "Prejuízo de R$ 34,00")');
+        // Extrato sem o bloco de receita (o TikTok renomeou in_come; o adaptador lê bruto 0 sem aviso), sem o detalhe do pedido: Preço "—".
+        const ext34d = JSON.parse(JSON.stringify(ext34)), id34d = '5770000000000000830', r34d = ext34d.data.order_record;
+        Object.assign(r34d, { trade_order_id: id34d, statement_detail_id: '5770000000000000831', income_v2: r34d.in_come });
+        delete r34d.in_come; r34d.shipping_fee_detail.fee_list[0].amount = a34('-20.00');
+        await TT.gravarCaptura('transacao', ext34d, '7000000234', lidoEm);
+        const y34 = TT.resumo(await TT.ler('7000000234'), { hoje: '2026-09-25' }), u34 = y34.pedidos[0], ly34 = contaTela(ABA.html(y34, { hoje: '2026-09-25' }), id34d);
+        ok(u34.status === 'nao_lido' && !u34.exato && u34.repasse === null && valorDe(ly34, 'Preço') === null && ly34.some(l => l.rot === 'Preço') && !ly34.some(l => l.c === 0),
+            'extrato sem o bloco de receita (in_come renomeado) e sem o detalhe do pedido (#34): "não lido" e Preço "—" (antes "Preço R$ 0,00")');
     }
 
     {   // #35: pedido cancelado com R$ 8,50 de frete que ficou + pedido ok de lucro R$ 37,00 (custo R$ 30, imposto 6%).
