@@ -1,11 +1,1 @@
-﻿# Resultado dos testes (local, automatico) - 07/10/2026 17:16 
-- origin/nuvem/331-centavos @ fbdf0cb: suite do GitHub OK ✔ devolução com frete reverso e ajuste da carteira; escrow que não fecha vira aviso; falha vira naoLido (nunca zero) (0.7531ms) | TUDO OK · 18 arquivos de teste passaram + a suíte do copiloto-nucleo.
-- origin/nuvem/b1-ruptura-sino @ cc276d9: suite do GitHub OK ✔ devolução com frete reverso e ajuste da carteira; escrow que não fecha vira aviso; falha vira naoLido (nunca zero) (1.236ms) | TUDO OK · 10 arquivos de teste passaram + a suíte do copiloto-nucleo.
-- origin/nuvem/bloqueios-330 @ a110667: suite do GitHub OK ✔ devolução com frete reverso e ajuste da carteira; escrow que não fecha vira aviso; falha vira naoLido (nunca zero) (0.9509ms) | TUDO OK · 7 arquivos de teste passaram + a suíte do copiloto-nucleo.
-- origin/nuvem/correcoes-centavos @ 20cbc75: suite do GitHub OK ✔ devolução com frete reverso e ajuste da carteira; escrow que não fecha vira aviso; falha vira naoLido (nunca zero) (0.8676ms) | TUDO OK · 13 arquivos de teste passaram + a suíte do copiloto-nucleo.
-- origin/nuvem/m4-regras-canais @ 4f032db: suite do GitHub OK ✔ devolução com frete reverso e ajuste da carteira; escrow que não fecha vira aviso; falha vira naoLido (nunca zero) (0.7038ms) | TUDO OK · 10 arquivos de teste passaram + a suíte do copiloto-nucleo.
-- origin/nuvem/testes-centavos @ 643db14: suite do GitHub OK ✔ devolução com frete reverso e ajuste da carteira; escrow que não fecha vira aviso; falha vira naoLido (nunca zero) (1.1754ms) | TUDO OK · 13 arquivos de teste passaram + a suíte do copiloto-nucleo.
-- origin/nuvem2/330-final @ 703209f: suite do GitHub OK ✔ devolução com frete reverso e ajuste da carteira; escrow que não fecha vira aviso; falha vira naoLido (nunca zero) (0.8474ms) | TUDO OK · 9 arquivos de teste passaram + a suíte do copiloto-nucleo.
-- origin/nuvem2/verificacoes @ bdea553: suite do GitHub OK ✔ devolução com frete reverso e ajuste da carteira; escrow que não fecha vira aviso; falha vira naoLido (nunca zero) (0.9306ms) | 1 arquivo(s) com falha: teste_politica_manifest.js
-
-- PR #7 (nuvem/331-centavos) por cima do projeto local, suite de 111 arquivos: 7 arquivo(s) com falha: teste_ads.js, teste_calc.js, teste_cobrancas.js, teste_ml_intocado.js, teste_painel.js, teste_remessas_detalhe.js, teste_vendas_tela.js
+﻿# Resultado dos testes (local, automatico) - 07/10/2026 18:26 
