@@ -175,6 +175,24 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         ok(st.erro === 'outra_conta' && depois.every(k => et[k] && et[k].estado === 'erro' && /mudou de conta/.test(et[k].erro || '')),
             'a etapa da troca e as seguintes saem com "mudou de conta" (nenhuma "ok")');
     }
+    {   // g1b (2ª revisão): o diário só desfaz os retratos da leitura do ML; o clique da seller e o TikTok gravados na mesma janela ficam
+        const dados = { ['posvenda:' + A]: { reclamacoes: 1, mensagens: 0, devolucoes: 0, ts: 1 }, ['medidas:' + A]: { porItem: {} }, ['resumo:' + A + ':semanal']: { novo: true } };
+        let trocou = false, F = null;
+        F = montaFundo({ dados, hoje: '2026-10-07', rota: u => {
+            if (/\/anuncios\/lista/.test(u)) return { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], trocou ? OUTRA : A) };
+            if (/post-purchase/.test(u)) {
+                trocou = true;
+                // na janela da etapa: a seller marca a medida e o resumo como visto; uma captura do TikTok chega
+                F.ctx.chrome.storage.local.set({ ['medidas:' + A]: { porItem: { MLB1000000001: { marca: 'fui_eu' } } }, ['resumo:' + A + ':semanal']: { novo: false }, 'tt:7000000001:saldo': { v: 10 } });
+                return { html: html({ x: [{ value: 'problems-to-manage', text: 'Reclamações', badge: { label: '7' } }] }) };
+            }
+            return null;
+        } });
+        await F.ctx.sincronizar('manual');
+        ok(dados['posvenda:' + A].reclamacoes === 1 && JSON.stringify(dados['medidas:' + A]) === '{"porItem":{"MLB1000000001":{"marca":"fui_eu"}}}'
+            && dados['resumo:' + A + ':semanal'].novo === false && dados['tt:7000000001:saldo'] && dados['tt:7000000001:saldo'].v === 10,
+            'troca no meio da etapa: o retrato do ML volta (posvenda:A), mas a marca da medida, o resumo visto e o TikTok gravados na janela ficam');
+    }
     {   // g2: troca no meio da etapa Alertas (no pedido do Resumo): resumo, perguntas e alertas da OUTRA não ficam na A
         const resumoB = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'fixtures/resumo_content_exemplo.json'), 'utf8'));
         const dados = {};

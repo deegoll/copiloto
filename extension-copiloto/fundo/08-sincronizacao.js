@@ -39,10 +39,15 @@ async function limpaCiclo(c, etapaId) {
 // Conferência acusou outra conta → desfazDiario (cada chave volta ao que era; a que não existia some); conferência boa → o diário recomeça.
 // Fora do diário: o status, o ciclo e as respostas guardadas nele, e o que não vem da sessão do ML (cfg, custos, ERP, vistos).
 const FORA_DO_DIARIO = /^(shc:status$|shc:ciclo$|shc:ret:|cfg$|c\||v\||erp[:@])/;
+// 2ª revisão (07/10): o embrulho é global, então o diário anota SÓ os retratos que a leitura do ML grava (lista fechada). Fora dele ficam os
+// cliques da seller e os outros canais gravados na mesma janela: medidas (marca "fui eu"), resumo semanal visto, robô, robopromo, cert,
+// erpx, fotos, tt: (TikTok), licença. Desfazer um deles apagaria o que a seller fez.
+const NO_DIARIO = /^(?:fh|ad|cob|ads)\||^(?:ml:cobrancas|ml:full|full|ml:promos|ml:anuncios|cob|visitas|vbAnuncio|vb|fiscal|cat|catcomp|remessas|perguntas|frete|editor|reputacao|promoSaiu|prejuizo|conferir|shc:anomalias|shc:alertas|resumo|posvenda|nfe|fech|fat|exp|ads|afil|mp:repasse|comp)(?::|$)/;
+const noDiario = k => NO_DIARIO.test(k) && !/:semanal$/.test(k) && !FORA_DO_DIARIO.test(k);
 const diarios = new Set();
 let armazem = null;   // get/set/remove de verdade do chrome.storage.local (o diário embrulha set e remove na 1ª abertura)
 const anotaDiario = ks => Promise.all([...diarios].map(d => {
-    const novas = ks.filter(k => typeof k === 'string' && !FORA_DO_DIARIO.test(k) && !d.antes.has(k));
+    const novas = ks.filter(k => typeof k === 'string' && noDiario(k) && !d.antes.has(k));
     if (novas.length) { const p = armazem.get(novas).catch(() => null); novas.forEach(k => d.antes.set(k, p.then(o => (!o ? { falhou: true } : k in o ? { v: o[k] } : null)))); }
     return Promise.all(ks.map(k => d.antes.get(k)));
 }));
