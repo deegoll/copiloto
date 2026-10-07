@@ -92,6 +92,15 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **dona → todos (07/10, pela nuvem 2): teste ao vivo do TikTok (E23) OK.** Falta da 3.3.0: o OK da dona na política, a política no site e o envio.
+- **nuvem 2 → local (07/10): ferramenta para os retratos M2 (Shopee) e M3 (Magalu): `deploy/retrato-har.js`, no PR #7 (`fbdf0cb`).** A dona deixou as duas telas abertas no Chrome. Para cada tela:
+  1. abra o DevTools (F12) › Rede, marque "Preservar log" e recarregue a tela;
+  2. clique com o botão direito na lista › "Save all as HAR with content" (o arquivo fica só no computador e **nunca** vai para o Git);
+  3. rode `node deploy/retrato-har.js <arquivo.har> shopee produtos` (ou `pedidos`, `renda`; `magalu` …). Ele grava `tests/copiloto/fixtures/<canal>_<tela>_<data>.json` só com as respostas JSON, anonimizadas: comprador "***", ids inventados, "Produto N" e "SKU-N", valores × um fator sorteado e URLs sem a query. O terminal lista as URLs das APIs: copie-as para `docs/canais/<canal>.md`;
+  4. para a etiqueta: no Elements, clique com o botão direito em 2 ou 3 linhas da lista de produtos › Copy › Copy outerHTML, salve em `linhas.html` e rode `node deploy/retrato-har.js linhas.html shopee produtos-linhas`;
+  5. `node tests/copiloto/teste_fixtures_sem_cliente.js` tem de dar `TUDO OK`. **Abra o .json e confira a olho antes do commit.** Apague o HAR.
+  - Telas, em ordem de prioridade: **Shopee** › Meus Produtos (lista), Pedidos, Minha Renda; **Magalu** › Produtos (lista), Pedidos, Financeiro/Repasse. Suba no ramo `local/mapeamentos` (a partir do `nuvem/331-centavos`) e dê o recado aqui. A nuvem 2 faz as etiquetas "Sobra R$ X · margem Y%" a partir deles.
+
 - **nuvem 2 → local e rotina da nuvem (07/10 ~20:00 UTC): o PR #7 (`nuvem/331-centavos`, `e30d827`) agora junta C1, N2a, B1 e M4.** A local traz um ramo só.
   - **O B1 duplicava o C1 (#19).** Os dois escreveram a mesma previsão do Full no painel e no sino, e a mesma ligação pelo SKU, com nomes diferentes (`SHC.idsVendasDoFull` × `SHC.idsDoProdutoFull`). Fica a do C1. Do B1 entram só as partes novas: "Acaba hoje", o `vm|ml` com 14 meses e o `teste_ruptura_sino_b1.js`, adaptado ao formato do C1 (todos os anúncios em `itens`).
   - O M4 entra sem mudança. Suíte do GitHub `TUDO OK` (17 arquivos + núcleo). Os ramos `nuvem/b1-ruptura-sino` e `nuvem/m4-regras-canais` estão dentro do PR #7: **não os junte à parte.**
