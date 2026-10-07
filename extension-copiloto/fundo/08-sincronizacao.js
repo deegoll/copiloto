@@ -40,10 +40,10 @@ async function limpaCiclo(c, etapaId) {
 // Fora do diário: o status, o ciclo e as respostas guardadas nele, e o que não vem da sessão do ML (cfg, custos, ERP, vistos).
 const FORA_DO_DIARIO = /^(shc:status$|shc:ciclo$|shc:ret:|cfg$|c\||v\||erp[:@])/;
 // 2ª revisão (07/10): o embrulho é global, então o diário anota SÓ os retratos que a leitura do ML grava (lista fechada). Fora dele ficam os
-// cliques da seller e os outros canais gravados na mesma janela: medidas (marca "fui eu"), resumo semanal visto, robô, robopromo, cert,
-// erpx, fotos, tt: (TikTok), licença. Desfazer um deles apagaria o que a seller fez.
-const NO_DIARIO = /^(?:fh|ad|cob|ads)\||^(?:ml:cobrancas|ml:full|full|ml:promos|ml:anuncios|cob|visitas|vbAnuncio|vb|fiscal|cat|catcomp|remessas|perguntas|frete|editor|reputacao|promoSaiu|prejuizo|conferir|shc:anomalias|shc:alertas|resumo|posvenda|nfe|fech|fat|exp|ads|afil|mp:repasse|comp)(?::|$)/;
-const noDiario = k => NO_DIARIO.test(k) && !/:semanal$/.test(k) && !FORA_DO_DIARIO.test(k);
+// cliques da seller e os outros canais gravados na mesma janela: medidas (marca "fui eu"), robô, robopromo, cert, erpx, fotos, tt: (TikTok),
+// licença. Desfazer um deles apagaria o que a seller fez. Dentro: vendas por anúncio (vd|, vm|, vu|) e as marcas de migração (shc:migra:).
+const NO_DIARIO = /^(?:fh|ad|cob|ads|vd|vm|vu)\||^shc:migra:|^(?:ml:cobrancas|ml:full|full|ml:promos|ml:anuncios|cob|visitas|vbAnuncio|vb|fiscal|cat|catcomp|remessas|perguntas|frete|editor|reputacao|promoSaiu|prejuizo|conferir|shc:anomalias|shc:alertas|resumo|posvenda|nfe|fech|fat|exp|ads|afil|mp:repasse|comp)(?::|$)/;
+const noDiario = k => NO_DIARIO.test(k) && !FORA_DO_DIARIO.test(k);   // resumo:<c>:dia/:semanal ficam DENTRO: desfazer só traz o "novo" de volta
 const diarios = new Set();
 let armazem = null;   // get/set/remove de verdade do chrome.storage.local (o diário embrulha set e remove na 1ª abertura)
 const anotaDiario = ks => Promise.all([...diarios].map(d => {
