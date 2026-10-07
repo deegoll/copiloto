@@ -1601,6 +1601,10 @@
     const EXCL_AGENTE = /vendedor|lojista|\bloja\b|\bvcs\b|\bvoces\b|\bsepar|despach|fatur|embal|\bcobr|tabela|descri|\bfotos?\b|titulo|anunci/i;
     // Ambíguo (na dúvida, sem regra): "foi engano no/do pedido" costuma ser o pedido que veio errado; o engano no produto, item, envio também.
     const EXCL_DUVIDA = /\bengano (?:n[oa]s?|d[oa]s?|de) (?:pedidos?|produtos?|itens|item|pe[cç]as?|mercadorias?|encomendas?|pacotes?|envio|entrega)\b/i;
+    // Decisão da local (07/10, zero risco): "demorou demais/muito" sem dizer quem atrasou (Correios, transportadora, Mercado Envios) pode ser o
+    // despacho; o Copiloto não sabe se foi no prazo, então não vira pedido de exclusão.
+    const DEMORA_VAGA = /\bdemor\w*(?: \w+){0,2} (?:demais|muito)\b|\b(?:muito|demais|super) demor\w*/i;
+    const QUEM_TRANSPORTA = /correio|transportador|mercado envios|entregador|logistic/i;
     const BOM_ESTADO = /(n[ãa]o (foi |era |est[áa] |esta )?|nunca (foi )?|nem )usad[oa]s?|sem uso/gi;
     // O erro do PRÓPRIO comprador sai do texto antes de procurar culpa do vendedor (antes ele anulava o veto inteiro: "comprei errado e veio
     // com defeito" pedia exclusão). Trecho curto: o verbo e o erro com até 3 palavras entre eles — nenhuma delas de recebimento ("comprei mas
@@ -1613,6 +1617,7 @@
     const excluivel = t => {
         const s = semAcento(t);
         if (!s || new RegExp(NAO + ' (chegou|recebi|recebeu|foi entregue)', 'i').test(s) && !EXCLUIVEL[3][0].test(s) || EXCL_DUVIDA.test(s)) return null;
+        if (DEMORA_VAGA.test(s) && !QUEM_TRANSPORTA.test(s)) return null;
         for (const x of EXCLUIVEL) {
             if (!x[0].test(s)) continue;
             const sobra = s.replace(x[4], ' ').replace(x[3], ' ').split(' ').filter(p => p && !LIGACAO.has(p));
