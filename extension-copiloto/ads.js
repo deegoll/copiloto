@@ -183,8 +183,9 @@
             if (!g.itens.length) selos.push('semAnuncio');
             else if (margem === null) selos.push('semCusto');
             if (m.investimento > 0 && !(m.vendas > 0)) selos.push('semVenda');
-            // Acima = lucro depois do Ads < 0 em centavos (A.montante), não ACOS > margem em ponto flutuante: Ads = sobra no centavo (lucro R$ 0,00) não passa.
-            if (margem !== null && m.investimento > 0 && (margem <= 0 || (m.acos !== null && A.montante({ m, margem }).lucroRs < 0))) selos.push('acima');
+            // Acima = lucro depois do Ads < 0 em centavos (A.montante), não ACOS > margem em ponto flutuante: Ads = sobra no centavo (lucro R$ 0,00)
+            // não passa; gasto sem venda passa (como o painel, P.adsEquilibrio, e a contagem da manchete, A.resultado).
+            if (margem !== null && m.investimento > 0 && A.montante({ m, margem, ads: g.ads }).lucroRs < 0) selos.push('acima');
             const folga = margem === null ? null : margem - meta;   // o que o Ads pode levar sem furar a meta
             if (folga > 0 && m.acos > 0 && m.acos <= folga * A.ESCALA && perdeOrc) selos.push('escalar');
             return { chave: g.chave, sku: g.sku, titulo: g.titulo, itens: g.itens, ads: g.ads, porTitulo: g.via.has('titulo') && !g.via.has('id'),
@@ -273,12 +274,14 @@
 
     /**
      * Montante em R$ do SKU no período: sobra antes do Ads = margem (%) × receita pelo Ads; lucro depois do Ads = sobra − investimento.
+     * A conta é a de cada anúncio (SHC.adsLucro, a mesma do painel, P.adsEquilibrio) somada no centavo: o mesmo lucro nas duas telas.
      * Sem custo → null (não inventa). lucroRs < 0 ⇔ ACOS acima do equilíbrio (ou gasto sem venda).
      */
     A.montante = function (g) {
         const ads = SHC.r2(g.m.investimento || 0);
         if (g.margem === null) return { adsRs: ads, sobraRs: null, lucroRs: null };
-        const sobra = SHC.r2((g.m.receita || 0) * g.margem / 100);
+        const ms = g.ads && g.ads.length ? g.ads.map(a => a.m || {}) : [g.m];
+        const sobra = SHC.r2(ms.reduce((t, m) => t + SHC.adsLucro(g.margem, m.receita, m.investimento).antes, 0));
         return { adsRs: ads, sobraRs: sobra, lucroRs: SHC.r2(sobra - ads) };
     };
 
