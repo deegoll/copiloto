@@ -12,9 +12,10 @@
 //   G. painel lateral (P.adsDoAnuncio, adsLigaCatalogo, adsEquilibrio, adsDoItem, adsConta, adsCampanhasLista, adsVereditoDe,
 //      adsCampanhaVs, adsFatoCatalogo) e o cruzamento com ads.html (mesmo snapshot → mesmo número);
 //   H. Ads do Faturamento (SHC.fechamentoDasCobrancas → P.adsDoFechamento e A.modelos): cobrado − estornado, estorno com sinal −;
-//   I. núcleo (copiloto-nucleo): adaptador adsDosAnuncios e motor.rateioAds — o Ads rateado + o não rateado = o Ads lido.
+//   I. núcleo (copiloto-nucleo): adaptador adsDosAnuncios e motor.rateioAds — o Ads rateado + o não rateado = o Ads lido;
+//   J. os casos fixos (e gerados) das divergências corrigidas (#22–#28): cada um falha no código antigo e passa no novo.
 // Casos gerados com semente fixa (LCG): o resultado é o mesmo em toda execução (nada de Math.random).
-// Divergências achadas nesta auditoria (fora deste teste para a suíte seguir verde; repro e esperado × obtido no relatório da tarefa):
+// Divergências achadas nesta auditoria (as corrigidas são provadas na parte J; as outras ficam fora deste teste para a suíte seguir verde):
 //   1) [corrigida, #22] ads.js A.rs0 arredondava o negativo para cima (Math.round(−2,5) = −2): lucro de −R$ 2,50 → KPI "−R$ 2", manchete
 //      "prejuízo de R$ 3". Agora o meio real vai para longe do zero nos dois sinais e o rodapé mostra a conta em centavos, fechando
 //      ("sobra R$ 30,00 − Ads R$ 32,50 = −R$ 2,50").
