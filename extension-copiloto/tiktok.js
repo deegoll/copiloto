@@ -589,8 +589,10 @@
         const junta = c => [].concat.apply([], modelos.map(m => m[c]));
         const conc = CN.conciliacao.conciliar({ pedidos: junta('pedido'), tarifas: junta('tarifas'), repasses: junta('repasses'), devolucoes: junta('devolucoes'), hoje,
             prazo_dias: prazo && prazo.valor > 0 ? { tiktok: prazo.valor } : undefined });
-        const porDia = {};
-        pedidos.filter(r => r.status_repasse === 'a_liberar' && r.repasse !== null).forEach(r => { const x = r.data_prevista || 'sem data'; porDia[x] = U.r2((porDia[x] || 0) + r.repasse); });
+        // "Previsto": só o que ainda está a liberar, linha a linha (venda paga + devolução "Est." → só a devolução; o que já foi pago não é previsto).
+        const porDia = {}, liberado = x => x.status === 'disponivel' || x.status === 'sacado';
+        pedidos.filter(r => r.status_repasse === 'a_liberar' && r.repasse !== null).forEach(r => (r._modelo.repasses || []).filter(x => !liberado(x)).forEach(x => {
+            const dd = x.data_prevista || r.data_prevista || 'sem data'; porDia[dd] = U.r2((porDia[dd] || 0) + x.valor); }));
         return {
             conta: d.conta, vazio: !(d.peds || []).length && !['extratos', 'areceber', 'saldo', 'saude', 'afil', 'camp', 'falha', 'dev', 'anuncios', 'tarefas', 'resumo_fin', 'pago', 'listas'].some(c => d[c]),
             kpis: {

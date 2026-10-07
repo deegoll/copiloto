@@ -41,9 +41,9 @@
 //      nada devolvia 0). Agora conciliar() sem pedido devolve os totais null e a aba não mostra a linha (seções F, I e K).
 //  10) CORRIGIDA (#38): SHC.tt.lucroDoPedido só marcava status_repasse/data_prevista pela LISTA do Financeiro: o "Est." lido só no detalhe do
 //      extrato sumia do "Previsto". Agora, sem a lista, vêm do detalhe do extrato (Σ Previsto = "a liberar"; seções I e K).
-//  11) conciliar(): pedido com uma linha já liquidada e outra "Est." (venda paga R$ 73 + devolução em andamento −R$ 30 = esperado R$ 43)
-//      compara só o recebido com o esperado: status "a maior" e, na tela, "diferença do esperado: R$ 30,00" em vermelho — alarme falso
-//      (com o sinal trocado vira "parcial" e a diferença entra no total do mesmo jeito).
+//  11) CORRIGIDA (#39): conciliar() comparava só o recebido com o esperado quando o pedido tinha uma linha liquidada e outra "Est." (venda paga
+//      R$ 73 + devolução −R$ 30 = R$ 43): "a maior" R$ 30,00 em vermelho. Agora o que falta liberar entra na conta: 'parcial' com a diferença
+//      PREVISTA, fora do total; o "Previsto" mostra só o que falta liberar (seções F e K).
 // Rodar: node tests/copiloto/teste_centavos_nucleo.js
 'use strict';
 require('./relogio').fixar();
@@ -546,7 +546,7 @@ console.log('F. Conciliação pedido × repasse: diferença = recebido − esper
             L.formato.conta(['esperado', 'recebido', 'a_liberar', 'diferenca'].every(k2 => dinOk(l[k2])), { l });
             if (l.status === 'agrupado') return;
             L.linha.conta(cent(l.esperado) === esperadoC[l.pedido_id]
-                && (l.recebido === null || ['ok', 'a_menor', 'a_maior', 'parcial'].indexOf(l.status) >= 0 && cent(l.diferenca) === cent(l.recebido) - esperadoC[l.pedido_id])
+                && (l.recebido === null || ['ok', 'a_menor', 'a_maior', 'parcial'].indexOf(l.status) >= 0 && cent(l.diferenca) === cent(l.recebido) + (l.diferenca_prevista ? cent(l.a_liberar) : 0) - esperadoC[l.pedido_id])
                 && (l.status !== 'ok' || Math.abs(l.diferenca) <= tol + 1e-9) && (l.status !== 'a_menor' || l.diferenca < -tol) && (l.status !== 'a_maior' || l.diferenca > tol)
                 && (['a_liberar', 'retido'].indexOf(l.status) < 0 || cent(l.diferenca) === cent(l.a_liberar) - esperadoC[l.pedido_id]), { l, esperado: esperadoC[l.pedido_id], tol });
         });
@@ -557,7 +557,7 @@ console.log('F. Conciliação pedido × repasse: diferença = recebido − esper
         });
         const recebidoC = somaC(unicos.filter(lib), x => cent(x.valor)), aLibC = somaC(unicos.filter(x => !lib(x)), x => cent(x.valor));
         const fechadas = c.pedidos.filter(l => ['ok', 'a_menor', 'a_maior', 'parcial'].indexOf(l.status) >= 0);
-        const difC = somaC(fechadas, l => cent(l.diferenca)) + somaC(c.grupos.filter(g => g.recebido !== null), g => cent(g.diferenca));
+        const difC = somaC(fechadas.filter(l => !l.diferenca_prevista), l => cent(l.diferenca)) + somaC(c.grupos.filter(g => g.recebido !== null), g => cent(g.diferenca));
         const espC = somaC(c.pedidos.filter(l => l.status !== 'agrupado'), l => esperadoC[l.pedido_id]) + somaC(c.grupos, g => cent(g.esperado));
         L.totais.conta(cent(c.totais.recebido) === recebidoC && cent(c.totais.a_liberar) === aLibC && cent(c.totais.diferenca) === difC && cent(c.totais.esperado) === espC
             && c.sem_pedido.length === 1 && somaC(Object.keys(c.totais.por_status), s => c.totais.por_status[s]) === n, { t, totais: c.totais, recebidoC, aLibC, difC, espC });
@@ -579,6 +579,23 @@ console.log('F. Conciliação pedido × repasse: diferença = recebido − esper
     okLote(L.totais, 'totais: recebido e a liberar = Σ repasses únicos (o repetido conta 1 vez; o de outro período fica fora); esperado e diferença = Σ linhas + grupos');
     okLote(L.naoLido, 'tarifas ou repasses não lidos: nenhum esperado/diferença inventado (status "nao_lido"; recebido 0 vem com repasses_nao_lidos = true)');
     okLote(L.mes, 'conciliação por mês: esperado = Σ repasses dos pedidos lidos, recebido = Σ liberados (únicos), diferença = recebido − esperado');
+
+    // #39: o mesmo pedido com uma linha liquidada e outra ainda "Est." (venda R$ 73 paga + devolução −R$ 30 a liberar = esperado R$ 43): a diferença
+    // é a PREVISTA (recebido + a liberar − esperado), o status 'parcial' (recebeu parte, o resto está pendente) e ela fica FORA do total.
+    const P39 = (id, x) => M.garantir('pedido', Object.assign({}, tt, { id, data_venda: '2026-09-10', status: 'entregue', data_entrega: '2026-09-12', itens: [{ sku: 'A', qtd: 1, preco_unit: 100 }] }, x || {}));
+    const T39 = (id, v) => M.garantir('tarifa', Object.assign({}, tt, { pedido_id: id, data: '2026-09-10', tipo: 'comissao', valor: v }));
+    const R39 = (rid, id, valor, st) => M.garantir('repasse', Object.assign({}, tt, { id: rid, valor, pedidos: [id], status: st, data_liberada: st === 'disponivel' ? '2026-09-19' : null, data_prevista: '2026-09-30' }));
+    const c39 = CO.conciliar({ pedidos: [P39('M1', { reembolso: 30 }), P39('M2'), P39('M3', { reembolso: 30 }), P39('M4', { reembolso: 30 }), P39('M5')],
+        tarifas: [T39('M1', 27), T39('M2', 12), T39('M3', 27), T39('M4', 27), T39('M5', 12)],
+        repasses: [R39('a1', 'M1', 73, 'disponivel'), R39('b1', 'M1', -30, 'a_liberar'), R39('a2', 'M2', 73, 'disponivel'), R39('b2', 'M2', 15, 'a_liberar'),
+            R39('a3', 'M3', 73, 'disponivel'), R39('b3', 'M3', -30, 'disponivel'), R39('a4', 'M4', 73, 'a_liberar'), R39('b4', 'M4', -30, 'a_liberar'), R39('a5', 'M5', 88, 'disponivel'), R39('b5', 'M5', 0, 'a_liberar')], hoje: '2026-09-25' });
+    const st39 = Object.fromEntries(c39.pedidos.map(l => [l.pedido_id, l.status + ' ' + l.diferenca]));
+    ok(st39.M1 === 'parcial 0' && st39.M2 === 'parcial 0' && st39.M3 === 'ok 0' && st39.M4 === 'a_liberar 0' && st39.M5 === 'ok 0' && c39.totais.diferenca === 0
+        && c39.totais.recebido === 277 && c39.totais.a_liberar === 28 && c39.totais.esperado === 305,
+        'venda paga + devolução "Est." (#39): "parcial" com diferença prevista 0 (antes "a maior" R$ 30,00 no total); paga + R$ 15 "Est.": "parcial" 0 (antes −R$ 15 no total); as duas pagas ou as duas "Est.": ok/a liberar; linha zerada pendente: ok');
+    const c39b = CO.conciliar({ pedidos: [P39('M6')], tarifas: [T39('M6', 12)], repasses: [R39('a6', 'M6', 50, 'disponivel'), R39('b6', 'M6', 20, 'a_liberar')], hoje: '2026-09-25' });
+    ok(c39b.pedidos[0].status === 'parcial' && c39b.pedidos[0].diferenca === -18 && c39b.pedidos[0].diferenca_prevista === true && c39b.totais.diferenca === 0,
+        'parcial com falta prevista (R$ 50 pago + R$ 20 "Est." de R$ 88): diferença PREVISTA −R$ 18,00 na linha, fora do total até liquidar (como a do "a liberar")');
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -1132,6 +1149,18 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         ok(p38.exato && p38.status_repasse === 'a_liberar' && p38.data_prevista === '2026-09-30' && v38.conciliacao.a_liberar === 50 && JSON.stringify(v38.repasse.linha_do_tempo) === '[{"dia":"2026-09-30","valor":50}]'
             && /Previsto: 30\/09 R\$ 50,00</.test(h38) && /a liberar/.test(sub38),
             '"Est." lido só no detalhe do extrato (#38): entra no "Previsto: 30/09 R$ 50,00" igual ao "a liberar" e a linha do pedido diz "a liberar" (antes linha do tempo vazia)');
+    }
+
+    {   // #39 na extensão: venda liquidada (R$ 73) + devolução parcial "Est." (−R$ 30) do mesmo pedido, lidas na lista do Financeiro.
+        const C39 = '7000000039', id39 = '577000000000003901', a39 = c => ({ amount: (c < 0 ? '-' : '') + (Math.abs(c) / 100).toFixed(2) });
+        const l39 = (sdid, stmt, earning, fees, ship, settle, st) => ({ trade_order_id: id39, statement_detail_id: sdid, statement_id: stmt, placed_time: msDia('2026-09-10'), delivery_time: msDia('2026-09-12'),
+            settlement_status: st, settlement_time: st === 2 ? msDia('2026-09-19') : undefined, estimate_settle_time: msDia(st === 2 ? '2026-09-19' : '2026-09-30'), earning_amount: a39(earning), fees: a39(fees),
+            shipping_amount: a39(ship), settlement_amount: a39(settle), sku_records: [{ sku_id: '1730000000000003901', quantity: 1, product_name: 'Produto 39', earning_amount: a39(earning) }] });
+        await TT.gravarCaptura('pedidos_fin', { code: 0, data: { order_records: [l39('3901', '391', 10000, -2200, -500, 7300, 2), l39('3902', '392', -3000, 0, 0, -3000, 1)] } }, C39, lidoEm);
+        const v39 = TT.resumo(await TT.ler(C39), { hoje: '2026-09-25' }), h39 = ABA.html(v39, { hoje: '2026-09-25' }), rec39 = (/<p class="rs">Recebido:.*?<\/p>/.exec(h39) || [''])[0].replace(/<[^>]+>/g, '');
+        ok(v39.conciliacao.diferenca === 0 && v39.conciliacao.recebido === 73 && v39.conciliacao.a_liberar === -30 && v39.conciliacao.esperado === 43 && !/diferença do esperado/.test(h39)
+            && rec39 === 'Recebido: R$ 73,00 · a liberar: −R$ 30,00' && JSON.stringify(v39.repasse.linha_do_tempo) === '[{"dia":"2026-09-30","valor":-30}]' && /Previsto: 30\/09 −R\$ 30,00</.test(h39),
+            'venda paga + devolução "Est." na tela (#39): "Recebido R$ 73,00 · a liberar −R$ 30,00" sem "diferença do esperado" (antes R$ 30,00 em vermelho); Previsto 30/09 −R$ 30,00 (só o que falta liberar)');
     }
 
     console.log('\n' + nChecks + ' verificações.');
