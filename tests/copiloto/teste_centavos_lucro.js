@@ -18,8 +18,8 @@
 // Divergências achadas nesta auditoria (fora deste teste para a suíte seguir verde; repro no relatório da tarefa):
 //   1) SHC.precoMinimo (calc.js): o 1º preço testado não passa por r2 → às vezes devolve um preço 1 centavo abaixo da meta (a R$ 163,30
 //      sobram R$ 8,16 e 5% são R$ 8,17) ou alguns centavos acima do menor (273,41 em vez de 273,40). O CopilotoNucleo.tarifas.precoMinimo acerta.
-//   2) SHC.calcular: a classe usa a margem JÁ arredondada: prejuízo pequeno (−R$ 0,07 em R$ 227,15 = −0,03% → "−0") vira "lucrativo"/"apertado"
-//      e 9,98% passa na meta de 10% (SHC.sobraAnuncio/sobraProposta comparam sem arredondar).
+//   2) [corrigida, #9] SHC.calcular: a classe usava a margem JÁ arredondada: prejuízo pequeno (−R$ 0,07 em R$ 227,15 = −0,03% → "−0") virava
+//      "lucrativo"/"apertado" e 9,98% passava na meta de 10%. Agora compara sem arredondar, como SHC.sobraAnuncio/sobraProposta (B e C).
 //   3) Custo/outros/frete digitados com 3+ casas ("12,345": etiqueta, painel, planilha) entram crus na conta; a tela mostra o arredondado e
 //      as linhas não fecham com o resultado (1 centavo). SHC.kitDe arredonda com Math.round(x*100)/100 (1,005 → 1,00; SHC.r2 dá 1,01).
 //   4) [corrigida, #4/#13/#36] SHC.r2 não arredondava o meio centavo do mesmo jeito: r2(2,145) = 2,15 mas r2(2,175) = 2,17 (imposto de 6% em
@@ -151,6 +151,12 @@ console.log('B. SHC.calcular (Mercado Livre) — casos feitos à mão');
     ok(c11.recebe_rs === 62 && c11.sobra_rs === -39 && c11.sobra_pct === -39 && c11.classe === 'prejuizo' && SHC.moeda(c11.sobra_rs) === '−R$ 39,00'
         && [c11.comissao_rs, c11.taxa_fixa_rs, c11.frete_rs, c11.imposto_rs, c11.custo_rs, c11.outros_rs].every(v => v >= 0),
         'prejuízo: 62,00 − 95,00 − 6,00 = −R$ 39,00 (sinal negativo) e todos os custos positivos (o sinal fica só no resultado)');
+    // #9: a classe vem da sobra e da margem sem arredondar; o % da tela tem 1 casa e nunca é −0.
+    const c12 = SHC.calcular('ml', 227.15, { custo: 177.69, frete: 20 }, { margem_alvo_pct: 0 }), c13 = SHC.calcular('ml', 227.15, { custo: 177.69, frete: 20 }, { margem_alvo_pct: 5 });
+    const c14 = SHC.calcular('ml', 183.93, { custo: 121.67, frete: 20 }, { margem_alvo_pct: 10 }), c15 = SHC.calcular('ml', 183.93, { custo: 121.67, frete: 20 }, { margem_alvo_pct: 9.97 });
+    ok(c12.sobra_rs === -0.07 && Object.is(c12.sobra_pct, 0) && c12.classe === 'prejuizo' && c13.classe === 'prejuizo'
+        && c14.sobra_rs === 18.35 && c14.sobra_pct === 10 && c14.classe === 'apertado' && c15.classe === 'lucrativo',
+        'R$ 227,15 com sobra −R$ 0,07 (−0,03%, a tela mostra 0%) é prejuízo; margem de 9,977% (a tela mostra 10%) fica abaixo da meta de 10% e passa na de 9,97%');
 }
 
 console.log('C. SHC.calcular (Mercado Livre) — casos gerados: as contas em centavos inteiros e a calculadora do popup');
@@ -175,9 +181,8 @@ console.log('C. SHC.calcular (Mercado Livre) — casos gerados: as contas em cen
         // Margem: o % da tela é a sobra ÷ preço com 1 casa; sinal e classe (fora da faixa em que o arredondamento decide).
         if (c.sobra_rs !== null) {
             const m = c.sobra_rs / preco * 100;
-            K.conta(c.sobra_pct === Math.round(m * 10) / 10 && (c.sobra_rs >= 0 ? c.classe !== 'prejuizo' : true)
-                && (c.sobra_pct <= -0.1 ? c.classe === 'prejuizo' : true)
-                && (Math.abs(m - cfg.margem_alvo_pct) >= 0.05 && m >= 0.05 ? c.classe === (m < cfg.margem_alvo_pct ? 'apertado' : 'lucrativo') : true), { preco, item, cfg, sobra: c.sobra_rs, pct: c.sobra_pct, classe: c.classe });
+            K.conta(c.sobra_pct === Math.round(m * 10) / 10 && !Object.is(c.sobra_pct, -0)
+                && c.classe === (c.sobra_rs < 0 ? 'prejuizo' : m < cfg.margem_alvo_pct ? 'apertado' : 'lucrativo'), { preco, item, cfg, sobra: c.sobra_rs, pct: c.sobra_pct, classe: c.classe });
             // Calculadora do popup: "Sobra no final R$ X (p%)" + "Comissão R$ · taxa fixa R$ · frete R$ · imposto R$" e o custo digitado.
             const txt = { sobra: SHC.moeda(c.sobra_rs), com: SHC.moeda(c.comissao_rs), fixa: c.taxa_fixa_rs ? SHC.moeda(c.taxa_fixa_rs) : 'R$ 0,00',
                 frete: SHC.moeda(c.frete_rs), imp: c.imposto_rs ? SHC.moeda(c.imposto_rs) : 'R$ 0,00', custo: SHC.moeda(c.custo_rs), outros: SHC.moeda(c.outros_rs) };
@@ -187,7 +192,7 @@ console.log('C. SHC.calcular (Mercado Livre) — casos gerados: as contas em cen
     }
     okLote(L, 'recebe = preço − comissão − taxa fixa − frete e sobra = recebe − custo − outros − imposto, em centavos inteiros (tudo com 2 casas)');
     okLote(M, 'comissão e imposto a no máximo meio centavo do % exato; taxa fixa da faixa; frete do comprador abaixo de R$ 79; frete sem valor marcado');
-    okLote(K, 'margem da tela = sobra ÷ preço (1 casa); sobra ≥ 0 nunca é "prejuízo"; margem ≤ −0,1% é "prejuízo"; meta comparada fora do empate');
+    okLote(K, 'margem da tela = sobra ÷ preço (1 casa, nunca −0); classe pela sobra e pela margem SEM arredondar (sobra < 0 = prejuízo; abaixo da meta = apertado)');
     okLote(T, 'popup: os R$ da tela (comissão, taxa fixa, frete, imposto, custo, outros) somam exatamente a "Sobra no final"');
     okLote(S, 'sem custo: sobra, custo e % ficam null (a tela mostra "—"/"＋ custo"), o "você recebe" continua em centavos');
 }
