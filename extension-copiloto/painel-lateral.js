@@ -888,7 +888,7 @@
         const xs = brutos.map(P.adsDoAnuncio), soma = k => xs.some(x => x[k] !== null) ? SHC.r2(xs.reduce((t, x) => t + (x[k] || 0), 0)) : null;
         const cid = String(brutos[0].campanhaId || (brutos[0].campaign && brutos[0].campaign.id) || '');
         const c = ((snap && snap.campanhas) || []).find(k => String(k.id) === cid) || {};
-        return { noAds: true, status: ativoTxt(brutos[0].status),
+        return { noAds: true, status: ativoTxt(brutos[0].status), linhas: xs,   // linhas = uma por campanha (o lucro do veredito, SHC.adsLucro)
             campanha: { id: cid, nome: c.nome || c.name || xs[0].campanha || '', estrategia: P.estrategiaTxt(c.estrategia || c.strategy), roasObjetivo: SHC.num(c.roasObjetivo !== undefined ? c.roasObjetivo : c.roasTarget), status: ativoTxt(c.status) },
             m: razoes({ gasto: soma('gasto') || 0, receita: soma('receita') || 0, vendas: soma('vendas') || 0, cliques: soma('cliques'), impressoes: soma('impressoes') }) };
     };
@@ -902,12 +902,16 @@
         const a = m(c.metricas || c.metrics), b = m(ant.metricas || ant.metrics || ant);
         return a.gasto === null || b.gasto === null ? null : { atual: a, antes: b };
     };
-    // Compensa? eq = SHC.adsEquilibrio (ACOS de equilíbrio = margem antes do Ads) | null (sem custo).
-    P.adsVeredito = function (m, eq) {
+    // Compensa? eq = SHC.adsEquilibrio (ACOS de equilíbrio = margem antes do Ads) | null (sem custo). l = lucro depois do Ads (SHC.adsLucro das
+    // linhas do anúncio, a mesma conta da lista e de ads.html); sem l, o de m. #23: decide pelo lucro no centavo, não por ACOS < equilíbrio em
+    // ponto flutuante: > 0 compensa, < 0 não compensa, R$ 0,00 = 'empate' (o Ads levou tudo o que sobrou: nem "compensa" nem "acima").
+    P.adsVeredito = function (m, eq, l) {
         if (!m || !(m.gasto > 0)) return { tipo: 'semGasto', texto: 'Sem gasto no período' };
         if (!eq) return { tipo: 'semCusto', texto: 'Informe o custo para saber se compensa' };
-        if (m.acos !== null && m.acos < eq.equilibrio) return { tipo: 'compensa', texto: 'Compensa', det: `ACOS ${SHC.pctTxt(m.acos)}, abaixo do equilíbrio de ${SHC.pctTxt(eq.equilibrio)}: o Ads deixa lucro.` };
-        return { tipo: 'nao', texto: 'Não compensa', det: m.acos === null ? `Gastou ${SHC.moeda(m.gasto)} sem venda pelo Ads.` : `ACOS ${SHC.pctTxt(m.acos)}, acima do equilíbrio de ${SHC.pctTxt(eq.equilibrio)}: o Ads leva mais do que sobra da venda.` };
+        const d = (l || SHC.adsLucro(eq.equilibrio, m.receita, m.gasto)).depois, ac = SHC.pctTxt(m.acos), qe = SHC.pctTxt(eq.equilibrio);
+        if (d > 0) return { tipo: 'compensa', texto: 'Compensa', det: `ACOS ${ac}, abaixo do equilíbrio de ${qe}: o Ads deixa lucro.` };
+        if (d === 0) return { tipo: 'empate', texto: 'No equilíbrio', det: `ACOS ${ac}, no equilíbrio de ${qe}: o Ads levou tudo o que sobrou da venda (lucro R$ 0,00).` };
+        return { tipo: 'nao', texto: 'Não compensa', det: m.acos === null ? `Gastou ${SHC.moeda(m.gasto)} sem venda pelo Ads.` : `ACOS ${ac}, acima do equilíbrio de ${qe}: o Ads leva mais do que sobra da venda.` };
     };
     // Visão geral da conta no Mercado Ads: resumo do ML (resumo.total) e, no que faltar, a soma das CAMPANHAS (como ads.html, A.kpis: a lista
     // de campanhas vem inteira e a de anúncios pode vir em parte, completo:false); sem métricas de campanha, a soma dos anúncios.
@@ -934,8 +938,10 @@
         const com = (xs || []).filter(x => !x.semCusto), sem = (xs || []).filter(x => x.semCusto && x.a.gasto > 0).length;
         if (!(gastoTotal > 0)) return Object.assign(P.adsVeredito(null, null), { semCusto: sem });
         if (!com.some(x => x.a.gasto > 0)) return { tipo: 'semCusto', texto: 'Sem cálculo', semCusto: sem };
-        const s = k => com.reduce((t, x) => t + (k === 'antes' ? x.antes : x.a[k]), 0), g = s('gasto'), r = s('receita');
-        return Object.assign(P.adsVeredito(razoes({ gasto: g, receita: r, vendas: 0, cliques: null, impressoes: null }), { equilibrio: r > 0 ? s('antes') / r * 100 : 0 }), { semCusto: sem });
+        const s = k => SHC.r2(com.reduce((t, x) => t + (k === 'antes' ? x.antes : x.a[k]), 0)), g = s('gasto'), r = s('receita'), antes = s('antes');
+        // #23: o lucro no centavo (Σ sobra − Σ Ads) decide, como a lista e ads.html; o equilíbrio = Σ sobra ÷ Σ receita só vai no texto.
+        return Object.assign(P.adsVeredito(razoes({ gasto: g, receita: r, vendas: 0, cliques: null, impressoes: null }), { equilibrio: r > 0 ? antes / r * 100 : 0 },
+            { antes, depois: SHC.r2(antes - g) }), { semCusto: sem });
     };
     // Campanhas criadas: status, orçamento/dia, gasto, vendas, ACOS, nº de anúncios, perda de aparições e o selo compensa/não compensa.
     // Métricas: as da campanha no Mercado Ads; sem elas, a soma dos anúncios dela. eq = P.adsEquilibrio. Ativas primeiro, maior gasto.
@@ -3331,8 +3337,9 @@
         // F9: lista do Ads lida só em parte → não afirma "não está no Ads".
         if (!x.noAds && adsSnap.completo === false) return `<div class="card">${cab}<p style="margin:6px 0 0;font-size:12.5px">${esc(P.adsNaoAchei(adsSnap))}</p>${abrir}</div>`;
         if (!x.noAds) return `<div class="card">${cab}<p style="margin:6px 0 0;font-size:12.5px"><b>No Ads: não.</b> Este anúncio não está em nenhuma campanha do Mercado Ads (${esc(periodoAds())}).</p>${abrir}</div>`;
-        const m = x.m, c = x.campanha, eq = it._soAds ? null : SHC.adsEquilibrio(it, custoDe(it), cfg), v = P.adsVeredito(m, eq);
-        const cor = { compensa: 'ok', nao: 'ruim', semCusto: 'neutra', semGasto: 'neutra' }[v.tipo], kc = { compensa: 'ok', nao: 'pr' }[v.tipo] || '';
+        // #23: o veredito pelo lucro do anúncio no centavo, com as campanhas dele somadas (a conta da lista "Por produto" e de ads.html).
+        const m = x.m, c = x.campanha, eq = it._soAds ? null : SHC.adsEquilibrio(it, custoDe(it), cfg), v = P.adsVeredito(m, eq, eq ? SHC.adsLucro(eq.equilibrio, x.linhas) : null);
+        const cor = { compensa: 'ok', empate: 'aviso', nao: 'ruim', semCusto: 'neutra', semGasto: 'neutra' }[v.tipo], kc = { compensa: 'ok', empate: 'at', nao: 'pr' }[v.tipo] || '';
         const selo = (s, a) => s === 'ativo' ? ` <span class="selo ok">Ativ${a}</span>` : s === 'pausado' ? ` <span class="selo at">Pausad${a}</span>` : '';   // anúncio (o) e campanha (a)
         const vs = P.adsCampanhaVs(adsSnap, c.id), ap = adsSnap.anterior && adsSnap.anterior.periodo;
         const lin = (r, a, b, fmt, bom) => `<tr><td>${r}</td><td><b>${a === null ? '—' : fmt(a)}</b>${setaAds(a, b, bom)}</td><td>${b === null ? '—' : fmt(b)}</td></tr>`;
@@ -3612,7 +3619,7 @@
     // Tudo do ads:<conta> (Mercado Ads, só leitura) e do equilíbrio do Copiloto. Criar, pausar ou mudar orçamento é com você, no Mercado Ads. ──
     const FILTROS_ADS = [['acima', 'Acima do equilíbrio', 'p'], ['escalar', 'Dá para escalar', 'l'], ['semVenda', 'Sem venda com gasto', 'a'], ['semCusto', 'Sem custo', 'n']];
     const ROAS_TXT = 'ROAS = quanto voltou de venda para cada R$ 1 no Ads.';
-    const SELO_VER = { compensa: ['ok', 'Compensa'], nao: ['pr', 'Não compensa'], semCusto: ['', 'Sem cálculo'], semGasto: ['', 'Sem gasto'] };
+    const SELO_VER = { compensa: ['ok', 'Compensa'], empate: ['at', 'No equilíbrio'], nao: ['pr', 'Não compensa'], semCusto: ['', 'Sem cálculo'], semGasto: ['', 'Sem gasto'] };
     const seloVer = v => { const [c, t] = SELO_VER[v.tipo] || ['', v.texto || '']; return `<span class="selo ${c}"${v.det ? ` title="${esc(v.det)}"` : ''}>${esc(t)}</span>`; };
     const seloCamp = c => c.status === 'ativo' ? '<span class="selo ok">Ativa</span>' : c.status === 'pausado' ? '<span class="selo at">Pausada</span>' : c.statusBruto ? `<span class="selo">${esc(c.statusBruto.toLowerCase())}</span>` : '';
     const perdeTxt = c => {
@@ -3641,16 +3648,17 @@
         const camps = P.adsCampanhasLista(adsSnap, lista), ver = P.adsVereditoDe(lista, m.gasto), per = periodoAds(), nAc = fs.acima.length;
         const tit = x => esc(x.a.titulo || (x.it && x.it.titulo) || x.a.itemId);
         // Manchete (1 frase) e KPIs
-        const fato = P.adsFatoCatalogo(ver.tipo === 'compensa' ? `O Ads dá lucro (ACOS ${pctOu(m.acos)}).` : ver.tipo === 'nao' ? `O Ads leva mais do que sobra (ACOS ${pctOu(m.acos)}).` : `Ads: ${SHC.moeda(m.gasto)} em 30 dias.`,
+        const fato = P.adsFatoCatalogo(ver.tipo === 'compensa' ? `O Ads dá lucro (ACOS ${pctOu(m.acos)}).` : ver.tipo === 'nao' ? `O Ads leva mais do que sobra (ACOS ${pctOu(m.acos)}).`
+            : ver.tipo === 'empate' ? `O Ads empata: levou tudo o que sobrou das vendas (ACOS ${pctOu(m.acos)}).` : `Ads: ${SHC.moeda(m.gasto)} em 30 dias.`,
             ver.tipo, m.gasto, adsSnap && adsSnap.catalogoSemLigacao);   // F8
         const acao = nAc ? (nAc === 1 ? `${fs.acima[0].a.titulo || fs.acima[0].a.itemId} gasta mais do que aguenta.` : `${ver.tipo === 'compensa' ? 'Só ' : ''}${nAc} produtos gastam mais do que aguentam.`)
             : fs.escalar.length ? `${SHC.qtd(fs.escalar.length, 'produto aguenta', 'produtos aguentam')} investir mais.` : 'Nada pede sua atenção agora.';
-        const ptM = ver.tipo === 'nao' ? 'pr' : nAc ? 'at' : ver.tipo === 'compensa' ? 'ok' : '';
+        const ptM = ver.tipo === 'nao' ? 'pr' : nAc || ver.tipo === 'empate' ? 'at' : ver.tipo === 'compensa' ? 'ok' : '';
         // v3.1 (imagem aprovada): KPI em R$ inteiro ("R$ 1.433", ESPEC §5); ACOS e ROAS com a cor do veredito da conta.
-        const kR = v => SHC.moeda(Math.round(v || 0)).replace(/,00$/, ''), corV = ver.tipo === 'compensa' ? 'ok' : ver.tipo === 'nao' ? 'pr' : '';
+        const kR = v => SHC.moeda(Math.round(v || 0)).replace(/,00$/, ''), corV = { compensa: 'ok', empate: 'at', nao: 'pr' }[ver.tipo] || '';
         let h = `<p class="manchete"><span class="pt ${ptM}"></span><b>${esc(fato)}</b> ${esc(acao)}</p>
           <div class="kpis k4">${kpiN('', 'Investimento 30 dias', kR(m.gasto), esc(per))}${kpiN('', 'Vendas pelo Ads', kR(m.receita), esc(SHC.qtd(m.vendas, 'venda', 'vendas')))}`
-          + kpiN(corV, 'ACOS ⓘ', pctOu(m.acos), ver.tipo === 'compensa' ? 'abaixo da sua margem' : ver.tipo === 'nao' ? 'acima da sua margem' : '', ACOS_TXT)
+          + kpiN(corV, 'ACOS ⓘ', pctOu(m.acos), { compensa: 'abaixo da sua margem', empate: 'no limite da sua margem', nao: 'acima da sua margem' }[ver.tipo] || '', ACOS_TXT)
           + kpiN(m.roas !== null ? corV : '', 'ROAS ⓘ', xTxt(m.roas), m.roas !== null ? esc('R$ ' + (Math.round(m.roas * 100) / 100).toLocaleString('pt-BR') + ' por R$ 1') : '', ROAS_TXT) + '</div>';
         // Precisa de você: acima do equilíbrio (até 3; primeiro o que já dá prejuízo antes do Ads) e o que dá para escalar (até 2).
         // Tirar / Ajustar / Ver só ABREM o Ads do anúncio (detalhe na própria aba): mudar a campanha é com você, no Mercado Ads.

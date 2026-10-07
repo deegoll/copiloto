@@ -224,24 +224,37 @@
     };
     A.NOME_GRUPO = { rentabilidade: 'Rentabilidade', crescimento: 'Crescimento', fora: 'Fora do Ads', semCusto: 'Falta o custo', semAnuncio: 'Sem ligação com seus anúncios' };
 
-    /** Leitura de cada campanha: impressões perdidas + ACOS × equilíbrio dos produtos dela + orçamento sugerido (só texto). */
+    /**
+     * Leitura de cada campanha: impressões perdidas + ACOS × equilíbrio dos produtos dela + orçamento sugerido (só texto).
+     * #23: "acima" pelo lucro no centavo (Σ sobra antes do Ads − Σ Ads, SHC.adsLucro) das linhas da campanha dos produtos COM custo, a mesma
+     * base e a mesma regra do veredito da campanha no painel (P.adsVereditoDe): lucro R$ 0,00 é "no equilíbrio", nunca "acima". Produto sem
+     * custo fica fora (não há sobra para comparar; antes o ACOS da campanha inteira ia contra o equilíbrio só dos com custo).
+     */
     A.leituraCampanha = function (c, grupos, cfg) {
         const meta = SHC.num((cfg || {}).margem_alvo_pct) || 0;
         // Equilíbrio da campanha = margem dos SKUs dela, pesada pela receita de Ads de cada um.
-        let peso = 0, soma = 0;
+        let peso = 0, soma = 0, antes = 0, gasto = 0, fora = false;
         grupos.forEach(g => {
-            if (g.margem === null) return;
-            const rec = g.ads.filter(a => a.campanhaId === c.id).reduce((s, a) => s + ((a.m && a.m.receita) || 0), 0);
+            const ms = g.ads.filter(a => a.campanhaId === c.id).map(a => a.m || {});
+            if (!ms.length) return;
+            if (g.margem === null) { fora = fora || ms.some(m => m.investimento > 0 || m.receita > 0); return; }
+            const rec = ms.reduce((s, m) => s + (m.receita || 0), 0);
             if (rec > 0) { peso += rec; soma += rec * g.margem; }
+            const l = SHC.adsLucro(g.margem, ms.map(m => ({ receita: m.receita, gasto: m.investimento })));
+            antes += l.antes; gasto += l.gasto;
         });
-        const eq = peso > 0 ? soma / peso : null, acos = c.m && c.m.acos;
-        const out = A.leituraShare(c.share, eq !== null && acos !== null && acos > eq);
-        if (eq !== null && acos !== null) {
-            if (acos > eq) out.push(`ACOS de ${SHC.pctTxt(acos)} acima do equilíbrio dos produtos (${SHC.pctTxt(eq)}): o Ads come mais que a sobra. Suba o ROAS objetivo ou tire os produtos marcados.`);
-            else if (acos > eq - meta) out.push(`ACOS de ${SHC.pctTxt(acos)} abaixo do equilíbrio (${SHC.pctTxt(eq)}): dá lucro, mas fica abaixo da sua meta de ${SHC.pctTxt(meta)}. Não aumente o orçamento; suba um pouco o ROAS objetivo.`);
+        antes = SHC.r2(antes); gasto = SHC.r2(gasto);
+        const eq = peso > 0 ? soma / peso : null, acos = peso > 0 ? gasto / peso * 100 : null, lucro = SHC.r2(antes - gasto), acima = gasto > 0 && lucro < 0;
+        const so = fora ? ' Só os produtos com custo entram nesta conta.' : '';
+        const out = A.leituraShare(c.share, acima);
+        if (gasto > 0 && eq !== null) {
+            if (acima) out.push(`ACOS de ${SHC.pctTxt(acos)} acima do equilíbrio dos produtos (${SHC.pctTxt(eq)}): o Ads come mais que a sobra. Suba o ROAS objetivo ou tire os produtos marcados.` + so);
+            else if (lucro === 0) out.push(`ACOS de ${SHC.pctTxt(acos)} no equilíbrio dos produtos (${SHC.pctTxt(eq)}): o Ads levou tudo o que sobrou, sem lucro. Não aumente o orçamento; suba um pouco o ROAS objetivo.` + so);
+            else if (acos > eq - meta) out.push(`ACOS de ${SHC.pctTxt(acos)} abaixo do equilíbrio (${SHC.pctTxt(eq)}): dá lucro, mas fica abaixo da sua meta de ${SHC.pctTxt(meta)}. Não aumente o orçamento; suba um pouco o ROAS objetivo.` + so);
             else if (acos <= (eq - meta) * A.ESCALA && c.share && c.share.orcamento >= A.PERDE_MIN && c.orcamentoDia > 0)
-                out.push(`ACOS de ${SHC.pctTxt(acos)} bem abaixo do equilíbrio (${SHC.pctTxt(eq)}) mesmo com a sua meta, e perdendo por orçamento: dá para testar orçamento de ${SHC.moeda(c.orcamentoDia)} para ${SHC.moeda(SHC.r2(c.orcamentoDia * 1.25))} por dia e conferir em 7 dias.`);
-        } else if (c.m && c.m.investimento > 0 && !(c.m.vendas > 0)) out.push('Gastou sem nenhuma venda no período.');
+                out.push(`ACOS de ${SHC.pctTxt(acos)} bem abaixo do equilíbrio (${SHC.pctTxt(eq)}) mesmo com a sua meta, e perdendo por orçamento: dá para testar orçamento de ${SHC.moeda(c.orcamentoDia)} para ${SHC.moeda(SHC.r2(c.orcamentoDia * 1.25))} por dia e conferir em 7 dias.` + so);
+        } else if (gasto > 0) out.push(c.m && c.m.vendas > 0 ? `Gastou ${SHC.moeda(gasto)} nos produtos com custo sem nenhuma venda deles pelo Ads.` : 'Gastou sem nenhuma venda no período.');
+        else if (c.m && c.m.investimento > 0 && !(c.m.vendas > 0)) out.push('Gastou sem nenhuma venda no período.');
         return { linhas: out, equilibrio: eq };
     };
 
@@ -315,7 +328,7 @@
         const sobra = soma('sobraRs'), ads = soma('adsRs'), receita = soma('receita');
         return { comCusto: comCusto.length, semCusto: comGasto.filter(g => g.selos.indexOf('semCusto') >= 0).length,
             sobra, ads, lucro: comCusto.length ? SHC.r2(sobra - ads) : null, equilibrio: receita > 0 ? sobra / receita * 100 : null,
-            acima: comCusto.filter(g => g.lucroRs < 0).length };
+            acos: receita > 0 ? ads / receita * 100 : null, acima: comCusto.filter(g => g.lucroRs < 0).length };
     };
 
     /** Manchete (1 frase): {cls: pr|at|ok, fato, acao}. */
@@ -328,6 +341,9 @@
         const pp = SHC.qtd(r.acima, 'produto passa', 'produtos passam');
         if (!r.comCusto) return { cls: r.semCusto ? 'at' : 'ok', fato: r.semCusto ? 'Falta o custo dos produtos com Ads.' : 'Nenhum produto gastou com Ads no período.', acao: r.semCusto ? 'Informe o custo para ver se o Ads dá lucro.' : '' };
         if (r.lucro < 0) return { cls: 'pr', fato: `O Ads dá prejuízo de ${rs0(-r.lucro)} no período.`, acao: r.acima ? `${pp} do equilíbrio: tire ou ajuste em "Precisa de você".` : '' };
+        // #23: lucro R$ 0,00 no centavo = empate, como o veredito da conta no painel ("No equilíbrio"): nem "dá lucro" nem "prejuízo".
+        if (r.lucro === 0) return { cls: 'at', fato: 'O Ads empata no período: levou tudo o que sobrou das vendas dos produtos com custo.',
+            acao: r.acima ? `${pp} do equilíbrio: tire ou ajuste em "Precisa de você".` : 'Nenhum produto passa do equilíbrio.' };
         if (r.acima) return { cls: 'at', fato: `O Ads dá lucro, mas ${pp} do equilíbrio.`, acao: 'Veja o que fazer em "Precisa de você".' };
         return { cls: 'ok', fato: `O Ads dá lucro de ${rs0(r.lucro)} nos produtos com custo.`, acao: orc || 'Nenhum produto passa do equilíbrio.' };
     };
@@ -405,14 +421,16 @@
         const a = an.kpis.atual, b = an.kpis.anterior || {}, r = an.res;
         if (!a) return '<p class="sub">Sem totais do período.</p>';
         const cel = (cls, rot, tit, valor, sub) => `<div class="kpi ${cls}" title="${esc(tit)}"><div class="l">${esc(rot)}</div><div class="v">${valor}</div><div class="s">${esc(sub)}</div></div>`;
-        const corLucro = r.lucro === null ? '' : (r.lucro < 0 ? 'pr' : 'ok');
+        // #23: a cor segue o lucro no centavo (R$ 0,00 = âmbar, como "No equilíbrio" no painel); o ACOS, a mesma base (só produtos com custo).
+        const corLucro = r.lucro === null ? '' : (r.lucro < 0 ? 'pr' : r.lucro === 0 ? 'at' : 'ok');
+        const corAc = r.lucro === null ? '' : r.lucro <= 0 ? corLucro : (A.corAcos(r.acos, r.equilibrio, an.meta) === 'ok' ? 'ok' : 'at');
         // A conta do rodapé em centavos (fecha: sobra − Ads = lucro); o número grande é esse lucro em R$ inteiro (o mesmo da manchete).
         const subLucro = r.lucro === null ? 'informe o custo dos produtos'
             : `sobra ${rs(r.sobra)} − Ads ${rs(r.ads)} = ${rs(r.lucro)}` + (r.semCusto ? ` · ${SHC.qtd(r.semCusto, 'sem custo fica', 'sem custo ficam')} fora` : '');
         return '<div class="kpis k4">'
             + cel('', 'Investimento', A.SIGLAS.investimento, rs0(a.investimento), A.variacao(a.investimento, b.investimento))
             + cel('', 'Receita pelo Ads', A.SIGLAS.receita, rs0(a.receita), A.variacao(a.receita, b.receita))
-            + cel(A.corAcos(a.acos, r.equilibrio, an.meta), 'ROAS · ACOS ⓘ', A.SIGLAS.roas + ' ' + A.SIGLAS.acos, `${A.xTxt(a.roas)} <small>· ${pct(a.acos)}</small>`,
+            + cel(corAc, 'ROAS · ACOS ⓘ', A.SIGLAS.roas + ' ' + A.SIGLAS.acos, `${A.xTxt(a.roas)} <small>· ${pct(a.acos)}</small>`,
                 r.equilibrio !== null ? 'equilíbrio ' + pct(r.equilibrio) + (b.acos != null ? ' · antes ' + pct(b.acos) : '') : (b.acos != null ? 'antes ' + pct(b.acos) : ''))
             + cel(corLucro, 'Lucro depois do Ads ⓘ', 'Sobra das vendas pelo Ads (preço de hoje, tarifa, frete, seu custo e imposto) menos o que o Ads custou. Só produtos com custo.', rs0(r.lucro), subLucro)
             + '</div>';

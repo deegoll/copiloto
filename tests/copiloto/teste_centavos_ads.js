@@ -21,6 +21,9 @@
 //      ("sobra R$ 30,00 − Ads R$ 32,50 = −R$ 2,50").
 //   2) [corrigida, #23] ads.js: SKU com lucro depois do Ads de R$ 0,00 (Ads = sobra, no centavo) ganhava o selo "Acima do equilíbrio" e a ação
 //      "Ajustar" por ruído de ponto flutuante (ACOS 23,791193949216638 > margem 23,791193949216634). Agora o selo segue o lucro em centavos.
+//      Revisão 2: o painel (cartão "Ads deste anúncio", campanha e conta, P.adsVeredito/P.adsVereditoDe) e a leitura da campanha em ads.html
+//      também decidem pelo lucro no centavo; R$ 0,00 = "No equilíbrio" (antes "Não compensa … acima"). A campanha em ads.html usa a base do
+//      painel, só os produtos com custo (antes o ACOS da campanha inteira contra o equilíbrio só dos com custo dava vereditos opostos).
 //   3) [corrigida junto com a 6, #26] ads.js: SKU com gasto e sem venda entrava na contagem da manchete ("1 produto passa do equilíbrio")
 //      mas não no filtro "Acima do equilíbrio (0)". Agora ganha o selo "acima", como no painel.
 //   4) [corrigida, #24] ads.js A.metricas: TACOS sem as vendas orgânicas lidas virava o próprio ACOS, e A.soma/A.kpis transformavam orgânicas
@@ -383,6 +386,7 @@ console.log('F. Texto da tela de ads.html = os números da conta');
         const mc = c.an.manchete, r = c.an.res, kp = deRs0(A.rs0(r.lucro));
         const m = /dá (prejuízo|lucro) de (R\$ [\d.]+)/.exec(mc.fato);
         if (r.lucro < 0) return (!!m && m[1] === 'prejuízo' && -deRs0(m[2]) === kp && mc.cls === 'pr') || `conta ${c.k}: ${mc.fato} × KPI ${A.rs0(r.lucro)}`;
+        if (r.lucro === 0) return (/^O Ads empata/.test(mc.fato) && mc.cls === 'at') || mc.fato;   // R$ 0,00 no centavo (#23)
         if (r.acima) return (/^O Ads dá lucro, mas/.test(mc.fato) && mc.cls === 'at') || mc.fato;
         return (!!m && m[1] === 'lucro' && deRs0(m[2]) === kp && mc.cls === 'ok') || `conta ${c.k}: ${mc.fato} × KPI ${A.rs0(r.lucro)}`;
     });
@@ -422,8 +426,9 @@ console.log('F. Texto da tela de ads.html = os números da conta');
     });
     // leitura da campanha: "testar orçamento de R$ X para R$ Y" (Y = X × 1,25)
     {
-        const casoFixo = A.leituraCampanha({ id: '1', m: { acos: 5, investimento: 10, vendas: 1 }, share: { orcamento: 30 }, orcamentoDia: 33.33 },
-            [{ margem: 40, ads: [{ campanhaId: '1', m: { receita: 100 } }] }], { margem_alvo_pct: 10 });
+        // o Ads da campanha está nos anúncios dela (a leitura usa as linhas dos produtos com custo, #23)
+        const casoFixo = A.leituraCampanha({ id: '1', m: { acos: 5, investimento: 5, vendas: 1 }, share: { orcamento: 30 }, orcamentoDia: 33.33 },
+            [{ margem: 40, ads: [{ campanhaId: '1', m: { receita: 100, investimento: 5 } }] }], { margem_alvo_pct: 10 });
         const leituras = contas.flatMap(c => c.an.camps.map(k => ({ c, k }))).concat([{ c: { k: 'fixo' }, k: { orcamentoDia: 33.33, leitura: casoFixo } }]);
         const comOrc = leituras.filter(({ k }) => k.leitura.linhas.some(t => /testar orçamento/.test(t)));
         prop('leitura da campanha: "orçamento de R$ X para R$ Y por dia" com X = orçamento/dia e Y = X × 1,25 (±½ centavo)', comOrc, ({ c, k }) => {
@@ -494,7 +499,7 @@ console.log('G. Painel lateral (aba Ads) e o cruzamento com ads.html');
         if (!com.some(x => x.a.gasto > 0)) return (ver.tipo === 'semCusto' && ver.semCusto === semC) || ver.tipo;
         const luc = com.reduce((t, x) => t + cent(x.depois), 0), rec = com.reduce((t, x) => t + cent(x.a.receita), 0);
         if (!rec) return ver.tipo === 'nao' || `conta ${c.k}: sem receita e ${ver.tipo}`;
-        if (luc === 0) return true;   // empate no centavo: a comparação é em ponto flutuante (ver divergência 2)
+        if (luc === 0) return (ver.tipo === 'empate' && ver.semCusto === semC) || `conta ${c.k}: lucro R$ 0,00 e ${ver.tipo}`;   // empate no centavo (#23)
         return ((luc > 0) === (ver.tipo === 'compensa') && ver.semCusto === semC) || `conta ${c.k}: lucro ${reais(luc)} e ${ver.tipo}`;
     });
     prop('P.adsDoItem (detalhe do anúncio): gasto, receita e vendas = Σ dos anúncios daquele MLB (catálogo ligado incluso); ROAS e CPC com 2 casas', contas.flatMap(c => c.itens.map(it => ({ c, it }))), ({ c, it }) => {
@@ -634,6 +639,50 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
         const g1 = A.analisa(contaFixa([{ id: 'MLB9000000032', title: 'Produto G', campaignId: 4, cost: (adsC + 1) / 100, totalAmount: precoC * v / 100, prints: 900, clicks: 9, unitsQuantity: v }]), its, () => ({ custo: custoC / 100 }), cfg, []).grupos[0];
         return (g0.lucroRs === 0 && !g0.selos.includes('acima') && g0.acao === null && g1.lucroRs === -0.01 && g1.selos.includes('acima') && g1.acao.tipo === 'ajustar')
             || `preço ${precoC} recebe ${recebeC} custo ${custoC} × ${v}: ${A.textoMontante(g0)} ${g0.selos} | ${A.textoMontante(g1)} ${g1.selos}`;
+    });
+}
+{   // #23, revisão 2: o veredito do painel (cartão "Ads deste anúncio", campanha e conta) e a leitura da campanha em ads.html pelo lucro no
+    // centavo, não por ACOS × equilíbrio em ponto flutuante. Lucro R$ 0,00 = "No equilíbrio" (nem "Compensa" nem "acima"), como ads.html.
+    const cfg = { imposto_pct: 0, margem_alvo_pct: 10 }, it = [{ itemId: 'MLB9000000031', sku: 'TST-E', titulo: 'Produto E', preco: 148.08, recebe: 85.23 }];
+    const custo = () => ({ custo: 50 }), sobraDe = x => SHC.sobraAnuncio(x, custo(), cfg);
+    const telas = (rows, its, custoDe) => {
+        its = its || it; custoDe = custoDe || custo;
+        const snap = P.adsLigaCatalogo(contaFixa(rows), its), an = A.analisa(snap, its, custoDe, cfg, []), l = P.adsEquilibrio(snap, its, x => SHC.sobraAnuncio(x, custoDe(x), cfg));
+        const d = P.adsDoItem(snap, its[0].itemId), eq = SHC.adsEquilibrio(its[0], custoDe(its[0]), cfg);
+        return { g: an.grupos.find(g => g.itens[0] === its[0]), an, l, card: P.adsVeredito(d.m, eq, SHC.adsLucro(eq.equilibrio, d.linhas)), camps: P.adsCampanhasLista(snap, l),
+            conta: P.adsVereditoDe(l, P.adsConta(snap).gasto), leit: id => an.camps.find(c => c.id === id).leitura.linhas.join(' ') };
+    };
+    const sku = (cost, totalAmount) => telas([{ id: 'MLB9000000031', title: 'Produto E', campaignId: 3, cost, totalAmount, prints: 3000, clicks: 60, unitsQuantity: 6 }]);
+    const e = sku(211.38, 888.48), c3 = e.camps[0].veredito;
+    ok(A.textoMontante(e.g) === 'Ads R$ 211,38 · Lucro R$ 0,00' && e.l[0].depois === 0 && !e.l[0].acima && e.card.tipo === 'empate' && !/acima/.test(e.card.det) && c3.tipo === 'empate'
+        && e.conta.tipo === 'empate' && /no equilíbrio dos produtos/.test(e.leit('3')) && !/acima/.test(e.leit('3')),
+        `#23 os dados do repro (Ads R$ 211,38 = sobra no centavo): ads.html "Lucro R$ 0,00"; cartão do anúncio, campanha e conta "No equilíbrio" no painel; leitura da campanha em ads.html sem "acima" (obtido: cartão ${e.card.tipo} · ${e.card.det} · campanha ${c3.tipo} · conta ${e.conta.tipo} · ads.html "${e.leit('3')}")`);
+    const corK = (an, rot) => (new RegExp('<div class="kpi ([a-z]*)" title="[^"]*"><div class="l">' + rot).exec(A.htmlKpis4(an)) || [])[1];
+    ok(/^O Ads empata/.test(e.an.manchete.fato) && e.an.manchete.cls === 'at' && corK(e.an, 'ROAS · ACOS') === 'at' && corK(e.an, 'Lucro depois do Ads') === 'at',
+        `#23 a conta em ads.html no empate: a manchete "O Ads empata" e o ACOS e o lucro em âmbar, como "No equilíbrio" no painel; nunca vermelho (obtido: ${e.an.manchete.fato} · ACOS ${corK(e.an, 'ROAS · ACOS')} · lucro ${corK(e.an, 'Lucro depois do Ads')})`);
+    const p1 = sku(211.39, 888.48), g1 = sku(211.37, 888.48);
+    ok(p1.card.tipo === 'nao' && p1.camps[0].veredito.tipo === 'nao' && p1.conta.tipo === 'nao' && /acima do equilíbrio/.test(p1.leit('3')) && p1.g.selos.includes('acima')
+        && g1.card.tipo === 'compensa' && g1.camps[0].veredito.tipo === 'compensa' && g1.conta.tipo === 'compensa' && /abaixo do equilíbrio/.test(g1.leit('3')) && !g1.g.selos.includes('acima')
+        && p1.an.manchete.cls === 'pr' && corK(p1.an, 'ROAS · ACOS') === 'pr' && g1.an.manchete.cls === 'ok' && corK(g1.an, 'ROAS · ACOS') !== 'pr',
+        `#23 um centavo a mais de Ads (−R$ 0,01): "Não compensa" e "acima" em todas as telas; um a menos (+R$ 0,01): "Compensa" e "abaixo" (obtido: ${p1.card.tipo}/${p1.camps[0].veredito.tipo}/${p1.conta.tipo} · ${g1.card.tipo}/${g1.camps[0].veredito.tipo}/${g1.conta.tipo})`);
+    // Campanha com um produto sem custo: ads.html comparava o ACOS da campanha INTEIRA com o equilíbrio só dos com custo; agora a base do painel.
+    const its2 = [{ itemId: 'MLB9000000033', sku: 'TST-H', titulo: 'Produto H', preco: 100, recebe: 80 }, { itemId: 'MLB9000000034', sku: 'TST-I', titulo: 'Produto I', preco: 100, recebe: 80 }];
+    const sc = telas([{ id: 'MLB9000000033', title: 'Produto H', campaignId: 5, cost: 25, totalAmount: 100, prints: 10, clicks: 1, unitsQuantity: 1 },
+        { id: 'MLB9000000034', title: 'Produto I', campaignId: 5, cost: 50, totalAmount: 50, prints: 10, clicks: 1, unitsQuantity: 1 }], its2, x => (x.sku === 'TST-H' ? custo() : null));
+    ok(sc.camps[0].veredito.tipo === 'compensa' && sc.camps[0].veredito.semCusto === 1 && /^ACOS de 25% abaixo do equilíbrio \(30%\)/.test(sc.leit('5')) && /Só os produtos com custo entram/.test(sc.leit('5')) && !/acima/.test(sc.leit('5')),
+        `#23 campanha com 1 produto sem custo (R$ 50 de Ads): os dois lados julgam só o com custo (Ads R$ 25 × sobra R$ 30) e dizem que o sem custo ficou fora (obtido: painel ${sc.camps[0].veredito.tipo} · ads.html "${sc.leit('5')}")`);
+    const rnd = semente(7231);
+    prop('#23 Ads = sobra no centavo (lucro R$ 0,00), em 1 a 3 campanhas: "No equilíbrio" no cartão, na conta e na campanha (painel e ads.html), nunca "acima"; 1 centavo a mais: "Não compensa"/"acima" em todas', vezes(300), () => {
+        const precoC = I(rnd, 3000, 40000), recebeC = Math.round(precoC * 0.8) - I(rnd, 0, 900), custoC = I(rnd, 100, recebeC - 100), its = [{ itemId: 'MLB9000000035', sku: 'TST-J', titulo: 'Produto J', preco: precoC / 100, recebe: recebeC / 100 }];
+        const cd = () => ({ custo: custoC / 100 }), m = SHC.sobraAnuncio(its[0], cd(), cfg).pct, nc = I(rnd, 1, 3);
+        const rows = vezes(nc).map(j => { const v = I(rnd, 1, 5); return { id: 'MLB9000000035', title: 'Produto J', campaignId: 40, cost: 0, totalAmount: precoC * v / 100 + (j ? I(rnd, 0, 99) / 100 : 0), prints: 10, clicks: 1, unitsQuantity: v }; });
+        rows.forEach((r, j) => { r.campaignId = 40 + j; r.cost = SHC.r2(r.totalAmount * m / 100); });
+        if (!rows.every(r => r.cost > 0)) return true;
+        const t0 = telas(rows, its, cd), r1 = rows.map((r, j) => Object.assign({}, r, j === 0 ? { cost: SHC.r2(r.cost + 0.01) } : {})), t1 = telas(r1, its, cd);
+        const tipos0 = [t0.card.tipo, t0.conta.tipo].concat(t0.camps.map(c => c.veredito.tipo)), l0 = t0.an.camps.map(c => c.leitura.linhas.join(' '));
+        return (t0.g.lucroRs === 0 && tipos0.every(x => x === 'empate') && l0.every(x => /no equilíbrio dos produtos/.test(x) && !/acima/.test(x))
+            && t1.g.lucroRs === -0.01 && t1.card.tipo === 'nao' && t1.conta.tipo === 'nao' && t1.camps.find(c => c.id === '40').veredito.tipo === 'nao' && /acima do equilíbrio/.test(t1.leit('40')))
+            || `preço ${precoC} recebe ${recebeC} custo ${custoC} × ${nc} campanhas: ${tipos0} · ${l0.join(' | ')} · +1 centavo ${t1.card.tipo}`;
     });
 }
 {   // #24: sem as orgânicas lidas (e sem o tacos do ML), TACOS e "Vendas orgânicas" = "—"; nunca o ACOS nem "0 un. · R$ 0,00"
