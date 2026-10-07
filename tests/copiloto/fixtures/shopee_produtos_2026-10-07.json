@@ -1,0 +1,1820 @@
+{
+  "canal": "shopee",
+  "tela": "produtos",
+  "lido_em": "2026-10-07",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v3/opt/mpsku/list/v2/get_product_list",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER",
+        "page_number",
+        "page_size",
+        "list_type",
+        "need_ads"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "message": "success",
+        "user_message": "success",
+        "data": {
+          "page_info": {
+            "total": 166,
+            "page_number": 92,
+            "page_size": 15
+          },
+          "products": [
+            {
+              "id": 90000000003,
+              "name": "Produto 1",
+              "status": 1,
+              "cover_image": "Texto 1",
+              "parent_sku": "SKU-1",
+              "price_detail": {
+                "price_min": "641.15",
+                "price_max": "641.15",
+                "has_discount": true,
+                "max_discount_percentage": 5,
+                "max_discount": 617,
+                "selling_price_min": "609",
+                "selling_price_max": "609"
+              },
+              "stock_detail": {
+                "total_available_stock": 1233,
+                "total_seller_stock": 1233,
+                "total_shopee_stock": 0,
+                "low_stock_status": 0,
+                "enable_stock_reminder": false,
+                "model_seller_stock_sold_out": false,
+                "model_shopee_stock_sold_out": false,
+                "advanced_stock": {
+                  "sellable_stock": 0,
+                  "in_transit_stock": 0
+                },
+                "enable_stock_reminder_status": 0
+              },
+              "promotion": {
+                "ongoing_campaigns": [
+                  {
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "price_min": "609",
+                    "price_max": "609"
+                  }
+                ],
+                "wholesale": false,
+                "has_bundle_deal": false
+              },
+              "statistics": {
+                "view_count": 36,
+                "liked_count": 16,
+                "sold_count": 2
+              },
+              "tag": {
+                "is_virtual_sku": false,
+                "unlist": false,
+                "has_discount": true,
+                "wholesale": false,
+                "has_bundle_deal": false,
+                "has_add_on_deal": false,
+                "live_sku": false,
+                "ssp": false,
+                "has_ams_commission": true,
+                "member_exclusive": false,
+                "is_ipr_appealing": false,
+                "is_bulky_item": false,
+                "to_be_archived": false
+              },
+              "modify_time": 1791066263,
+              "create_time": 1758547210,
+              "model_list": [
+                {
+                  "id": 900000000004,
+                  "name": "",
+                  "sku": "",
+                  "tier_index": [
+                    0
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": true,
+                  "image": "",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 2
+                  },
+                  "price_detail": {
+                    "origin_price": "641.15",
+                    "promotion_price": "609"
+                  }
+                }
+              ],
+              "promotion_detail": {
+                "ongoing_campaigns": [
+                  {
+                    "product_id": 90000000003,
+                    "model_id": 900000000004,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "609"
+                  }
+                ]
+              },
+              "scheduled_publish_time": 0,
+              "appeal_info": {
+                "ipr_appeal_info": {
+                  "appeal_opt": 0,
+                  "can_not_appeal_transify_key": "",
+                  "reference_id": 91,
+                  "appeal_status": 0
+                }
+              },
+              "mtsku_item_id": 91,
+              "ssp_id": 91,
+              "category_path": [
+                900005,
+                900006,
+                900007
+              ]
+            },
+            {
+              "id": 90000000008,
+              "name": "Produto 2",
+              "status": 1,
+              "cover_image": "Texto 2",
+              "parent_sku": "SKU-2",
+              "price_detail": {
+                "price_min": "252.75",
+                "price_max": "345.23",
+                "has_discount": true,
+                "max_discount_percentage": 123,
+                "max_discount": 617,
+                "selling_price_min": "240.13",
+                "selling_price_max": "328"
+              },
+              "stock_detail": {
+                "total_available_stock": 3697,
+                "total_seller_stock": 3697,
+                "total_shopee_stock": 0,
+                "low_stock_status": 0,
+                "enable_stock_reminder": false,
+                "model_seller_stock_sold_out": true,
+                "model_shopee_stock_sold_out": false,
+                "advanced_stock": {
+                  "sellable_stock": 0,
+                  "in_transit_stock": 0
+                },
+                "enable_stock_reminder_status": 0
+              },
+              "promotion": {
+                "ongoing_campaigns": [
+                  {
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "price_min": "240.13",
+                    "price_max": "328"
+                  }
+                ],
+                "wholesale": false,
+                "has_bundle_deal": false
+              },
+              "statistics": {
+                "view_count": 68,
+                "liked_count": 59,
+                "sold_count": 35
+              },
+              "tag": {
+                "is_virtual_sku": false,
+                "unlist": false,
+                "has_discount": true,
+                "wholesale": false,
+                "has_bundle_deal": false,
+                "has_add_on_deal": false,
+                "live_sku": false,
+                "ssp": false,
+                "has_ams_commission": true,
+                "member_exclusive": false,
+                "is_ipr_appealing": false,
+                "is_bulky_item": false,
+                "to_be_archived": false
+              },
+              "modify_time": 1791066098,
+              "create_time": 1698081197,
+              "model_list": [
+                {
+                  "id": 900000000009,
+                  "name": "Produto 3",
+                  "sku": "SKU-3",
+                  "tier_index": [
+                    2
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 0,
+                    "total_seller_stock": 0,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": false,
+                  "image": "Texto 3",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 7
+                  },
+                  "price_detail": {
+                    "origin_price": "277.41",
+                    "promotion_price": "0"
+                  }
+                },
+                {
+                  "id": 900000000010,
+                  "name": "Produto 4",
+                  "sku": "SKU-4",
+                  "tier_index": [
+                    4
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": false,
+                  "image": "Texto 4",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 5
+                  },
+                  "price_detail": {
+                    "origin_price": "252.75",
+                    "promotion_price": "240.13"
+                  }
+                },
+                {
+                  "id": 900000000011,
+                  "name": "Produto 5",
+                  "sku": "SKU-5",
+                  "tier_index": [
+                    0
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1232,
+                    "total_seller_stock": 1232,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": false,
+                  "image": "Texto 5",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 7
+                  },
+                  "price_detail": {
+                    "origin_price": "345.23",
+                    "promotion_price": "328"
+                  }
+                },
+                {
+                  "id": 900000000012,
+                  "name": "Produto 6",
+                  "sku": "SKU-6",
+                  "tier_index": [
+                    1
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1232,
+                    "total_seller_stock": 1232,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": false,
+                  "image": "Texto 6",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 12
+                  },
+                  "price_detail": {
+                    "origin_price": "265.08",
+                    "promotion_price": "251.84"
+                  }
+                }
+              ],
+              "promotion_detail": {
+                "ongoing_campaigns": [
+                  {
+                    "product_id": 90000000008,
+                    "model_id": 900000000011,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "328"
+                  },
+                  {
+                    "product_id": 90000000008,
+                    "model_id": 900000000012,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "251.84"
+                  },
+                  {
+                    "product_id": 90000000008,
+                    "model_id": 900000000010,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "240.13"
+                  }
+                ]
+              },
+              "scheduled_publish_time": 0,
+              "appeal_info": {
+                "ipr_appeal_info": {
+                  "appeal_opt": 0,
+                  "can_not_appeal_transify_key": "",
+                  "reference_id": 91,
+                  "appeal_status": 0
+                }
+              },
+              "mtsku_item_id": 91,
+              "ssp_id": 91,
+              "category_path": [
+                900005,
+                900006,
+                900007
+              ]
+            },
+            {
+              "id": 90000000013,
+              "name": "Produto 7",
+              "status": 1,
+              "cover_image": "Texto 7",
+              "parent_sku": "SKU-7",
+              "price_detail": {
+                "price_min": "271.25",
+                "price_max": "271.25",
+                "has_discount": true,
+                "max_discount_percentage": 5,
+                "max_discount": 617,
+                "selling_price_min": "258",
+                "selling_price_max": "258"
+              },
+              "stock_detail": {
+                "total_available_stock": 1233,
+                "total_seller_stock": 1233,
+                "total_shopee_stock": 0,
+                "low_stock_status": 0,
+                "enable_stock_reminder": false,
+                "model_seller_stock_sold_out": false,
+                "model_shopee_stock_sold_out": false,
+                "advanced_stock": {
+                  "sellable_stock": 0,
+                  "in_transit_stock": 0
+                },
+                "enable_stock_reminder_status": 0
+              },
+              "promotion": {
+                "ongoing_campaigns": [
+                  {
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "price_min": "258",
+                    "price_max": "258"
+                  }
+                ],
+                "wholesale": false,
+                "has_bundle_deal": false
+              },
+              "statistics": {
+                "view_count": 28,
+                "liked_count": 28,
+                "sold_count": 6
+              },
+              "tag": {
+                "is_virtual_sku": false,
+                "unlist": false,
+                "has_discount": true,
+                "wholesale": false,
+                "has_bundle_deal": false,
+                "has_add_on_deal": false,
+                "live_sku": false,
+                "ssp": false,
+                "has_ams_commission": true,
+                "member_exclusive": false,
+                "is_ipr_appealing": false,
+                "is_bulky_item": false,
+                "to_be_archived": false
+              },
+              "modify_time": 1791064146,
+              "create_time": 1698081586,
+              "model_list": [
+                {
+                  "id": 900000000014,
+                  "name": "",
+                  "sku": "",
+                  "tier_index": [
+                    0
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": true,
+                  "image": "",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 6
+                  },
+                  "price_detail": {
+                    "origin_price": "271.25",
+                    "promotion_price": "258"
+                  }
+                }
+              ],
+              "promotion_detail": {
+                "ongoing_campaigns": [
+                  {
+                    "product_id": 90000000013,
+                    "model_id": 900000000014,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "258"
+                  }
+                ]
+              },
+              "scheduled_publish_time": 0,
+              "appeal_info": {
+                "ipr_appeal_info": {
+                  "appeal_opt": 0,
+                  "can_not_appeal_transify_key": "",
+                  "reference_id": 91,
+                  "appeal_status": 0
+                }
+              },
+              "mtsku_item_id": 91,
+              "ssp_id": 91,
+              "category_path": [
+                900005,
+                900015,
+                900016
+              ]
+            },
+            {
+              "id": 90000000017,
+              "name": "Produto 8",
+              "status": 1,
+              "cover_image": "Texto 8",
+              "parent_sku": "SKU-8",
+              "price_detail": {
+                "price_min": "369.89",
+                "price_max": "369.89",
+                "has_discount": true,
+                "max_discount_percentage": 5,
+                "max_discount": 617,
+                "selling_price_min": "351",
+                "selling_price_max": "351"
+              },
+              "stock_detail": {
+                "total_available_stock": 1233,
+                "total_seller_stock": 1233,
+                "total_shopee_stock": 0,
+                "low_stock_status": 0,
+                "enable_stock_reminder": false,
+                "model_seller_stock_sold_out": false,
+                "model_shopee_stock_sold_out": false,
+                "advanced_stock": {
+                  "sellable_stock": 0,
+                  "in_transit_stock": 0
+                },
+                "enable_stock_reminder_status": 0
+              },
+              "promotion": {
+                "ongoing_campaigns": [
+                  {
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "price_min": "351",
+                    "price_max": "351"
+                  }
+                ],
+                "wholesale": false,
+                "has_bundle_deal": false
+              },
+              "statistics": {
+                "view_count": 4,
+                "liked_count": 4,
+                "sold_count": 4
+              },
+              "tag": {
+                "is_virtual_sku": false,
+                "unlist": false,
+                "has_discount": true,
+                "wholesale": false,
+                "has_bundle_deal": false,
+                "has_add_on_deal": false,
+                "live_sku": false,
+                "ssp": false,
+                "has_ams_commission": true,
+                "member_exclusive": false,
+                "is_ipr_appealing": false,
+                "is_bulky_item": false,
+                "to_be_archived": false
+              },
+              "modify_time": 1791064079,
+              "create_time": 1698082816,
+              "model_list": [
+                {
+                  "id": 900000000018,
+                  "name": "",
+                  "sku": "",
+                  "tier_index": [
+                    0
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": true,
+                  "image": "",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 4
+                  },
+                  "price_detail": {
+                    "origin_price": "369.89",
+                    "promotion_price": "351"
+                  }
+                }
+              ],
+              "promotion_detail": {
+                "ongoing_campaigns": [
+                  {
+                    "product_id": 90000000017,
+                    "model_id": 900000000018,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "351"
+                  }
+                ]
+              },
+              "scheduled_publish_time": 0,
+              "appeal_info": {
+                "ipr_appeal_info": {
+                  "appeal_opt": 0,
+                  "can_not_appeal_transify_key": "",
+                  "reference_id": 91,
+                  "appeal_status": 0
+                }
+              },
+              "mtsku_item_id": 91,
+              "ssp_id": 91,
+              "category_path": [
+                900005,
+                900006,
+                900007
+              ]
+            },
+            {
+              "id": 90000000019,
+              "name": "Produto 9",
+              "status": 1,
+              "cover_image": "Texto 9",
+              "parent_sku": "SKU-9",
+              "price_detail": {
+                "price_min": "123.29",
+                "price_max": "123.29",
+                "has_discount": true,
+                "max_discount_percentage": 5,
+                "max_discount": 615,
+                "selling_price_min": "117",
+                "selling_price_max": "117"
+              },
+              "stock_detail": {
+                "total_available_stock": 1233,
+                "total_seller_stock": 1233,
+                "total_shopee_stock": 0,
+                "low_stock_status": 0,
+                "enable_stock_reminder": false,
+                "model_seller_stock_sold_out": false,
+                "model_shopee_stock_sold_out": false,
+                "advanced_stock": {
+                  "sellable_stock": 0,
+                  "in_transit_stock": 0
+                },
+                "enable_stock_reminder_status": 0
+              },
+              "promotion": {
+                "ongoing_campaigns": [
+                  {
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "price_min": "117",
+                    "price_max": "117"
+                  }
+                ],
+                "wholesale": false,
+                "has_bundle_deal": false
+              },
+              "statistics": {
+                "view_count": 1,
+                "liked_count": 2,
+                "sold_count": 0
+              },
+              "tag": {
+                "is_virtual_sku": false,
+                "unlist": false,
+                "has_discount": true,
+                "wholesale": false,
+                "has_bundle_deal": false,
+                "has_add_on_deal": false,
+                "live_sku": false,
+                "ssp": false,
+                "has_ams_commission": true,
+                "member_exclusive": false,
+                "is_ipr_appealing": false,
+                "is_bulky_item": false,
+                "to_be_archived": false
+              },
+              "modify_time": 1791063552,
+              "create_time": 1694439222,
+              "model_list": [
+                {
+                  "id": 900000000020,
+                  "name": "",
+                  "sku": "",
+                  "tier_index": [
+                    0
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": true,
+                  "image": "",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 0
+                  },
+                  "price_detail": {
+                    "origin_price": "123.29",
+                    "promotion_price": "117"
+                  }
+                }
+              ],
+              "promotion_detail": {
+                "ongoing_campaigns": [
+                  {
+                    "product_id": 90000000019,
+                    "model_id": 900000000020,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "117"
+                  }
+                ]
+              },
+              "scheduled_publish_time": 0,
+              "appeal_info": {
+                "ipr_appeal_info": {
+                  "appeal_opt": 0,
+                  "can_not_appeal_transify_key": "",
+                  "reference_id": 91,
+                  "appeal_status": 0
+                }
+              },
+              "mtsku_item_id": 91,
+              "ssp_id": 91,
+              "category_path": [
+                900005,
+                900006,
+                900007
+              ]
+            },
+            {
+              "id": 90000000021,
+              "name": "Produto 10",
+              "status": 1,
+              "cover_image": "Texto 10",
+              "parent_sku": "SKU-10",
+              "price_detail": {
+                "price_min": "369.89",
+                "price_max": "382.22",
+                "has_discount": true,
+                "max_discount_percentage": 5,
+                "max_discount": 617,
+                "selling_price_min": "351",
+                "selling_price_max": "363.12"
+              },
+              "stock_detail": {
+                "total_available_stock": 2466,
+                "total_seller_stock": 2466,
+                "total_shopee_stock": 0,
+                "low_stock_status": 0,
+                "enable_stock_reminder": false,
+                "model_seller_stock_sold_out": false,
+                "model_shopee_stock_sold_out": false,
+                "advanced_stock": {
+                  "sellable_stock": 0,
+                  "in_transit_stock": 0
+                },
+                "enable_stock_reminder_status": 0
+              },
+              "promotion": {
+                "ongoing_campaigns": [
+                  {
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "price_min": "351",
+                    "price_max": "363.12"
+                  }
+                ],
+                "wholesale": false,
+                "has_bundle_deal": false
+              },
+              "statistics": {
+                "view_count": 17,
+                "liked_count": 20,
+                "sold_count": 2
+              },
+              "tag": {
+                "is_virtual_sku": false,
+                "unlist": false,
+                "has_discount": true,
+                "wholesale": false,
+                "has_bundle_deal": false,
+                "has_add_on_deal": false,
+                "live_sku": false,
+                "ssp": false,
+                "has_ams_commission": true,
+                "member_exclusive": false,
+                "is_ipr_appealing": false,
+                "is_bulky_item": false,
+                "to_be_archived": false
+              },
+              "modify_time": 1791053520,
+              "create_time": 1711994472,
+              "model_list": [
+                {
+                  "id": 900000000022,
+                  "name": "Produto 11",
+                  "sku": "SKU-11",
+                  "tier_index": [
+                    0
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": false,
+                  "image": "Texto 11",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 0
+                  },
+                  "price_detail": {
+                    "origin_price": "382.22",
+                    "promotion_price": "363.12"
+                  }
+                },
+                {
+                  "id": 900000000023,
+                  "name": "Produto 12",
+                  "sku": "SKU-12",
+                  "tier_index": [
+                    1
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": false,
+                  "image": "Texto 12",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 2
+                  },
+                  "price_detail": {
+                    "origin_price": "369.89",
+                    "promotion_price": "351"
+                  }
+                }
+              ],
+              "promotion_detail": {
+                "ongoing_campaigns": [
+                  {
+                    "product_id": 90000000021,
+                    "model_id": 900000000022,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "363.12"
+                  },
+                  {
+                    "product_id": 90000000021,
+                    "model_id": 900000000023,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "351"
+                  }
+                ]
+              },
+              "scheduled_publish_time": 0,
+              "appeal_info": {
+                "ipr_appeal_info": {
+                  "appeal_opt": 0,
+                  "can_not_appeal_transify_key": "",
+                  "reference_id": 91,
+                  "appeal_status": 0
+                }
+              },
+              "mtsku_item_id": 91,
+              "ssp_id": 91,
+              "category_path": [
+                900005,
+                900006,
+                900007
+              ]
+            },
+            {
+              "id": 90000000024,
+              "name": "Produto 13",
+              "status": 1,
+              "cover_image": "Texto 13",
+              "parent_sku": "SKU-13",
+              "price_detail": {
+                "price_min": "61.64",
+                "price_max": "61.64",
+                "has_discount": true,
+                "max_discount_percentage": 5,
+                "max_discount": 614,
+                "selling_price_min": "58.57",
+                "selling_price_max": "58.57"
+              },
+              "stock_detail": {
+                "total_available_stock": 1222,
+                "total_seller_stock": 1222,
+                "total_shopee_stock": 0,
+                "low_stock_status": 0,
+                "enable_stock_reminder": false,
+                "model_seller_stock_sold_out": false,
+                "model_shopee_stock_sold_out": false,
+                "advanced_stock": {
+                  "sellable_stock": 0,
+                  "in_transit_stock": 0
+                },
+                "enable_stock_reminder_status": 0
+              },
+              "promotion": {
+                "ongoing_campaigns": [
+                  {
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "price_min": "58.57",
+                    "price_max": "58.57"
+                  }
+                ],
+                "wholesale": false,
+                "has_bundle_deal": false
+              },
+              "statistics": {
+                "view_count": 85,
+                "liked_count": 33,
+                "sold_count": 27
+              },
+              "tag": {
+                "is_virtual_sku": false,
+                "unlist": false,
+                "has_discount": true,
+                "wholesale": false,
+                "has_bundle_deal": false,
+                "has_add_on_deal": false,
+                "live_sku": false,
+                "ssp": false,
+                "has_ams_commission": true,
+                "member_exclusive": false,
+                "is_ipr_appealing": false,
+                "is_bulky_item": false,
+                "to_be_archived": false
+              },
+              "modify_time": 1791053258,
+              "create_time": 1698086378,
+              "model_list": [
+                {
+                  "id": 900000000025,
+                  "name": "",
+                  "sku": "",
+                  "tier_index": [
+                    0
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1222,
+                    "total_seller_stock": 1222,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": true,
+                  "image": "",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 27
+                  },
+                  "price_detail": {
+                    "origin_price": "61.64",
+                    "promotion_price": "58.57"
+                  }
+                }
+              ],
+              "promotion_detail": {
+                "ongoing_campaigns": [
+                  {
+                    "product_id": 90000000024,
+                    "model_id": 900000000025,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "58.57"
+                  }
+                ]
+              },
+              "scheduled_publish_time": 0,
+              "appeal_info": {
+                "ipr_appeal_info": {
+                  "appeal_opt": 0,
+                  "can_not_appeal_transify_key": "",
+                  "reference_id": 91,
+                  "appeal_status": 0
+                }
+              },
+              "mtsku_item_id": 91,
+              "ssp_id": 91,
+              "category_path": [
+                900005,
+                900006,
+                900007
+              ]
+            },
+            {
+              "id": 90000000026,
+              "name": "Produto 14",
+              "status": 1,
+              "cover_image": "Texto 14",
+              "parent_sku": "SKU-14",
+              "price_detail": {
+                "price_min": "32.49",
+                "price_max": "32.49",
+                "has_discount": true,
+                "max_discount_percentage": 5,
+                "max_discount": 613,
+                "selling_price_min": "30.87",
+                "selling_price_max": "30.87"
+              },
+              "stock_detail": {
+                "total_available_stock": 1228,
+                "total_seller_stock": 1228,
+                "total_shopee_stock": 0,
+                "low_stock_status": 0,
+                "enable_stock_reminder": false,
+                "model_seller_stock_sold_out": false,
+                "model_shopee_stock_sold_out": false,
+                "advanced_stock": {
+                  "sellable_stock": 0,
+                  "in_transit_stock": 0
+                },
+                "enable_stock_reminder_status": 0
+              },
+              "promotion": {
+                "ongoing_campaigns": [
+                  {
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "price_min": "30.87",
+                    "price_max": "30.87"
+                  }
+                ],
+                "wholesale": false,
+                "has_bundle_deal": false
+              },
+              "statistics": {
+                "view_count": 31,
+                "liked_count": 6,
+                "sold_count": 5
+              },
+              "tag": {
+                "is_virtual_sku": false,
+                "unlist": false,
+                "has_discount": true,
+                "wholesale": false,
+                "has_bundle_deal": false,
+                "has_add_on_deal": false,
+                "live_sku": false,
+                "ssp": false,
+                "has_ams_commission": true,
+                "member_exclusive": false,
+                "is_ipr_appealing": false,
+                "is_bulky_item": false,
+                "to_be_archived": false
+              },
+              "modify_time": 1791053255,
+              "create_time": 1773675011,
+              "model_list": [
+                {
+                  "id": 900000000027,
+                  "name": "",
+                  "sku": "",
+                  "tier_index": [
+                    0
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1228,
+                    "total_seller_stock": 1228,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": true,
+                  "image": "",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 5
+                  },
+                  "price_detail": {
+                    "origin_price": "32.49",
+                    "promotion_price": "30.87"
+                  }
+                }
+              ],
+              "promotion_detail": {
+                "ongoing_campaigns": [
+                  {
+                    "product_id": 90000000026,
+                    "model_id": 900000000027,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "30.87"
+                  }
+                ]
+              },
+              "scheduled_publish_time": 0,
+              "appeal_info": {
+                "ipr_appeal_info": {
+                  "appeal_opt": 0,
+                  "can_not_appeal_transify_key": "",
+                  "reference_id": 91,
+                  "appeal_status": 0
+                }
+              },
+              "mtsku_item_id": 91,
+              "ssp_id": 91,
+              "category_path": [
+                900005,
+                900006,
+                900028
+              ]
+            },
+            {
+              "id": 90000000029,
+              "name": "Produto 15",
+              "status": 1,
+              "cover_image": "Texto 15",
+              "parent_sku": "SKU-15",
+              "price_detail": {
+                "price_min": "133.15",
+                "price_max": "165.21",
+                "has_discount": true,
+                "max_discount_percentage": 5,
+                "max_discount": 615,
+                "selling_price_min": "126.51",
+                "selling_price_max": "156.96"
+              },
+              "stock_detail": {
+                "total_available_stock": 3699,
+                "total_seller_stock": 3699,
+                "total_shopee_stock": 0,
+                "low_stock_status": 0,
+                "enable_stock_reminder": false,
+                "model_seller_stock_sold_out": false,
+                "model_shopee_stock_sold_out": false,
+                "advanced_stock": {
+                  "sellable_stock": 0,
+                  "in_transit_stock": 0
+                },
+                "enable_stock_reminder_status": 0
+              },
+              "promotion": {
+                "ongoing_campaigns": [
+                  {
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "price_min": "126.51",
+                    "price_max": "156.96"
+                  }
+                ],
+                "wholesale": false,
+                "has_bundle_deal": false
+              },
+              "statistics": {
+                "view_count": 5,
+                "liked_count": 11,
+                "sold_count": 0
+              },
+              "tag": {
+                "is_virtual_sku": false,
+                "unlist": false,
+                "has_discount": true,
+                "wholesale": false,
+                "has_bundle_deal": false,
+                "has_add_on_deal": false,
+                "live_sku": false,
+                "ssp": false,
+                "has_ams_commission": true,
+                "member_exclusive": false,
+                "is_ipr_appealing": false,
+                "is_bulky_item": false,
+                "to_be_archived": false
+              },
+              "modify_time": 1791053215,
+              "create_time": 1632416542,
+              "model_list": [
+                {
+                  "id": 900000000030,
+                  "name": "CURTO",
+                  "sku": "SKU-16",
+                  "tier_index": [
+                    0
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": false,
+                  "image": "Texto 16",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 0
+                  },
+                  "price_detail": {
+                    "origin_price": "133.15",
+                    "promotion_price": "126.51"
+                  },
+                  "cssp_id": 91
+                },
+                {
+                  "id": 900000000031,
+                  "name": "LONGO",
+                  "sku": "SKU-17",
+                  "tier_index": [
+                    1
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": false,
+                  "image": "Texto 17",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 0
+                  },
+                  "price_detail": {
+                    "origin_price": "165.21",
+                    "promotion_price": "156.96"
+                  },
+                  "cssp_id": 91
+                },
+                {
+                  "id": 900000000032,
+                  "name": "MEDIO",
+                  "sku": "SKU-18",
+                  "tier_index": [
+                    2
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": false,
+                  "image": "Texto 18",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 0
+                  },
+                  "price_detail": {
+                    "origin_price": "152.88",
+                    "promotion_price": "145.25"
+                  },
+                  "cssp_id": 91
+                }
+              ],
+              "promotion_detail": {
+                "ongoing_campaigns": [
+                  {
+                    "product_id": 90000000029,
+                    "model_id": 900000000031,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "156.96"
+                  },
+                  {
+                    "product_id": 90000000029,
+                    "model_id": 900000000032,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "145.25"
+                  },
+                  {
+                    "product_id": 90000000029,
+                    "model_id": 900000000030,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "126.51"
+                  }
+                ]
+              },
+              "scheduled_publish_time": 0,
+              "appeal_info": {
+                "ipr_appeal_info": {
+                  "appeal_opt": 0,
+                  "can_not_appeal_transify_key": "",
+                  "reference_id": 91,
+                  "appeal_status": 0
+                }
+              },
+              "mtsku_item_id": 91,
+              "ssp_id": 91,
+              "category_path": [
+                900005,
+                900006,
+                900007
+              ]
+            },
+            {
+              "id": 90000000033,
+              "name": "Produto 16",
+              "status": 1,
+              "cover_image": "Texto 19",
+              "parent_sku": "SKU-19",
+              "price_detail": {
+                "price_min": "234.26",
+                "price_max": "234.26",
+                "has_discount": true,
+                "max_discount_percentage": 5,
+                "max_discount": 615,
+                "selling_price_min": "222.56",
+                "selling_price_max": "222.56"
+              },
+              "stock_detail": {
+                "total_available_stock": 1233,
+                "total_seller_stock": 1233,
+                "total_shopee_stock": 0,
+                "low_stock_status": 0,
+                "enable_stock_reminder": false,
+                "model_seller_stock_sold_out": false,
+                "model_shopee_stock_sold_out": false,
+                "advanced_stock": {
+                  "sellable_stock": 0,
+                  "in_transit_stock": 0
+                },
+                "enable_stock_reminder_status": 0
+              },
+              "promotion": {
+                "ongoing_campaigns": [
+                  {
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "price_min": "222.56",
+                    "price_max": "222.56"
+                  }
+                ],
+                "wholesale": false,
+                "has_bundle_deal": false
+              },
+              "statistics": {
+                "view_count": 52,
+                "liked_count": 133,
+                "sold_count": 9
+              },
+              "tag": {
+                "is_virtual_sku": false,
+                "unlist": false,
+                "has_discount": true,
+                "wholesale": false,
+                "has_bundle_deal": false,
+                "has_add_on_deal": false,
+                "live_sku": false,
+                "ssp": false,
+                "has_ams_commission": true,
+                "member_exclusive": false,
+                "is_ipr_appealing": false,
+                "is_bulky_item": false,
+                "to_be_archived": false
+              },
+              "modify_time": 1791053123,
+              "create_time": 1705926636,
+              "model_list": [
+                {
+                  "id": 900000000034,
+                  "name": "",
+                  "sku": "",
+                  "tier_index": [
+                    0
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": true,
+                  "image": "",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 9
+                  },
+                  "price_detail": {
+                    "origin_price": "234.26",
+                    "promotion_price": "222.56"
+                  }
+                }
+              ],
+              "promotion_detail": {
+                "ongoing_campaigns": [
+                  {
+                    "product_id": 90000000033,
+                    "model_id": 900000000034,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "222.56"
+                  }
+                ]
+              },
+              "scheduled_publish_time": 0,
+              "appeal_info": {
+                "ipr_appeal_info": {
+                  "appeal_opt": 0,
+                  "can_not_appeal_transify_key": "",
+                  "reference_id": 91,
+                  "appeal_status": 0
+                }
+              },
+              "mtsku_item_id": 91,
+              "ssp_id": 91,
+              "category_path": [
+                900005,
+                900006,
+                900007
+              ]
+            },
+            {
+              "id": 90000000035,
+              "name": "Produto 17",
+              "status": 1,
+              "cover_image": "Texto 20",
+              "parent_sku": "SKU-20",
+              "price_detail": {
+                "price_min": "197.27",
+                "price_max": "197.27",
+                "has_discount": true,
+                "max_discount_percentage": 5,
+                "max_discount": 615,
+                "selling_price_min": "187",
+                "selling_price_max": "187"
+              },
+              "stock_detail": {
+                "total_available_stock": 1233,
+                "total_seller_stock": 1233,
+                "total_shopee_stock": 0,
+                "low_stock_status": 0,
+                "enable_stock_reminder": false,
+                "model_seller_stock_sold_out": false,
+                "model_shopee_stock_sold_out": false,
+                "advanced_stock": {
+                  "sellable_stock": 0,
+                  "in_transit_stock": 0
+                },
+                "enable_stock_reminder_status": 0
+              },
+              "promotion": {
+                "ongoing_campaigns": [
+                  {
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "price_min": "187",
+                    "price_max": "187"
+                  }
+                ],
+                "wholesale": false,
+                "has_bundle_deal": false
+              },
+              "statistics": {
+                "view_count": 32,
+                "liked_count": 59,
+                "sold_count": 17
+              },
+              "tag": {
+                "is_virtual_sku": false,
+                "unlist": false,
+                "has_discount": true,
+                "wholesale": false,
+                "has_bundle_deal": false,
+                "has_add_on_deal": false,
+                "live_sku": false,
+                "ssp": false,
+                "has_ams_commission": true,
+                "member_exclusive": false,
+                "is_ipr_appealing": false,
+                "is_bulky_item": false,
+                "to_be_archived": false
+              },
+              "modify_time": 1791053042,
+              "create_time": 1713204825,
+              "model_list": [
+                {
+                  "id": 900000000036,
+                  "name": "",
+                  "sku": "",
+                  "tier_index": [
+                    0
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": true,
+                  "image": "",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 17
+                  },
+                  "price_detail": {
+                    "origin_price": "197.27",
+                    "promotion_price": "187"
+                  }
+                }
+              ],
+              "promotion_detail": {
+                "ongoing_campaigns": [
+                  {
+                    "product_id": 90000000035,
+                    "model_id": 900000000036,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "187"
+                  }
+                ]
+              },
+              "scheduled_publish_time": 0,
+              "appeal_info": {
+                "ipr_appeal_info": {
+                  "appeal_opt": 0,
+                  "can_not_appeal_transify_key": "",
+                  "reference_id": 91,
+                  "appeal_status": 0
+                }
+              },
+              "mtsku_item_id": 91,
+              "ssp_id": 91,
+              "category_path": [
+                900005,
+                900006,
+                900007
+              ]
+            },
+            {
+              "id": 90000000037,
+              "name": "Produto 18",
+              "status": 1,
+              "cover_image": "Texto 21",
+              "parent_sku": "SKU-21",
+              "price_detail": {
+                "price_min": "221",
+                "price_max": "221",
+                "has_discount": true,
+                "max_discount_percentage": 6,
+                "max_discount": 617,
+                "selling_price_min": "209.67",
+                "selling_price_max": "209.67"
+              },
+              "stock_detail": {
+                "total_available_stock": 1233,
+                "total_seller_stock": 1233,
+                "total_shopee_stock": 0,
+                "low_stock_status": 0,
+                "enable_stock_reminder": false,
+                "model_seller_stock_sold_out": false,
+                "model_shopee_stock_sold_out": false,
+                "advanced_stock": {
+                  "sellable_stock": 0,
+                  "in_transit_stock": 0
+                },
+                "enable_stock_reminder_status": 0
+              },
+              "promotion": {
+                "ongoing_campaigns": [
+                  {
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "price_min": "209.67",
+                    "price_max": "209.67"
+                  }
+                ],
+                "wholesale": false,
+                "has_bundle_deal": false
+              },
+              "statistics": {
+                "view_count": 4,
+                "liked_count": 14,
+                "sold_count": 0
+              },
+              "tag": {
+                "is_virtual_sku": false,
+                "unlist": false,
+                "has_discount": true,
+                "wholesale": false,
+                "has_bundle_deal": false,
+                "has_add_on_deal": false,
+                "live_sku": false,
+                "ssp": false,
+                "has_ams_commission": true,
+                "member_exclusive": false,
+                "is_ipr_appealing": false,
+                "is_bulky_item": false,
+                "to_be_archived": false
+              },
+              "modify_time": 1791053023,
+              "create_time": 1632419463,
+              "model_list": [
+                {
+                  "id": 90000000038,
+                  "name": "",
+                  "tier_index": [
+                    0
+                  ],
+                  "stock_detail": {
+                    "advanced_stock": {
+                      "sellable_stock": 0,
+                      "in_transit_stock": 0
+                    },
+                    "total_available_stock": 1233,
+                    "total_seller_stock": 1233,
+                    "total_shopee_stock": 0
+                  },
+                  "is_default": true,
+                  "image": "",
+                  "tag": {
+                    "is_partial_fulfillment": false,
+                    "is_bulky_model": false
+                  },
+                  "statistics": {
+                    "sold_count": 0
+                  },
+                  "price_detail": {
+                    "origin_price": "221",
+                    "promotion_price": "209.67"
+                  }
+                }
+              ],
+              "promotion_detail": {
+                "ongoing_campaigns": [
+                  {
+                    "product_id": 90000000037,
+                    "model_id": 90000000038,
+                    "campaign_type": 10,
+                    "promo_source": 1,
+                    "start_time": 1790865000,
+                    "end_time": 1793460600,
+                    "promotion_price": "209.67"
+                  }
+                ]
+              },
+              "scheduled_publish_time": 0,
+              "appeal_info": {
+                "ipr_appeal_info": {
+                  "appeal_opt": 0,
+                  "can_not_appeal_transify_key": "",
+                  "reference_id": 91,
+                  "appeal_status": 0
+                }
+              },
+              "mtsku_item_id": 91,
+              "ssp_id": 91,
+              "category_path": [
+                900005,
+                900006,
+                900007
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v3/opt/mpsku/list/v2/get_product_list_education_visible_info",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "message": "success",
+        "user_message": "success",
+        "data": {
+          "direct_shop_upgraded_education": {
+            "direct_status": 0,
+            "is_switched_sip_shop": false
+          },
+          "ssp_eligible_education": {
+            "ssp_eligible_type": 0,
+            "item_count": 0,
+            "is_buy_box_rcmd": false,
+            "eligible_item_count": 0,
+            "eligible_buybox_item_count": 0,
+            "possible_popup_interval_days": 1,
+            "autoenroll_popup_interval_days": 1
+          },
+          "incorrect_ssp_education": {
+            "show_pop_up": false,
+            "qualified_level": 0,
+            "task_state": 0
+          }
+        }
+      }
+    }
+  ]
+}

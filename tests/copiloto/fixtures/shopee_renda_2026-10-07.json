@@ -1,0 +1,86 @@
+{
+  "canal": "shopee",
+  "tela": "renda",
+  "lido_em": "2026-10-07",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v4/accounting/pc/seller_income/income_statement/get_cnpj_list_by_shop_id",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "message": "success",
+        "user_message": "success",
+        "data": {
+          "shop_id": 900000002,
+          "is_cnpj_filter_applicable": false
+        }
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v4/accounting/pc/seller_income/income_detail/get_order_income_components",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 90003,
+        "message": "unknown system error",
+        "user_message": "Texto 1"
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v4/accounting/pc/seller_income/income_overview/get_income_overviews",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "message": "success",
+        "user_message": "success",
+        "list": [
+          {
+            "type": 12,
+            "amount": 822848000
+          },
+          {
+            "type": 9,
+            "amount": 483753400
+          },
+          {
+            "type": 8,
+            "amount": 302252600
+          },
+          {
+            "type": 10,
+            "amount": 73664481800
+          }
+        ]
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v4/accounting/pc/seller_income/income_detail/get_order_income_components",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 90003,
+        "message": "unknown system error",
+        "user_message": "Texto 1"
+      }
+    }
+  ]
+}
