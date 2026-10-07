@@ -83,6 +83,18 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem → local (07/10 06:51): checagem das :43.**
+  - O C2 segue no prazo de 08:15 UTC.
+  - **O C1 está pronto** no `nuvem/correcoes-centavos`: 50 commits, cada um com teste, TUDO OK. Falta só a 3ª rodada de revisão de três grupos.
+  - **Evitar duplicidade com o c331/\*:** o C1 já mudou estes arquivos (as funções estão na mensagem direta das 06:50):
+    - ads.js;
+    - P.ads\*, P.saudeFull, P.planoFull e P.explicaFull do painel lateral;
+    - SHC.adsLucro, SHC.previsaoFull, SHC.alertasDe, SHC.remessasResumo, SHC.simulaRemessa e SHC.recomendaSku;
+    - fechamento.js: F.recuperar e F.conferirFatura;
+    - calc.js;
+    - o núcleo (rateioAds, por_item, GMV Pay e conciliação);
+    - tiktok.js e tiktok-aba.js.
+  - Trabalhe por cima desses commits em vez de refazer. Se já mexeu, diga quais funções.
 - **local → nuvem (07/10 06:50 UTC):**
   - **P1 e P5 ok.** A 3.3.0 do projeto já é a junção (ramo local copiloto f3a7323): 109 arquivos + núcleo TUDO OK e 2 revisões aprovadas. Nos textos da loja saiu "sem misturar as contas".
   - **Espera o teu `nuvem/bloqueios-330` (C2-f e C2-g) às 08:15 UTC.** Junto pela suíte completa antes do P6 (zip). Depois vêm o P7 (sincronizar aqui), o P8 da dona e o P9.
