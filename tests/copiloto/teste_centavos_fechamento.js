@@ -568,6 +568,9 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
     // inventava o "valor devido" (esperado = cobrado − teto); e a "tarifa acima" (estimativa) que ganhava da repetida deixava a cobrança em
     // dobro fora do texto do chamado. Agora: todo "Valor devido" é um valor lido (o de 1 cobrança ou R$ 0 da venda cancelada); a repetida só
     // pede quando o cobrado líquido cobre todas as cópias (o resto vira dúvida, sem número, ou sai); a repetição absorvida aparece no texto.
+    // Revisão 2: com uma 2ª cobrança do MESMO tipo (tarifa de processamento, o mesmo texto em outro pagamento, frete extra), o líquido do tipo
+    // escondia o estorno de outro valor feito na repetida (frete R$ 20 × 2 + extra R$ 15 + estorno de R$ 12 pedia R$ 20 firmes; sobravam R$ 8).
+    // A conferência agora é pela PRÓPRIA cobrança (texto sem o "Cancelamento d…" + MLB).
     const rnd2 = lcg(7008);
     const gera2 = () => {
         const cobs = [], porId = {};
@@ -580,27 +583,66 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
             if (rnd2() < 0.4) add('Cancelamento do Custo por vender', rnd2() < 0.5 ? tv : escolhe(rnd2, [2.5, 6, 15, 30]), 'B' + o, { estorno: true });
             for (let k = inteiro(rnd2, 0, 3); k > 0; k--) add('Custo por cobrar', cc, 'PAG' + o);
             if (rnd2() < 0.5) add('Cancelamento do Custo por cobrar', escolhe(rnd2, [1, 2.5, 4, 8, 12.5]), 'PAG' + o, { estorno: true });
+            // Revisão 2: 2ª cobrança do mesmo tipo (outro texto; o mesmo texto em outro pagamento) e frete com estorno de outro valor.
+            if (rnd2() < 0.35) add('Tarifa de processamento', escolhe(rnd2, [2, 6, 7.5]), 'PAG' + o);
+            if (rnd2() < 0.35) add('Custo por cobrar', escolhe(rnd2, [cc, 4, 6]), 'PAG2' + o);
+            if (rnd2() < 0.6) {
+                const fe = escolhe(rnd2, [12.5, 20, 31.9]);
+                for (let k = inteiro(rnd2, 1, 3); k > 0; k--) add('Tarifa de envio', fe, 'ENV' + o);
+                if (rnd2() < 0.5) add('Tarifa por envio extra ou intermunicipal', escolhe(rnd2, [fe, 15]), 'ENV' + o);
+                if (rnd2() < 0.5) add('Cancelamento da tarifa de envio', rnd2() < 0.3 ? fe : escolhe(rnd2, [5, 12, 15]), 'BENV' + o, { estorno: true });
+            }
         }
         return { cobs, porId };
     };
-    let nDuv = 0, nAbs = 0;
+    // Por pedido|texto|MLB (a própria cobrança): o líquido e o que pode ter sobrado acima do legítimo (1 cobrança por pagamento/envio de
+    // cada valor, menos os estornos de mesmo valor). Sobra 0 quando um estorno do texto não casa com cobrança de mesmo valor, ou quando há
+    // estorno de um texto sem cobrança no pedido no mesmo tipo|MLB: ele pode ter acertado as cópias, e então nada pode ser pedido firme.
+    const txDe = c => String(c.texto || c.cobranca).replace(/^cancelamento\s+(d[oa]s?|de)\s+/i, '').toLowerCase();
+    const sobraDe = cobs => {
+        const tx = {}, orf = {};
+        cobs.forEach(c => {
+            const k = c.orderId + '|' + txDe(c) + '|' + c.itemId, t = tx[k] || (tx[k] = { net: 0, por: {}, tipo: c.orderId + '|' + SHC.tipoCustoFechamento(c.texto) + '|' + c.itemId });
+            const v = t.por[C(c.valor)] || (t.por[C(c.valor)] = { c: 0, e: 0, ops: new Set() });
+            t.net += (c.estorno ? -1 : 1) * C(c.valor);
+            if (c.estorno) v.e++; else { v.c++; v.ops.add(c.id.split('|')[1]); }
+        });
+        Object.values(tx).forEach(t => { if (!Object.values(t.por).some(v => v.c)) orf[t.tipo] = true; });
+        Object.values(tx).forEach(t => { t.solto = Object.values(t.por).some(v => v.e > v.c) || !!orf[t.tipo];
+            t.sobra = t.solto ? 0 : t.net - soma(Object.keys(t.por).map(c => +c * Math.max(0, t.por[c].ops.size - t.por[c].e))); });
+        return tx;
+    };
+    let nDuv = 0, nAbs = 0, nFirme2 = 0, nDuv2 = 0;
     todos(400, gera2, x => {
         const cf = F.conferir(x.cobs, x.porId), r = confere(x, cf, F.recuperar({ conferir: cf }));
         if (r !== true) return r;
-        const net = netDe(x.cobs), lidos = {}, repV = {};
+        const net = netDe(x.cobs), lidos = {}, sob = sobraDe(x.cobs), pede = {}, pedeTipo = {};
         x.cobs.forEach(c => { const k = c.orderId + '|' + SHC.tipoCustoFechamento(c.texto) + '|' + c.itemId; if (!c.estorno) (lidos[k] || (lidos[k] = new Set([0]))).add(C(c.valor)); });
         for (const i of cf) {
-            const k = chave(i), t = F.textoChamado(i);
-            if (i.duvida) { if (/Valor devido|Diferença:|Solicitamos/.test(t)) return k + ': dúvida com número no texto'; nDuv++; continue; }
+            const k = chave(i), t = F.textoChamado(i), kx = i.pedido + '|' + txDe(i) + '|' + i.itemId;
+            if (i.duvida) {
+                if (/Valor devido|Diferença:|Solicitamos/.test(t)) return k + ': dúvida com número no texto';
+                // "ficaram R$ X cobrados em “texto”" = o líquido da própria cobrança (não o do tipo)
+                const fic = /ficaram (R\$ [\d.]+,\d{2}) cobrados(?: em “([^”]+)”)?/.exec(i.motivo || '');
+                if (fic && (!fic[2] || !sob[i.pedido + '|' + txDe({ texto: fic[2] }) + '|' + i.itemId] || lerMoeda(fic[1]) !== sob[i.pedido + '|' + txDe({ texto: fic[2] }) + '|' + i.itemId].net))
+                    return kx + ': o motivo da dúvida cita ' + fic[0] + ' (líquido da cobrança: ' + R(sob[kx] ? sob[kx].net : NaN) + ')';
+                nDuv++; if (i.regra === 'repetida' && sob[kx].net !== net[k]) nDuv2++;
+                continue;
+            }
             const dv = /- Valor devido: (R\$ [\d.]+,\d{2})\n/.exec(t);
             if (dv && !lidos[k].has(lerMoeda(dv[1]))) return k + ': "Valor devido" ' + dv[1] + ' não foi lido em nenhuma cobrança';
-            if (i.regra === 'repetida') repV[k] = (repV[k] || 0) + C(i.valor);
+            if (i.regra === 'repetida') { pede[kx] = (pede[kx] || 0) + C(i.diferenca); pedeTipo[k] = (pedeTipo[k] || 0) + C(i.diferenca); if (sob[kx].net !== net[k]) nFirme2++; }
+            if (i.repetidaMin > 0) pedeTipo[k] = (pedeTipo[k] || 0) + C(i.repetidaMin);   // "pedimos ao menos o estorno da cobrança lançada em duplicidade"
             if (i.repetida) { nAbs++; if (t.indexOf(i.repetida) < 0) return k + ': o texto não cita a repetição (' + i.repetida + ')'; }
         }
-        for (const k of Object.keys(repV)) if (repV[k] > net[k]) return k + ': repetida pedida com ' + net[k] + ' líquidos de ' + repV[k] + ' cobrados (houve estorno)';
+        // Nada firme pede mais do que sobrou acima do legítimo na própria cobrança (nem, somando, no tipo).
+        for (const kx of Object.keys(pede)) if (pede[kx] > sob[kx].sobra) return kx + ': a repetida pede ' + R(pede[kx]) + ' firmes e '
+            + (sob[kx].solto ? 'há estorno que não casa com cobrança de mesmo valor (pode ter acertado as cópias)' : 'sobraram no máximo ' + R(sob[kx].sobra) + ' acima do legítimo');
+        for (const k of Object.keys(pedeTipo)) { const s = soma(Object.values(sob).filter(t => t.tipo === k).map(t => t.sobra)); if (pedeTipo[k] > s) return k + ': pede ' + R(pedeTipo[k]) + ' firmes pela repetição, sobraram ' + R(s); }
         return true;
-    }, 'estorno de outro valor: "Valor devido" sempre lido, repetida só com o líquido cobrindo as cópias, a repetição absorvida no texto (e o resto de cima)');
+    }, 'estorno de outro valor (e 2ª cobrança do mesmo tipo): "Valor devido" sempre lido, a repetida (e o "ao menos" da estimativa) nunca pede mais que a sobra da própria cobrança, a repetição absorvida no texto (e o resto de cima)');
     ok(nDuv > 20 && nAbs > 20, 'os casos gerados têm repetida que vira dúvida (' + nDuv + ') e repetida absorvida por outra regra (' + nAbs + ')');
+    ok(nFirme2 > 20 && nDuv2 > 20, 'os casos gerados têm repetida com outra cobrança do mesmo tipo no pedido: firme (' + nFirme2 + ') e dúvida (' + nDuv2 + ')');
     // Os 2 casos do relatório (07/10/2026): cancelada + "Custo por cobrar" 2× (R$ 10 cobrados) e tarifa 2× com R$ 6 no anúncio (R$ 20 cobrados).
     const cob = (o, texto, valor, id, extra) => Object.assign({ orderId: o, itemId: 'MLB1000000001', data: '2026-09-10', texto, valor, id }, extra || {});
     const a = F.conferir([cob('9000000001', 'Custo por vender', 10, '9000000001|P1|CVVML'), cob('9000000001', 'Cancelamento do Custo por vender', 10, '9000000001|P1|BVVML', { estorno: true }),
@@ -638,6 +680,34 @@ console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tar
     ok(d3.length === 1 && d3[0].regra === 'repetida' && !!d3[0].duvida && F.recuperar({ conferir: d3 }).total === 0 && /^Olá! Tenho uma dúvida/.test(t3) && /R\$ 5,00 × 3/.test(t3)
         && /estorno/.test(t3) && !/Valor devido|Diferença|Solicitamos/.test(t3) && /ficaram R\$ 12,00 cobrados/.test(d3[0].motivo),
         '"Custo por cobrar" 3× de R$ 5 e estorno de R$ 3: o que o estorno acertou não se sabe → dúvida, o texto só pergunta (antes: pedia R$ 10,00 sem citar o estorno)');
+    // Revisão 2: 2ª cobrança do mesmo tipo no pedido. O estorno de outro valor da própria repetida não some no líquido do tipo.
+    const f1 = F.conferir([cob('9000000011', 'Tarifa de envio', 20, 'F1|ENV1|CXENV'), cob('9000000011', 'Tarifa de envio', 20, 'F2|ENV1|CXENV'),
+        cob('9000000011', 'Tarifa por envio extra ou intermunicipal', 15, 'F3|ENV1|CXEXT'), cob('9000000011', 'Cancelamento da tarifa de envio', 12, 'F4|ENV1|BXENV', { estorno: true })], {});
+    const tf1 = f1.length === 1 ? F.textoChamado(f1[0]) : '';
+    ok(f1.length === 1 && f1[0].regra === 'repetida' && !!f1[0].duvida && F.recuperar({ conferir: f1 }).total === 0 && /^Olá! Tenho uma dúvida/.test(tf1) && !/Valor devido|Diferença|Solicitamos/.test(tf1)
+        && /R\$ 20,00 × 2/.test(tf1) && /ficaram R\$ 28,00 cobrados em “Tarifa de envio” no pedido/.test(f1[0].motivo),
+        'frete R$ 20 × 2 + "Tarifa por envio extra" R$ 15 + estorno de R$ 12 da tarifa de envio: dúvida, R$ 0,00 no "Dá para recuperar" e "ficaram R$ 28,00" da própria cobrança (antes: pedia R$ 20,00 firmes; sobravam R$ 8)');
+    const f2 = F.conferir([cob('9000000012', 'Custo por cobrar', 5, 'G1|PAG1|CVVPRC'), cob('9000000012', 'Custo por cobrar', 5, 'G2|PAG1|CVVPRC'),
+        cob('9000000012', 'Tarifa de processamento', 6, 'G3|PAG1|CXPROC'), cob('9000000012', 'Cancelamento do Custo por cobrar', 4, 'G4|PAG1|BVVPRC', { estorno: true })], {});
+    ok(f2.length === 1 && f2[0].regra === 'repetida' && !!f2[0].duvida && F.recuperar({ conferir: f2 }).total === 0 && /ficaram R\$ 6,00 cobrados em “Custo por cobrar”/.test(f2[0].motivo),
+        '"Custo por cobrar" R$ 5 × 2 + "Tarifa de processamento" R$ 6 (mesmo tipo) + estorno de R$ 4: dúvida com "ficaram R$ 6,00" (antes: pedia R$ 5,00; o tipo tinha R$ 12)');
+    const f3 = F.conferir([cob('9000000013', 'Custo por cobrar', 5, 'H1|PAG1|CVVPRC'), cob('9000000013', 'Custo por cobrar', 5, 'H2|PAG1|CVVPRC'),
+        cob('9000000013', 'Custo por cobrar', 6, 'H3|PAG2|CVVPRC'), cob('9000000013', 'Cancelamento do Custo por cobrar', 4, 'H4|PAG1|BVVPRC', { estorno: true })], {});
+    ok(f3.length === 1 && f3[0].regra === 'repetida' && !!f3[0].duvida && F.recuperar({ conferir: f3 }).total === 0 && /ficaram R\$ 12,00 cobrados em “Custo por cobrar”/.test(f3[0].motivo),
+        '"Custo por cobrar" R$ 5 × 2 no pagamento 1 + R$ 6 no pagamento 2 + estorno de R$ 4: dúvida (antes: pedia R$ 5,00; sobrava no máximo R$ 1)');
+    // Controle: o estorno casa (texto e valor) com a OUTRA cobrança, ou cita a outra pelo nome → a repetida continua firme.
+    const f4 = F.conferir([cob('9000000014', 'Tarifa de envio', 20, 'I1|ENV1|CXENV'), cob('9000000014', 'Tarifa de envio', 20, 'I2|ENV1|CXENV'),
+        cob('9000000014', 'Tarifa por envio extra ou intermunicipal', 15, 'I3|ENV1|CXEXT'), cob('9000000014', 'Cancelamento da Tarifa por envio extra ou intermunicipal', 15, 'I4|ENV1|BXEXT', { estorno: true })], {});
+    const f5 = F.conferir([cob('9000000015', 'Custo por cobrar', 5, 'J1|PAG1|CVVPRC'), cob('9000000015', 'Custo por cobrar', 5, 'J2|PAG1|CVVPRC'),
+        cob('9000000015', 'Tarifa de processamento', 6, 'J3|PAG1|CXPROC'), cob('9000000015', 'Cancelamento da Tarifa de processamento', 2, 'J4|PAG1|BXPROC', { estorno: true })], {});
+    ok(f4.length === 1 && !f4[0].duvida && f4[0].diferenca === 20 && /- Valor devido: R\$ 20,00\n/.test(F.textoChamado(f4[0])) && F.recuperar({ conferir: f4 }).total === 20
+        && f5.length === 1 && !f5[0].duvida && f5[0].diferenca === 5 && F.recuperar({ conferir: f5 }).total === 5,
+        'controle: estorno do frete extra (mesmo texto e valor) ou da tarifa de processamento (pelo nome): a repetida da outra cobrança continua pedindo R$ 20,00 e R$ 5,00');
+    // Estorno de um texto sem cobrança no pedido (órfão): pode ser de qualquer cobrança do tipo → dúvida, sem citar "ficaram" (não se sabe de qual).
+    const f6 = F.conferir([cob('9000000016', 'Custo por cobrar', 5, 'K1|PAG1|CVVPRC'), cob('9000000016', 'Custo por cobrar', 5, 'K2|PAG1|CVVPRC'),
+        cob('9000000016', 'Cancelamento do Custo por cobrar no Mercado Pago', 3, 'K3|PAG1|BVVPRC', { estorno: true })], {});
+    ok(f6.length === 1 && !!f6[0].duvida && F.recuperar({ conferir: f6 }).total === 0 && /mas houve estorno\. /.test(f6[0].motivo) && !/ficaram/.test(f6[0].motivo),
+        'estorno de outro valor com um nome que não casa com cobrança do pedido: dúvida, e o motivo não inventa quanto ficou');
     // A "tarifa acima" (estimativa pelo preço de hoje) ganha da repetida (fato): o texto que fica cita a cobrança em dobro e pede ao menos a cópia.
     const e1 = F.conferir([cob('9000000008', 'Custo por vender', 7.25, 'E5|9000000008|CVVML'), cob('9000000008', 'Custo por vender', 7.25, 'E6|9000000008|CVVML')],
         { MLB1000000001: { tarifa: 6, preco: 50, titulo: 'X' } });
