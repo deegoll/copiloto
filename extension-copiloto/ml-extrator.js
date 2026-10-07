@@ -5095,6 +5095,11 @@
         // Vendendo e o estoque acaba em menos de 15 dias (ou já acabou) → repor, com vendas subindo ou caindo (sem estoque, a venda cai de qualquer jeito).
         if (vendaDia > 0 && cob < L.coberturaBaixa)
             return Object.assign(out, { acao: 'repor', cor: 'vermelho', rotulo: 'Repor', motivo: (est.total > 0 ? 'Estoque de ' + unTxt(est.total) + dura : 'Sem estoque') + ' e ' + ritmo + '.' });
+        // B2: zerou as vendas do mês SEM estoque, mas vendeu no mês anterior → é ruptura (repor), não "sem estoque e sem venda" (manter).
+        const unAnt = numF(s && s.unidadesAnt);
+        if (un === 0 && est.total === 0 && unAnt > 0)
+            return Object.assign(out, { acao: 'repor', cor: 'vermelho', rotulo: 'Repor', motivo: 'Sem estoque e sem venda neste mês; no mês anterior vendeu ' + unTxt(unAnt)
+                + (est.aCaminho > 0 ? ' (' + unTxt(est.aCaminho) + ' a caminho do Full)' : '') + '.' });
         if (v !== null && v >= L.subindo && est.proprio > 0 && !(est.full > 0))
             return Object.assign(out, { acao: 'full', cor: 'azul', rotulo: 'Enviar ao Full', motivo: capF(tend) + unTxt(est.proprio) + ' no seu estoque, fora do Full.' });
         if ((v !== null && v <= L.caindo && (cob === null || cob > L.coberturaAlta) && est.total > 0) || (!(vendaDia > 0) && est.total > 0 && un !== null))
@@ -5279,9 +5284,10 @@
         const o = opc || {}, out = { repor: [], full: [], baixar: [], liquidar: [], sazonal: [], total: 0, texto: '' };
         if (!fams || !fams.lido) return out;
         (fams || []).forEach(f => {
-            (f.skus || []).filter(s => s.bruto > 0).forEach(s => {
+            // B2: o SKU que zerou as vendas do mês (vendeu no anterior) não some: sem estoque ele é ruptura (repor); com estoque fica de fora como antes.
+            (f.skus || []).filter(s => s.bruto > 0 || s.brutoAnt > 0).forEach(s => {
                 const r = SHC.recomendaSku(s, SHC.estoqueSku(s, itens, full), fams.diasCobertos);
-                if (out[r.acao]) out[r.acao].push({ familia: f.familia, sku: s.sku, titulo: s.titulo, itemId: (s.itemIds || [])[0] || '', motivo: r.motivo });
+                if (out[r.acao] && (s.bruto > 0 || r.acao === 'repor')) out[r.acao].push({ familia: f.familia, sku: s.sku, titulo: s.titulo, itemId: (s.itemIds || [])[0] || '', motivo: r.motivo });
             });
             (f.parados || []).forEach(p => out.liquidar.push({ familia: f.familia, sku: p.sku, titulo: p.titulo, itemId: p.itemId, motivo: SHC.recomendaParado(p).motivo }));
             const sz = SHC.sazonalCompra(f, { hoje: o.hoje });
