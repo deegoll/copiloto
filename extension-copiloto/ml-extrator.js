@@ -1421,13 +1421,16 @@
     // [motivo do comprador, a regra do ML, o que o seller confere antes de enviar (o Copiloto não tem como saber)].
     // Auditoria da loja (07/10/2026): erro na COMPRA ("comprei por engano", "comprei errado", "engano na compra") é arrependimento, não
     // "reclamação aberta por engano"; a do transporte exige demora/atraso explícitos (só "Correios" no motivo não basta).
+    // Rastreio 07/10/2026 (bloqueio 4): "não serviu" sozinho saiu da troca — em autopeças é quase sempre o veículo incompatível, que é do
+    // anúncio (a regra oficial veta). As regras rodam no texto sem acento e sem pontuação (SHC.motivoExcluivel normaliza antes).
     const EXCLUIVEL = [
-        [/arrepend|desist|n[ãa]o (quer|quero) mais|mudou de ideia|compr(ei|ou|a)( \S+){0,3} (por engano|errad)|engano (na|da) compra/i, 'o comprador se arrependeu da compra e o produto está em perfeitas condições', 'o produto voltou sem uso e em perfeitas condições'],
+        [/arrepend|desist|n[ãa]o (quer|quero) mais|mud(ou|ei|amos) de id[ée]ia|(compr(ei|ou|a)|escolh(i|eu)|selecion(ei|ou)|pedi(u)?)( \S+){0,3} (por engano|errad)|engano (na|da) compra/i, 'o comprador se arrependeu da compra e o produto está em perfeitas condições', 'o produto voltou sem uso e em perfeitas condições'],
         [/\bengano\b/i, 'o comprador iniciou a reclamação por engano', 'a conversa mostra que a reclamação foi aberta por engano'],
         [/n[ãa]o reconhe[cç]/i, 'o comprador não reconhece a compra', 'o pedido foi entregue no endereço da compra'],
         [/(aparece|consta|marcad[oa]) como entregue/i, 'o comprador não recebeu o produto, mas o envio aparece como entregue', 'o rastreio mostra a entrega'],
         [/^(?=.*(demor|atras))(?=.*(entreg|cheg|correio|transport|mercado envios))/i, 'a reclamação foi aberta pela demora do transporte, com o envio dentro do prazo estabelecido', 'você despachou dentro do prazo'],
-        [/trocar? (de |o |por outro )?(tamanho|modelo|numera)|tamanho errado|n[ãa]o serviu/i, 'o comprador quer trocar por outro tamanho ou modelo (autopeças, vestuário, bolsas e calçados)', 'o anúncio é de autopeças, vestuário, bolsas ou calçados'],
+        [/trocar? (de |o |a |por outr[oa] )?(tamanho|modelo|numera)|tamanho errado/i, 'o comprador quer trocar por outro tamanho ou modelo (autopeças, vestuário, bolsas e calçados)',
+            'o anúncio é de autopeças, vestuário, bolsas ou calçados e a troca é escolha do comprador (não medida, tabela ou compatibilidade errada no anúncio)'],
         [/meio de contato|s[óo] queria (falar|perguntar)|d[úu]vida sobre/i, 'o comprador usou a reclamação como meio de contato', 'a reclamação só trazia uma pergunta'],
     ];
     // Revisão 07/10/2026: "Me arrependi porque veio com defeito" ou "o vendedor não postou nos Correios" casavam com a 1ª regra parecida.
@@ -1435,21 +1438,55 @@
     // transporte; estoque) VETA antes de qualquer regra. "Não chegou" só entra quando o rastreio diz entregue.
     // 2ª revisão: despacho demorado ("demorou para postar") e mensagem sem resposta também são do vendedor; o engano do vendedor ("enviou por
     // engano", "engano no envio") veta, o do comprador ("foi engano", "engano na compra") não; "não foi usado"/"sem uso" é estado bom, não "usado".
-    const EXCL_VETO = new RegExp(['n[ãa]o (despach|envi|post|mand)', 'enviad[oa] (por engano|errad)', 'envi(ou|aram) (por engano|errad|outr)', 'mand(ou|aram) (por engano|outr[oa]|errad)',
+    const NAO = '\\b(?:n[ãa]o|naum|num|n)';   // "não", "nao", "naum", "num", "ñ" (sem acento vira "n")
+    const EXCL_VETO = new RegExp([NAO + ' (despach|envi|post|mand)', 'enviad[oa] (por engano|errad)', 'envi(ou|aram) (por engano|errad|outr)', 'mand(ou|aram) (por engano|outr[oa]|errad)',
         'veio (outr[oa]|errad)', 'engano (no|do|de) (envio|despacho|separa|vendedor)', 'demor\\w*( \\S+){0,2} (para|pra|a|em) (despach|post|envi|mand|sair|respond)', 'atras\\w* n[oa] (despach|postag)',
-        'n[ãa]o (me )?respond', 'sem resposta', 'estoque', '\\bquebr', 'danific', 'avari', 'amassad', 'extravi', 'r[ée]plica', 'pirat',
+        NAO + ' (me )?respond', 'sem resposta', 'estoque', '\\bquebr', 'danific', 'avari', 'amassad', 'extravi', 'r[ée]plica', 'pirat',
         // auditoria da loja: produto que não funcionou, item faltando na caixa, postagem atrasada, falsificado, manchado, pacote violado/aberto, não entregue
-        'n[ãa]o funcion', 'sem (o|a|os|as) (manual|caixa|acess\\w*|pe[çc]as?|cabo|carregador|nota|etiqueta)', 'post\\w* (com atraso|tarde|atrasad)', 'vendedor (demor|atras)',
-        'falsific', 'manchad', 'violad', '(chegou|veio|caixa|pacote|embalagem) (\\S+ )?abert', 'n[ãa]o entreg'].join('|'), 'i');
+        NAO + ' funcion', 'sem (o|a|os|as) (manual|caixa|acess\\w*|pe[çc]as?|cabo|carregador|nota|etiqueta)', 'post\\w* (com atraso|tarde|atrasad)', 'vendedor (demor|atras)',
+        'falsific', 'manchad', 'violad', '(chegou|veio|caixa|pacote|embalagem) (\\S+ )?abert', NAO + ' entreg',
+        // rastreio 07/10: o que chegou não é o que foi comprado ("comprei mas chegou errado", "recebi o modelo trocado", "recebi por engano outro")
+        '(veio|vieram|chegou|chegaram|recebi|recebeu|recebemos|mand(ou|aram)|envi(ou|aram)|entreg(ou|aram))( \\w+){0,3} (outr[oa]s?|errad|trocad|diferent)'].join('|'), 'i');
+    // Rastreio 07/10/2026 (bloqueio 4): culpas do vendedor escritas de outro jeito passavam ("desisti, veio trincado", "despachou com atraso",
+    // "não serviu no meu carro"). Trava por palavra, com e sem acento e gíria; na dúvida, NÃO é excluível. Roda no texto sem o erro do comprador.
+    const EXCL_CULPA = new RegExp([
+        // estado do produto
+        'trinc', 'rach(ad|ou|a\\b)', 'lascad', 'risc(ad|ou|os?\\b)', 'arranh', 'amass', 'estrag', 'pif(ou|ad)', 'queim(ou|ad)', 'derret', 'rasg', 'furad', '\\bfuros?\\b',
+        'descasc', 'descol', 'desbot', 'manch', 'mof(o|ad)', 'bolor', 'molhad', '\\bumid(o|a|os|as|ade)\\b', 'encharc', 'vaz(and|ament|ou|ad|a\\b)', 'cheir', 'fedo', '\\bfede(\\b|nd)', '\\bodor',
+        '\\bsuj(o|a|os|as|eira)\\b', 'encardid', 'enferruj', 'ferrug', 'oxid', 'podre', 'bichad', 'validade', 'deformad', 'empenad', '\\btort[oa]s?\\b', 'zoad', 'zuad', 'detonad',
+        'qualidade', 'porcaria', '\\blixo\\b', 'vagabund', 'fajut', 'xing ?ling', 'paragua', 'mal feit', 'fragil|frageis', 'imitac', 'generic', NAO + ' original', 'recondicion', 'remanufat',
+        'seminov', 'mostruario', 'lacre', '\\bvazi[oa]s?\\b', 'para(ou|do) de', 'deu (pau|problema|defeito|ruim)', '(com|tem|deu|apresent\\w*) problema', 'falh(a|ou|and)', 'barulh', 'ruido',
+        'chiad', 'zumbid', 'superaquec', 'trav(ou|and)',
+        NAO + ' (liga|ligou|acend|carreg|encaix|serv|cab(e|ia)|coub|ved|gel|esquent|aquec|conect|pare|le\\b|ler\\b|toc(a|ou)\\b|fech(a|ou)\\b|abr(e|iu)\\b|segur|aguent|prest|deu certo|bat(e|em)\\b|condiz|correspond|confere\\b)',
+        NAO + ' (e|eh|era) (o|a|os|as) (que|mesm)',
+        // diferente do anúncio, da foto ou do comprado
+        'an[úu]nci', '\\bfotos?\\b', 'descrit', 'propaganda', 'engan(ava|ou|aram|os[oa]s?|acao)', 'nada a ver', 'tabela', 'trocad',
+        '(cor|modelo|tamanho|voltagem|tensao|marca|numeracao|tecido|material|sabor|versao|tipo|medidas?) (e |eh |era |esta |ta |veio |vieram |ficou |totalmente |completamente |bem |muito )?(outr[oa]|errad|trocad|diferent)',
+        'compr(ei|ou|amos)( \\w+){1,3} (e|mas) (veio|vieram|chegou|chegaram|recebi|recebeu|mandaram|mandou|enviaram|enviou)',
+        '(veio|vieram|chegou|chegaram|recebi|mandaram|enviaram)( \\w+){0,2} (azul|vermelh|pret[oa]|branc|verde|amarel|rosa|cinza|marrom|bege|rox[oa]|laranja|dourad|pratead)',
+        'reconhe\\w*( \\w+){0,3} (produto|item|peca|mercadoria|marca|embalagem|chegou|veio|recebi)',
+        'engano (no|do|de|na|da) (envio|despacho|separa|vendedor|cor|modelo|tamanho|produto|item|peca|voltagem|quantidade|entrega)',
+        'menos (unidades|pecas|itens|produtos)', 'quantidade (menor|errad|diferent)', '(so|somente|apenas) (veio|vieram|mandaram|mandou|enviaram|enviou|recebi) (um|uma|1|2|3|metade|parte|a caixa|o manual|a capa)\\b',
+        '(veio|chegou|recebi|recebemos) sem', 'nota fiscal|\\bnfe?\\b|sem nota', 'sem garantia|' + NAO + ' (tem|tinha|veio com|deram|da|dao|cobre) garantia|garantia (negada|recusada)',
+        // autopeças: veículo incompatível é do anúncio (a compatibilidade é do vendedor)
+        'carro', 'veicul', '\\bmotos?\\b', 'motocicleta', 'caminh(ao|oes|onete)', 'onibus', 'trator', 'automovel', 'compat', 'aplicac',
+        // vendedor e despacho (demora do vendedor não é demora do transporte)
+        'vendedor', 'lojista', 'cancel(ou|aram)\\b', 'ignor(ou|aram)', NAO + ' (me )?(atend|retorn|ajud)', 'ningu[eé]m (me )?(respond|atend|retorn)', 'sumiu',
+        '(despach|post|envi|mand|separ|fatur|emit)\\w*( \\w+){0,3} (com atraso|atrasad|tarde|depois do prazo|fora do prazo|apos o prazo|em atraso|com demora|so depois|dias depois)',
+        '(atras|demor)\\w*( \\w+){0,3} (despach|post|envi|mand|separ|fatur|emit|colet|sair)', NAO + ' foi (despach|post|envi|mand|separ|colet|fatur)',
+        'ainda ' + NAO + ' (saiu|foi|despach|post|envi)', '(so|somente|apenas) (despach|post|envi|mand)', 'sem (rastr|codigo)'].join('|'), 'i');
     const BOM_ESTADO = /(n[ãa]o (foi |era |est[áa] |esta )?|nunca (foi )?|nem )usad[oa]s?|sem uso/gi;
     // O erro do PRÓPRIO comprador sai do texto antes de procurar culpa do vendedor (antes ele anulava o veto inteiro: "comprei errado e veio
-    // com defeito" pedia exclusão). Trecho curto: o verbo e o erro com até 3 palavras entre eles.
-    const TRECHO_COMPRADOR = /\b(compr(ei|ou|a)|escolh(i|eu)|selecion(ei|ou)|pedi(u)?)\b(\s+\S+){0,3}?\s+(errad[oa]s?|por engano)/gi;
+    // com defeito" pedia exclusão). Trecho curto: o verbo e o erro com até 3 palavras entre eles — nenhuma delas de recebimento ("comprei mas
+    // chegou errado" é culpa do vendedor, não do comprador).
+    const TRECHO_COMPRADOR = /\b(compr(ei|ou|a)|escolh(i|eu)|selecion(ei|ou)|pedi(u)?)\b(\s+(?!(chegou|chegaram|veio|vieram|recebi|recebeu|mand\w*|envi\w*|entreg\w*|mas|porem|so|e)\b)\S+){0,3}?\s+(errad[oa]s?|por engano)/gi;
     const semComprador = t => String(t || '').replace(BOM_ESTADO, ' ').replace(TRECHO_COMPRADOR, ' ');
+    // Sem acento, sem pontuação e minúsculo: "Não", "nao" e "ñ" caem nas mesmas regras.
+    const semAcento = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
     const excluivel = t => {
-        const s = String(t || '');
-        if (DEV_CULPA.test(semComprador(s)) || EXCL_VETO.test(s)) return null;
-        if (/n[ãa]o (chegou|recebi|recebeu|foi entregue)/i.test(s) && !EXCLUIVEL[3][0].test(s)) return null;
+        const s = semAcento(t), sc = semComprador(s);
+        if (DEV_CULPA.test(sc) || EXCL_CULPA.test(sc) || EXCL_VETO.test(s)) return null;
+        if (new RegExp(NAO + ' (chegou|recebi|recebeu|foi entregue)', 'i').test(s) && !EXCLUIVEL[3][0].test(s)) return null;
         return EXCLUIVEL.find(([re]) => re.test(s)) || null;
     };
     /** Motivo do comprador → a regra de exclusão do ML em que ele se encaixa ('' = não é excluível: corrija a causa). */

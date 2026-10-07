@@ -146,6 +146,54 @@ console.log('Exclusão de reclamação e experiência de compra: só o que as re
     ok(!/respondidas|resolvidas/.test(ex), 'o pedido de exclusão não afirma o que o Copiloto não sabe ("já respondidas/resolvidas")');
 }
 
+console.log('Exclusão (rastreio 07/10, bloqueio 4): culpa do vendedor escrita de outro jeito nunca é excluível');
+{
+    const vazou = l => l.filter(m => SHC.motivoExcluivel(m));
+    const travou = l => l.filter(m => !SHC.motivoExcluivel(m));
+    // Autopeças: veículo incompatível é do anúncio (a regra oficial veta); "não serviu" sozinho não diz que é troca de tamanho.
+    const veiculo = ['Não serviu no meu carro', 'Nao serviu no meu carro', 'nao serve no meu veiculo', 'A peça não serve no meu veículo', 'Não é compatível com o meu carro',
+        'Incompatível com meu veículo', 'nao encaixou na moto', 'Quero trocar o modelo, não serviu no meu carro', 'Não serviu', 'num serviu no carro', 'ñ serviu na minha moto',
+        'O anúncio dizia que era compatível e não serviu', 'Não serviu, a compatibilidade do anúncio está errada'];
+    const v1 = vazou(veiculo);
+    ok(!v1.length, 'autopeças: veículo incompatível (e "não serviu" sozinho) não é excluível' + (v1.length ? ': ' + v1.join(' | ') : ''));
+    // Despacho atrasado é do vendedor, não demora do transporte.
+    const despacho = ['Despachou com atraso', 'Vendedor despachou com atraso', 'despachou atrasado, chegou tarde', 'Enviou atrasado e chegou depois do prazo', 'Atraso no envio e na entrega',
+        'Produto chegou atrasado porque o vendedor despachou depois do prazo', 'demoraram pra postar e chegou atrasado', 'So postaram depois de 5 dias, chegou atrasado',
+        'Não foi postado no prazo, chegou atrasado', 'Chegou atrasado pq nao foi despachado', 'Atrasaram o envio', 'Mandaram tarde, atrasou a entrega', 'Enviaram fora do prazo, chegou atrasado',
+        'Ainda não saiu, está atrasado', 'Atrasou a entrega porque o vendedor demorou', 'Não quero mais, demorou demais para chegar porque não foi postado'];
+    const v2 = vazou(despacho);
+    ok(!v2.length, '"despachou com atraso" e variações: não é demora do transporte' + (v2.length ? ': ' + v2.join(' | ') : ''));
+    // Produto com defeito ou estragado não é arrependimento (com e sem acento, gíria).
+    const estado = ['Desisti, veio trincado', 'desisti veio trincado', 'Me arrependi, veio riscado', 'Desisti, o produto veio vazando', 'Me arrependi, veio com cheiro forte',
+        'Desisti porque chegou molhado', 'Desisti, enferrujado', 'Mudei de ideia, o produto estava sujo', 'Mudou de ideia, o produto estava sujo', 'Me arrependi, produto de má qualidade',
+        'me arrependi, produto de ma qualidade', 'Desisti, veio todo zoado', 'Me arrependi, uma porcaria', 'Desisti, nao liga', 'Me arrependi, ñ funciona', 'Desisti, pifou no primeiro dia',
+        'Me arrependi, veio rachado', 'Desisti, veio amassado', 'Desisti, a caixa veio vazia', 'Desisti, deu defeito', 'arrependi, veio estragado', 'Desisti, veio arranhado',
+        'Desisti, veio com mofo', 'Desisti, nao carrega', 'Me arrependi, faz barulho', 'Me arrependi, veio usado', 'Me arrependi, não é original', 'desisti, xing ling', 'Desisti, veio torto'];
+    const v3 = vazou(estado);
+    ok(!v3.length, '"desisti, veio trincado" e variações: defeito ou estado ruim não é arrependimento' + (v3.length ? ': ' + v3.join(' | ') : ''));
+    // Diferente do anúncio, da foto ou do comprado; vendedor, nota e garantia.
+    const outro = ['Comprei mas chegou errado', 'Comprei um e recebi errado', 'Comprei e recebi o modelo trocado', 'Engano: veio a cor trocada', 'Desisti, a cor é outra',
+        'Desisti, veio menor que o anunciado', 'Desisti, não é o da foto', 'Me arrependi, a foto do anúncio enganava', 'As medidas do anúncio não batem', 'Tamanho não corresponde à tabela de medidas',
+        'Não reconheço o produto que chegou', 'Recebi por engano outro produto', 'Engano na cor enviada', 'nada a ver com a foto, desisti', 'Desisti, não é o que eu pedi',
+        'Me arrependi, propaganda enganosa', 'Comprei azul e veio vermelho, desisti', 'Desisti, a voltagem veio errada', 'Desisti: o vendedor cancelou', 'Desisti porque a nota fiscal não veio',
+        'Me arrependi, veio sem garantia', 'Desisti, o vendedor sumiu', 'Desisti, ninguém me respondeu', 'Desisti, só veio 1 de 2', 'O vendedor se enganou', 'Aparece como entregue mas veio vazio'];
+    const v4 = vazou(outro);
+    ok(!v4.length, 'produto diferente do anúncio/da foto, chegou errado, vendedor, nota e garantia: não é excluível' + (v4.length ? ': ' + v4.join(' | ') : ''));
+    // Os legítimos continuam: arrependimento puro, erro do comprador na compra, demora do transporte sem culpa do vendedor, troca escolhida.
+    const legit = ['Me arrependi da compra', 'me arrependi', 'Desisti da compra', 'Não quero mais', 'nao quero mais o produto', 'Mudei de ideia', 'mudei de idéia',
+        'Recebi o produto, mas não quero mais', 'Comprei por engano', 'comprei errado', 'Escolhi o tamanho errado', 'Pedi a cor errada', 'Engano na compra', 'Foi engano',
+        'Abri a reclamação por engano', 'Chegou atrasado', 'Demora dos Correios', 'Atraso na entrega', 'Entrega atrasada', 'Demorou para chegar', 'Os Correios atrasaram a entrega',
+        'O produto foi enviado no prazo mas chegou atrasado', 'Quero trocar de tamanho', 'Comprei o tamanho errado, quero trocar', 'Trocar por outro modelo', 'Não reconheço esta compra',
+        'nao reconheco essa compra', 'Consta como entregue mas não recebi', 'Só queria perguntar sobre a garantia', 'Me arrependi, o produto não foi usado',
+        'Desisti, comprei outro modelo em outra loja', 'Desisti, achei mais barato em outra loja'];
+    const t1 = travou(legit);
+    ok(!t1.length, 'continuam excluíveis: arrependimento puro, erro do comprador, demora do transporte, troca escolhida' + (t1.length ? ': ' + t1.join(' | ') : ''));
+    ok(/escolha do comprador/.test(SHC.confereExclusao('Quero trocar de tamanho')) && /compatibilidade/.test(SHC.confereExclusao('Quero trocar de tamanho')),
+        'troca de tamanho/modelo: o seller confere que foi escolha do comprador, não medida, tabela ou compatibilidade errada no anúncio');
+    ok(SHC.chamadoExclusao({ motivo: 'Desisti, veio trincado', casos: 2, naReputacao: 2, pedidos: ['2000000951'] }) === ''
+        && SHC.chamadoExclusao({ motivo: 'Vendedor despachou com atraso', casos: 1, naReputacao: 1 }) === '', 'com culpa do vendedor no motivo, nenhum texto de exclusão sai');
+}
+
 console.log('Caso incerto: pede a conferência, nunca afirma cobrança indevida');
 {
     const dv = SHC.devolucoesContestar([{ pedido: '2000000999', itemId: 'MLB1', data: '2026-09-10', valor: 23.9, linhas: [{ v: 23.9 }] }], null, false).itens[0];
