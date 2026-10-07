@@ -1962,11 +1962,15 @@
      * Lucro depois do Ads de UM anúncio (a mesma conta em ads.html e no painel): sobra antes do Ads = margem antes do Ads (% do preço de hoje,
      * SHC.sobraAnuncio) × receita do Ads; depois = antes − gasto, em centavos; acima = gastou e o lucro ficou negativo (= ACOS acima da margem,
      * decidido no centavo: Ads = sobra não passa; gasto sem venda passa). Sem margem (sem custo) → null.
+     * #26: receita pode ser a lista das linhas do anúncio (o fundo grava uma por anúncio e campanha): [{receita, gasto}]. A sobra de cada
+     * linha no centavo, somada; o gasto é a soma das campanhas. A venda que o ML atribui a uma campanha em que o anúncio gastou R$ 0 entra.
      */
     SHC.adsLucro = function (margem, receita, gasto) {
         if (margem === null || margem === undefined || !isFinite(margem)) return null;
-        const g = SHC.r2(SHC.num(gasto) || 0), antes = SHC.r2((SHC.num(receita) || 0) * margem / 100), depois = SHC.r2(antes - g);
-        return { antes, depois, acima: g > 0 && depois < 0 };
+        const ls = Array.isArray(receita) ? receita : [{ receita, gasto }];
+        const antes = SHC.r2(ls.reduce((t, l) => t + SHC.r2((SHC.num(l && l.receita) || 0) * margem / 100), 0));
+        const g = SHC.r2(ls.reduce((t, l) => t + SHC.r2(SHC.num(l && l.gasto) || 0), 0)), depois = SHC.r2(antes - g);
+        return { antes, gasto: g, depois, acima: g > 0 && depois < 0 };
     };
     const listaResultados = j => (j && Array.isArray(j.results)) ? j.results : [];
     // F21: sem paging.total → null (quem lê segue até vir uma página menor que o limite). Antes devolvia o nº lido: 50 de 120 virava "completo".
@@ -2657,7 +2661,8 @@
      * Full (produto com alerta): previsão de 30 dias = SHC.previsaoFull, a MESMA do painel (30 dias, ano passado, índice sazonal, parado).
      *   Alerta = acaba em ≤ 7 dias (ML ou ⌊aptas × 30 ÷ previsão⌋; sem estoque e com previsão = acabou) ou aptas + a caminho abaixo do
      *   mínimo em unidades do SKU (SHC.fullMinimo; sem mínimo definido não há "abaixo do mínimo").
-     * Ads (acima do equilíbrio): gasto > sobra por unidade antes do Ads × vendas do Ads. Sem custo do produto não alerta.
+     * Ads (acima do equilíbrio): lucro do anúncio depois do Ads < 0 no centavo (SHC.adsLucro: margem × receita do Ads, as campanhas do anúncio
+     *   somadas, como o cartão Alertas do painel, P.adsEquilibrio, e ads.html). Sem custo do produto não alerta.
      */
     SHC.alertasDe = function (dados) {
         dados = dados || {};
@@ -2695,20 +2700,25 @@
                 titulo: p.titulo || '', texto, dias, aptas: tem, aCaminho: cam, vendas30: v30, minUn: fm.minUn, abaixoMin: fm.abaixo, faltam: fm.faltam, sugerido: fm.sugerido });
         });
         const porId = new Map((dados.itens || []).filter(i => i && i.itemId).map(i => [String(i.itemId), i]));
-        ((dados.ads && dados.ads.anuncios) || []).forEach(a => {
-            if (!a || !(a.custo > 0)) return;
-            const it = porId.get(a.itemId);
-            if (!it) return;
+        // #26: o anúncio em várias campanhas (uma linha por anúncio e campanha) é UM aviso, com as campanhas somadas (como o painel).
+        const doAnuncio = new Map();
+        ((dados.ads && dados.ads.anuncios) || []).forEach(a => { if (a && a.itemId && porId.has(a.itemId)) (doAnuncio.get(a.itemId) || doAnuncio.set(a.itemId, []).get(a.itemId)).push(a); });
+        doAnuncio.forEach((ls, id) => {
+            const gasto = SHC.r2(ls.reduce((t, a) => t + (SHC.num(a.custo) || 0), 0));
+            if (!(gasto > 0)) return;
+            const it = porId.get(id);
             const c = SHC.custoDeAnuncio ? SHC.custoDeAnuncio(custos, { sku: it.sku, skus: it.skus, skuFonte: it.skuFonte, itemId: it.itemId, familia: it.familia }) : null;
             const eq = SHC.adsEquilibrio(it, c && c.dados, cfg);
             if (!eq) return;
-            // #26: SHC.adsLucro (margem × receita do Ads, no centavo), a mesma conta do cartão Alertas (P.adsEquilibrio) e de ads.html.
-            const l = SHC.adsLucro(eq.equilibrio, a.receita, a.custo), antes = l.antes;
+            // SHC.adsLucro (margem × receita do Ads, no centavo), a mesma conta do cartão Alertas (P.adsEquilibrio) e de ads.html.
+            const l = SHC.adsLucro(eq.equilibrio, ls.map(a => ({ receita: a.receita, gasto: a.custo }))), antes = l.antes;
             if (!l.acima) return;
-            lista.push({ tipo: 'ads', nivel: 'critico', chave: 'ads|' + a.itemId, itemId: a.itemId, sku: it.sku || '', titulo: a.titulo || it.titulo || '',
-                texto: eq.equilibrio <= 0 ? 'Este anúncio já dá prejuízo antes do Ads e ainda gastou ' + SHC.moeda(a.custo) + ' em Ads.'
-                    : 'O Ads gastou ' + SHC.moeda(a.custo) + ' e a sobra dessas vendas antes do Ads era ' + SHC.moeda(antes) + ' (margem de ' + SHC.pctTxt(eq.equilibrio) + ').',
-                gasto: a.custo, receita: a.receita, vendas: a.vendas, acos: a.acos, equilibrio: eq.equilibrio, excesso: SHC.r2(a.custo - antes), campanhaId: a.campanhaId });
+            const receita = SHC.r2(ls.reduce((t, a) => t + (SHC.num(a.receita) || 0), 0)), maior = ls.reduce((m, a) => ((SHC.num(a.custo) || 0) > (SHC.num(m.custo) || 0) ? a : m), ls[0]);
+            lista.push({ tipo: 'ads', nivel: 'critico', chave: 'ads|' + id, itemId: id, sku: it.sku || '', titulo: ls[0].titulo || it.titulo || '',
+                texto: eq.equilibrio <= 0 ? 'Este anúncio já dá prejuízo antes do Ads e ainda gastou ' + SHC.moeda(gasto) + ' em Ads.'
+                    : 'O Ads gastou ' + SHC.moeda(gasto) + ' e a sobra dessas vendas antes do Ads era ' + SHC.moeda(antes) + ' (margem de ' + SHC.pctTxt(eq.equilibrio) + ').',
+                gasto, receita, vendas: ls.reduce((t, a) => t + (SHC.num(a.vendas) || 0), 0), acos: receita > 0 ? gasto / receita * 100 : null,
+                equilibrio: eq.equilibrio, excesso: SHC.r2(gasto - antes), campanhaId: maior.campanhaId });
         });
         const dd = x => (typeof x.dias === 'number' ? x.dias : 99), ordem = { conta: 0, full: 1, ads: 2 };
         const daConta = SHC.alertasConta(dados.conta);   // restrição fiscal / penalidade do Full: travam a conta inteira → primeiro

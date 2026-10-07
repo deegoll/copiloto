@@ -28,11 +28,12 @@
 //   5) [corrigida, #25] ACOS/ROAS arredondados duas vezes: o fundo gravava r2(custo ÷ receita × 100) e r2(receita ÷ custo) e a tabela por SKU
 //      e o painel calculavam de novo → "43,2%" × "43,1%"; ROAS 201 ÷ 200 = "1,01x" × "1x". Agora o fundo grava cru, ads.html calcula da base
 //      (o do ML só sem a base) e o texto arredonda uma vez só (SHC.pctTxt; ROAS com SHC.r2, como o painel).
-//   6) [corrigida em parte, #26] Lucro depois do Ads do MESMO anúncio diferia entre ads.html (margem % × receita do Ads) e o painel (sobra de
+//   6) [corrigida, #26] Lucro depois do Ads do MESMO anúncio diferia entre ads.html (margem % × receita do Ads) e o painel (sobra de
 //      hoje × unidades): vendido abaixo do preço de hoje → "Prejuízo R$ 3,00" × "Lucro R$ 3,00". Agora as duas telas usam SHC.adsLucro (margem ×
-//      receita, por anúncio, no centavo). Fica de fora: a venda atribuída a um anúncio com gasto R$ 0 (outra campanha) entra só em ads.html
-//      (o painel lista só anúncio com gasto) → "Lucro R$ 50,00" × "Prejuízo R$ 10,00". O aviso do fundo (SHC.alertasDe: ícone e sino) também
-//      usa SHC.adsLucro e conta o mesmo anúncio que o cartão Alertas do painel (antes: sobra de hoje × unidades, discordava nos dois sentidos).
+//      receita, por anúncio, no centavo). O aviso do fundo (SHC.alertasDe: ícone e sino) também usa SHC.adsLucro e conta o mesmo anúncio que o
+//      cartão Alertas do painel (antes: sobra de hoje × unidades, discordava nos dois sentidos). Revisão 2: o anúncio em várias campanhas (também
+//      numa em que gastou R$ 0 e o ML atribuiu venda) é UMA entrada no painel e um aviso no ícone, com as campanhas somadas, como ads.html e o
+//      cartão do anúncio (antes "Lucro R$ 50,00" × "Prejuízo R$ 10,00"); "dá para investir mais" olha só o que foi pago.
 //   7) [corrigida, #27] Sem o resumo do ML (falha da chamada campaigns/metrics): ads.html somava as campanhas e o painel os anúncios lidos →
 //      R$ 100,00 × R$ 60,00 com a lista de anúncios em parte, e a linha "Total" do painel ≠ soma das linhas. Agora o painel soma as campanhas
 //      (P.adsConta) e a linha Total é a soma das linhas (P.adsCampanhasTotal).
@@ -454,11 +455,13 @@ console.log('G. Painel lateral (aba Ads) e o cruzamento com ads.html');
         const solto = c.ads.filter(a => a.catalogo === 'solto').reduce((t, a) => t + a.costC, 0), lig = c.ads.filter(a => a.catalogo === 'ligado').length;
         return (emCentavos(c.snapP.catalogoSemLigacao) && cent(c.snapP.catalogoSemLigacao) === solto && c.snapP.catalogoLigados === lig) || `conta ${c.k}: ${c.snapP.catalogoSemLigacao}`;
     });
-    prop('P.adsEquilibrio: sobra antes do Ads = margem (sobra de 1 un. ÷ preço) × receita do Ads (±½ centavo, #26), depois = antes − Ads (no centavo), acima ⇔ depois < 0 ⇔ ACOS acima do equilíbrio; sem custo = null', contas.flatMap(c => c.lista.map(x => ({ c, x }))), ({ c, x }) => {
+    prop('P.adsEquilibrio: sobra antes do Ads = margem (sobra de 1 un. ÷ preço) × receita do Ads (±½ centavo por campanha, #26), depois = antes − Ads (no centavo), acima ⇔ depois < 0 ⇔ ACOS acima do equilíbrio; sem custo = null', contas.flatMap(c => c.lista.map(x => ({ c, x }))), ({ c, x }) => {
         if (x.semCusto) return (x.antes === null && x.depois === null && x.margem === null && x.acima === false) || `conta ${c.k} ${x.a.itemId}: sem custo com número`;
-        const s = c.sobraDe(x.it), exata = cent(x.a.receita) * s.sobra / x.it.preco;   // centavos, sem arredondar
-        return (emCentavos(x.antes) && emCentavos(x.depois) && Math.abs(cent(x.antes) - exata) <= 0.5 + 1e-6 && cent(x.depois) === cent(x.antes) - cent(x.a.gasto)
-            && x.acima === (cent(x.depois) < 0) && (cent(x.depois) === 0 || x.acima === (x.acos === null || x.acos > x.margem))
+        const s = c.sobraDe(x.it), exata = cent(x.a.receita) * s.sobra / x.it.preco, nr = x.linhas.filter(y => y.a.receita > 0).length;   // centavos, sem arredondar
+        const ex = cent(x.antes) - exata;   // erro de arredondar a sobra de cada campanha
+        return (emCentavos(x.antes) && emCentavos(x.depois) && Math.abs(ex) <= 0.5 * Math.max(1, nr) + 1e-6 && cent(x.depois) === cent(x.antes) - cent(x.a.gasto)
+            && x.acima === (cent(x.depois) < 0) && (cent(x.depois) === 0 || nr > 1 || x.acima === (x.acos === null || x.acos > x.margem))
+            && cent(x.a.gasto) === x.linhas.reduce((t, y) => t + cent(y.a.gasto), 0) && cent(x.a.receita) === x.linhas.reduce((t, y) => t + cent(y.a.receita), 0)
             && (x.a.receita > 0 ? Math.abs(x.acos - x.a.gasto / x.a.receita * 100) < 1e-9 : x.acos === null)) || `conta ${c.k} ${x.a.itemId}: ${JSON.stringify([x.antes, x.depois, x.acima, x.acos, x.margem])}`;
     });
     prop('"Por produto" do painel: Σ gasto dos anúncios + catálogo sem ligação = investimento da conta = Σ SKUs de ads.html', contas, c => {
@@ -485,14 +488,14 @@ console.log('G. Painel lateral (aba Ads) e o cruzamento com ads.html');
         const cada = rows.every(r => { const x = c.porCamp.get(Number(r.id)); return cent(r.m.gasto) === x.costC && cent(r.m.receita) === x.recC && r.m.vendas === x.v; });
         return (cada && soma === cent(c.contaP.gasto) && somaR === cent(c.contaP.receita)) || `conta ${c.k}: Σ ${reais(soma)} × total ${SHC.moeda(c.contaP.gasto)}`;
     });
-    prop('P.adsVereditoDe (conta e campanha): "Compensa" ⇔ Ads < sobra antes do Ads dos anúncios com custo (lucro > 0); equilíbrio = Σ sobra ÷ Σ receita', contas.flatMap(c => [{ c, xs: c.lista, g: c.contaP.gasto }].concat(c.campsP.map(r => ({ c, xs: c.lista.filter(x => x.a.campanhaId === r.id), g: r.m.gasto, v: r.veredito })))), ({ c, xs, g, v }) => {
-        const ver = v || P.adsVereditoDe(xs, g), com = xs.filter(x => !x.semCusto);
+    prop('P.adsVereditoDe (conta e campanha): "Compensa" ⇔ Ads < sobra antes do Ads dos anúncios com custo (lucro > 0); equilíbrio = Σ sobra ÷ Σ receita', contas.flatMap(c => [{ c, xs: c.lista, g: c.contaP.gasto }].concat(c.campsP.map(r => ({ c, xs: P.adsLinhas(c.lista).filter(x => x.a.campanhaId === r.id), g: r.m.gasto, v: r.veredito })))), ({ c, xs, g, v }) => {
+        const ver = v || P.adsVereditoDe(xs, g), com = xs.filter(x => !x.semCusto), semC = xs.filter(x => x.semCusto && x.a.gasto > 0).length;
         if (!(g > 0)) return ver.tipo === 'semGasto' || ver.tipo;
-        if (!com.length) return (ver.tipo === 'semCusto' && ver.semCusto === xs.length) || ver.tipo;
+        if (!com.some(x => x.a.gasto > 0)) return (ver.tipo === 'semCusto' && ver.semCusto === semC) || ver.tipo;
         const luc = com.reduce((t, x) => t + cent(x.depois), 0), rec = com.reduce((t, x) => t + cent(x.a.receita), 0);
         if (!rec) return ver.tipo === 'nao' || `conta ${c.k}: sem receita e ${ver.tipo}`;
         if (luc === 0) return true;   // empate no centavo: a comparação é em ponto flutuante (ver divergência 2)
-        return ((luc > 0) === (ver.tipo === 'compensa') && ver.semCusto === xs.length - com.length) || `conta ${c.k}: lucro ${reais(luc)} e ${ver.tipo}`;
+        return ((luc > 0) === (ver.tipo === 'compensa') && ver.semCusto === semC) || `conta ${c.k}: lucro ${reais(luc)} e ${ver.tipo}`;
     });
     prop('P.adsDoItem (detalhe do anúncio): gasto, receita e vendas = Σ dos anúncios daquele MLB (catálogo ligado incluso); ROAS e CPC com 2 casas', contas.flatMap(c => c.itens.map(it => ({ c, it }))), ({ c, it }) => {
         const d = P.adsDoItem(c.snapP, it.itemId), meus = c.ads.filter(a => a.it === it && a.catalogo !== 'solto');
@@ -706,6 +709,47 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
         const v = I(rnd2, 0, 8), recC = v ? I(rnd2, 1, 12000) * v : 0, costC = I(rnd2, 1, Math.max(recC, 500));
         const r = duas([{ id: 'MLB9000000002', title: 'Produto F', campaignId: 7, cost: costC / 100, totalAmount: recC / 100, prints: 500, clicks: 12, unitsQuantity: v }]), x = avisos(r), sel = r.g.selos.includes('acima') ? 1 : 0;
         return (x.ic.ads === sel && x.card.ads === sel && (!sel || cent(x.ic.lista[0].excesso) === costC - cent(r.l[0].antes))) || `${v} vendas · receita ${recC} · Ads ${costC}: ${A.textoMontante(r.g)} · ícone ${x.ic.ads} · cartão ${x.card.ads}`;
+    });
+}
+{   // #26 (b), revisão 2: o anúncio em várias campanhas, também numa em que gastou R$ 0 e o ML atribuiu venda. Regra: o lucro do anúncio é o das
+    // campanhas somadas (a venda atribuída ao Ads entra mesmo sem gasto naquela campanha), como ads.html (por SKU) e o cartão "Ads deste anúncio"
+    // já faziam. O painel junta as linhas do anúncio numa entrada só, e o ícone também. A campanha continua com a conta só das linhas dela, e
+    // "dá para investir mais" olha só o que foi pago (a venda grátis não diz que vale pôr mais dinheiro).
+    const cfg = { imposto_pct: 0, margem_alvo_pct: 10 }, custo = () => ({ custo: 50 }), sobraDe = it => SHC.sobraAnuncio(it, custo(), cfg);
+    const it = [{ itemId: 'MLB9000000002', sku: 'TST-F', titulo: 'Produto F', preco: 100, recebe: 80 }];   // sobra hoje R$ 30/un. (30%)
+    const linha = (campaignId, cost, totalAmount, unitsQuantity) => ({ id: 'MLB9000000002', title: 'Produto F', campaignId, cost, totalAmount, prints: 500, clicks: 12, unitsQuantity });
+    const telas = (rows, perde) => {
+        const snap0 = contaFixa(rows, { semResumo: true });
+        if (perde) snap0.campanhas.forEach(c => { c.share = SHC.adsShare({ impressionShare: 0.5, lostImpressionShareByBudget: 0.3, lostImpressionShareByAdRank: 0.2 }); });
+        const snap = P.adsLigaCatalogo(snap0, it), an = A.analisa(snap, it, custo, cfg, []), l = P.adsEquilibrio(snap, it, sobraDe), d = P.adsDoItem(snap, 'MLB9000000002');
+        const ic = SHC.alertasDe({ ads: snap, itens: it, custos: { [SHC.chaveSku('TST-F')]: custo() }, cfg, hoje: '2026-10-07', full: { produtos: [] } });
+        return { g: an.grupos[0], an, l, ic, card: P.alertas([], l, [], {}), ver: P.adsVeredito(d.m, SHC.adsEquilibrio(it[0], custo(), cfg)), fs: P.adsFiltros(l, cfg.margem_alvo_pct),
+            camps: P.adsCampanhasLista(snap, l), conta: P.adsVereditoDe(l, P.adsConta(snap).gasto) };
+    };
+    const b = telas([linha(7, 40, 100, 1), linha(8, 0, 200, 2)]);
+    const c7 = b.camps.find(c => c.id === '7'), c8 = b.camps.find(c => c.id === '8'), h7 = b.an.camps.find(c => c.id === '7').leitura.linhas.join(' ');
+    ok(A.textoMontante(b.g) === 'Ads R$ 40,00 · Lucro R$ 50,00' && !b.g.selos.includes('acima') && b.l.length === 1 && b.l[0].antes === 90 && b.l[0].depois === 50 && b.l[0].acima === false
+        && b.l[0].a.gasto === 40 && b.l[0].a.receita === 300 && b.l[0].linhas.length === 2 && b.ic.ads === 0 && b.card.ads === 0 && b.ver.tipo === 'compensa' && b.conta.tipo === 'compensa',
+        `#26 (b) C7 Ads R$ 40 (R$ 100) + C8 Ads R$ 0 (R$ 200 atribuídos): "Lucro R$ 50,00" e sem "acima" em ads.html, no painel (1 entrada), no cartão Alertas, no ícone e no cartão do anúncio (obtido: ${A.textoMontante(b.g)} · painel ${b.l.map(x => x.depois + (x.acima ? ' acima' : '')).join(' | ')} · ícone ${b.ic.ads} · cartão ${b.ver.tipo})`);
+    ok(c7.veredito.tipo === 'nao' && /acima do equilíbrio/.test(h7) && c8.veredito.tipo === 'semGasto',
+        `#26 (b) a campanha fica com a conta dela: C7 (Ads R$ 40, sobra R$ 30) "Não compensa" no painel e "acima do equilíbrio" em ads.html; C8 sem gasto (obtido: ${c7.veredito.tipo} · ${h7} · ${c8.veredito.tipo})`);
+    const d2 = telas([linha(1, 50, 100, 1), linha(2, 10, 300, 3)]);
+    ok(A.textoMontante(d2.g) === 'Ads R$ 60,00 · Lucro R$ 60,00' && d2.l.length === 1 && d2.l[0].depois === 60 && !d2.l[0].acima && d2.ic.ads === 0 && d2.card.ads === 0 && d2.fs.acima.length === 0
+        && d2.camps.find(c => c.id === '1').veredito.tipo === 'nao' && d2.camps.find(c => c.id === '2').veredito.tipo === 'compensa',
+        `#26 o mesmo anúncio em 2 campanhas com gasto (C1 −R$ 20, C2 +R$ 80): 1 entrada com "Lucro R$ 60,00" no painel e em ads.html, sem aviso no ícone (antes: o anúncio duas vezes, uma "acima") (obtido: ${d2.l.map(x => x.depois).join(' | ')} · ícone ${d2.ic.ads})`);
+    const e1 = telas([linha(7, 30, 100, 1), linha(8, 0, 500, 5)], true), e2 = telas([linha(7, 5, 100, 1), linha(8, 0, 100, 1)], true);
+    ok(e1.fs.escalar.length === 0 && !e1.g.selos.includes('escalar') && e1.l[0].acos === 5 && e1.l[0].acosPago === 30
+        && e2.fs.escalar.length === 1 && e2.g.selos.includes('escalar') && e2.l[0].acosPago === 5,
+        `#26 "dá para investir mais" só pelo que foi pago: Ads R$ 30 em R$ 100 (ACOS pago 30%) + R$ 500 atribuídos sem gasto (ACOS 5%) não entra; ACOS pago 5% entra (obtido: ${e1.fs.escalar.length} [${e1.g.selos}] · ${e2.fs.escalar.length} [${e2.g.selos}])`);
+    const rnd = semente(7263);
+    prop('#26 anúncio em 1 a 3 campanhas, com linhas sem gasto que trouxeram venda: ads.html, o painel (1 entrada), o cartão Alertas, o ícone e o cartão do anúncio com o mesmo lucro e o mesmo "acima"; a campanha no painel × ads.html', vezes(500), () => {
+        const rows = [7, 8, 9].slice(0, I(rnd, 1, 3)).map(c => { const v = I(rnd, 0, 6), recC = v ? I(rnd, 1, 15000) * v : 0; return linha(c, (rnd() < 0.35 ? 0 : I(rnd, 1, Math.max(recC, 900))) / 100, recC / 100, v); });
+        if (!rows.some(r => r.cost > 0)) rows[0].cost = 0.5;
+        const t = telas(rows), x = t.l[0], ac = t.g.selos.includes('acima'), tag = `${JSON.stringify(rows.map(r => [r.campaignId, r.cost, r.totalAmount]))}: ${A.textoMontante(t.g)} · painel ${t.l.map(y => y.depois).join('|')} · ícone ${t.ic.ads} · cartão ${t.ver.tipo}`;
+        const camps = t.camps.every(c => { const rs = rows.filter(r => String(r.campaignId) === c.id), luc = rs.reduce((s, r) => s + cent(SHC.r2(r.totalAmount * 0.3)) - cent(r.cost), 0), h = t.an.camps.find(k => k.id === c.id).leitura.linhas.join(' ');
+            return !rs.some(r => r.cost > 0) ? c.veredito.tipo === 'semGasto' : luc === 0 || ((luc < 0) === (c.veredito.tipo === 'nao') && (luc < 0) === /acima do equilíbrio|Gastou sem nenhuma venda/.test(h)); });
+        return (t.l.length === 1 && cent(x.depois) === cent(t.g.lucroRs) && cent(x.antes) === cent(t.g.sobraRs) && x.acima === ac && (t.ic.ads === 1) === ac && (t.card.ads === 1) === ac
+            && (t.g.lucroRs === 0 || (t.ver.tipo === 'nao') === ac) && camps) || tag;
     });
 }
 {   // #27: sem o resumo do ML (campaigns/metrics falhou) e com a lista de anúncios em parte: o mesmo Investimento nas duas telas e Total = Σ campanhas

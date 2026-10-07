@@ -187,7 +187,9 @@
             // não passa; gasto sem venda passa (como o painel, P.adsEquilibrio, e a contagem da manchete, A.resultado).
             if (margem !== null && m.investimento > 0 && A.montante({ m, margem, ads: g.ads }).lucroRs < 0) selos.push('acima');
             const folga = margem === null ? null : margem - meta;   // o que o Ads pode levar sem furar a meta
-            if (folga > 0 && m.acos > 0 && m.acos <= folga * A.ESCALA && perdeOrc) selos.push('escalar');
+            // Escalar olha só o que foi pago (#26): a venda atribuída a uma campanha em que o anúncio gastou R$ 0 não diz que vale investir mais.
+            const pago = A.soma(g.ads.filter(a => a.m && a.m.investimento > 0).map(a => a.m));
+            if (folga > 0 && pago && pago.acos > 0 && pago.acos <= folga * A.ESCALA && perdeOrc) selos.push('escalar');
             return { chave: g.chave, sku: g.sku, titulo: g.titulo, itens: g.itens, ads: g.ads, porTitulo: g.via.has('titulo') && !g.via.has('id'),
                 m, margem, equilibrio: margem, campIds, campanhas, perdeOrc, selos };
         }).sort((a, b) => (b.m.investimento || 0) - (a.m.investimento || 0) || (b.m.impressoes || 0) - (a.m.impressoes || 0) || String(a.titulo).localeCompare(String(b.titulo)));
@@ -276,14 +278,15 @@
 
     /**
      * Montante em R$ do SKU no período: sobra antes do Ads = margem (%) × receita pelo Ads; lucro depois do Ads = sobra − investimento.
-     * A conta é a de cada anúncio (SHC.adsLucro, a mesma do painel, P.adsEquilibrio) somada no centavo: o mesmo lucro nas duas telas.
+     * A conta é a de cada linha (anúncio × campanha, também a sem gasto que trouxe venda) somada no centavo, SHC.adsLucro: a mesma do painel
+     * (P.adsEquilibrio) e do ícone (SHC.alertasDe), o mesmo lucro nas três telas.
      * Sem custo → null (não inventa). lucroRs < 0 ⇔ ACOS acima do equilíbrio (ou gasto sem venda).
      */
     A.montante = function (g) {
         const ads = SHC.r2(g.m.investimento || 0);
         if (g.margem === null) return { adsRs: ads, sobraRs: null, lucroRs: null };
         const ms = g.ads && g.ads.length ? g.ads.map(a => a.m || {}) : [g.m];
-        const sobra = SHC.r2(ms.reduce((t, m) => t + SHC.adsLucro(g.margem, m.receita, m.investimento).antes, 0));
+        const sobra = SHC.adsLucro(g.margem, ms.map(m => ({ receita: m.receita, gasto: m.investimento }))).antes;
         return { adsRs: ads, sobraRs: sobra, lucroRs: SHC.r2(sobra - ads) };
     };
 

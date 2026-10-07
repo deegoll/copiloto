@@ -276,17 +276,38 @@
     // Ponto de equilíbrio por anúncio: sobra antes do Ads = margem antes do Ads (sobra ÷ preço de hoje) × receita do Ads e lucro depois =
     // antes − Ads, no centavo (SHC.adsLucro: a mesma conta de ads.html, A.montante); acima = o Ads custou mais que essa sobra (= ACOS acima
     // do equilíbrio). Vendido abaixo do preço de hoje (promoção) a sobra cai junto. ACOS = Ads ÷ receita do Ads. Sem custo → sem selo.
-    // → [{a, it, sobraUn, margem, acos, antes, depois, acima, semCusto}] (acima primeiro, depois maior gasto); só anúncio com gasto.
+    // #26: o fundo grava uma linha por anúncio e campanha; o anúncio em várias campanhas é UMA entrada, com as campanhas somadas (como ads.html
+    // por SKU, o cartão "Ads deste anúncio" e o ícone): a venda que o ML atribui a uma campanha em que ele gastou R$ 0 entra na sobra.
+    // "Dá para investir mais" (P.adsFiltros) olha só o que foi pago: acosPago/vendasPagas das campanhas com gasto (venda grátis não conta).
+    // linhas = as linhas do anúncio, uma por campanha (veredito da campanha, P.adsCampanhasLista); a lista leva .linhas = as de TODOS os
+    // anúncios, também dos que não gastaram nada (a venda atribuída sem gasto entra na campanha, como em ads.html).
+    // → [{a, it, sobraUn, margem, acos, acosPago, vendasPagas, antes, depois, acima, semCusto, linhas}] (acima primeiro, depois maior gasto);
+    //   só anúncio com gasto.
     P.adsEquilibrio = function (snap, itens, sobraDe) {
-        const porId = {};
+        const porId = {}, grupos = new Map(), todas = [];
         (itens || []).forEach(it => { porId[it.itemId] = it; });
-        return ((snap && snap.anuncios) || []).map(P.adsDoAnuncio).filter(a => a && a.gasto > 0).map(a => {
+        ((snap && snap.anuncios) || []).map(P.adsDoAnuncio).filter(Boolean).forEach(a => {
             const it = porId[a.itemId] || null, s = it ? sobraDe(it) : null, semCusto = !(s && s.sobra !== null);
             const l = semCusto ? null : SHC.adsLucro(s.pct, a.receita, a.gasto);
-            return { a, it, semCusto, sobraUn: semCusto ? null : s.sobra, margem: semCusto ? null : s.pct,
+            const x = { a, it, semCusto, sobraUn: semCusto ? null : s.sobra, margem: semCusto ? null : s.pct,
                 acos: a.receita > 0 ? a.gasto / a.receita * 100 : null, antes: l ? l.antes : null, depois: l ? l.depois : null, acima: !!l && l.acima };
-        }).sort((x, y) => (y.acima - x.acima) || (y.a.gasto - x.a.gasto));
+            todas.push(x);
+            (grupos.get(a.itemId) || grupos.set(a.itemId, []).get(a.itemId)).push(x);
+        });
+        const lista = [...grupos.values()].map(ls => {
+            const x = ls[0], soma = (xs, k) => SHC.r2(xs.reduce((t, y) => t + (y.a[k] || 0), 0)), pagas = ls.filter(y => y.a.gasto > 0);
+            const somaN = k => (ls.some(y => y.a[k] !== null) ? soma(ls, k) : null);
+            const a = ls.length === 1 ? x.a : Object.assign({}, x.a, { gasto: soma(ls, 'gasto'), receita: soma(ls, 'receita'), vendas: soma(ls, 'vendas'),
+                cliques: somaN('cliques'), impressoes: somaN('impressoes'), campanhaId: '', campanha: ls.map(y => y.a.campanha).filter(Boolean).join(', ') });
+            const l = x.semCusto ? null : SHC.adsLucro(x.margem, ls.map(y => y.a)), rp = soma(pagas, 'receita');
+            return Object.assign({}, x, { a, acos: a.receita > 0 ? a.gasto / a.receita * 100 : null, acosPago: rp > 0 ? soma(pagas, 'gasto') / rp * 100 : null,
+                vendasPagas: soma(pagas, 'vendas'), antes: l ? l.antes : null, depois: l ? l.depois : null, acima: !!l && l.acima, linhas: ls });
+        }).filter(x => x.a.gasto > 0).sort((x, y) => (y.acima - x.acima) || (y.a.gasto - x.a.gasto));
+        lista.linhas = todas;
+        return lista;
     };
+    // Linhas (anúncio × campanha) de P.adsEquilibrio: as de todos os anúncios; numa lista sem .linhas (filtrada), as das entradas dela.
+    P.adsLinhas = eq => (eq && eq.linhas) || (eq || []).flatMap(x => x.linhas || [x]);
     // Ads da conta no mês pelo Faturamento (fech:<conta>:<AAAA-MM>.porTipo): Product Ads e Publicidade de Seguidores, LÍQUIDOS (cobrado −
     // estornado, como o Fechamento). Tipo que não veio = null (não lido), nunca 0. Sinal: positivo = gasto; negativo = os estornos passaram
     // das cobranças no mês (crédito, nunca gasto: o Math.abs mostrava "R$ 15,00 de Product Ads"). texto = a frase do cartão Ads.
@@ -907,10 +928,12 @@
     const orcDia = c => SHC.num(c.orcamentoDiario !== undefined && c.orcamentoDiario !== null ? c.orcamentoDiario : (c.dailyBudget !== undefined ? c.dailyBudget : c.orcamento));
     // Compensa? de um grupo de anúncios (campanha ou conta) pelo equilíbrio do Copiloto (P.adsEquilibrio): o Ads gastou menos que a
     // sobra das vendas que trouxe. Só os anúncios com custo entram; sem nenhum → 'semCusto'.
+    // xs = entradas de P.adsEquilibrio (conta) ou linhas de uma campanha (P.adsLinhas): a linha com custo e sem gasto entra com a venda dela
+    // (#26); semCusto = quantos gastaram sem o custo informado.
     P.adsVereditoDe = function (xs, gastoTotal) {
-        const com = (xs || []).filter(x => !x.semCusto), sem = (xs || []).length - com.length;
+        const com = (xs || []).filter(x => !x.semCusto), sem = (xs || []).filter(x => x.semCusto && x.a.gasto > 0).length;
         if (!(gastoTotal > 0)) return Object.assign(P.adsVeredito(null, null), { semCusto: sem });
-        if (!com.length) return { tipo: 'semCusto', texto: 'Sem cálculo', semCusto: sem };
+        if (!com.some(x => x.a.gasto > 0)) return { tipo: 'semCusto', texto: 'Sem cálculo', semCusto: sem };
         const s = k => com.reduce((t, x) => t + (k === 'antes' ? x.antes : x.a[k]), 0), g = s('gasto'), r = s('receita');
         return Object.assign(P.adsVeredito(razoes({ gasto: g, receita: r, vendas: 0, cliques: null, impressoes: null }), { equilibrio: r > 0 ? s('antes') / r * 100 : 0 }), { semCusto: sem });
     };
@@ -929,7 +952,7 @@
             return { id, nome: String(c.nome || c.name || 'Campanha ' + id), status: ativoTxt(c.status), statusBruto: String(c.status || ''), orcamentoDia: orcDia(c),
                 estrategia: P.estrategiaTxt(c.estrategia || c.strategy), anuncios: dela.length, m,
                 perdeOrcamento: sh ? SHC.num(sh.perdidasOrcamento) : null, perdeClassificacao: sh ? SHC.num(sh.perdidasClassificacao) : null,
-                veredito: P.adsVereditoDe((eq || []).filter(x => x.a.campanhaId === id), m.gasto) };
+                veredito: P.adsVereditoDe(P.adsLinhas(eq).filter(x => x.a.campanhaId === id), m.gasto) };
         }).sort((x, y) => ((y.status === 'ativo') - (x.status === 'ativo')) || (y.m.gasto - x.m.gasto));
     };
     // Linha "Total" da tabela de campanhas: a soma das linhas que ela mostra (P.adsCampanhasLista), no centavo, e o ACOS dessa soma.
@@ -937,12 +960,13 @@
         const s = k => SHC.r2((camps || []).reduce((t, c) => t + ((c.m && c.m[k]) || 0), 0));
         return razoes({ gasto: s('gasto'), receita: s('receita'), vendas: s('vendas'), cliques: null, impressoes: null });
     };
-    // Filtros do "Ver por produto" sobre P.adsEquilibrio. Escalar = ACOS até 60% da folga (equilíbrio − meta), com venda.
+    // Filtros do "Ver por produto" sobre P.adsEquilibrio. Escalar = ACOS até 60% da folga (equilíbrio − meta), com venda, só no que foi pago
+    // (acosPago, vendasPagas: a venda atribuída a uma campanha sem gasto não diz que vale investir mais).
     P.adsFiltros = function (lista, meta) {
-        const mt = SHC.num(meta) || 0;
+        const mt = SHC.num(meta) || 0, ac = x => (x.acosPago !== undefined ? x.acosPago : x.acos), vp = x => (x.vendasPagas !== undefined ? x.vendasPagas : x.a.vendas);
         return {
             acima: lista.filter(x => x.acima),
-            escalar: lista.filter(x => !x.semCusto && !x.acima && x.acos !== null && x.a.vendas > 0 && x.margem - mt > 0 && x.acos <= (x.margem - mt) * 0.6),
+            escalar: lista.filter(x => !x.semCusto && !x.acima && ac(x) !== null && vp(x) > 0 && x.margem - mt > 0 && ac(x) <= (x.margem - mt) * 0.6),
             semVenda: lista.filter(x => !(x.a.vendas > 0)),
             semCusto: lista.filter(x => x.semCusto),
         };
@@ -3642,8 +3666,8 @@
         const resCamp = [nAt ? SHC.qtd(nAt, 'ativa', 'ativas') : SHC.qtd(camps.length, 'campanha', 'campanhas')].concat(camps.slice(0, 2).map(c => `${c.nome} ACOS ${pctOu(c.m.acos)}`)).join(' · ');
         // Cor da campanha: a mesma conta do selo (anúncios dela com custo: vendas, Ads e sobra antes do Ads), agora com o "apertado".
         const corCamp = c => {
-            const xs = lista.filter(x => x.a.campanhaId === c.id && !x.semCusto), s = k => xs.reduce((t, x) => t + (k === 'antes' ? x.antes : x.a[k]), 0);
-            return xs.length ? P.saudeRetorno(s('receita'), s('gasto'), s('antes'), cfg.margem_alvo_pct) : '';
+            const xs = P.adsLinhas(lista).filter(x => x.a.campanhaId === c.id && !x.semCusto), s = k => xs.reduce((t, x) => t + (k === 'antes' ? x.antes : x.a[k]), 0);
+            return xs.some(x => x.a.gasto > 0) ? P.saudeRetorno(s('receita'), s('gasto'), s('antes'), cfg.margem_alvo_pct) : '';
         };
         const maxC = escalaRet(camps, c => [c.m.receita, c.m.gasto]);
         const linhaCamp = c => {
