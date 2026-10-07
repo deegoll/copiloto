@@ -2867,9 +2867,24 @@
     // dela nas vendas de 30 dias. pct null (nenhuma venda para dividir) → null: sem essa parte, o ano passado não entra. Painel e ícone.
     SHC.vmDaParte = (vm, pct) => (pct === null || pct === undefined ? null
         : Object.keys(vm || {}).reduce((o, m) => { const v = unDe(vm[m]); if (v !== null) o[m] = Math.round(v * pct / 100); return o; }, {}));
+    // Anúncios do retrato que são este produto do Full: pelos MLB (quando o ML traz) ou pelo SKU; sem os dois, pelo título. UMA regra para o
+    // painel (P.anunciosDoFull: plano, saúde, lucro) e o ícone (SHC.alertasDe, no service worker) — antes o ícone só via os MLB do Full.
+    SHC.idsDoFull = p => [...new Set([].concat((p && p.itemIds) || [], p && p.itemId ? [p.itemId] : []).filter(Boolean))];
+    const skuNorm = new Map(), skuN = s => {   // nSku com memória: a mesma conta para cada anúncio × produto (milhares no fundo)
+        const k = String(s || ''); let v = skuNorm.get(k);
+        if (v === undefined) { if (skuNorm.size > 20000) skuNorm.clear(); v = nSku(k); skuNorm.set(k, v); }
+        return v;
+    };
+    SHC.anunciosDoFull = function (p, itens) {
+        const l = Array.isArray(itens) ? itens.filter(Boolean) : [], sku = skuN(p && p.sku), tn = SHC.normalizaTitulo(p && p.titulo), ids = SHC.idsDoFull(p);
+        const r = l.filter(it => ids.indexOf(it.itemId) >= 0 || (sku && skuN(it.sku) === sku));
+        return r.length || !tn || sku || ids.length ? r : l.filter(it => SHC.normalizaTitulo(it.titulo) === tn);
+    };
+    // MLB cujas vendas por mês (vm|ml) são deste produto: os do Full + os anúncios ligados pelo SKU (ou título). Painel e ícone leem e somam estes.
+    SHC.idsDoProdutoFull = (p, itens) => [...new Set(SHC.anunciosDoFull(p, itens).map(it => it.itemId).concat(SHC.idsDoFull(p)).filter(Boolean))];
     /**
-     * dados = { full: ml:full, ads: ads:<conta>, itens: anúncios do retrato, custos: {chave: dados} (c|sku|…, c|ml|…), cfg,
-     *           vm?: {MLB: {'AAAA-MM': vendas}} (vm|ml), mesesLidos?: ['AAAA-MM'], hoje: 'AAAA-MM-DD',
+     * dados = { full: ml:full, ads: ads:<conta>, itens: TODOS os anúncios do retrato (o Full liga os do mesmo SKU), custos: {chave: dados} (c|sku|…, c|ml|…), cfg,
+     *           vm?: {MLB: {'AAAA-MM': vendas}} (vm|ml dos MLB de SHC.idsDoProdutoFull), mesesLidos?: ['AAAA-MM'], hoje: 'AAAA-MM-DD',
      *           saude?: { semFiscal: n (fiscal:<conta>.total), perdendo: n (anúncios ativos com radar 'caindo') } }
      * → { criticos, full, ads, lista:[{tipo:'full'|'ads', nivel:'critico', chave, itemId, sku, titulo, texto, …}] }
      * Full (produto com alerta): previsão de 30 dias = SHC.previsaoFull, a MESMA do painel (30 dias, ano passado, índice sazonal, parado).
@@ -2883,8 +2898,9 @@
         const hoje = dados.hoje || SHC.hoje(), vm = dados.vm || {}, lidos = dados.mesesLidos || [];
         // Variações do mesmo anúncio (mesmos MLB): o vm|ml é do anúncio inteiro → cada uma fica com a parte dela nas vendas de 30 dias
         // (SHC.vmDaParte, a mesma conta de P.planoFull); sem essa parte, o ano passado não entra.
-        const prods = ((dados.full && dados.full.produtos) || []).filter(Boolean);
-        const idsDe = p => [...new Set((p.itemIds && p.itemIds.length ? p.itemIds : [p.itemId]).filter(Boolean))];
+        const prods = ((dados.full && dados.full.produtos) || []).filter(Boolean), its = Array.isArray(dados.itens) ? dados.itens : [];
+        // Anúncios do produto = os do painel (SHC.idsDoProdutoFull: MLB do Full + os do mesmo SKU no retrato); dados.itens = TODOS os anúncios.
+        const idsDoP = new Map(), idsDe = p => { let v = idsDoP.get(p); if (!v) idsDoP.set(p, v = SHC.idsDoProdutoFull(p, its)); return v.slice(); };
         // vm do produto = soma dos anúncios dele, mês a mês (como o vmDe do painel, P.somaMeses); sem anúncio → null (ano passado desconhecido).
         const vmDe = ids => (ids.length ? ids.reduce((o, id) => { Object.keys(vm[id] || {}).forEach(m => { o[m] = (o[m] || 0) + (unDe(vm[id][m]) || 0); }); return o; }, {}) : null);
         const irmaos = {};

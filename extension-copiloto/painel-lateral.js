@@ -743,13 +743,10 @@
         });
         return { linhas, livre, dias };
     };
-    // Anúncios do retrato que são este produto do Full: pelos MLB (quando o ML traz) ou pelo SKU; sem os dois, pelo título.
-    P.idsDoFull = p => [...new Set([].concat(p.itemIds || [], p.itemId ? [p.itemId] : []).filter(Boolean))];
-    P.anunciosDoFull = function (p, itens) {
-        const sku = SHC.normalizaSku(p.sku || ''), tn = P.normTitulo(p.titulo), ids = P.idsDoFull(p);
-        const r = (itens || []).filter(it => ids.indexOf(it.itemId) >= 0 || (sku && SHC.normalizaSku(it.sku) === sku));
-        return r.length || !tn || sku || ids.length ? r : (itens || []).filter(it => P.normTitulo(it.titulo) === tn);
-    };
+    // Anúncios do retrato que são este produto do Full: pelos MLB (quando o ML traz) ou pelo SKU; sem os dois, pelo título. A regra fica em
+    // SHC.anunciosDoFull (ml-extrator.js) — a MESMA do ícone (SHC.alertasDe, no service worker), que soma o vm|ml destes anúncios.
+    P.idsDoFull = p => SHC.idsDoFull(p);
+    P.anunciosDoFull = (p, itens) => SHC.anunciosDoFull(p, itens);
     P.explicaFull = function (l, dias) {
         const x = l.prev, nm = P.nomeMes(x.mes), out = [], p = l.p || {};
         const naoLido = l.semAnuncio ? '' : ` As vendas de ${nm} ainda não foram lidas.`;
@@ -5054,7 +5051,7 @@
         });
     }
     const chaveFull = p => [p.produtoId || '', p.variacao || '', p.itemId || p.sku || p.titulo || ''].join('|');   // variações do mesmo anúncio: uma chave cada
-    const idsDoPlano = p => [...new Set(P.anunciosDoFull(p, itens).map(it => it.itemId).concat(P.idsDoFull(p)))];
+    const idsDoPlano = p => SHC.idsDoProdutoFull(p, itens);   // MLB do Full + os do mesmo SKU: os mesmos do ícone (SHC.alertasDe)
     // v2.7: remessas (lista + detalhe lido na rodada lenta) — recolhido: "2 abertas · 3 fechadas nos últimos 30 dias · R$ X gastos em remessas este mês".
     function cardRemessas() {
         const rr = remessas ? SHC.remessasResumo(remessas, remDet, SHC.hoje().slice(0, 7)) : null;
