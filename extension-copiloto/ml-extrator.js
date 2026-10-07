@@ -5023,7 +5023,7 @@
         const L = SHC.REC_SKU, un = numF(s && s.unidades), v = numF(s && s.variacaoPct), d = numF(dias) >= 1 ? dias : null;
         const vendaDia = un !== null && d ? un / d : null, out = { vendaDia: vendaDia === null ? null : Math.round(vendaDia * 10) / 10, cobertura: null };
         if (!est || !est.lido) return Object.assign(out, { acao: 'sem_dado', cor: 'cinza', rotulo: 'Sem estoque lido', motivo: 'O estoque deste SKU ainda não foi lido (lista de Anúncios ou Full).' });
-        const cob = vendaDia > 0 ? Math.floor(est.total / vendaDia) : null;
+        const cob = vendaDia > 0 ? Math.floor(est.total * d / un) : null;   // multiplica antes (#20): 33 × 20 ÷ 44 = 15 (33 ÷ (44 ÷ 20) dava 14,999…)
         out.cobertura = cob;
         const ritmo = vendaDia > 0 ? 'vende ' + decTxt(vendaDia) + ' por dia' : 'sem venda neste mês', tend = v === null ? '' : 'vendas ' + (v >= 0 ? '▲ ' : '▼ ') + pctTxt(v) + ', ';
         const dura = cob === null ? '' : ' dá para ' + SHC.qtd(cob, 'dia', 'dias');
