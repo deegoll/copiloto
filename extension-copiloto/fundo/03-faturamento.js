@@ -228,7 +228,17 @@ async function gravarFreteHist(conta, cobs, mesesLidos) {
     // v3.1: frete de devoluções por pedido (tarifa de devolução = frete de VOLTA; fora do frete da venda e do "cobrado a mais").
     Object.keys(antes.devolucoes || {}).forEach(k => { const p = antes.devolucoes[k]; if (p && p.data >= limF && !relido(p.data)) devs[k] = p; });
     if (cobs && cobs.length) {
-        SHC.freteDasCobrancas(cobs).forEach(p => { if (p.data >= limF) pedidos[p.pedido] = { itemId: p.itemId, data: p.data, cobrado: p.cobrado, bruto: p.cobrado, cheio: p.cheio, formato: p.formato, cancelado: p.cancelado, temExtra: p.temExtra, linhas: p.linhas }; });
+        // Revisão 07/10/2026: tarifa e estorno lidos no MESMO lote guardam o bruto (antes do estorno), o cheioBruto e os estornos (est), como o
+        // ramo do estorno sozinho abaixo. Antes guardava bruto = cobrado já líquido e sem est: relido sozinho num lote seguinte (mês da tarifa
+        // já fechado e lido), o mesmo estorno descontava de novo (50 − 10 = 40 → 30).
+        const estLote = {};
+        cobs.forEach(c => { if (c && c.tipo === 'frete_estorno' && c.orderId && c.valor >= 0) (estLote[c.orderId] || (estLote[c.orderId] = {}))[c.id || (c.data + '|' + c.valor)] = c.valor; });
+        SHC.freteDasCobrancas(cobs).forEach(p => {
+            if (p.data < limF) return;
+            const e = estLote[p.pedido], se = e ? Object.keys(e).reduce((t, k) => t + e[k], 0) : 0;
+            pedidos[p.pedido] = Object.assign({ itemId: p.itemId, data: p.data, cobrado: p.cobrado, bruto: SHC.r2(p.cobrado + se), cheio: p.cheio, formato: p.formato, cancelado: p.cancelado,
+                temExtra: p.temExtra, linhas: p.linhas }, e ? { est: e } : {}, e && !p.cancelado && typeof p.cheio === 'number' ? { cheioBruto: SHC.r2(p.cheio + se) } : {});
+        });
         SHC.vendasDasCobrancas(cobs).forEach(v => { if (v.data >= limV) vendas[v.pedido] = { itemId: v.itemId, data: v.data, cancelada: v.cancelada }; });
         SHC.devolucoesDasCobrancas(cobs).forEach(p => { if (p.data >= limF) devs[p.pedido] = { itemId: p.itemId, data: p.data, valor: p.valor, linhas: p.linhas }; });
         // Estorno lido agora de um pedido cobrado num mês que não foi relido: desconta do valor BRUTO guardado, uma vez por estorno
