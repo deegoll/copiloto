@@ -1561,7 +1561,7 @@
     // ("outra loja", "loja física", "outro anúncio" não vetam).
     const EXCL_AGENTE = /vendedor|lojista|\bloja\b|\bvcs\b|\bvoces\b|\bsepar|despach|fatur|embal|\bcobr|tabela|descri|\bfotos?\b|titulo|anunci/i;
     // Ambíguo (na dúvida, sem regra): "foi engano no/do pedido" costuma ser o pedido que veio errado; o engano no produto, item, envio também.
-    const EXCL_DUVIDA = /\bengano (?:n|d|de)?[oa]?s? ?(?:pedidos?|produtos?|itens|item|pe[cç]as?|mercadorias?|encomendas?|pacotes?|envio|entrega)\b/i;
+    const EXCL_DUVIDA = /\bengano (?:n[oa]s?|d[oa]s?|de) (?:pedidos?|produtos?|itens|item|pe[cç]as?|mercadorias?|encomendas?|pacotes?|envio|entrega)\b/i;
     const BOM_ESTADO = /(n[ãa]o (foi |era |est[áa] |esta )?|nunca (foi )?|nem )usad[oa]s?|sem uso/gi;
     // O erro do PRÓPRIO comprador sai do texto antes de procurar culpa do vendedor (antes ele anulava o veto inteiro: "comprei errado e veio
     // com defeito" pedia exclusão). Trecho curto: o verbo e o erro com até 3 palavras entre eles — nenhuma delas de recebimento ("comprei mas
