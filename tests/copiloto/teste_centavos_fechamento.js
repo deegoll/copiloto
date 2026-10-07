@@ -8,7 +8,7 @@
 // Casos gerados: gerador congruencial (LCG) com semente fixa — o teste dá sempre o mesmo resultado. Ids e valores são inventados.
 // Divergências encontradas no produto (registradas para a equipe, com repro em scratchpad/centavos/). As marcadas "corrigida" têm caso
 // próprio que falhava antes da correção; as outras ficam FORA das asserções:
-//   1. F.conferir + F.recuperar somam 2 regras sobre a MESMA cobrança (repetida + sem estorno; repetida + tarifa acima) → recuperar > cobrado;
+//   1. (corrigida) F.conferir + F.recuperar somavam 2 regras sobre a MESMA cobrança (repetida + sem estorno; repetida + tarifa acima) → recuperar > cobrado;
 //   2. F.recuperar conta o custo inteiro da remessa do Full (coleta) como "dá para recuperar";
 //   3. SHC.r2 perde 1 centavo em parte dos empates de meio centavo (ex.: imposto de 5% sobre R$ 42,70 = 2,135 → R$ 2,13);
 //   4. F.recuperar usa a lista pagoAMais cortada em 200: o frete confirmado acima disso some do total;
@@ -510,6 +510,63 @@ console.log('F.conferir: cada cobrança para conferir fecha (cobrado − esperad
         }
         return true;
     }, 'cada item: cobrado − esperado = diferença > 0 e nunca mais que o cobrado (líquido) daquele tipo no pedido; na tabela, Cobrado − Esperado = Diferença (dúvida: "pode estar certo", sem número)');
+}
+
+console.log('2 regras na MESMA cobrança (repetida + cancelada sem estorno / tarifa acima): conta 1 vez só, nunca acima do cobrado');
+{
+    // Cada pedido: tarifa de venda 1 a 3 vezes (às vezes 1 cancelada), "Custo por cobrar" 0 a 3 vezes no mesmo pagamento; o anúncio paga
+    // uma tarifa de hoje inventada. entityId diferente a cada cobrança e o mesmo conceptId (como uma cobrança em dobro de verdade).
+    const rnd = lcg(7007);
+    const gera = () => {
+        const cobs = [], porId = {};
+        for (let p = inteiro(rnd, 1, 40); p > 0; p--) {
+            const o = String(2000300000 + inteiro(rnd, 0, 99999)), it = 'MLB93000000' + inteiro(rnd, 10, 99), tv = escolhe(rnd, [7.25, 10, 14.5, 20, 33.9]), cc = escolhe(rnd, [3.33, 5, 8.9]);
+            porId[it] = { tarifa: escolhe(rnd, [3, 6, 7.25, 9.9, 25]), preco: 60, titulo: 'Produto ' + it.slice(-2) };
+            const add = (texto, valor, op, extra) => cobs.push(Object.assign({ orderId: o, itemId: it, data: '2026-09-' + String(inteiro(rnd, 1, 28)).padStart(2, '0'), texto, valor,
+                id: inteiro(rnd, 1e8, 9e8) + '|' + op + '|' + (extra ? 'B' : 'C') + 'X' }, extra || {}));
+            for (let k = inteiro(rnd, 1, 3); k > 0; k--) add('Custo por vender', tv, 'P' + o);
+            if (rnd() < 0.5) add('Cancelamento do Custo por vender', tv, 'B' + o, { estorno: true });
+            for (let k = inteiro(rnd, 0, 3); k > 0; k--) add('Custo por cobrar', cc, 'PAG' + o);
+        }
+        return { cobs, porId };
+    };
+    const chave = x => x.pedido + '|' + SHC.tipoCustoFechamento(x.cobranca) + '|' + x.itemId;
+    const pedido = t => moedasDe(t.slice(t.indexOf('Solicitamos')))[0] || 0;   // o estorno que o texto do chamado pede (dúvida: nenhum)
+    let comDuas = 0;
+    todos(400, gera, x => {
+        const cf = F.conferir(x.cobs, x.porId), rec = F.recuperar({ conferir: cf }), net = {}, dif = {}, txt = {}, dRec = {}, tRec = {};
+        x.cobs.forEach(c => { const k = c.orderId + '|' + SHC.tipoCustoFechamento(c.texto) + '|' + c.itemId; net[k] = (net[k] || 0) + (c.estorno ? -1 : 1) * C(c.valor); });
+        cf.filter(i => !i.duvida).forEach(i => { const k = chave(i); dif[k] = (dif[k] || 0) + C(i.diferenca); txt[k] = (txt[k] || 0) + pedido(F.textoChamado(i)); });
+        rec.parcelas.forEach(p => p.itens.forEach(i => { const k = chave(i); dRec[k] = (dRec[k] || 0) + C(i.valor); tRec[k] = (tRec[k] || 0) + pedido(F.textoChamado(F.itemDoChamado(i))); }));
+        for (const k of Object.keys(dif)) {
+            if (dif[k] > net[k] || txt[k] > net[k]) return k + ': para conferir pede ' + dif[k] + ' (textos ' + txt[k] + ') de ' + net[k] + ' cobrados';
+            if (dRec[k] !== dif[k] || tRec[k] !== dif[k]) return k + ': recuperar ' + dRec[k] + ' (textos ' + tRec[k] + ') × para conferir ' + dif[k];
+        }
+        if (cf.some(i => C(i.valor) - C(i.esperado) !== C(i.diferenca))) return 'cobrado − esperado ≠ diferença';
+        if (C(rec.total) !== soma(Object.values(dRec))) return 'total ' + rec.total;
+        if (cf.some(i => /Também aparece repetida/.test(i.motivo))) comDuas++;
+        return true;
+    }, 'por cobrança (pedido + tipo + anúncio): Σ diferenças, Σ estornos pedidos nos textos e o "Dá para recuperar" ≤ o cobrado líquido, sem contar 2 vezes');
+    ok(comDuas > 50, 'os casos gerados têm 2 regras na mesma cobrança (' + comDuas + ' de 400)');
+    // Os 2 casos do relatório (07/10/2026): cancelada + "Custo por cobrar" 2× (R$ 10 cobrados) e tarifa 2× com R$ 6 no anúncio (R$ 20 cobrados).
+    const cob = (o, texto, valor, id, extra) => Object.assign({ orderId: o, itemId: 'MLB1000000001', data: '2026-09-10', texto, valor, id }, extra || {});
+    const a = F.conferir([cob('9000000001', 'Custo por vender', 10, '9000000001|P1|CVVML'), cob('9000000001', 'Cancelamento do Custo por vender', 10, '9000000001|P1|BVVML', { estorno: true }),
+        cob('9000000001', 'Custo por cobrar', 5, '1|PAG1|CVVPRC'), cob('9000000001', 'Custo por cobrar', 5, '2|PAG1|CVVPRC')], {});
+    const b = F.conferir([cob('9000000002', 'Custo por vender', 10, '9000000002|9000000002|CVVML'), cob('9000000002', 'Custo por vender', 10, '9000000002|9000000002|CVVML')],
+        { MLB1000000001: { tarifa: 6, preco: 50, titulo: 'X' } });
+    ok(a.length === 1 && a[0].regra === 'sem_estorno' && a[0].diferenca === 10 && F.recuperar({ conferir: a }).total === 10 && pedido(F.textoChamado(a[0])) === 1000
+        && /mas esta cobrança não\. Também aparece repetida neste pedido: R\$ 5,00 × 2\.$/.test(a[0].motivo),
+        'cancelada + "Custo por cobrar" 2× de R$ 5: 1 item de R$ 10,00 (o cobrado; antes R$ 15,00), e o motivo diz que também veio repetida');
+    ok(b.length === 1 && b[0].regra === 'tarifa' && b[0].diferenca === 14 && F.recuperar({ conferir: b }).total === 14 && pedido(F.textoChamado(b[0])) === 1400,
+        'tarifa de R$ 10 lançada 2× e R$ 6 no anúncio: 1 item de R$ 14,00 (20 − 6; antes R$ 24,00)');
+    const c2 = F.conferir([cob('9000000003', 'Custo por vender', 20, '1|9000000003|CVVML'), cob('9000000003', 'Custo por vender', 20, '2|9000000003|CVVML')], { MLB1000000001: { tarifa: 25, preco: 200 } });
+    ok(c2.length === 1 && c2[0].regra === 'repetida' && c2[0].diferenca === 20, 'repetida maior que a "tarifa acima" (R$ 20 × R$ 15): fica a repetida, 1 vez só');
+    // Lista guardada pela versão anterior (conferir:<conta>) com as 2 regras no mesmo pedido: o "Dá para recuperar" conta 1 vez só.
+    const velha = [{ pedido: '9000000001', itemId: 'MLB1000000001', data: '2026-09-10', cobranca: 'Custo por cobrar', regra: 'sem_estorno', valor: 10, esperado: 0, diferenca: 10, motivo: 'm' },
+        { pedido: '9000000001', itemId: 'MLB1000000001', data: '2026-09-10', cobranca: 'Custo por cobrar', regra: 'repetida', valor: 10, esperado: 5, diferenca: 5, motivo: 'm' }];
+    const rv = F.recuperar({ conferir: velha });
+    ok(rv.total === 10 && rv.parcelas.length === 1 && rv.parcelas[0].id === 'estorno' && rv.parcelas[0].itens.length === 1 && velha[1].diferenca === 5,
+        'lista guardada antes da correção (sem estorno R$ 10 + repetida R$ 5): "Dá para recuperar" R$ 10,00, não R$ 15,00 (a lista guardada não é alterada)');
 }
 
 console.log('F.comparaRepasse: o que entrou no Mercado Pago × o líquido estimado');

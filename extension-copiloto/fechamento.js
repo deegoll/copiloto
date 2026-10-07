@@ -282,6 +282,30 @@
         return { txt: (l.dir === 'sobe' ? '▲ ' : '▼ ') + q, cls: noRitmo ? 'igual' : l.dir };
     };
 
+    // Revisão 07/10/2026 ("cada centavo"): 2 regras sobre a MESMA cobrança (pedido + tipo + anúncio) — repetida + venda cancelada sem estorno,
+    // repetida + tarifa acima, repetida + frete fora da curva — pediam de volta o mesmo dinheiro 2 vezes (R$ 15 de R$ 10 cobrados).
+    // Fica a regra que pede mais (a soma das repetidas ou a outra), nunca acima do cobrado (teto(chave, itens)); a repetição que sai vira
+    // fato no motivo. Dúvida fica como está: o texto dela só pergunta, sem pedir valor. teto null = cobrado não sabido (sem teto).
+    // → a lista sem as sobreposições (item mudado = objeto novo; nunca mexe nos de entrada)
+    const umaVezPorCobranca = (lista, chave, teto) => {
+        const g = {}, fora = new Set(), troca = new Map();
+        lista.forEach(x => { if (x && !x.duvida && x.diferenca > 0) { const k = chave(x); (g[k] || (g[k] = [])).push(x); } });
+        Object.keys(g).forEach(k => {
+            const xs = g[k], rep = xs.filter(x => x.regra === 'repetida'), out = xs.filter(x => x.regra !== 'repetida').sort((a, b) => b.diferenca - a.diferenca);
+            const fica = out.length && (!rep.length || out[0].diferenca >= rep.reduce((s, x) => s + x.diferenca, 0)) ? [out[0]] : rep.slice().sort((a, b) => b.diferenca - a.diferenca);
+            const saiRep = rep.filter(x => fica.indexOf(x) < 0);
+            let resta = teto(k, xs);
+            xs.forEach(x => { if (fica.indexOf(x) < 0) fora.add(x); });
+            fica.forEach((x, i) => {
+                const d = resta === null ? x.diferenca : r2(Math.min(x.diferenca, Math.max(0, resta)));
+                if (resta !== null) resta = r2(resta - d);
+                if (!(d > 0)) { fora.add(x); return; }
+                const nota = i === 0 && saiRep.length ? ' Também aparece repetida neste pedido: ' + saiRep.map(y => SHC.moeda(y.esperado) + ' × ' + Math.round(y.valor / y.esperado)).join(', ') + '.' : '';
+                if (d < x.diferenca || nota) troca.set(x, Object.assign({}, x, d < x.diferenca ? { diferenca: d, esperado: r2(x.valor - d) } : {}, nota ? { motivo: (x.motivo || '') + nota } : {}));
+            });
+        });
+        return lista.filter(x => !fora.has(x)).map(x => troca.get(x) || x);
+    };
     /**
      * Quanto dá para recuperar (ESTIMATIVA; só o que tem base, cada parcela com a origem):
      *  - cobrancas: "Cobranças para conferir" (SHC.fech.conferir: tarifa acima do que a venda mostra, cobrança repetida);
@@ -320,7 +344,10 @@
         // v3.1: "para conferir" gravado pela versão anterior pode ter a tarifa de devolução: ela nunca entra no que dá para recuperar.
         // v3.3: dúvida (pode ser legítima: 1 cobrança por pagamento/envio, frete de venda cancelada já despachada) fica só no "para conferir".
         // 3.3.0 (trava do frete): o frete fora da curva também (o guardado antes da trava vem sem a dúvida: sai pela regra).
-        const cf = (d.conferir || []).filter(x => x && !x.duvida && !F.freteSemChamado(x) && x.diferenca > 0 && SHC.tipoCustoFechamento(x.cobranca) !== 'devolucao');
+        // Lista guardada antes da revisão de 07/10/2026 pode ter 2 regras na mesma cobrança: conta 1 vez só (teto = o cobrado líquido da outra regra).
+        const cf = umaVezPorCobranca((d.conferir || []).filter(x => x && !x.duvida && !F.freteSemChamado(x) && x.diferenca > 0 && SHC.tipoCustoFechamento(x.cobranca) !== 'devolucao'),
+            x => x.pedido + '|' + SHC.tipoCustoFechamento(x.cobranca) + '|' + x.itemId,
+            (k, xs) => (xs.some(x => x.regra !== 'repetida') ? Math.max(...xs.filter(x => x.regra !== 'repetida').map(x => x.valor)) : null));
         add('cobrancas', 'Cobranças acima do esperado', 'Cobranças para conferir (tarifa acima do que a venda mostra, cobrança repetida)',
             cf.filter(x => x.regra !== 'sem_estorno').map(x => Object.assign({}, x, { cobrado: x.valor, valor: x.diferenca })));
         add('estorno', 'Cancelada ou devolvida sem estorno', 'Venda cancelada: a tarifa voltou, outra cobrança do pedido não',
@@ -396,7 +423,7 @@
         const ped = {};
         // v3.1: a tarifa de devolução (frete de VOLTA do produto devolvido) nunca vira pedido de revisão: fica só no custo do mês.
         (cobs || []).forEach(c => { if (c && c.orderId && c.valor >= 0 && SHC.tipoCustoFechamento(c.texto, c.id) !== 'devolucao') (ped[c.orderId] || (ped[c.orderId] = [])).push(c); });
-        const out = [], freteItem = {};
+        const out = [], freteItem = {}, chaves = new Map(), liqDe = {};   // item → pedido|tipo|MLB; pedido|tipo|MLB → cobrado − estornado (teto)
         const tituloDe = (id, cs) => ((cs.find(c => c.titulo) || {}).titulo) || ((itensPorId[id] || {}).titulo) || '';
         Object.keys(ped).forEach(o => {
             const cs = ped[o], data = cs.map(c => c.data).filter(Boolean).sort()[0] || '';
@@ -419,8 +446,10 @@
             // sobra = cobranças − estornos − nº de pagamentos/envios com cobrança em aberto (1 legítima para cada). Cada grupo gasta da sobra.
             Object.keys(grupos).forEach(g => { if (grupos[g].c - grupos[g].e > 0) totais[grupos[g].gt].ops++; });
             Object.keys(totais).forEach(gt => { const T = totais[gt]; T.sobra = T.c - T.e - T.ops; });
+            Object.keys(liq).forEach(k => { liqDe[o + '|' + k] = liq[k]; });
             // 3.3.0: tipo = o da cobrança pelo texto e pelo código (c.id), para a trava do frete valer também com o texto vazio.
-            const base = (c, extra) => Object.assign({ pedido: o, data, itemId: c.itemId, titulo: tituloDe(c.itemId, cs), cobranca: c.texto, tipo: SHC.tipoCustoFechamento(c.texto, c.id) }, extra);
+            const base = (c, extra) => { const x = Object.assign({ pedido: o, data, itemId: c.itemId, titulo: tituloDe(c.itemId, cs), cobranca: c.texto, tipo: SHC.tipoCustoFechamento(c.texto, c.id) }, extra);
+                chaves.set(x, o + '|' + SHC.tipoCustoFechamento(c.texto, c.id) + '|' + c.itemId); return x; };
             Object.keys(grupos).forEach(g => {
                 const x = grupos[g], T = totais[x.gt], porOp = POR_OPERACAO[SHC.tipoCustoFechamento(x.cob.texto, x.cob.id)];
                 const n = 1 + Math.min(x.c - x.e - 1, T.sobra);
@@ -471,7 +500,8 @@
                         : 'O frete deste pedido ficou acima do que este anúncio costuma pagar. O valor está certo para a faixa de preço, o peso e as unidades desta venda?' }));
             });
         });
-        return out.sort((a, b) => b.diferenca - a.diferenca);
+        // 2 regras na mesma cobrança (repetida + cancelada/tarifa/frete): 1 item só, nunca acima do cobrado líquido daquele tipo no pedido.
+        return umaVezPorCobranca(out, x => chaves.get(x), k => (k in liqDe ? liqDe[k] : null)).sort((a, b) => b.diferenca - a.diferenca);
     };
 
     // ── v3.4 (05/10, print da dona: "por que o sistema apresenta informações diferentes?"): a regra antiga comparava a tarifa cobrada com o
