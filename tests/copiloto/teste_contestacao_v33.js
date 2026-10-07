@@ -232,7 +232,14 @@ console.log('Exclusão de reclamação e experiência de compra: só o que as re
     const vaga = ['Demorou demais para chegar', 'Demorou muito para chegar', 'A entrega demorou demais', 'Desisti porque demorou muito', 'Muito demorado', 'Demorou muito mesmo para entregar'];
     const vagaPassou = vaga.filter(m => SHC.motivoExcluivel(m));
     ok(!vagaPassou.length, 'demora vaga ("demorou demais/muito" sem Correios ou transportadora): sem pedido de exclusão' + (vagaPassou.length ? ': ' + vagaPassou.join(' | ') : ''));
-    const comQuem = ['Os Correios demoraram demais', 'A transportadora demorou demais', 'Demorou demais pelo Mercado Envios', 'Demorou demais, os Correios atrasaram a entrega'];
+    // O mesmo para o atraso: "chegou atrasado", "a entrega atrasou" e variações sem o transportador ficam sem regra.
+    const atraso = ['Chegou atrasado', 'A entrega atrasou', 'Entrega atrasada', 'Chegou com 5 dias de atraso', 'Passou do prazo de entrega', 'Chegou depois do prazo', 'Atrasou a entrega', 'Demora na entrega',
+        'Atraso na entrega', 'Demorou para chegar', 'O produto foi enviado no prazo mas chegou atrasado', 'Chegou com 10 dias de atraso', 'Estou esperando há 20 dias, entrega atrasada',
+        'Desisti, chegou atrasado', 'Não quero mais, demorou para chegar'];   // antes da decisão de 07/10 eram da regra do transporte
+    const atrasoPassou = atraso.filter(m => SHC.motivoExcluivel(m));
+    ok(!atrasoPassou.length, 'atraso sem Correios, transportadora ou Mercado Envios no motivo: sem pedido de exclusão' + (atrasoPassou.length ? ': ' + atrasoPassou.join(' | ') : ''));
+    const comQuem = ['Os Correios demoraram demais', 'A transportadora demorou demais', 'Demorou demais pelo Mercado Envios', 'Demorou demais, os Correios atrasaram a entrega',
+        'Os Correios atrasaram a entrega', 'Entrega atrasada pela transportadora', 'Demora dos Correios'];
     ok(comQuem.every(m => /demora do transporte/.test(SHC.motivoExcluivel(m))), 'demora com Correios, transportadora ou Mercado Envios no motivo continua na regra da demora do transporte');
     // 2ª revisão (07/10): despacho demorado e mensagem sem resposta são do vendedor; o engano e o "não foi usado" do comprador voltam a valer.
     const veto2 = ['Desisti porque demorou para despachar', 'Me arrependi, demorou demais para postar', 'Desisti, o vendedor não respondeu', 'Mensagem sem resposta, desisti', 'Engano no envio'];
@@ -249,7 +256,7 @@ console.log('Exclusão de reclamação e experiência de compra: só o que as re
     const comprador = ['Me arrependi, o produto não foi usado', 'Me arrependi, nunca usado', 'Escolhi o tamanho errado', 'Engano na compra', 'Foi engano'];
     const travou = comprador.filter(m => !SHC.motivoExcluivel(m));
     ok(!travou.length, 'erro ou arrependimento do comprador ("não foi usado", "escolhi errado", "foi engano"): excluível' + (travou.length ? ': ' + travou.join(' | ') : ''));
-    ok(SHC.confereExclusao('Atraso na entrega') === 'você despachou dentro do prazo' && SHC.confereExclusao('Me arrependi da compra') === 'o produto voltou sem uso e em perfeitas condições'
+    ok(SHC.confereExclusao('Atraso dos Correios') === 'você despachou dentro do prazo' && SHC.confereExclusao('Me arrependi da compra') === 'o produto voltou sem uso e em perfeitas condições'
         && SHC.confereExclusao('Produto com defeito') === '', 'cada regra diz o que o seller confere antes de enviar (nada quando não é excluível)');
     ok(!/respondidas|resolvidas/.test(ex), 'o pedido de exclusão não afirma o que o Copiloto não sabe ("já respondidas/resolvidas")');
 }
@@ -290,8 +297,8 @@ console.log('Exclusão (rastreio 07/10, bloqueio 4): culpa do vendedor escrita d
     // Os legítimos continuam: arrependimento puro, erro do comprador na compra, demora do transporte sem culpa do vendedor, troca escolhida.
     const legit = ['Me arrependi da compra', 'me arrependi', 'Desisti da compra', 'Não quero mais', 'nao quero mais o produto', 'Mudei de ideia', 'mudei de idéia',
         'Recebi o produto, mas não quero mais', 'Comprei por engano', 'comprei errado', 'Escolhi o tamanho errado', 'Pedi a cor errada', 'Engano na compra', 'Foi engano',
-        'Abri a reclamação por engano', 'Chegou atrasado', 'Demora dos Correios', 'Atraso na entrega', 'Entrega atrasada', 'Demorou para chegar', 'Os Correios atrasaram a entrega',
-        'O produto foi enviado no prazo mas chegou atrasado', 'Quero trocar de tamanho', 'Comprei o tamanho errado, quero trocar', 'Trocar por outro modelo', 'Não reconheço esta compra',
+        'Abri a reclamação por engano', 'Demora dos Correios', 'Atraso dos Correios', 'Os Correios atrasaram a entrega', 'Desisti, os Correios atrasaram',
+        'O produto foi enviado no prazo mas os Correios atrasaram', 'Quero trocar de tamanho', 'Comprei o tamanho errado, quero trocar', 'Trocar por outro modelo', 'Não reconheço esta compra',
         'nao reconheco essa compra', 'Consta como entregue mas não recebi', 'Só queria perguntar sobre a garantia', 'Me arrependi, o produto não foi usado',
         'Desisti, comprei outro modelo em outra loja', 'Desisti, achei mais barato em outra loja'];
     const t1 = travou(legit);
@@ -340,10 +347,10 @@ console.log('Exclusão (revisão do grupo g): só o núcleo da regra + complemen
         'Troca de tamanho', 'Quero trocar o modelo', 'Me arrependi de ter comprado', 'Desisti, ja comprei outro', 'Me arrependi, comprei outro igual mais barato', 'Desisti, nem abri a caixa',
         'Desisti, devolvo lacrado', 'Me arrependi, comprei outro na loja física', 'Desisti, comprei por impulso', 'Comprei 2 por engano', 'comprei a cor errada', 'Me arrependi, não combinou com o meu sofá',
         'Me arrependi, quero devolver', 'Comprei sem querer', 'Engano meu, desculpe', 'Abri por engano', 'Foi engano, pode cancelar a reclamação', 'Não reconheço essa compra, não fui eu',
-        'Não fiz esta compra', 'No rastreio consta como entregue mas nao recebi', 'Chegou com 10 dias de atraso', 'Atraso dos Correios', 'Estou esperando há 20 dias, entrega atrasada',
-        'Passou do prazo de entrega', 'Desisti, chegou atrasado', 'Demorou demais pra chegar, ficou parado nos correios', 'A transportadora atrasou a entrega', 'Só queria tirar uma dúvida']);
+        'Não fiz esta compra', 'No rastreio consta como entregue mas nao recebi', 'Atraso dos Correios', 'Estou esperando há 20 dias, os Correios atrasaram',
+        'Demorou demais pra chegar, ficou parado nos correios', 'A transportadora atrasou a entrega', 'Só queria tirar uma dúvida']);
     ok(!l1.length, msg('continuam excluíveis: arrependimento com complemento neutro, troca pura, engano do comprador, transporte com o envio no prazo', l1));
-    ok(/demora do transporte/.test(SHC.motivoExcluivel('Os Correios atrasaram, o produto foi postado no prazo')) && /demora do transporte/.test(SHC.motivoExcluivel('Não quero mais, demorou para chegar'))
+    ok(/demora do transporte/.test(SHC.motivoExcluivel('Os Correios atrasaram, o produto foi postado no prazo')) && /demora do transporte/.test(SHC.motivoExcluivel('Não quero mais, demorou para chegar pelos Correios'))
         && /reclamação por engano/.test(SHC.motivoExcluivel('Engano meu')) && /arrependeu/.test(SHC.motivoExcluivel('Engano na compra')), 'cada motivo cai na regra certa (transporte, engano, arrependimento)');
     // Escolha documentada: o erro do comprador com o veículo junto fica como DÚVIDA (a compatibilidade pode ter vindo do anúncio); "tamanho
     // errado" sem dizer quem errou e "não gostei do cheiro" (pode ser o produto com cheiro) também. Na dúvida, não marca.
