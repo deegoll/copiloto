@@ -2068,7 +2068,8 @@
     };
     // ── fim 3.3.0 (E18) ──
     /**
-     * v3.3 Botão "Copiar pedido de exclusão" (aba Pós-venda): posvenda:<conta> + motivo + anúncios → o g de SHC.chamadoExclusao | null (nada a pedir).
+     * v3.3 Botão "Copiar pedido de exclusão" (aba Pós-venda): posvenda:<conta> + motivo + anúncios → o g de SHC.chamadoExclusao | null (nada a pedir);
+     * contaAgora = casos da leitura atual, fora da mediação, que contam na reputação (o botão só aparece com 1 ou mais).
      * Rastreio 07/10/2026 (R10): reclamação com mediação aberta fica fora (o ML não analisa a exclusão dela), pela situação do caso e do porPedido;
      * pedidos = os do motivo que não estão marcados "não contou na reputação"; produtos com o SKU pelo anúncio achado pelo título (SHC.posvendaAnalise).
      */
@@ -2080,7 +2081,7 @@
         if (!cs.length && !pedidos.length) return null;
         const produtos = SHC.posvendaAnalise(cs.filter(c => c.afetouReputacao !== false), itens || []).produtos.map(p => ({ sku: p.sku || '', titulo: p.titulo || '' }));
         const naReputacao = pedidos.length ? pedidos.filter(n => pp[n].afetouReputacao === true).length : cs.filter(c => c.afetouReputacao === true).length;
-        return { motivo: mot, casos: pedidos.length || cs.length, naReputacao, produtos, pedidos };
+        return { motivo: mot, casos: pedidos.length || cs.length, naReputacao, produtos, pedidos, contaAgora: cs.filter(c => c.afetouReputacao === true).length };
     };
     /** Frete da conta (frete:<conta>:hist) → {cor, resumo, conc} | null. Sempre vale conciliados + faltam + compradorPaga = vendas. */
     // Conciliação só vale com as vendas lidas (depois de atualizar a extensão, antes da sincronização, não há vendas: nunca "0 de 0").
@@ -4980,7 +4981,7 @@
                 // v3.3: motivo que as regras de exclusão do ML aceitam → o pedido de exclusão pronto (reputação e experiência de compra).
                 // Auditoria da loja: só quando algum caso desse motivo CONTA na reputação (pedir a exclusão do que não conta não tem sentido).
                 // Rastreio 07/10 (R10): e fora da mediação (P.grupoExclusao): caso em mediação o ML não analisa.
-                + (((P.grupoExclusao(posvenda, x.motivo, itens) || {}).naReputacao > 0) ? `<small class="det" style="display:block">Pode sair da reputação: ${esc(SHC.motivoExcluivel(x.motivo))}. Envie só se ${esc(SHC.confereExclusao(x.motivo))}. <button class="lnk" data-pos-excluir="${esc(x.motivo)}">${posCopiado === x.motivo ? '✓ Texto copiado' : 'Copiar pedido de exclusão'}</button></small>` : '')
+                + (((P.grupoExclusao(posvenda, x.motivo, itens) || {}).contaAgora > 0) ? `<small class="det" style="display:block">Pode sair da reputação: ${esc(SHC.motivoExcluivel(x.motivo))}. Envie só se ${esc(SHC.confereExclusao(x.motivo))}. <button class="lnk" data-pos-excluir="${esc(x.motivo)}">${posCopiado === x.motivo ? '✓ Texto copiado' : 'Copiar pedido de exclusão'}</button></small>` : '')
                 + '</div>').join('')
             + (a.motivos.length > 5 ? `<p class="rs">${btVer('pos:motivos', `Ver mais (${a.motivos.length - 5})`)}</p>` : '')
             + `<p class="rs">${esc(a.naReputacao + ' de ' + a.total)} contaram na sua reputação.</p></div>`;
