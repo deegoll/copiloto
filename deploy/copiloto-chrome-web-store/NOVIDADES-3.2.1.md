@@ -1,6 +1,6 @@
 # Copiloto 3.2.1: versão blindada (auditoria de segurança de 01/10/2026)
 
-Pacote: `copiloto-v3.2.1.zip` (nesta pasta). **Publicado na Chrome Web Store:** a ficha mostra a versão 3.2.1, atualizada em 02/10/2026 (conferido em 02/10/2026). A comparação deste zip com o CRX que a loja distribui ainda está pendente.
+Pacote: `copiloto-v3.2.1.zip` (nesta pasta). **Publicado na Chrome Web Store:** a ficha mostra a versão 3.2.1, atualizada em 02/10/2026 (conferido em 02/10/2026). Em 07/10/2026, o CRX que a loja distribui foi comparado com este zip: os 43 arquivos são iguais byte a byte (a loja só acrescenta `_metadata/` e a linha `update_url` do manifest). Para refazer: `node deploy/conferir-crx.js 3.2.1`.
 SHA-256 do zip (gerado de novo em 02/10/2026, depois da revisão final): `809BEA9BA393637328F19F7BA49D58694BB12975ED6F60EB8AFEA0ACD213F0F1` (43 arquivos, iguais byte a byte ao código de `extension-copiloto`). Se o pacote for refeito, troque aqui e anote também no registro do envio.
 Texto para a dona e para as clientes: `deploy/seguranca/copiloto/SEGURANCA-COPILOTO.md`.
 

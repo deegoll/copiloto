@@ -26,6 +26,9 @@ if ($novos) { throw "Arquivos fora da lista (decida se entram): $($novos.Name -j
 
 $versao = (Get-Content (Join-Path $ext 'manifest.json') -Raw | ConvertFrom-Json).version
 $zip = Join-Path $PSScriptRoot "copiloto-v$versao.zip"
+# 07/10: versão com etiqueta já foi enviada à loja; refazer o zip apagaria o pacote guardado (e o SHA-256 do VERSOES.md).
+$etiqueta = git -C $ext tag -l "copiloto-v$versao" 2>$null
+if ($etiqueta) { throw "A versão $versao já foi publicada (etiqueta $etiqueta). Suba a versão no manifest.json antes de empacotar." }
 $tmp = Join-Path $env:TEMP "copiloto-pacote-$versao"
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
 New-Item -ItemType Directory $tmp | Out-Null

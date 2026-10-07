@@ -14,11 +14,16 @@ Cada versão publicada tem uma etiqueta no Git (`copiloto-vX.Y.Z`). Nela, a past
 ```bash
 git show copiloto-v3.2.1 --stat
 sha256sum deploy/copiloto-chrome-web-store/copiloto-v3.2.1.zip
+node deploy/conferir-crx.js 3.2.1   # baixa o CRX da loja e compara com o zip
 ```
+
+O `conferir-crx.js` só confere a versão que a loja distribui hoje. Conferido em 07/10/2026: o CRX da 3.2.1 é igual ao zip (43 arquivos; a loja só acrescenta `_metadata/` e a linha `update_url`).
 
 ## Regra para as próximas versões
 
-1. `empacotar.ps1` gera o zip (só depois de todos os testes passarem).
-2. Antes de enviar à loja: commit da pasta `extension-copiloto/` e etiqueta `copiloto-vX.Y.Z` apontando para esse commit.
-3. Acrescentar a linha nesta tabela com o SHA-256 do zip e a data.
-4. Envio para análise só com o OK da dona.
+1. Subir a versão no `manifest.json`. O `empacotar.ps1` recusa uma versão que já tem etiqueta, para não apagar o zip publicado.
+2. `empacotar.ps1` gera o zip (só depois de todos os testes passarem).
+3. Antes de enviar à loja: commit da pasta `extension-copiloto/` e etiqueta `copiloto-vX.Y.Z` apontando para esse commit.
+4. Acrescentar a linha nesta tabela com o SHA-256 do zip e a data.
+5. Envio para análise só com o OK da dona.
+6. Depois de publicada: `node deploy/conferir-crx.js X.Y.Z`.

@@ -79,7 +79,17 @@ A lista técnica completa está em `deploy/copiloto-chrome-web-store/NOVIDADES-3
 5. **Módulo TikTok:** está desligado. Antes de ligar, a conferência dele tem de ser reforçada (anotado).
 6. **Licença:** hoje não manda nada. **Antes de ligar o login, a política nova tem de estar no ar**, porque a de hoje diz "não enviamos nada para os servidores do SellerHub".
 
-### O que falta você decidir (nada foi enviado)
+### Situação em 07/10/2026
+
+- **Envio da 3.2.1:** feito. Publicada em 02/10/2026. Em 07/10, o CRX que a loja distribui foi comparado com o zip guardado e é igual (`node deploy/conferir-crx.js 3.2.1`).
+- **Política de privacidade:** já está no ar, com o controlador, o CNPJ e a parte da LGPD preenchidos. Ela diz "Atualizada em 06/10/2026, para a versão 3.3.0" e já descreve o TikTok Shop (permissões opcionais `scripting` e `seller-br.tiktok.com`).
+- **3.3.0:** está no branch `copiloto-v3.3.0`, ainda não enviada. Conferido em 07/10: os 7 arquivos de teste passam, e o zip tem o SHA-256 do `VERSOES.md` e o mesmo conteúdo da pasta.
+- **Atenção, política × 3.3.0:** a política no ar descreve o TikTok Shop ligável, com as permissões `scripting` e `seller-br.tiktok.com`. A 3.3.0 do branch mantém o TikTok travado e não pede essas permissões. Ou a política diz mais do que a extensão faz, ou existe outra 3.3.0 fora deste repositório. Isso precisa ser esclarecido antes do envio. Se o TikTok for ligado, vale a conferência reforçada (risco 5).
+- **Próxima versão:** o `manifest.json` de `main` ainda diz 3.2.1. O `empacotar.ps1` agora recusa empacotar uma versão que já tem etiqueta. Antes, ele apagava e refazia o zip publicado.
+
+Os itens abaixo ficam como registro do que havia para decidir em 02/10.
+
+### O que faltava você decidir em 02/10 (registro)
 
 1. **Enviar a 3.2.1 para a loja.** Há dois caminhos:
    - **(a) Recomendado:** esperar a 3.2.0 ser aprovada e enviar a 3.2.1 logo em seguida.

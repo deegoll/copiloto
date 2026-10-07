@@ -25,7 +25,15 @@ git show copiloto-v3.2.1 --stat
 sha256sum deploy/copiloto-chrome-web-store/copiloto-v3.2.1.zip
 ```
 
-Para fechar a cadeia, baixe o CRX publicado do item acima e compare o conteúdo com o zip da etiqueta.
+Para fechar a cadeia, compare o CRX publicado com o zip da etiqueta:
+
+```bash
+node deploy/conferir-crx.js 3.2.1
+```
+
+O script baixa o CRX da loja e confere arquivo por arquivo. A loja só acrescenta `_metadata/` e a linha `update_url` no manifest. Conferido em 07/10/2026: os 43 arquivos são iguais.
+
+**Versão 3.3.0:** o código está no branch `copiloto-v3.3.0` e ainda não foi para a loja. Atenção: a política de privacidade no ar foi atualizada em 06/10/2026 "para a versão 3.3.0" e descreve o TikTok Shop ligável, com as permissões opcionais `scripting` e `seller-br.tiktok.com`. A 3.3.0 do branch não tem nada disso: o TikTok continua travado e o manifest não pede essas permissões.
 
 ## Estrutura
 
@@ -35,6 +43,7 @@ Para fechar a cadeia, baixe o CRX publicado do item acima e compare o conteúdo 
 | `copiloto-nucleo/` | Núcleo de cálculo multicanal em JavaScript puro, sem dependências. `extension-copiloto/nucleo/` é uma cópia idêntica de parte dele |
 | `tests/copiloto/` | Testes que conferem o código: segurança, conteúdo do pacote e divisão do fundo |
 | `deploy/copiloto-chrome-web-store/` | Empacotador (`empacotar.ps1`), zips das versões 3.x, `VERSOES.md`, política de privacidade e textos da ficha |
+| `deploy/conferir-crx.js` | Baixa o CRX da loja e compara com o zip enviado |
 | `deploy/cws-publicar.js` e `cws-autorizar.js` | Envio do zip pela API da Chrome Web Store. A credencial não está no repositório (`.gitignore`) |
 | `deploy/seguranca/copiloto/` | Resumo de segurança do Copiloto e o rascunho da nova política |
 
