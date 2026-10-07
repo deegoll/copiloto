@@ -287,14 +287,18 @@
                 acos: a.receita > 0 ? a.gasto / a.receita * 100 : null, antes: l ? l.antes : null, depois: l ? l.depois : null, acima: !!l && l.acima };
         }).sort((x, y) => (y.acima - x.acima) || (y.a.gasto - x.a.gasto));
     };
-    // Ads da conta no mês pelo Faturamento (fech:<conta>:<AAAA-MM>.porTipo): Product Ads e Publicidade de Seguidores.
-    // Tipo que não veio = null (não lido), nunca 0. Sinal: o valor gasto, positivo.
+    // Ads da conta no mês pelo Faturamento (fech:<conta>:<AAAA-MM>.porTipo): Product Ads e Publicidade de Seguidores, LÍQUIDOS (cobrado −
+    // estornado, como o Fechamento). Tipo que não veio = null (não lido), nunca 0. Sinal: positivo = gasto; negativo = os estornos passaram
+    // das cobranças no mês (crédito, nunca gasto: o Math.abs mostrava "R$ 15,00 de Product Ads"). texto = a frase do cartão Ads.
     P.adsDoFechamento = function (fech) {
         const pt = (fech && fech.porTipo) || null;
         if (!pt) return null;
-        const v = k => (SHC.num(pt[k]) === null ? null : SHC.r2(Math.abs(SHC.num(pt[k]))));
-        const ads = v('ads'), seguidores = v('ads_seguidores');
-        return ads === null && seguidores === null ? null : { ads, seguidores, total: SHC.r2((ads || 0) + (seguidores || 0)) };
+        const v = k => (SHC.num(pt[k]) === null ? null : SHC.r2(SHC.num(pt[k])));
+        const ads = v('ads'), seguidores = v('ads_seguidores'), est = ' (estornos maiores que as cobranças)';
+        if (ads === null && seguidores === null) return null;
+        const texto = (ads === null ? 'Product Ads não lido' : SHC.moeda(ads) + ' de Product Ads' + (ads < 0 ? est : ''))
+            + (seguidores ? (seguidores < 0 ? ' e ' : ' + ') + SHC.moeda(seguidores) + ' de Publicidade de Seguidores' + (seguidores < 0 ? est : '') : '');
+        return { ads, seguidores, total: SHC.r2((ads || 0) + (seguidores || 0)), texto };
     };
 
     // ── Saúde do estoque no Full (por produto). prevQtd = previsão de 30 dias (P.previsaoFull).
@@ -3605,7 +3609,7 @@
     const blocoAd = (k, titulo, resumo, dentro) => `<div class="card ad-bl"><div class="ad-cab"><div class="ad-t"><h3>${esc(titulo)}</h3><span>${resumo}</span></div>${dentro ? btVer(k) : ''}</div>${dentro && aberto(k) ? '<div class="ad-in">' + dentro + '</div>' : ''}</div>`;
     function cardAdsSku() {
         const fm = P.adsDoFechamento(fechMes), mes = P.nomeMes(SHC.hoje().slice(0, 7));
-        const totMes = fm ? `Ads da conta em ${esc(mes)} (Faturamento): ${fm.ads !== null ? SHC.moeda(fm.ads) + ' de Product Ads' : 'Product Ads não lido'}${fm.seguidores ? ' + ' + SHC.moeda(fm.seguidores) + ' de Publicidade de Seguidores' : ''}.` : '';
+        const totMes = fm ? `Ads da conta em ${esc(mes)} (Faturamento): ${esc(fm.texto)}.` : '';   // estorno líquido com o sinal − (P.adsDoFechamento)
         const cab = '<div class="ch"><h3>Ads</h3></div>', rodMes = totMes ? `<p class="det">${totMes}</p>` : '';
         if (!adsSnap) return `<div class="card">${cab}<p class="det">Aparece depois da próxima leitura do Mercado Ads.</p>${rodMes}</div>`;
         if (adsSnap.temAds === false) return `<div class="card">${cab}<p class="det">Esta conta não usa o Mercado Ads.</p>${rodMes}</div>`;

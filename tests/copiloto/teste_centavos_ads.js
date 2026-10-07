@@ -34,8 +34,8 @@
 //   7) [corrigida, #27] Sem o resumo do ML (falha da chamada campaigns/metrics): ads.html somava as campanhas e o painel os anúncios lidos →
 //      R$ 100,00 × R$ 60,00 com a lista de anúncios em parte, e a linha "Total" do painel ≠ soma das linhas. Agora o painel soma as campanhas
 //      (P.adsConta) e a linha Total é a soma das linhas (P.adsCampanhasTotal).
-//   8) P.adsDoFechamento e A.modelos usam Math.abs: mês com estorno de Product Ads maior que a cobrança (porTipo.ads = −15) aparece como
-//      R$ 15,00 GASTOS em Product Ads (crédito virou gasto).
+//   8) [corrigida, #28] P.adsDoFechamento e A.modelos usavam Math.abs: mês com estorno de Product Ads maior que a cobrança (porTipo.ads = −15)
+//      aparecia como R$ 15,00 GASTOS. Agora o valor líquido fica com o sinal ("−R$ 15,00 … estornos maiores que as cobranças").
 //   9) copiloto-nucleo motor.rateioAds: o último pedido leva o resto e o resto fica NEGATIVO quando as partes arredondam para cima
 //      (R$ 3,15 em 30 pedidos iguais: 29 × R$ 0,11 e o último −R$ 0,04). A soma fecha, mas um pedido ganha Ads negativo.
 // Rodar: node tests/copiloto/teste_centavos_ads.js
@@ -554,7 +554,7 @@ console.log('H. Ads do Faturamento (SHC.fechamentoDasCobrancas → P.adsDoFecham
     prop('A.modelos: "No Faturamento de MM/AAAA: R$ X" = porTipo.ads e porTipo.ads_seguidores do mês', meses.filter(x => x.cob.length || x.seg.length), x => {
         const rot = x.mes.slice(5) + '/' + x.mes.slice(0, 4), mods = A.modelos([], [{ mes: rot, porTipo: x.fech.porTipo }]), pt = x.fech.porTipo;
         const pa = mods.find(m => /^Product Ads/.test(m.nome)), sg = mods.find(m => /^Publicidade de Seguidores/.test(m.nome));
-        const v = (m, k) => { const r = new RegExp('No Faturamento de ' + rot.replace('/', '\\/') + ': (R\\$ [\\d.]+,\\d\\d)').exec(m ? m.detalhe : ''); return r ? deMoeda(r[1]) : null; };
+        const v = (m, k) => { const r = new RegExp('No Faturamento de ' + rot.replace('/', '\\/') + ': (−?R\\$ [\\d.]+,\\d\\d)').exec(m ? m.detalhe : ''); return r ? deMoeda(r[1]) : null; };
         return ((cent(pt.ads || 0) ? v(pa, 'ads') === cent(pt.ads) : !pa || v(pa) === null) && (cent(pt.ads_seguidores || 0) ? v(sg) === cent(pt.ads_seguidores) : !sg)) || `${x.mes}: ${mods.map(m => m.detalhe).join(' / ')}`;
     });
 }
@@ -711,6 +711,27 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
         return (cent(m.gasto) === c.tot.costC && cent(k.investimento) === c.tot.costC && cent(m.receita) === c.tot.recC && cent(k.receita) === c.tot.recC && m.vendas === c.tot.v && m.cliques === c.tot.cli
             && m.impressoes === c.tot.imp && cent(t.gasto) === rows.reduce((x, r) => x + cent(r.m.gasto), 0) && cent(t.gasto) === c.tot.costC && cent(t.receita) === c.tot.recC)
             || `conta ${c.k}: painel ${m.gasto} · ads.html ${k.investimento} · Total ${t.gasto} × ${reais(c.tot.costC)}`;
+    });
+}
+{   // #28: Product Ads líquido negativo no mês (estorno maior que a cobrança) é crédito, não gasto: o sinal − fica
+    const f = SHC.fechamentoDasCobrancas([{ id: '1|2|CPADS', data: '2026-09-05', texto: 'Product Ads', valor: 10 }, { id: '1|3|BPADS', data: '2026-09-06', texto: 'Cancelamento de Product Ads', valor: 25 }])['2026-09'];
+    const a = P.adsDoFechamento(f), mod = A.modelos([], [{ mes: '09/2026', porTipo: f.porTipo }])[0];
+    ok(f.porTipo.ads === -15 && a.ads === -15 && a.total === -15 && a.texto === '−R$ 15,00 de Product Ads (estornos maiores que as cobranças)'
+        && mod.detalhe === 'Nenhuma campanha lida no Mercado Ads. No Faturamento de 09/2026: −R$ 15,00 (estornos maiores que as cobranças no mês).',
+        `#28 Product Ads R$ 10,00 − estorno R$ 25,00: "−R$ 15,00" no painel e em ads.html, nunca R$ 15,00 de gasto (obtido: ${JSON.stringify(a)} | ${mod.detalhe})`);
+    const b = P.adsDoFechamento({ porTipo: { ads: 120.5, ads_seguidores: -7.25 } });
+    ok(b.ads === 120.5 && b.seguidores === -7.25 && b.total === 113.25 && b.texto === 'R$ 120,50 de Product Ads e −R$ 7,25 de Publicidade de Seguidores (estornos maiores que as cobranças)'
+        && P.adsDoFechamento({ porTipo: { ads: 30, ads_seguidores: 5 } }).texto === 'R$ 30,00 de Product Ads + R$ 5,00 de Publicidade de Seguidores',
+        `#28 seguidores com estorno líquido: total = R$ 120,50 − R$ 7,25 = R$ 113,25 e o texto com o sinal (obtido: ${b.texto})`);
+    const rnd = semente(728);
+    prop('#28 meses com estorno até 3× a cobrança: Ads do Faturamento (painel e ads.html) = cobrado − estornado com o sinal, no centavo', vezes(300), i => {
+        const cobC = I(rnd, 1, 50000), canC = I(rnd, 1, cobC * 3), segC = rnd() < 0.5 ? I(rnd, -20000, 20000) : 0, liq = cobC - canC;
+        const fx = SHC.fechamentoDasCobrancas([{ id: `${i}|1|CPADS`, data: '2026-08-03', texto: 'Product Ads', valor: cobC / 100 }, { id: `${i}|2|BPADS`, data: '2026-08-04', texto: 'Cancelamento de Product Ads', valor: canC / 100 }])['2026-08'];
+        const pt = Object.assign({}, fx.porTipo, segC ? { ads_seguidores: segC / 100 } : {}), x = P.adsDoFechamento({ porTipo: pt });
+        const det = (A.modelos([], [{ mes: '08/2026', porTipo: pt }]).map(m => m.detalhe).join(' ').match(/No Faturamento de 08\/2026: (−?R\$ [\d.]+,\d\d)/g) || []).map(t => deMoeda(t.replace(/^.*: /, '')));
+        const esperado = [liq, segC].filter(Boolean);
+        return (cent(x.ads) === liq && (segC ? cent(x.seguidores) === segC : !x.seguidores) && cent(x.total) === liq + segC && x.texto.indexOf(reais(liq) + ' de Product Ads') === 0
+            && JSON.stringify(det) === JSON.stringify(esperado)) || `cobrado ${cobC} estorno ${canC} seguidores ${segC}: ${JSON.stringify(x)} · ${det}`;
     });
 }
 
