@@ -2593,35 +2593,64 @@
     // Mesma regra do cartão "Alertas" do painel lateral (P.saudeFull / P.adsEquilibrio), para o número do ícone bater com a lista.
     const unDe = v => (typeof v === 'number' ? (isFinite(v) ? v : null) : inteiro(v));
     const mesMenos = (m, k) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 - k, 1)).toISOString().slice(0, 7);
+    // ── Previsão de 30 dias do Full: UMA conta para o painel (P.previsaoFull → plano, saúde e cartão Alertas) e para o ícone e o sino
+    // (SHC.alertasDe, que roda também no service worker). vm = {'AAAA-MM': vendas} do produto (vm|ml somado dos anúncios dele).
+    // Previsão = o maior entre as vendas dos últimos 30 dias (ML) e as do mesmo mês do ano passado (vm|ml).
+    // Campo que o ML não mostrou fica null (não vira 0): sem os dois números → qtd null (sem sugestão).
+    // lidos = meses lidos inteiros no Faturamento (ml:cobrancas mesesLidos): lá, mês sem a chave no vm = 0 vendas.
+    // v3.3 (pedido da dona 07/10/2026: "sugerir pelo estoque, pelo giro e pela sazonalidade"):
+    //  · PARADO (opc.aptas > 0 e nenhuma venda em 30 dias) não usa o ano passado: com estoque e sem venda o problema é o anúncio (exposição,
+    //    experiência, preço), não a época — mandar mais só empaca e gera armazenagem. fonte 'parado', qtd 0.
+    //  · Sazonalidade: vendas de 30 dias × índice do ano passado (mês alvo ÷ mês destes 30 dias, os dois de um ano antes). Só entra com 3+ vendas
+    //    no mês base e só para subir (até 3×): queda de época já aparece nas vendas de 30 dias. Vale o maior entre 30 dias, ano passado e índice.
+    SHC.SAZONAL_MAX = 3;
+    // Mês que mais pesa nos próximos 30 dias (hoje + 15 dias), um ano antes: 24/09/2026 → '2025-10'.
+    SHC.mesAnoPassado = hoje => mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') + 15 * 864e5).toISOString().slice(0, 7), 12);
+    SHC.previsaoFull = function (vendas30, vm, hoje, lidos, opc) {
+        const u = unDe(vendas30), ult30 = u === null ? null : Math.max(0, u), mes = SHC.mesAnoPassado(hoje);
+        const doMes = m => (vm && vm[m] !== undefined && vm[m] !== null ? unDe(vm[m]) : (vm && (lidos || []).indexOf(m) >= 0 ? 0 : null));
+        const a = doMes(mes), ano = a === null ? null : Math.max(0, a);
+        if (ult30 === 0 && unDe(opc && opc.aptas) > 0) return { qtd: 0, fonte: 'parado', ult30, mes, anoPassado: ano, base: null, baseAno: null, indice: null };
+        const base = mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') - 15 * 864e5).toISOString().slice(0, 7), 12), b = base === mes ? null : doMes(base);
+        const indice = ult30 > 0 && ano !== null && b >= 3 && ano > b ? Math.min(SHC.SAZONAL_MAX, SHC.r2(ano / b)) : null;
+        const saz = indice ? Math.ceil(ult30 * indice - 1e-9) : null;
+        const qtd = ult30 === null && ano === null ? null : Math.max(ult30 || 0, ano || 0, saz || 0);
+        const fonte = saz !== null && qtd === saz && saz > Math.max(ult30 || 0, ano || 0) ? 'sazonal' : ano !== null && (ult30 === null || ano > ult30) ? 'anoPassado' : 'ult30';
+        return { qtd, fonte, ult30, mes, anoPassado: ano, base: indice ? base : null, baseAno: indice ? b : null, indice };
+    };
+    // Variações do mesmo anúncio (mesmos MLB): o vm|ml é do anúncio inteiro → a variação fica com pct% de cada mês (arredondado), pct = a parte
+    // dela nas vendas de 30 dias. pct null (nenhuma venda para dividir) → null: sem essa parte, o ano passado não entra. Painel e ícone.
+    SHC.vmDaParte = (vm, pct) => (pct === null || pct === undefined ? null
+        : Object.keys(vm || {}).reduce((o, m) => { const v = unDe(vm[m]); if (v !== null) o[m] = Math.round(v * pct / 100); return o; }, {}));
     /**
      * dados = { full: ml:full, ads: ads:<conta>, itens: anúncios do retrato, custos: {chave: dados} (c|sku|…, c|ml|…), cfg,
      *           vm?: {MLB: {'AAAA-MM': vendas}} (vm|ml), mesesLidos?: ['AAAA-MM'], hoje: 'AAAA-MM-DD',
      *           saude?: { semFiscal: n (fiscal:<conta>.total), perdendo: n (anúncios ativos com radar 'caindo') } }
      * → { criticos, full, ads, lista:[{tipo:'full'|'ads', nivel:'critico', chave, itemId, sku, titulo, texto, …}] }
-     * Full (produto com alerta): previsão de 30 dias = maior entre vendas30 e o mesmo mês do ano passado (vm). Alerta = acaba em
-     *   ≤ 7 dias (ML ou aptas ÷ previsão; sem estoque e com previsão = acabou) ou aptas + a caminho abaixo do mínimo em unidades
-     *   do SKU (SHC.fullMinimo; sem mínimo definido não há "abaixo do mínimo").
+     * Full (produto com alerta): previsão de 30 dias = SHC.previsaoFull, a MESMA do painel (30 dias, ano passado, índice sazonal, parado).
+     *   Alerta = acaba em ≤ 7 dias (ML ou ⌊aptas × 30 ÷ previsão⌋; sem estoque e com previsão = acabou) ou aptas + a caminho abaixo do
+     *   mínimo em unidades do SKU (SHC.fullMinimo; sem mínimo definido não há "abaixo do mínimo").
      * Ads (acima do equilíbrio): gasto > sobra por unidade antes do Ads × vendas do Ads. Sem custo do produto não alerta.
      */
     SHC.alertasDe = function (dados) {
         dados = dados || {};
         const cfg = Object.assign({}, SHC.PADRAO, dados.cfg || {}), custos = dados.custos || {}, lista = [];
         const hoje = dados.hoje || SHC.hoje(), vm = dados.vm || {}, lidos = dados.mesesLidos || [];
-        const mesAno = mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') + 15 * 864e5).toISOString().slice(0, 7), 12);
         // Variações do mesmo anúncio (mesmos MLB): o vm|ml é do anúncio inteiro → cada uma fica com a parte dela nas vendas de 30 dias
-        // (mesma conta de P.planoFull); sem essa parte, o ano passado não entra.
+        // (SHC.vmDaParte, a mesma conta de P.planoFull); sem essa parte, o ano passado não entra.
         const prods = ((dados.full && dados.full.produtos) || []).filter(Boolean);
         const idsDe = p => [...new Set((p.itemIds && p.itemIds.length ? p.itemIds : [p.itemId]).filter(Boolean))];
+        // vm do produto = soma dos anúncios dele, mês a mês (como o vmDe do painel, P.somaMeses); sem anúncio → null (ano passado desconhecido).
+        const vmDe = ids => (ids.length ? ids.reduce((o, id) => { Object.keys(vm[id] || {}).forEach(m => { o[m] = (o[m] || 0) + (unDe(vm[id][m]) || 0); }); return o; }, {}) : null);
         const irmaos = {};
         prods.forEach(p => { const k = idsDe(p).sort().join(','); if (k) { const g = irmaos[k] || (irmaos[k] = { n: 0, v: 0 }); g.n++; g.v += Math.max(0, unDe(p.vendas30) || 0); } });
         prods.forEach(p => {
             const aptas = unDe(p.aptas), v30 = unDe(p.vendas30), cam = Math.max(0, unDe(p.aCaminho) || 0);
             if (aptas === null) return;
             const ids = idsDe(p), g = irmaos[ids.slice().sort().join(',')];
-            const comMes = ids.filter(id => vm[id] && vm[id][mesAno] !== undefined && vm[id][mesAno] !== null);
-            let ano = comMes.length ? Math.max(0, comMes.reduce((n, id) => n + (unDe(vm[id][mesAno]) || 0), 0)) : (ids.length && lidos.indexOf(mesAno) >= 0 ? 0 : null);
-            if (g && g.n > 1) ano = g.v > 0 && v30 !== null && ano !== null ? Math.round(ano * Math.max(0, v30) / g.v) : null;
-            const ult30 = v30 === null ? null : Math.max(0, v30), prev = ult30 === null && ano === null ? null : Math.max(ult30 || 0, ano || 0);
+            const vmP = g && g.n > 1 ? SHC.vmDaParte(vmDe(ids), g.v > 0 && v30 !== null ? Math.max(0, v30) / g.v * 100 : null) : vmDe(ids);
+            // #19: a MESMA previsão do painel (P.previsaoFull = SHC.previsaoFull), com o índice sazonal e o parado da v3.3.
+            const prev = SHC.previsaoFull(p.vendas30, vmP, hoje, lidos, { aptas: p.aptas }).qtd;
             const cad = p.sku && SHC.chaveSku ? custos[SHC.chaveSku(p.sku)] : null;
             const tem = Math.max(0, aptas), fm = SHC.fullMinimo(p, cad, prev, dados.sellerId);   // F23: mínimo da conta
             const cobertura = prev > 0 ? Math.floor(tem * 30 / prev) : null;   // multiplica antes: 23 × 30 ÷ 23 = 30 (23 ÷ (23 ÷ 30) dava 29,999…)
