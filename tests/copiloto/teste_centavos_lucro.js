@@ -381,6 +381,12 @@ console.log('E. SHC.precoMinimo: o menor preço que deixa a meta (busca centavo 
             && sa.sobra === 85.86 && cent(sa.sobra) === 8700 - deMoeda(SHC.moeda(ga.custo)) - deMoeda(SHC.moeda(ga.outros))
             && gb.custo === 7.78 && gb.outros === 1.01 && gb.frete === 20 && gb.comissao_pct === 12.345 && banco[SHC.chave('ml', 'MLB9100000013')].custo === 0,
             'anúncio sem SKU grava em centavos: "1,005" → 1,01 (igual ao do SKU), o campo do painel e a etiqueta mostram 1,01 e a sobra 87,00 − 1,01 − 0,13 = 85,86; % de comissão fica como veio');
+        // #11: o painel lateral ("＋ custo" de anúncio sem SKU e custo da família nas Promoções) grava pelo P.gravarCusto, que também vai em centavos.
+        await P.gravarCusto(P.alvoCusto([], ['MLB9100000021'], null), SHC.num('1,005'), 't');
+        await P.gravarCusto({ chaves: [SHC.chaveParaGravar({ familia: 'F123' })] }, SHC.num('12,345'), 'f');
+        const gl = banco[SHC.chaveParaGravar({ itemId: 'MLB9100000021' })], gf = banco[SHC.chaveParaGravar({ familia: 'F123' })];
+        ok(gl.custo === 1.01 && campo(gl.custo) === '1,01' && SHC.moeda(gl.custo) === 'R$ 1,01' && SHC.sobraAnuncio({ preco: 100, recebe: 87 }, gl, {}).sobra === 85.99 && gf.custo === 12.35,
+            'painel lateral, anúncio sem SKU e família: "1,005" → 1,01 e "12,345" → 12,35; o campo, a etiqueta e a sobra (87,00 − 1,01 = 85,99) batem');
     }
 
     console.log('G. Lista de Anúncios → balão "Resultado de 1 venda" → etiqueta (números do ML + custo e imposto do seller)');

@@ -74,6 +74,7 @@
     };
     // Digitado aqui = origem 'manual' (a leitura do Tiny não troca, SHC.tinyDigitado); o título gravado antes fica.
     P.gravarCusto = async function (alvo, custo, titulo) {
+        custo = SHC.r2(custo);   // em centavos, como o SHC.salvarCusto e o salvarCustoSku: "1,005" → 1,01 no campo, na etiqueta e na conta
         const tit = atual => (titulo && !(atual && atual.titulo) ? { titulo } : {});
         if (alvo.sku) return SHC.salvarCustoSku(alvo.sku, Object.assign({ custo, origem: 'manual' }, tit(await SHC.lerChave(SHC.chaveSku(alvo.sku)))));
         for (const k of alvo.chaves) { const a = (await SHC.lerChave(k)) || {}; await SHC.gravarChave(k, Object.assign(a, tit(a), { custo, origem: 'manual', atualizado: Date.now() })); }
@@ -7343,7 +7344,7 @@
     }
     async function salvarCustoFamilia(chave) {
         const inp = document.querySelector(`[data-custo="${CSS.escape(chave)}"]`), v = SHC.num(inp.value);
-        if (!(v > 0)) { inp.style.borderColor = '#DC2626'; inp.focus(); return; }
+        if (!(SHC.r2(v) > 0)) { inp.style.borderColor = '#DC2626'; inp.focus(); return; }   // 0,004 vira 0 em centavos: não é custo
         const f = snap.familias.find(x => x.chave === chave);
         const alvo = P.alvoCusto(skusFam[chave] || [], ((f && f.anuncios) || []).concat((propsPorFam[chave] || []).map(p => p.itemId)), custoFam[chave], chave);
         if (!alvo) return;
@@ -7356,7 +7357,7 @@
     async function salvarCustoGrupo(chave, bt) {
         const perto = bt && bt.parentElement && bt.parentElement.querySelector && bt.parentElement.querySelector('[data-csku]');
         const inp = perto || document.querySelector(`[data-csku="${CSS.escape(chave)}"]`), v = SHC.num(inp.value);
-        if (!(v > 0)) { inp.style.borderColor = '#DC2626'; inp.title = P.MSG_CUSTO; avisa(P.MSG_CUSTO, 8000); inp.focus(); return; }   // só a borda vermelha não diz o que fazer
+        if (!(SHC.r2(v) > 0)) { inp.style.borderColor = '#DC2626'; inp.title = P.MSG_CUSTO; avisa(P.MSG_CUSTO, 8000); inp.focus(); return; }   // só a borda vermelha não diz o que fazer; 0,004 vira 0 em centavos
         const g = grupos.find(x => x.chave === chave) || (chave.indexOf('sku:') === 0 ? { sku: chave.slice(4), itens: [{}], titulo: '' } : null);   // 3.3.0 (E14): SKU que só o TikTok tem (filtro TikTok) → c|sku|<SKU>
         if (!g) return;
         catEditando = null;
