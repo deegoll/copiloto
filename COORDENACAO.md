@@ -18,7 +18,6 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
-| nuvem | **M4** · regras oficiais da Shopee e da Magalu (reclamação, devolução, exclusão de reclamação, frete, tarifas) | ramo `nuvem/m4-regras-canais`: só `docs/canais/shopee.md`, `docs/canais/magalu.md` e um teste novo | 07/10 |
 | nuvem 2 | **3.4.0 · etiquetas de sobra na Shopee e na Magalu** (pedido da dona, 07/10 11:05): na lista de produtos do Seller Center da Shopee e do painel da Magalu, a etiqueta "Sobra R$ X · margem Y%" por produto, com o custo cadastrado no Copiloto. A Shopee já tem a tabela oficial no núcleo (`tarifas.js`). A Magalu precisa da tabela oficial (M4). **Espera os retratos M2, M3 e M4 da local** | ramo `nuvem2/etiquetas-shopee-magalu` (a criar), só depois dos retratos | 07/10 11:05 |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
@@ -91,6 +90,12 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem → local (07/10 18:55 UTC): M4 pronta no ramo `nuvem/m4-regras-canais`, commit `4f032db`** (base `local/3.3.0-final`).
+  - Novos `docs/canais/shopee.md` (8 fontes oficiais: central do vendedor e central de ajuda) e `docs/canais/magalu.md` (4 fontes do Universo Magalu), cada regra com a fonte e a data lida (07/10/2026).
+  - Shopee: disputa e provas aceitas, prazos de devolução (3, 7, 12, 30, 60 dias), recurso de pontos de penalidade (14 dias), cupons de frete, comissão de 01/10/2026 (fixo R$ 4,50; CPF +R$ 3 acima de 450 pedidos/90 dias). Os percentuais por faixa estão em imagem: "não encontrado em texto".
+  - Duas divergências entre páginas oficiais da Shopee, anotadas: prazo das provas de dano (3 × 2 dias) e limite da "metade do preço" (R$ 9 no artigo 26839 × R$ 8 no 18483). O núcleo segue o R$ 9.
+  - Magalu: só o SLA (atendimento, índice de reclamação < 5% e < 1%, rastreio), repasse e comissão de 9,9% para novos. Devolução, exclusão de reclamação, comissão por categoria e frete do Magalu Entregas: "não encontrado" (portal com login e central com Cloudflare). Fica para o M3 logado.
+  - Teste novo `teste_canais_m4.js` (reprova sem os arquivos, com regra sem fonte ou com fonte fora do domínio oficial; confere a tarifa fixa com o núcleo). Suíte do GitHub: `TUDO OK` (10 arquivos + núcleo). Não mexi no zip nem no `VERSOES.md`; não é código da extensão.
 - **nuvem 2 → local (07/10): o C1 + N2a está pronto no PR #7 (`nuvem/331-centavos`, base `local/3.3.0-final`, rascunho).** São 65 commits.
   - Os 6 `teste_centavos_*.js` foram ajustados à trava do frete da 3.3.0. Os testes acharam 3 erros, já corrigidos:
     - (1) `F.juntaConferir` contava duas vezes a mesma cobrança;
@@ -327,6 +332,7 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 | Lado | Tarefa | Commit |
 |---|---|---|
+| nuvem | M4: regras oficiais da Shopee e da Magalu em `docs/canais/` com o `teste_canais_m4.js` (ramo `nuvem/m4-regras-canais`) | `4f032db` |
 | nuvem 2 | 3.3.0 final: código do computador + C2, política nova, zip e SHA (ramo `nuvem2/330-final`, PR #6) | `703209f` |
 | nuvem | N2a "cada centavo": 6 arquivos `teste_centavos_*.js`, 460 conferências (ramo `nuvem/testes-centavos`, PR depois da sua sincronização) | `643db14` |
 | nuvem | C2 para a 3.3.0: multi-empresa sem mistura e contestação só com fato lido (ramo `nuvem/bloqueios-330`, PR #4) | `a110667` |
