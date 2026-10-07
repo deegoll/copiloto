@@ -5425,7 +5425,7 @@
     /**
      * { skus:[{sku, qtd, medidas:{ordenadas:[cm], pesoKg}|null}], remessasAnteriores: ml:full:remessas:<conta> (ou o array) }
      * → { itens, unidades, volumeM3, pesoKg, semMedida:[sku], semPeso:[sku], volumesEstimados:{caixas, pallets, texto}, veiculo,
-     *     custoEstimado:{valor, min, max, porUnidade, base (remessas usadas), fonte:'suas remessas anteriores'} | null, custoMotivo }
+     *     custoEstimado:{valor, min, max, porUnidade, base (remessas usadas), fonte:'suas remessas anteriores', baseTxt (a base, para a tela)} | null, custoMotivo }
      * Volume = soma das caixas dos produtos (sem folga de empilhamento: é o mínimo). Caixas de até 25 kg / 0,1 m³; pallet quando passa de 1 m³.
      */
     SHC.simulaRemessa = function (o) {
@@ -5455,7 +5455,9 @@
         let custo = null, custoMotivo = '';
         if (base.length && un > 0) {
             const pu = base.map(r => r.custo / r.unidades), med = pu.reduce((s, x) => s + x, 0) / pu.length;
-            custo = { valor: SHC.r2(med * un), min: SHC.r2(Math.min(...pu) * un), max: SHC.r2(Math.max(...pu) * un), porUnidade: SHC.r2(med), base: base.length, fonte: 'suas remessas anteriores' };
+            // baseTxt: a base que a conta usou, com a palavra do filtro ("recebida"; o cartão chama de "fechada" também a vencida e a cancelada).
+            custo = { valor: SHC.r2(med * un), min: SHC.r2(Math.min(...pu) * un), max: SHC.r2(Math.max(...pu) * un), porUnidade: SHC.r2(med), base: base.length, fonte: 'suas remessas anteriores',
+                baseTxt: base.length === 1 ? 'o que o ML cobrou na sua última remessa recebida' : 'a média das suas últimas ' + base.length + ' remessas recebidas com cobrança' };
         } else custoMotivo = 'O Mercado Livre cobra a coleta por distância, mas não publica a tabela; o Copiloto aprende com as suas remessas' + (un > 0 ? ' — ainda não há remessa recebida com cobrança nesta conta.' : '.');   // recebida: vencida/cancelada não conta (#17)
         return { itens, unidades: un, volumeM3: vol, pesoKg: peso, semMedida, semPeso, volumesEstimados: volumes, veiculo,
             veiculoMotivo: veiculo ? '' : (!un ? 'Informe as quantidades.' : 'Falta a medida de ' + SHC.qtd(semMedida.length, 'SKU', 'SKUs') + ' (o Copiloto lê as medidas do ML na rodada lenta, ou use a planilha do ERP).'),

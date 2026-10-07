@@ -5203,7 +5203,7 @@
             + `<div class="acoes" style="justify-content:flex-start"><button class="bt leve" data-sim-ver>Recalcular</button></div>`
             + `<div class="recnota neutra"><b>${fmtUn(s.unidades)} un.</b> · volume ${fmt3(s.volumeM3)} m³${s.semMedida.length ? ' (sem ' + SHC.qtd(s.semMedida.length, 'SKU', 'SKUs') + ')' : ''} · peso ${kg(s.pesoKg)}${s.semPeso.length ? ' (sem ' + SHC.qtd(s.semPeso.length, 'SKU', 'SKUs') + ')' : ''}${s.volumesEstimados.texto ? ' · ' + esc(s.volumesEstimados.texto) : ''}<br>`
             + `Veículo sugerido: ${s.veiculo ? '<b>' + esc(s.veiculo) + '</b>' : esc(s.veiculoMotivo)}<br>`
-            + (s.custoEstimado ? `Custo estimado da coleta: <b>${SHC.moeda(s.custoEstimado.valor)}</b> (de ${SHC.moeda(s.custoEstimado.min)} a ${SHC.moeda(s.custoEstimado.max)}) · ${SHC.moeda(s.custoEstimado.porUnidade)} por unidade, a média das suas últimas ${SHC.qtd(s.custoEstimado.base, 'remessa fechada', 'remessas fechadas')} com cobrança.` : esc(s.custoMotivo)) + '</div>'
+            + (s.custoEstimado ? `Custo estimado da coleta: <b>${SHC.moeda(s.custoEstimado.valor)}</b> (de ${SHC.moeda(s.custoEstimado.min)} a ${SHC.moeda(s.custoEstimado.max)}) · ${SHC.moeda(s.custoEstimado.porUnidade)} por unidade, ${esc(s.custoEstimado.baseTxt)}.` : esc(s.custoMotivo)) + '</div>'
             + '<p class="det">O Mercado Livre cobra a coleta por distância e não publica a tabela: o custo aqui é o que ele cobrou nas suas remessas anteriores, por unidade. Volume = a soma das caixas dos produtos, sem folga. Fonte: Estoque Full, Gestão de envios Full e as medidas dos seus anúncios.</p>';
         return h + '</div>';
     }
