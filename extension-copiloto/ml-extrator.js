@@ -5807,9 +5807,13 @@
      * contas = [{sellerId, nome, vb (vb:<conta>), fech (fech:<conta>:<mes>), anomalias (shc:anomalias:<conta> | null)}], mes 'AAAA-MM'
      * → { mes, contas:[{sellerId, nome, vendasBrutas|null, parcial, liquido|null, alertas|null, motivo}], total:{vendasBrutas, liquido, alertas, contasComVendas, contasComLiquido}, faltando:[nome] }
      * Líquido = vendas brutas − canceladas/devolvidas − tudo o que o ML cobrou no mês (fech.total), a mesma conta do Fechamento. Sem o dado, null e o motivo (nunca 0).
+     * v3.3 multi-empresa (bloqueio 5): c.empresa = '' (as contas não separadas) ou o sellerId da conta marcada "Outra empresa" (SHC.dadosContas).
+     * Faturamento de empresas diferentes NUNCA se soma: empresas = [{ empresa, contas:[sellerId], total }] (a principal primeiro) e o total geral
+     * só existe com uma empresa só (com 2 ou mais, total = null e variasEmpresas = true).
      */
     SHC.consolidado = function (contas, mes) {
-        const out = { mes, contas: [], total: { vendasBrutas: 0, liquido: 0, alertas: 0, contasComVendas: 0, contasComLiquido: 0, contasComAlertas: 0 }, faltando: [] };
+        const zero = () => ({ vendasBrutas: 0, liquido: 0, alertas: 0, contasComVendas: 0, contasComLiquido: 0, contasComAlertas: 0 }), grupos = new Map();
+        const out = { mes, contas: [], total: null, empresas: [], variasEmpresas: false, faltando: [] };
         (contas || []).forEach(c => {
             if (!c || !c.sellerId) return;
             const nome = c.nome || SHC.nomeConta(c.sellerId), vbm = c.vb && c.vb.dias ? SHC.vendasBrutasDoMes(c.vb.dias, mes) : null, f = c.fech;
@@ -5818,15 +5822,24 @@
             const liquido = bruto !== null && custos !== null ? SHC.r2(bruto - (vbm.cancelado || 0) - (vbm.devolvido || 0) - custos) : null;
             const alertas = c.anomalias && typeof c.anomalias.total === 'number' ? c.anomalias.total : null;
             const motivo = bruto === null ? 'Ainda não li as vendas desta conta neste mês. Entre nela no Mercado Livre e sincronize.' : custos === null ? 'O Faturamento deste mês ainda não foi lido nesta conta.' : '';
-            out.contas.push({ sellerId: String(c.sellerId), nome, vendasBrutas: bruto, parcial, liquido, alertas, motivo });
-            if (bruto !== null) { out.total.vendasBrutas = SHC.r2(out.total.vendasBrutas + bruto); out.total.contasComVendas++; } else out.faltando.push(nome);
-            if (liquido !== null) { out.total.liquido = SHC.r2(out.total.liquido + liquido); out.total.contasComLiquido++; }
-            if (alertas !== null) { out.total.alertas += alertas; out.total.contasComAlertas++; }
+            const empresa = typeof c.empresa === 'string' ? c.empresa : '';
+            out.contas.push({ sellerId: String(c.sellerId), nome, vendasBrutas: bruto, parcial, liquido, alertas, motivo, empresa, outraEmpresa: !!empresa });
+            if (!grupos.has(empresa)) grupos.set(empresa, { empresa, contas: [], total: zero() });
+            const g = grupos.get(empresa), t = g.total;
+            g.contas.push(String(c.sellerId));
+            if (bruto !== null) { t.vendasBrutas = SHC.r2(t.vendasBrutas + bruto); t.contasComVendas++; } else out.faltando.push(nome);
+            if (liquido !== null) { t.liquido = SHC.r2(t.liquido + liquido); t.contasComLiquido++; }
+            if (alertas !== null) { t.alertas += alertas; t.contasComAlertas++; }
         });
-        out.contas.sort((a, b) => (b.vendasBrutas || 0) - (a.vendasBrutas || 0));
-        if (!out.total.contasComVendas) out.total.vendasBrutas = null;
-        if (!out.total.contasComLiquido) out.total.liquido = null;
-        if (!out.total.contasComAlertas) out.total.alertas = null;
+        out.contas.sort((a, b) => (a.empresa === b.empresa ? 0 : !a.empresa ? -1 : !b.empresa ? 1 : a.empresa < b.empresa ? -1 : 1) || (b.vendasBrutas || 0) - (a.vendasBrutas || 0));
+        out.empresas = [...grupos.values()].sort((a, b) => (!a.empresa ? -1 : !b.empresa ? 1 : a.empresa < b.empresa ? -1 : 1));
+        out.empresas.forEach(({ total: t }) => {
+            if (!t.contasComVendas) t.vendasBrutas = null;
+            if (!t.contasComLiquido) t.liquido = null;
+            if (!t.contasComAlertas) t.alertas = null;
+        });
+        out.variasEmpresas = out.empresas.length > 1;
+        out.total = out.empresas.length === 1 ? out.empresas[0].total : out.empresas.length ? null : (t => Object.assign(t, { vendasBrutas: null, liquido: null, alertas: null }))(zero());
         return out;
     };
 
