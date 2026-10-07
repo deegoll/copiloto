@@ -4809,8 +4809,8 @@
         if (v !== null && v >= L.subindo && est.proprio > 0 && !(est.full > 0))
             return Object.assign(out, { acao: 'full', cor: 'azul', rotulo: 'Enviar ao Full', motivo: capF(tend) + unTxt(est.proprio) + ' no seu estoque, fora do Full.' });
         if ((v !== null && v <= L.caindo && (cob === null || cob > L.coberturaAlta) && est.total > 0) || (!(vendaDia > 0) && est.total > 0 && un !== null))
-            return Object.assign(out, { acao: 'baixar', cor: 'amarelo', rotulo: 'Baixar preço ou promoção', motivo: capF(tend) + 'estoque de ' + unTxt(est.total) + (cob === null ? ' parado' : dura) + '.' });
-        return Object.assign(out, { acao: 'manter', cor: 'verde', rotulo: 'Manter', motivo: capF(tend) + (est.total > 0 ? 'estoque de ' + unTxt(est.total) + dura : 'sem estoque e sem venda') + '.' });
+            return Object.assign(out, { acao: 'baixar', cor: 'amarelo', rotulo: 'Baixar preço ou promoção', motivo: capF(tend + 'estoque de ' + unTxt(est.total) + (cob === null ? ' parado' : dura) + '.') });
+        return Object.assign(out, { acao: 'manter', cor: 'verde', rotulo: 'Manter', motivo: capF(tend + (est.total > 0 ? 'estoque de ' + unTxt(est.total) + dura : 'sem estoque e sem venda') + '.') });   // maiúscula também sem a tendência (mês anterior não lido)
     };
     /** Anúncio parado (SHC.familias(...)[i].parados: estoque e nenhuma venda nos 3 últimos meses) → a mesma forma de SHC.recomendaSku. */
     SHC.recomendaParado = p => ({ acao: 'liquidar', cor: 'vermelho', rotulo: 'Liquidar ou descartar', vendaDia: 0, cobertura: null,
