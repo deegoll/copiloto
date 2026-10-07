@@ -722,15 +722,32 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
             ['remove do ERP', /chrome\.storage\.local\.remove\(\s*(SHC\.(TINY|OMIE|BLING)_CHAVE|\[?\s*['"`]erp[:@])/],
             ['cfg cru', /mud\.cfg\.newValue\s*\|\|\s*\{\}\)\s*;?\s*repinta|Object\.assign\(\{\}, SHC\.PADRAO, (mud|tudo|r|t)\.cfg/],
         ];
-        // Leituras cruas conferidas que não são de números de empresa (cada uma diz por quê). Nova leitura crua → passa pela camada ou entra aqui.
-        const PODE = {
-            'fundo/01-carga-e-eventos.js|get(null)': 'limparVersaoAntiga: só apaga ad|ml| e o retrato "atual" e limpa o apelido de ml:contas',
-            'fundo/09-custos-erp.js|get do cfg': 'empresaDoPedido: só lê cfg.empresaSeparada (qual conta é outra empresa), que é de todas',
-            'painel-lateral.js|lerChave do cfg': 'robô de promoções (cfg.robopromo): ainda é um só para todas as empresas',
-        };
+        // Leituras cruas conferidas que não são de números de empresa (cada uma diz por quê). Revisão 07/10: liberadas UMA A UMA pelo texto exato
+        // da linha (antes a liberação valia para o arquivo inteiro: o painel lateral podia voltar a ler o cfg cru e a suíte seguia verde).
+        // Nova leitura crua → passa pela camada da empresa ou entra aqui com a linha dela.
+        const PODE = [
+            ['fundo/01-carga-e-eventos.js', 'get(null)', "const tudo = await chrome.storage.local.get(null), fora = Object.keys(tudo).filter(k => k.indexOf('ad|ml|') === 0);",
+                'limparVersaoAntiga: só apaga ad|ml| e o retrato "atual" e limpa o apelido de ml:contas'],
+            ['fundo/09-custos-erp.js', 'get do cfg', "const cfg = (await chrome.storage.local.get('cfg')).cfg || {};", 'empresaDoPedido: só lê cfg.empresaSeparada (qual conta é outra empresa), que é de todas'],
+            ['painel-lateral.js', 'lerChave do cfg', "const salvarCfgRobo = async patch => SHC.gravarChave('cfg', Object.assign({}, (await SHC.lerChave('cfg')) || {}, patch));",
+                'robô de promoções (cfg.robopromo): ainda é um só para todas as empresas'],
+        ];
+        // Cada ocorrência de cada padrão, com a linha onde começa: só passa a que tem uma liberação com o mesmo arquivo, padrão e texto (1 por liberação).
         const varre = (arqs, ler) => {
             const cru = [];
-            arqs.forEach(a => { const t = ler(a); CRU.forEach(([nome, rx]) => { if (rx.test(t) && !PODE[a + '|' + nome]) cru.push(a + ': ' + nome); }); });
+            arqs.forEach(a => {
+                const t = ler(a), linhas = t.split('\n'), usadas = new Set();
+                CRU.forEach(([nome, rx]) => {
+                    const g = new RegExp(rx.source, 'g');
+                    let m;
+                    while ((m = g.exec(t))) {
+                        const n = t.slice(0, m.index).split('\n').length, linha = linhas[n - 1].trim();
+                        const k = PODE.findIndex((x, i) => !usadas.has(i) && x[0] === a && x[1] === nome && x[2] === linha);
+                        if (k >= 0) usadas.add(k); else cru.push(a + ':' + n + ': ' + nome);
+                        if (!m[0].length) g.lastIndex++;
+                    }
+                });
+            });
             return cru;
         };
         // O detector acusa cada padrão (as leituras que escapavam da trava antiga: rastreio cego_estatico.js).
@@ -738,6 +755,11 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
             'v.js': 'chrome.storage.local.get([...chaves])', 'u.js': "chrome.storage.local.remove('erp:tiny')", 'fundo/q.js': 'chrome.storage.local.get(null)', 's.js': 'cfg: Object.assign({}, SHC.PADRAO, tudo.cfg || {})' };
         ok(varre(Object.keys(amostras), a => amostras[a]).length === Object.keys(amostras).length && !varre(['ok.js'], () => "SHC.lerCfg(); SHC.areaEmpresa().get([...chaves]); chrome.storage.local.get('shc:ret:1')").length,
             'a trava acusa get("cfg"), get(["c|sku|…"]), getKeys(), lerChave("cfg"), get([...chaves]), remove("erp:…") e o cfg cru (e não acusa a leitura pela camada)');
+        // A liberação vale para a linha, não para o arquivo: a mesma leitura numa 2ª linha do painel lateral (o mutante da revisão) é acusada.
+        const pl = "    const salvarCfgRobo = async patch => SHC.gravarChave('cfg', Object.assign({}, (await SHC.lerChave('cfg')) || {}, patch));\n"
+            + "        const [c, st] = await Promise.all([SHC.lerChave('cfg'), SHC.lerStatus()]);";
+        const dupla = varre(['painel-lateral.js'], () => pl), outroArq = varre(['painel.js'], () => pl.split('\n')[0]);
+        ok(dupla.length === 1 && /:2: lerChave do cfg$/.test(dupla[0]) && outroArq.length === 1, 'a liberação é da linha (a 2ª leitura do cfg cru no mesmo arquivo é acusada; a mesma linha em outro arquivo também) (' + dupla.concat(outroArq).join('; ') + ')');
         const lista = d => fs.readdirSync(path.join(EXT, d), { withFileTypes: true }).flatMap(x => (x.isDirectory() ? lista(path.join(d, x.name)) : /\.js$/.test(x.name) ? [path.join(d, x.name).replace(/\\/g, '/')] : []));
         const arqs = lista('.').map(a => a.replace(/^\.\//, '')).filter(a => a !== 'store.js');
         ok(arqs.some(a => /^fundo\//.test(a)) && arqs.some(a => /^nucleo\//.test(a)), 'a varredura passa pela raiz, por fundo/ e por nucleo/ (' + arqs.length + ' arquivos)');
@@ -747,6 +769,9 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         const le = a => fs.readFileSync(path.join(EXT, a), 'utf8');
         ok(/cfg:\s*await SHC\.lerCfg\(\)/.test(le('fechamento.js')), 'Fechamento lê imposto/margem pela camada da empresa (SHC.lerCfg), não o cfg cru');
         ok(/cfg:\s*SHC\.lerCfg \? await SHC\.lerCfg\(\)/.test(le('tiktok.js')), 'TikTok lê o cfg pela camada da empresa (SHC.lerCfg)');
+        ok(/const \[c, st, an, g, ct, cts\] = await Promise\.all\(\[SHC\.lerCfg\(\), SHC\.lerStatus\(\)/.test(le('painel-lateral.js')),
+            'painel lateral: a leitura principal do cfg é pela camada da empresa (SHC.lerCfg) — a conta "Outra empresa" não vê o imposto e a margem da principal');
+        ok(PODE.every(([a, , l]) => le(a).split('\n').some(x => x.trim() === l)), 'cada leitura liberada ainda existe com o mesmo texto (liberação velha não fica na lista)');
         ok(/\[desenhaTiny, desenhaOmie, desenhaBling\]\.forEach/.test(le('painel.js').slice(le('painel.js').indexOf('contasMudou'))), 'painel: os cartões do ERP se redesenham quando a conta/empresa aberta muda');
         const sinc = ['painel.js', 'painel-lateral.js'].flatMap(a => le(a).split('\n').filter(l => /acao: 'sincronizar_custos'/.test(l)).map(l => [a, l]));
         ok(sinc.length >= 4 && sinc.every(([, l]) => /empresa/.test(l)), 'toda importação do ERP pedida pelas telas leva a empresa do clique (' + sinc.length + ' pedidos)');
