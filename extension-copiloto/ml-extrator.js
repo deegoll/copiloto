@@ -3988,7 +3988,8 @@
         if (ult && agora - ult.ts < dias * 864e5) return nada('A última troca foi há menos de ' + dias + ' dias. Esperando o resultado dela.');
         if (SHC.roboFeitasHoje(x && x.historico, agora) >= maxDia(c)) return nada('Limite de ' + maxDia(c) + ' trocas por dia alcançado. Continua amanhã.');
         return { acao: 'girar', novaOrdem: nova,
-            motivo: 'As visitas caíram ' + String(Math.abs(radar.variacaoPct)).replace('.', ',') + '% na última semana (' + radar.ult7 + ' contra ' + radar.ant7 + '). Troca da ordem das fotos; a capa fica.' };
+            motivo: 'As visitas caíram ' + String(Math.abs(radar.variacaoPct)).replace('.', ',') + '% na última semana (' + radar.ult7 + ' contra ' + radar.ant7 + '). Confira antes preço, frete, estoque e Ads: é o que mais pesa nas visitas. '
+                + 'Sugestão de teste: nova ordem das fotos de dentro (a capa fica). Não é garantia; o Copiloto compara as visitas 7 dias antes e depois.' };   // 07/10: teste de usuário perguntou se a troca "ajuda mesmo": o texto não promete efeito
     };
 
     // ── v3.1 Registro do robô (30/09/2026). Com ROBO_ESCRITA_CONFERIDA = false o robô SÓ SUGERE: quem troca as fotos no ML é o seller.

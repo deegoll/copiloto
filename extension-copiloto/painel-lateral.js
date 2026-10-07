@@ -6838,7 +6838,7 @@
         // o resultado de cada troca em 2 barras (7 dias antes × 7 depois); as travas do robô ficam dentro de "Regras do robô".
         const soSugere = escreve ? '' : ' · só sugere';
         let h = `<div class="card" id="cardRobo"><div class="sb-h"><svg class="ir" aria-hidden="true"><use href="#ip-robo"/></svg><b class="sb-t">Robô de fotos</b><span class="selo ${ligado ? 'ok' : 'cz'} d">${ligado ? 'Ligado' : 'Desligado'}${soSugere}</span></div>
-          <p class="det">${escreve ? 'Quando as visitas de um anúncio caem, troca a ordem das fotos para ver se ajuda.' : 'Quando as visitas de um anúncio caem, sugere uma nova ordem das fotos. Quem troca no Mercado Livre é você.'}</p>
+          <p class="det">${escreve ? 'Quando as visitas de um anúncio caem, troca a ordem das fotos para ver se ajuda.' : 'Quando as visitas de um anúncio caem, sugere um teste: uma nova ordem das fotos de dentro (a capa fica). Não é garantia: as visitas vêm mais da capa, do preço, do frete e do Ads. Depois de 7 dias, mostra se ajudou. Quem troca no Mercado Livre é você.'}</p>
           ${botaoRobo()}`;
         if (ligado && !permWww) h += '<p class="aviso-custo">Para o robô funcionar, o Copiloto precisa ler as fotos dos anúncios. Permita em “Fotos e medidas”, acima.</p>';
         if (ligado && !nItens) h += '<p class="aviso-custo">Agora ligue o robô nos anúncios que quiser, nos SKUs que estão caindo, no Radar.</p>';
