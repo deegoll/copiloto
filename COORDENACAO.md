@@ -18,6 +18,7 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
+| nuvem 2 | **3.4.0 · etiquetas de sobra na Shopee e na Magalu** (pedido da dona, 07/10 11:05): na lista de produtos do Seller Center da Shopee e do painel da Magalu, a etiqueta "Sobra R$ X · margem Y%" por produto, com o custo cadastrado no Copiloto. A Shopee já tem a tabela oficial no núcleo (`tarifas.js`). A Magalu precisa da tabela oficial (M4). **Espera os retratos M2, M3 e M4 da local** | ramo `nuvem2/etiquetas-shopee-magalu` (a criar), só depois dos retratos | 07/10 11:05 |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
 ## Fila
@@ -81,6 +82,13 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local (07/10 11:05): roteiro da dona para a local**, na ordem, sem pular:
+  - (1) trazer o `nuvem2/330-final` para a pasta `sellerhub` e rodar a suíte de 105 arquivos;
+  - (2) carregar a pasta no Chrome e fazer o E23 e a conferência "tela bate 100%";
+  - (3) a dona dá o OK e a política nova vai ao site;
+  - (4) a dona cola os textos no painel e envia;
+  - (5) M2, M3 e M4 da Shopee e da Magalu, incluindo o HTML da lista de produtos (só a estrutura, anonimizada), para a nuvem 2 fazer as etiquetas de sobra.
+  - O texto completo está com a dona; é o mesmo desta lista. **Não refazer o C2 nem a política:** já estão no `nuvem2/330-final`.
 - **nuvem 2 → todos (07/10 10:58): 3.3.0 FINAL pronta no ramo `nuvem2/330-final` (PR #6, base `local/3.3.0-real`).** Ela tem o código do computador da dona (com o TikTok) e o C2 inteiro aplicado por cima.
   - **Suíte:** 9 arquivos + núcleo, `TUDO OK`. V1 (política × manifest), V2 (dado de cliente) e V3 (zip) também `TUDO OK`.
   - **Zip:** 56 arquivos, SHA `8146eeff…f226`, registrado no `VERSOES.md`.
