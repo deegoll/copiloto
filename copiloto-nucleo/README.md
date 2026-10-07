@@ -77,7 +77,7 @@ Algumas regras de formato:
 
 Quando uma leitura falha, o adaptador devolve `M.naoLido(motivo)`. O motor então responde `status: 'nao_lido'`, informa em `faltando` o que faltou e deixa `repasse` e `lucro_real` em `null`. Custo não informado dá `status: 'sem_custo'`. O mesmo vale para um kit com um componente sem custo: o núcleo nunca soma um custo parcial.
 
-Tarifa estimada pela tabela só entra com `estimar_tarifas: true` e sai marcada (`tarifas_estimadas`). Um canal sem tabela na data continua "não lido".
+Tarifa estimada pela tabela só entra com `estimar_tarifas: true` e sai marcada (`tarifas_estimadas`). Um canal sem tabela na data continua "não lido". O pedido cancelado nunca é estimado (ver **Cancelado** abaixo).
 
 ---
 
@@ -106,7 +106,7 @@ Como a fórmula se aplica em cada caso:
 - **Por produto:** use `lucroPorProduto(resultados)`. O custo de cada SKU é exato. O resto é dividido pela participação do item na receita, e o Ads do anúncio fica com o item daquele anúncio.
 - **Mês:** use `fechamentoMes({ mes, resultados, tarifas, adsNaoRateado })`. O fechamento soma as tarifas sem pedido (fatura, Full, assinatura) e o Ads que não teve venda para ratear. Com `ads_rateados` (o padrão), a tarifa 'ads' da fatura não entra de novo.
 - **Devolução:** o reembolso sai da receita. O custo do produto é contado, a não ser que `produto_voltou: true`. No TikTok, `reverse_type 2` quer dizer reembolso sem devolução: o vendedor perde o produto.
-- **Cancelado:** receita, custo e imposto ficam em 0. Só conta a tarifa que sobrou depois do estorno.
+- **Cancelado:** receita, custo e imposto ficam em 0. Só conta a tarifa que sobrou depois do estorno, e só se foi **lida** (lista ou extrato do canal). Sem tarifa lida, o motor não estima pela tabela (a venda foi estornada): o pedido sai `nao_lido`, com o aviso "cancelado sem tarifa lida", e fica fora do lucro por produto e do fechamento.
 
 ---
 

@@ -35,6 +35,8 @@
 //      (extrato, detalhe do pedido ou os dois) aparece "—", fora do KPI: nunca "Preço R$ 0,00" nem prejuízo inventado (seção K).
 //   6) CORRIGIDA (#35): o KPI "Lucro 30 dias" somava só 'ok' e deixava de fora o prejuízo do CANCELADO (frete que ficou), que Produtos e a
 //      conciliação contam (KPI R$ 37,00 × produto R$ 28,50). Agora o KPI soma 'ok' e 'cancelado', como Produtos e o fechamento (seções I e K).
+//      Revisão 2: o cancelado conta só o que sobrou e foi LIDO; sem tarifa lida (visto só em Pedidos) o motor não estima pela tabela
+//      (antes −R$ 18,00 de comissão, fixo e SFP sobre o preço cheio no KPI e em Produtos): sai "não lido", fora dos dois (seção K).
 //   7) tarifas.simular: classe pela margem JÁ arredondada a 1 casa: prejuízo de −R$ 0,01 em R$ 300 (margem −0,003% → −0) sai "lucrativo".
 //   8) util.r2 (= SHC.r2) não arredonda o meio centavo sempre igual: 6% de R$ 282,25 = 16,935 → 16,93, mas a maioria dos empates sobe
 //      (≈4–9% dos empates de tarifa descem); SHC.moeda(16,935) mostra "R$ 16,94".
@@ -1157,6 +1159,45 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         ok(v35.pedidos.map(x => x.status + ' ' + x.lucro_real).sort().join() === 'cancelado -8.5,ok 37' && v35.kpis.lucro_30d === 28.5 && somaC(v35.produtos, x => cent(x.lucro_real)) === 2850
             && v35.conciliacao.recebido === 64.5 && deMoeda(kpi35) === 2850 && man35 === 'Lucro de R$ 28,50 em 30 dias no TikTok.' && v35.kpis.receita_30d === 100 && v35.kpis.margem_pct === 28.5,
             'KPI com pedido cancelado (#35): Lucro 30 dias R$ 28,50 = Σ Produtos = R$ 37,00 − R$ 8,50 do frete que ficou (antes R$ 37,00); manchete igual; margem 28,5%');
+    }
+
+    {   // #35, revisão 2: cancelado SEM tarifa lida (visto só em Pedidos, sem Financeiro) não entra com tarifa estimada pela tabela.
+        // Motor: cancelado de R$ 100,00 com estimar_tarifas → "não lido" (antes −R$ 18,00 de comissão, fixo e SFP sobre o preço cheio).
+        const pc = M.garantir('pedido', { canal: 'tiktok', conta: 'x', fonte: 'tela', id: 'C35-1', data_venda: '2026-09-20', status: 'cancelado', itens: [{ sku: 'CAMISA-35B', qtd: 1, total: 100 }] });
+        const custos35 = [{ sku: 'CAMISA-35B', custo: 30 }], rc = MO.lucroPedido(pc, { estimar_tarifas: true, custos: custos35, imposto_pct: 6 });
+        const rl = MO.lucroPedido(pc, { tarifas: [{ pedido_id: 'C35-1', tipo: 'frete_venda', valor: 8.5, data: '2026-09-20' }], custos: custos35, imposto_pct: 6 });
+        const po = M.garantir('pedido', { canal: 'tiktok', conta: 'x', fonte: 'tela', id: 'C35-2', data_venda: '2026-09-21', status: 'entregue', itens: [{ sku: 'CAMISA-35B', qtd: 1, total: 100 }] });
+        const ro = MO.lucroPedido(po, { tarifas: [{ pedido_id: 'C35-2', tipo: 'comissao', valor: 27, data: '2026-09-21' }], custos: custos35, imposto_pct: 6 });
+        const pp = MO.lucroPorProduto([ro, rc])[0], fm = MO.fechamentoMes({ mes: '2026-09', resultados: [ro, rc], tarifas: [] });
+        ok(rc.status === 'nao_lido' && rc.faltando.join() === 'tarifas' && rc.repasse === null && rc.lucro_real === null && !rc.tarifas_estimadas && Object.keys(rc.tarifas_por_tipo).length === 0
+            && rc.avisos.some(a => /^cancelado sem tarifa lida/.test(a)) && rl.status === 'cancelado' && rl.lucro_real === -8.5 && rl.repasse === -8.5
+            && ro.lucro_real === 37 && pp.pedidos === 1 && pp.pendentes === 1 && pp.lucro_real === 37 && fm.lucro_pedidos === 37 && fm.pendentes === 1 && fm.completo === false,
+            'motor (#35, revisão 2): cancelado sem tarifa lida não é estimado pela tabela — "não lido", fora de Produtos e do fechamento (antes −R$ 18,00); com o frete lido (R$ 8,50) continua contando');
+        // Extensão: só o cancelado (R$ 100,00, sem Financeiro) → KPI "—" e a manchete sem prejuízo (antes −R$ 18,00 e "Prejuízo de R$ 18,00").
+        const Ca = '7000000135', Cb = '7000000235', sk = '1730000000000000935';
+        const detC = (id, dia, st) => ({ code: 0, data: { main_order: { main_order_id: id, main_order_create_time: segDia(dia), payment_info: { main_order_origin_sale_price: fp(10000) },
+            skus: [{ seller_sku_name: 'CAMISA-35B', sku_id: sk, quantity: 1, product_name: 'Camisa 35B', total_price: fp(10000), sku_display_status: st }] } } });
+        await TT.gravarCaptura('pedido', detC('577000000000013501', '2026-09-20', 140), Ca, lidoEm);
+        banco['c|sku|CAMISA-35B'] = { custo: 30 };
+        const va = TT.resumo(await TT.ler(Ca), { hoje: '2026-09-25' }), ha = ABA.html(va, { hoje: '2026-09-25' }), pa = va.pedidos[0], la = contaTela(ha, pa.pedido_id);
+        const kpiA = (/<div class="l">Lucro 30 dias<\/div><div class="v">([^<]*)<\/div><div class="s">([^<]*)</.exec(ha) || []), manA = (/<p class="manchete">.*?<b>([^<]*)<\/b>/.exec(ha) || [])[1];
+        const sobA = (new RegExp('data-k="ped:' + pa.pedido_id + '"><summary><span class="rlt"><b>[^<]*</b><span class="sobra [^"]*">([^<]*)<').exec(ha) || [])[1];
+        const prodA = (/<div class="linha-comp"><span class="rlt"><b>[^<]*<\/b><span class="sobra [^"]*">([^<]*)<\/span>/.exec(ha) || [])[1];
+        ok(pa.status === 'nao_lido' && pa.cancelado && pa.lucro_real === null && pa.repasse === null && !pa.estimado && va.kpis.lucro_30d === null && kpiA[1] === '—' && kpiA[2] === '1 pedido'
+            && manA === 'Pedidos do TikTok lidos.' && !/Prejuízo|prejuízo/.test(ha) && sobA === 'cancelado · não lido' && valorDe(la, 'Repasse do TikTok') === null
+            && la.some(l => /^O que sobrou do cancelamento: abra/.test(l.rot) && l.c === null) && !la.some(l => /^(Comissão|Tarifa fixa|Programa de frete)/.test(l.rot))
+            && va.produtos.length === 1 && va.produtos[0].pedidos === 0 && va.produtos[0].pendentes === 1 && prodA === 'não lido',
+            'cancelado visto só em Pedidos, sem Financeiro (#35, revisão 2): KPI "—", manchete "Pedidos do TikTok lidos.", sem "estimado" nem prejuízo; o pedido "cancelado · não lido" e o produto "não lido" (nunca "sem custo": o custo existe)');
+        // O mesmo cancelado + um pedido ok lido na lista do Financeiro (lucro R$ 37,00, imposto 6%): KPI = Σ Produtos = R$ 37,00 (antes R$ 19,00, margem 19%).
+        await TT.gravarCaptura('pedido', detC('577000000000013502', '2026-09-20', 140), Cb, lidoEm);
+        await TT.gravarCaptura('pedidos_fin', { code: 0, data: { order_records: [{ trade_order_id: '577000000000013503', statement_detail_id: '13503', statement_id: '9135', placed_time: msDia('2026-09-21'),
+            settlement_status: 2, settlement_time: msDia('2026-09-24'), earning_amount: { amount: '100.00' }, fees: { amount: '-22.00' }, shipping_amount: { amount: '-5.00' }, settlement_amount: { amount: '73.00' },
+            sku_records: [{ sku_id: sk, quantity: 1, product_name: 'Camisa 35B', earning_amount: { amount: '100.00' } }] }] } }, Cb, lidoEm);
+        const vb = TT.resumo(await TT.ler(Cb), { hoje: '2026-09-25' }), hb = ABA.html(vb, { hoje: '2026-09-25' });
+        const kpiB = (/<div class="l">Lucro 30 dias<\/div><div class="v">([^<]*)<\/div>/.exec(hb) || [])[1], manB = (/<p class="manchete">.*?<b>([^<]*)<\/b>/.exec(hb) || [])[1];
+        ok(vb.pedidos.map(x => x.status + ' ' + x.lucro_real).sort().join() === 'nao_lido null,ok 37' && vb.kpis.lucro_30d === 37 && somaC(vb.produtos, x => cent(x.lucro_real)) === 3700
+            && vb.kpis.margem_pct === 37 && deMoeda(kpiB) === 3700 && manB === 'Lucro de R$ 37,00 em 30 dias no TikTok.' && !/prejuízo/i.test(hb) && vb.produtos[0].pendentes === 1 && vb.conciliacao.recebido === 73,
+            'cancelado sem Financeiro + pedido ok de R$ 37,00 (#35, revisão 2): Lucro 30 dias R$ 37,00 = Σ Produtos, margem 37% (antes R$ 19,00 e 19%: −R$ 18,00 de tarifa que ninguém leu)');
     }
 
     {   // #37: só o saldo (e depois o a receber) lido, nenhum pedido do Financeiro: nada de "Recebido: R$ 0,00 · a liberar: R$ 0,00".

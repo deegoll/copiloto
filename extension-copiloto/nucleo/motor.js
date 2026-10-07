@@ -76,7 +76,7 @@
      *   tarifas: Tarifa[] do canal (as do pedido são filtradas por pedido_id) | naoLido | undefined (= não lido),
      *   custos: CustoSKU[], imposto_pct | impostos: Imposto[], outros: R$ extra do pedido (embalagem etc.),
      *   ads: número ou {total, porAnuncio} (de rateioAds) | naoLido | undefined (= canal não informa → 0),
-     *   devolucoes: Devolucao[], estimar_tarifas: true → sem tarifa lida, estima pela tabela do canal (marcado 'estimada'),
+     *   devolucoes: Devolucao[], estimar_tarifas: true → sem tarifa lida, estima pela tabela do canal (marcado 'estimada'; o cancelado nunca),
      *   contexto_tarifa: {tipo_anuncio, frete_gratis_programa, ...} (para a estimativa), margem_alvo_pct, tabela
      * }
      */
@@ -104,7 +104,7 @@
         let tarifas = null, estimadas = false;
         const lidas = ctx.tarifas;
         if (Array.isArray(lidas)) tarifas = lidas.filter(t => t && t.pedido_id === pedido.id);
-        else if (ctx.estimar_tarifas && !faltando.length) {
+        else if (ctx.estimar_tarifas && !faltando.length && !cancelado) {
             tarifas = [];
             pedido.itens.forEach(it => {
                 const unit = it.qtd > 0 ? ((valorItem(it) || 0) - desconto * ((valorItem(it) || 0)) / (bruto || 1)) / it.qtd : 0;
@@ -114,7 +114,11 @@
             });
             estimadas = true;
             avisos.push('tarifas estimadas pela tabela do canal (não lidas)');
-        } else faltando.push('tarifas');
+        } else {
+            faltando.push('tarifas');
+            // Cancelado: a venda foi estornada e a tabela (comissão, fixo, SFP sobre o preço cheio) não vale. Só conta o que sobrou e foi LIDO.
+            if (cancelado && ctx.estimar_tarifas) avisos.push('cancelado sem tarifa lida: o que sobrou depois do estorno não foi lido (a tabela não vale para venda estornada)');
+        }
         if (tarifas && cancelado === false && reembolsoTotal) {
             // Com reembolso total o canal pode não cobrar comissão/fixo (TikTok): vale o que foi LIDO. Estimativa: só o que fica (programa de frete).
             if (estimadas) tarifas = tarifas.filter(t => t.tipo === 'programa_frete');
