@@ -524,13 +524,24 @@
         const unidades = (produtos || []).reduce((t, p) => t + (+(p && p.vendas30) || 0), 0);
         return custo > 0 && unidades > 0 ? { un: r2(custo / unidades), custo, unidades } : null;
     };
-    /** ACOS para a venda que veio de publicidade: o do anúncio (ads:<conta>.anuncios) ou, sem ele, o da conta → { pct, base } | null. */
+    /**
+     * ACOS para a venda que veio de publicidade: o do anúncio (ads:<conta>.anuncios, as campanhas dele somadas) ou, sem ele, o da conta
+     * → { pct, base } | null. #25: o mesmo de ads.html (A.metricas) e do painel (P.adsDoItem, P.adsConta): Ads ÷ receita da base, cru (o texto
+     * arredonda uma vez só); o acos gravado (o do ML, 2 casas) só quando falta o Ads. Conta: o resumo do ML; sem ele, a soma das campanhas.
+     */
     SHC.adsAcosDe = function (ads, itemId) {
         if (!ads) return null;
-        const a = (ads.anuncios || []).find(x => x && x.itemId && x.itemId === itemId && x.acos > 0);
-        if (a) return { pct: a.acos, base: 'ACOS do anúncio (' + pct(a.acos) + ')' };
-        const t = ads.resumo && ads.resumo.total;
-        return t && t.acos > 0 ? { pct: t.acos, base: 'ACOS da conta (' + pct(t.acos) + ')' } : null;
+        const v = (o, ks) => { for (const k of ks) { const x = SHC.num(o && o[k]); if (x !== null) return x; } return null; };
+        const soma = (ls, ks) => (ls.some(o => v(o, ks) !== null) ? r2(ls.reduce((t, o) => t + (v(o, ks) || 0), 0)) : null);
+        const acosDe = ls => {
+            const g = soma(ls, ['custo', 'cost']), rec = soma(ls, ['receita', 'totalAmount', 'amountTotal']);
+            return rec > 0 ? (g !== null ? g / rec * 100 : (ls.map(o => SHC.num(o.acos)).find(x => x > 0) || null)) : null;
+        };
+        const doAd = (ads.anuncios || []).filter(x => x && x.itemId && x.itemId === itemId), a = doAd.length ? acosDe(doAd) : null;
+        if (a > 0) return { pct: a, base: 'ACOS do anúncio (' + pct(a) + ')' };
+        const t = ads.resumo && (ads.resumo.total || ads.resumo), cm = (ads.campanhas || []).map(c => c && (c.metricas || c.metrics)).filter(Boolean);
+        const c = acosDe(t && v(t, ['custo', 'cost']) !== null ? [t] : cm.length ? cm : (ads.anuncios || []).filter(Boolean));
+        return c > 0 ? { pct: c, base: 'ACOS da conta (' + pct(c) + ')' } : null;
     };
     /**
      * Dados guardados da conta → (v, det) → o x de SHC.telaVendaConta. A etiqueta da tela e o aviso do fundo (SHC.vendasPrejuizo) usam

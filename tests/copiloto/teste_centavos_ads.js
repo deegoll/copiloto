@@ -30,7 +30,9 @@
 //      ausentes em "0 un. · R$ 0,00". Agora sem as orgânicas (e sem o tacos do ML) TACOS e "Vendas orgânicas" = "—", como o painel.
 //   5) [corrigida, #25] ACOS/ROAS arredondados duas vezes: o fundo gravava r2(custo ÷ receita × 100) e r2(receita ÷ custo) e a tabela por SKU
 //      e o painel calculavam de novo → "43,2%" × "43,1%"; ROAS 201 ÷ 200 = "1,01x" × "1x". Agora o fundo grava cru, ads.html calcula da base
-//      (o do ML só sem a base) e o texto arredonda uma vez só (SHC.pctTxt; ROAS com SHC.r2, como o painel).
+//      (o do ML só sem a base) e o texto arredonda uma vez só (SHC.pctTxt; ROAS com SHC.r2, como o painel). Revisão 2: a etiqueta da venda
+//      (ml-tela, SHC.adsAcosDe) também calcula da base, com as campanhas do anúncio somadas (antes "43,2%" do ML × "43,1%" nas telas), e sem
+//      o resumo do ML usa a soma das campanhas para o ACOS da conta.
 //   6) [corrigida, #26] Lucro depois do Ads do MESMO anúncio diferia entre ads.html (margem % × receita do Ads) e o painel (sobra de
 //      hoje × unidades): vendido abaixo do preço de hoje → "Prejuízo R$ 3,00" × "Lucro R$ 3,00". Agora as duas telas usam SHC.adsLucro (margem ×
 //      receita, por anúncio, no centavo). O aviso do fundo (SHC.alertasDe: ícone e sino) também usa SHC.adsLucro e conta o mesmo anúncio que o
@@ -51,7 +53,7 @@ const path = require('path');
 global.chrome = { storage: { local: { get: async () => ({}), set: async () => {}, remove: async () => {} } }, runtime: { sendMessage: async () => ({}) } };
 const EXT = path.join(__dirname, '../../extension-copiloto');
 const SHC = require(path.join(EXT, 'calc.js'));
-['store.js', 'ml-extrator.js', 'fechamento.js', 'painel-lateral.js'].forEach(a => require(path.join(EXT, a)));
+['store.js', 'ml-extrator.js', 'ml-tela.js', 'fechamento.js', 'painel-lateral.js'].forEach(a => require(path.join(EXT, a)));
 const A = require(path.join(EXT, 'ads.js'));
 const NUC = path.join(__dirname, '../../copiloto-nucleo/src');
 const MOTOR = require(path.join(NUC, 'motor.js'));
@@ -725,6 +727,33 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
     prop('#25 pares custo × receita em centavos: o texto do ACOS e do ROAS é o mesmo no KPI, na campanha, no SKU e no painel', vezes(300), () => {
         const cC = I(rnd, 1, 500000), rC = I(rnd, 1, 2000000), t = tela(cC / 100, rC / 100);
         return (igual(t.acos) && igual(t.roas) && Math.abs(dePct(t.acos[0]) - cC / rC * 100) <= 0.05 + 1e-9 && Math.abs(deX(t.roas[0]) - rC / cC) <= 0.005 + 1e-9) || `${cC} ÷ ${rC}: ${t.acos.join(' | ')} · ${t.roas.join(' | ')}`;
+    });
+}
+{   // #25, revisão 2: a etiqueta da venda (ml-tela, SHC.adsAcosDe) mostra o mesmo ACOS de ads.html e do painel: da base (Ads ÷ receita), com
+    // as campanhas do anúncio somadas; o acos gravado (do ML, 2 casas) só sem a base. Sem o resumo do ML, o da conta é a soma das campanhas.
+    const etq = (snap, id) => { const x = SHC.adsAcosDe(snap, id); return x ? x.base : null; };
+    const tela = (rows, o) => {
+        const snap = contaFixa(rows, o), it = [{ itemId: rows[0].id, sku: 'TST-K', titulo: 'Produto K', preco: 100, recebe: 80 }];
+        const an = A.analisa(snap, it, () => null, {}, []), d = P.adsDoItem(P.adsLigaCatalogo(snap, it), rows[0].id);
+        return { snap, kpi: SHC.pctTxt(an.kpis.atual.acos), sku: SHC.pctTxt(an.grupos[0].m.acos), card: SHC.pctTxt(d.m.acos), conta: SHC.pctTxt(P.adsConta(snap).acos),
+            ad: etq(snap, rows[0].id), ct: etq(snap, 'MLB0000000000'), x: SHC.adsAcosDe(snap, rows[0].id), an };
+    };
+    const ml = { id: 'MLB9000000041', title: 'Produto K', campaignId: 5, cost: 43.21, totalAmount: 100.14, prints: 1000, clicks: 10, unitsQuantity: 1, acos: 43.15 };
+    const a = tela([ml], { resumoExtra: { acos: 43.15 } });
+    ok(a.kpi === '43,1%' && a.sku === '43,1%' && a.card === '43,1%' && a.conta === '43,1%' && a.ad === 'ACOS do anúncio (43,1%)' && a.ct === 'ACOS da conta (43,1%)'
+        && a.x.pct === 43.21 / 100.14 * 100 && a.x.pct === a.an.grupos[0].m.acos,
+        `#25 o ML manda acos 43,15 no anúncio e no resumo: a etiqueta da venda diz "43,1%", como o KPI e o SKU de ads.html e o painel, e a estimativa do Ads da venda usa o mesmo número (obtido: ${a.ad} · ${a.ct} · ads.html ${a.kpi})`);
+    const b = tela([Object.assign({}, ml, { campaignId: 1, cost: 10, totalAmount: 100, acos: 10 }), Object.assign({}, ml, { campaignId: 2, cost: 30, totalAmount: 50, acos: 60 })]);
+    ok(b.sku === '26,7%' && b.card === '26,7%' && b.ad === 'ACOS do anúncio (26,7%)',
+        `#25 o anúncio em 2 campanhas (R$ 10 ÷ R$ 100 e R$ 30 ÷ R$ 50): a etiqueta usa as duas somadas, R$ 40 ÷ R$ 150 = "26,7%", como ads.html e o cartão do anúncio (obtido: ${b.ad} · SKU ${b.sku} · cartão ${b.card})`);
+    const c = tela([ml, Object.assign({}, ml, { id: 'MLB9000000042', campaignId: 6, cost: 20, totalAmount: 0, unitsQuantity: 0, acos: 0 })], { semResumo: true });
+    ok(c.kpi === '63,1%' && c.conta === '63,1%' && etq(c.snap, 'MLB9000000042') === 'ACOS da conta (63,1%)',
+        `#25 sem o resumo do ML: o ACOS da conta na etiqueta é a soma das campanhas (R$ 63,21 ÷ R$ 100,14), o mesmo de ads.html e do painel (antes: nenhum) (obtido: ${etq(c.snap, 'MLB9000000042')} · ads.html ${c.kpi})`);
+    const rnd = semente(7251);
+    prop('#25 pares custo × receita em centavos com o acos do ML (2 casas) gravado: a etiqueta da venda (anúncio e conta) = o KPI e o SKU de ads.html = o painel', vezes(400), () => {
+        const cC = I(rnd, 1, 500000), rC = I(rnd, 1, 2000000), mlA = SHC.r2(cC / rC * 100);
+        const t = tela([Object.assign({}, ml, { cost: cC / 100, totalAmount: rC / 100, acos: mlA })], { resumoExtra: { acos: mlA } });
+        return (t.ad === 'ACOS do anúncio (' + t.sku + ')' && t.ct === 'ACOS da conta (' + t.kpi + ')' && t.sku === t.card && t.kpi === t.conta) || `${cC} ÷ ${rC} (ML ${mlA}): ${t.ad} · ${t.ct} · ads.html ${t.kpi}/${t.sku} · painel ${t.conta}/${t.card}`;
     });
 }
 {   // #26: o mesmo lucro depois do Ads e o mesmo selo do anúncio em ads.html e no painel (SHC.adsLucro nas duas telas)
