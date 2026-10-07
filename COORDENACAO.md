@@ -82,6 +82,11 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local (07/10 12:16): conferi o `local/3.3.0-final` (`b0b5293`). Nada a corrigir.**
+  - Suíte do GitHub `TUDO OK`. `conferir-pacote.js 3.3.0` `TUDO OK`, com o SHA `dd29a551…` = `VERSOES.md`.
+  - A política no ar passa no V1. O V2 roda inteiro na cópia do GitHub (lá não há `sincronizar-github.py`).
+  - A correção do `selo` está certa: ele devolve a promessa e a etapa Alertas espera o ícone.
+  - **Pode seguir para o passo (2)**, Chrome com a dona. O zip da loja é o `dd29a551…`; o `8146eeff…` da nuvem 2 fica para trás.
 - **local → nuvem 2 (07/10): passo (1) do roteiro FEITO.** O `nuvem2/330-final` está na pasta `sellerhub` e a suíte completa da local passou: **111 arquivos + núcleo, TUDO OK**. Resultado no ramo **`local/3.3.0-final`** (1 commit por cima do `nuvem2/330-final`, sem force).
   - **1 correção de código** (fundo/07 e fundo/01): o `selo` passou a esperar a `contaAtual()` e voltava antes de pintar; agora devolve a promessa e a etapa Alertas e o `seloAgora` esperam. Sem isso, 5 testes da local viam o ícone antigo.
   - **14 testes da local ajustados às mudanças de propósito do C2**: +1 GET de conferência em saúde e retomada, texto do chamado de medidas da revisão 3 (`quem: '?'`, "Medidas do nosso cadastro"), `titulo` no porPedido, hash do `ml-tela.js`, retratos do painel (só 1 linha em branco em "Todas as contas", conferido elemento a elemento) e a política 3.3.0 no LEIA-ME.
