@@ -26,6 +26,22 @@ Pacote: `copiloto-v3.3.0.zip` (nesta pasta, gerado pela mesma lista fechada do `
 
 Nenhuma permissão nova. Nenhum dado de comprador novo.
 
+## Correções da revisão de código (07/10/2026)
+
+Uma revisão independente do código da 3.3.0 achou 9 problemas antes do envio. Todos foram corrigidos e ganharam teste:
+
+| # | Problema | Correção |
+|---|---|---|
+| 1 | "Esquecer" o ERP numa empresa apagava a credencial da OUTRA e tirava a permissão do Chrome de todas | Apaga só a da empresa aberta; a permissão só sai quando nenhuma empresa usa aquele ERP (`SHC.erpEmOutraEmpresa`) |
+| 2 | O Fechamento (e o cartão do guia e o lucro do TikTok) usava custo, imposto e despesas da outra empresa | Leem pela camada da empresa (`SHC.areaEmpresa`, `SHC.lerCfg`) |
+| 3 | O Full não repunha produto **esgotado**: o ML pausa o anúncio sem estoque e o Copiloto lia como "fora do ar" | Esgotado (`out_of_stock`, "Sem estoque" ou 0 aptas no Full) não trava o envio. Pausado por você, finalizado e em revisão continuam travando, com o motivo |
+| 4 | O pedido de exclusão saía para frases com culpa do vendedor ("me arrependi porque veio com defeito", "não postou nos Correios", "veio outro") | Culpa do vendedor no motivo veta a exclusão. A tela diz o que conferir antes de enviar (ex.: "Envie só se você despachou dentro do prazo") |
+| 5 | Caso incerto (🟡 da devolução, tarifa pelo preço de hoje, frete pela mediana) gerava texto afirmando "cobrança indevida" | Esses viram **Pedido de revisão**: os números, a base da estimativa e o estorno **se a diferença se confirmar** |
+| 6 | "Configurado" (imposto informado) era um só para todas as empresas | É por empresa. Salvar apelidos, "Outra empresa" ou módulos não marca mais o imposto como informado |
+| 7 | O seletor de conta da tabela de custos mostrava conta de outra empresa com os custos desta | Só as contas da mesma empresa; aviso de que as outras têm os custos delas |
+| 8 | Importação do ERP que durava minutos podia gravar na empresa errada se o ML trocasse de conta no meio | A importação grava sempre na empresa do começo (Tiny, Omie e Bling, pelo painel e pelo fundo) |
+| 9 | A releitura depois de troca de conta perdia meses: fuso fora de Brasília perto da meia-noite, mês cortado (80+ páginas) e vendas brutas | Compara pelo menor dia (local ou Brasília) e também põe na fila o mês cortado (`cortadoEm`) e o das vendas brutas (`lidoTs`) |
+
 ## O que mudou, por arquivo
 
 - `store.js`:
@@ -53,6 +69,7 @@ Nenhuma permissão nova. Nenhum dado de comprador novo.
   - "Outra empresa" em Ajustes.
 - `painel.js` e `painel.html`: "Outra empresa" em Suas contas.
 - `fechamento.js`: o texto da cobrança no formato novo. A dúvida continua só perguntando.
+- Revisão de 07/10: `copiloto.js`, `tiktok.js`, `ml-tela.js` e `fechamento.js` leem custos e cfg pela camada da empresa. `erp-cruzar.js`, `tiny.js`, `fundo/09` e `fundo/10` gravam o ERP na empresa do começo da importação. `fundo/03` e `fundo/04` guardam quando cada mês foi lido (`cortadoEm`, `lidoTs`).
 
 ## Testes
 
@@ -76,6 +93,11 @@ O `teste_fundo_dividido.js` agora aceita funções novas no fundo, desde que est
 | `SHC.chamadoDevolucao` | Texto no formato novo |
 | `SHC.medidasChamado` | Texto no formato novo |
 | `P.previsaoFull` | Anúncio parado com estoque passa a dar 0 |
+| `SHC.chamadoDevolucao` (🟡) e `SHC.fech.textoChamado` (estimado) | "Pedido de revisão", com o estorno só se confirmar |
+| `SHC.motivoExcluivel` | Culpa do vendedor no motivo veta a exclusão |
+| `SHC.lerCfg` | `configurado` por empresa; o campo `empresaSemNumeros` saiu |
+| `SHC.salvarCfg` de apelidos, "Outra empresa" e módulos | Não marca mais `configurado` |
+| `P.saudeEnvioFull` | Anúncio esgotado não trava o envio |
 
 ## O que ainda falta (fica para as próximas)
 

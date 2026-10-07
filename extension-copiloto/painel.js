@@ -302,18 +302,26 @@
 
     // F16 (auditoria 30/09): a tabela mostra os anúncios de UMA conta — diz qual, e com 2+ contas deixa escolher (o custo do SKU vale para todas).
     let contaVer = '';   // '' = a conta aberta agora no ML
+    // v3.3 multi-empresa (revisão 07/10/2026): só as contas da MESMA empresa da conta aberta. Os custos por SKU da tabela são os da empresa
+    // aberta: a conta de outra empresa mostraria os anúncios dela com os custos desta (e gravaria nesta o que fosse digitado).
+    const contasTab = async () => (SHC.contasDaEmpresa ? SHC.contasDaEmpresa() : SHC.contas ? SHC.contas() : []);
     async function desenhaContaTab() {
-        const box = $('#contaTab'), sel = $('#contaEsc');
+        const box = $('#contaTab'), sel = $('#contaEsc'), nota = $('#contaTabNota');
         if (!box || !sel) return;
-        let cs = [];
-        try { cs = SHC.contas ? await SHC.contas() : []; } catch (e) { cs = []; }
+        let cs = [], todas = 0;
+        try { cs = await contasTab(); todas = SHC.contas ? (await SHC.contas()).length : cs.length; } catch (e) { cs = []; }
         box.hidden = !cs.length;
         if (!cs.length) return;
         const atual = contaVer || (cs.find(c => c.atual) || cs[0]).sellerId;
         sel.innerHTML = cs.map(c => `<option value="${esc(c.sellerId)}"${c.sellerId === atual ? ' selected' : ''}>${esc(c.nome)}${c.atual ? ' (aberta agora)' : ''}</option>`).join('');
         sel.disabled = cs.length < 2;
+        if (nota) nota.textContent = todas > cs.length
+            ? 'O custo do SKU vale para as contas desta empresa. As contas de outra empresa têm os custos delas: abra o Mercado Livre nelas para ver e editar.'
+            : 'O custo do SKU vale para todas as contas.';
     }
     async function lerDados() {
+        // Conta escolhida que deixou de ser desta empresa (marcada em Ajustes, ou o ML abriu outra conta): volta para a aberta.
+        if (contaVer && !(await contasTab().catch(() => [])).some(c => c.sellerId === contaVer)) contaVer = '';
         const cv = contaVer || undefined;
         const [tudo, an, promos, g, full] = await Promise.all([SHC.lerTudo(), SHC.lerAnuncios(cv), SHC.lerPromos(cv), SHC.lerGuia(),
             SHC.lerFull ? SHC.lerFull(cv).catch(() => null) : null]);
@@ -644,7 +652,7 @@
         document.querySelectorAll('[data-apelido]').forEach(i => { txt[i.dataset.apelido] = i.value; });
         const sep = {}, temCaixa = !!document.querySelector('[data-empresa]');   // v3.3: contas de outra empresa (só com 2+ contas)
         document.querySelectorAll('[data-empresa]').forEach(i => { if (i.checked && /^\d{6,15}$/.test(i.dataset.empresa)) sep[i.dataset.empresa] = true; });
-        try { cfg = await SHC.salvarCfg(Object.assign({ apelidos: SHC.apelidosLimpos(txt) }, temCaixa ? { empresaSeparada: sep } : {})); } catch (e) { ok.className = 'msg erro'; ok.textContent = FALHA; return; }
+        try { cfg = await SHC.salvarCfg(Object.assign({ apelidos: SHC.apelidosLimpos(txt) }, temCaixa ? { empresaSeparada: sep } : {}), { semMarcar: true }); } catch (e) { ok.className = 'msg erro'; ok.textContent = FALHA; return; }   // apelido e empresa não são "imposto informado"
         ok.className = 'ok'; ok.textContent = '✓ Salvo';
         setTimeout(() => { ok.textContent = ''; }, 4000);
     });
@@ -1146,6 +1154,13 @@
 
     // ── Tiny (API v2 por token, tiny.js): só lê os custos; grava origem 'erp' sem trocar o que o seller digitou ──
     const TINY = { origins: [SHC.TINY_ORIGEM] };
+    // v3.3 multi-empresa (revisão 07/10/2026): "Esquecer" apaga só a credencial da empresa da conta aberta (SHC.areaEmpresa), e a permissão
+    // do Chrome para o site do ERP (uma só para todas) só sai quando nenhuma outra empresa usa esse ERP.
+    async function esquecerErp(chave, perm) {
+        await SHC.areaEmpresa().remove(chave);
+        if (await SHC.erpEmOutraEmpresa(chave).catch(() => true)) return;
+        try { await chrome.permissions.remove(perm); } catch (e) { /* ok */ }
+    }
     let tinyRodando = false;
     // A mensagem fica na seção "Custos do ERP" (v3.2.0: saiu a faixa rápida da tabela, que repetia conectar/importar).
     const tinyMsg = (t, erro) => { const m = $('#tinyMsg'); m.className = 'msg' + (erro ? ' erro' : (/^✓/.test(t || '') ? ' ok' : '')); m.textContent = t || ''; };
@@ -1184,15 +1199,18 @@
         tinyRodando = true;
         tinyBotoes(true);
         tinyMsg('Lendo os produtos do Tiny…');
+        // v3.3 multi-empresa (revisão 07/10/2026): o token é da empresa da conta aberta NO CLIQUE. A leitura leva minutos: se o ML abrir a conta
+        // de outra empresa no meio, custos, token e retrato vão mesmo assim para a empresa do clique (SHC.areaEmpresa(e0)).
         try {
+            const e0 = await SHC.empresaSeparada(), A = SHC.areaEmpresa(e0);
             const produtos = await SHC.tinyPuxar(token, {
                 fetch: (u, i) => fetch(u, i), espera: ms => new Promise(r => setTimeout(r, ms)),
                 progresso: (p, n) => { tinyMsg('Lendo os produtos do Tiny… página ' + p + ' de ' + n); tinyBarra(p, n); },
             });
-            const r = await SHC.tinyGravar(produtos, 'tiny');
-            const antes = await SHC.lerChave(SHC.TINY_CHAVE);
-            await SHC.gravarChave(SHC.TINY_CHAVE, { token, ultima: Object.assign({ ts: Date.now() }, r) });   // token só é guardado depois que o Tiny aceitou
-            if (SHC.erpRetratoDaTela) await SHC.erpRetratoDaTela('tiny', produtos, !(antes && antes.ultima));   // v3.2: cruzamento ERP × ML
+            const r = await SHC.tinyGravar(produtos, 'tiny', { empresa: e0 });
+            const antes = (await A.get(SHC.TINY_CHAVE))[SHC.TINY_CHAVE] || null;
+            await A.set({ [SHC.TINY_CHAVE]: { token, ultima: Object.assign({ ts: Date.now() }, r) } });   // token só é guardado depois que o Tiny aceitou
+            if (SHC.erpRetratoDaTela) await SHC.erpRetratoDaTela('tiny', produtos, !(antes && antes.ultima), e0);   // v3.2: cruzamento ERP × ML
             $('#tinyToken').value = '';
             await lerDados();
             desenhaTabela();
@@ -1236,7 +1254,7 @@
             tinyMsg('✓ Custos do Omie importados.' + (txtPrincipais() ? ' Agora: ' + txtPrincipais() + '.' : ''));
             impResumo(r, 'Omie');
         } catch (e) {
-            if (chaves) await chrome.storage.local.remove(SHC.OMIE_CHAVE).catch(() => {});   // chave que o Omie recusou não fica guardada
+            if (chaves) await SHC.areaEmpresa().remove(SHC.OMIE_CHAVE).catch(() => {});   // chave que o Omie recusou não fica guardada (v3.3: só a desta empresa)
             tinyMsg((e && e.msg) || FALHA, true);
         } finally {
             omieRodando = false;
@@ -1253,8 +1271,7 @@
     $('#omieSecret').addEventListener('keydown', e => { if (e.key === 'Enter') $('#omieConectar').click(); });
     $('#omieAtualizar').addEventListener('click', () => puxarOmie(chrome.permissions.request(OMIE), null));
     $('#omieEsquecer').addEventListener('click', async () => {
-        await chrome.storage.local.remove(SHC.OMIE_CHAVE);
-        try { await chrome.permissions.remove(OMIE); } catch (e) { /* ok */ }
+        await esquecerErp(SHC.OMIE_CHAVE, OMIE);
         tinyMsg('Chaves esquecidas. Os custos que já vieram do Omie continuam na tabela.');
         desenhaOmie();
     });
@@ -1315,7 +1332,7 @@
             // só apaga quando não havia nada antes.
             if (cred && antes) {
                 const b = await SHC.lerChave(SHC.BLING_CHAVE).catch(() => null);
-                if (b && !b.refresh) await (antes.clientId ? SHC.gravarChave(SHC.BLING_CHAVE, antes) : chrome.storage.local.remove(SHC.BLING_CHAVE)).catch(() => {});
+                if (b && !b.refresh) await (antes.clientId ? SHC.gravarChave(SHC.BLING_CHAVE, antes) : SHC.areaEmpresa().remove(SHC.BLING_CHAVE)).catch(() => {});
             }
             tinyMsg((e && e.msg) || FALHA, true);
         } finally {
@@ -1339,8 +1356,7 @@
         Promise.resolve(navigator.clipboard && navigator.clipboard.writeText(t)).then(() => tinyMsg('Endereço copiado. Cole em “URL de redirecionamento” no aplicativo do Bling.'), () => tinyMsg('Selecione o endereço e copie com Ctrl+C.'));
     });
     $('#blingEsquecer').addEventListener('click', async () => {
-        await chrome.storage.local.remove(SHC.BLING_CHAVE);
-        try { await chrome.permissions.remove(BLING); } catch (e) { /* ok */ }
+        await esquecerErp(SHC.BLING_CHAVE, BLING);
         tinyMsg('Bling desconectado. Os custos que já vieram do Bling continuam na tabela.');
         desenhaBling();
     });
@@ -1356,26 +1372,28 @@
         SHC.lerChave(SHC.TINY_CHAVE).then(t => (t && t.token ? puxarTiny(pedido, t.token) : desenhaTiny()));
     });
     $('#tinyEsquecer').addEventListener('click', async () => {
-        await chrome.storage.local.remove(SHC.TINY_CHAVE);
-        try { await chrome.permissions.remove(TINY); } catch (e) { /* ok */ }
+        await esquecerErp(SHC.TINY_CHAVE, TINY);
         tinyMsg('Token esquecido. Os custos que já vieram do Tiny continuam na tabela.');
         desenhaTiny();
     });
     desenhaTiny();
 
     // Mudou algo no armazenamento (etiqueta no ML, painel lateral, sincronização): relê.
-    let espera = null;
+    let espera = null, contasMudou = false;
     chrome.storage.onChanged.addListener((mud, area) => {
         if (area !== 'local') return;
         if (mud['shc:status'] && mud['shc:status'].newValue && passo === 3 && !$('#guia').hidden) mostraConta(mud['shc:status'].newValue);
         // Importação pelo fundo (Omie, ou o Tiny a cada sincronização): a barra acompanha shc:status.custosProgresso.
         if (mud['shc:status'] && !tinyRodando) impBarra((mud['shc:status'].newValue || {}).custosProgresso);
-        const relevante = Object.keys(mud).some(k => /^(c\||vm\||ml:anuncios|ml:promos|cfg$|shc:guia$)/.test(k));
+        // v3.3: ml:conta (o ML abriu outra conta, talvez de outra empresa): relê custos, cfg e as contas do seletor.
+        const relevante = Object.keys(mud).some(k => /^(c\||vm\||ml:anuncios|ml:promos|cfg$|shc:guia$|ml:conta$)/.test(k));
         if (Object.keys(mud).some(k => /^erpx:/.test(k))) (async () => { erpx = await SHC.lerChave('erpx:' + (contaVer || await SHC.contaAtual())); desenhaErpx(); })().catch(() => {});
         if (!relevante) return;
+        if (mud['ml:conta'] || mud.cfg) contasMudou = true;
         clearTimeout(espera);
         espera = setTimeout(async () => {
             await lerDados();
+            if (contasMudou) { contasMudou = false; desenhaContaTab().catch(() => {}); }
             if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#corpo')) { redesenharDepois = true; return; }
             desenhaTabela();
         }, 300);

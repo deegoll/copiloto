@@ -51,6 +51,17 @@ const HOJE = '2026-10-07';   // 30 dias ≈ setembro; mês alvo (hoje + 15) = ou
             'um dos anúncios ganhando a Buy Box: sem cautela');
         ok(!P.saudeEnvioFull(its, { exp: { porUp: { MLBU7000000001: SHC.mlExperienciaCompra({ up_id: 'MLBU7000000001', reputation: { color: 'green', value: 90 } }) }, porItem: { MLB7000000001: exp(25, 'red') } } }).bloqueia.length,
             'vale o MELHOR anúncio do produto: produto (UP) com nota boa libera o envio');
+        // Revisão 07/10/2026: o ML pausa sozinho o anúncio que ESGOTOU (restrição out_of_stock) — é o envio ao Full que o reativa.
+        const esg = { itemId: 'MLB7000000009', status: 'paused', restricao: { id: 'out_of_stock', txt: 'Inativo · Não há mais unidades à venda.' } };
+        ok(!P.saudeEnvioFull([esg], {}).bloqueia.length, 'esgotado (out_of_stock): não é "fora do ar", o envio repõe');
+        ok(!P.saudeEnvioFull([{ itemId: 'MLB7000000009', status: 'paused', estoque: 'Sem estoque' }], {}).bloqueia.length, 'linha que diz "Sem estoque": também esgotado');
+        ok(!P.saudeEnvioFull([{ itemId: 'MLB7000000009', status: 'paused' }], { aptas: 0 }).bloqueia.length, 'linha sem o motivo e o produto com 0 aptas no Full: esgotado');
+        ok(/fora do ar \(pausado por você\)/.test(P.saudeEnvioFull([{ itemId: 'MLB7000000009', status: 'paused', restricao: { id: 'paused' } }], { aptas: 0 }).bloqueia[0] || ''),
+            'pausado pelo seller (mesmo com 0 aptas): não envia e diz o motivo');
+        ok(/fora do ar \(em revisão pelo ML\)/.test(P.saudeEnvioFull([{ itemId: 'MLB7000000009', status: 'under_review', restricao: { id: 'under_review' } }], {}).bloqueia[0] || ''), 'em revisão pelo ML: não envia');
+        const fullEsg = { produtos: [{ titulo: 'Esgotado', sku: 'X1', itemIds: ['MLB7000000009'], aptas: 0, aCaminho: 0, vendas30: 30 }], espaco: [] };
+        const le = P.planoFull(fullEsg, { hoje: HOJE, dias: 30, vmDe: () => null, lucroDe: () => 10, saudeDe: p => P.saudeEnvioFull(P.anunciosDoFull(p, [esg]), { aptas: p.aptas }) }).linhas[0];
+        ok(le.qtd === 30 && !le.travas.length, 'plano: produto que vendeu 30 e esgotou no Full → repor 30 (antes: 0, "Não enviar agora")');
     }
 
     console.log('Plano de envio com a saúde (P.planoFull)');

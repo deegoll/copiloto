@@ -1895,7 +1895,7 @@
         itens.forEach(i => { if (i.sku) chaves.add(SHC.chaveSku(i.sku)); if (i.familia) chaves.add(SHC.chave('ml', i.familia)); if (i.itemId) chaves.add(SHC.chave('ml', i.itemId)); });
         chaves.delete('');
         const ids = [...new Set(itens.map(i => i.itemId).filter(Boolean))];
-        const [custos, vm] = await Promise.all([chaves.size ? chrome.storage.local.get([...chaves]) : {}, ids.length ? SHC.lerVendasMes(ids) : {}]);
+        const [custos, vm] = await Promise.all([chaves.size ? SHC.areaEmpresa().get([...chaves]) : {}, ids.length ? SHC.lerVendasMes(ids) : {}]);   // v3.3: custos da empresa da conta
         // icone: a página do ML não sabe se o ícone está fixado; SHC.telaCartaoGuia não deixa essa etapa opcional travar o cartão.
         return { cfg, guia, status, anuncios, custos, vm, temFull: full ? full.temFull : undefined,
             temPromos: promos && promos.vazio ? false : undefined, icone: null, hoje: SHC.hoje() };   // mesmo ctx do painel lateral

@@ -1403,6 +1403,11 @@
     /** Texto do chamado de uma tarifa de devolução (pedido, data, valor, o motivo e a regra; pede o estorno do que não é do vendedor). */
     SHC.chamadoDevolucao = function (x) {
         const d = /^\d{4}-\d{2}-\d{2}/.test(x.data || '') ? x.data.slice(8, 10) + '/' + x.data.slice(5, 7) + '/' + x.data.slice(0, 4) : '—';
+        // 🟡 (revisão 07/10/2026): sem certeza de quem foi a responsabilidade, o texto pergunta e pede o estorno só se ela não foi nossa.
+        if (x.cor === 'amarelo') return SHC.textoContestacao({ assunto: 'Pedido de revisão de tarifa de devolução', ids: [['Pedido', '#' + x.pedido]],
+            intro: 'Gostaríamos de entender por que esta tarifa de devolução (frete de volta do produto) foi cobrada de nós e se o valor está correto.',
+            fatos: ['Data da cobrança: ' + d, 'Valor cobrado: ' + SHC.moeda(x.valor), x.porque ? 'O que observamos: ' + x.porque : ''],
+            regras: ['devolucao'], pedido: 'a confirmação de quem foi a responsabilidade por esta devolução e, se ela não foi nossa, o estorno de ' + SHC.moeda(x.valor) + ' na nossa conta.' });
         const rep = x.recuperar > 0 && x.recuperar < x.valor;
         return SHC.textoContestacao({ assunto: 'Contestação de tarifa de devolução', ids: [['Pedido', '#' + x.pedido]],
             intro: 'Identificamos uma tarifa de devolução (frete de volta do produto) que não deveria ter sido cobrada de nós.',
@@ -1412,17 +1417,30 @@
     // v3.3 Exclusão de reclamação: só os casos que as regras do ML aceitam analisar (Central de Vendedores, "Conheça as regras de exclusão de
     // reclamações", lida em 07/10/2026). Defeito, produto diferente, faltando peça, despacho atrasado por nós, falta de estoque, mensagem sem
     // resposta no prazo NÃO entram — o Copiloto nunca pede a retirada do que é responsabilidade do vendedor (black hat, nunca).
+    // [motivo do comprador, a regra do ML, o que o seller confere antes de enviar (o Copiloto não tem como saber)].
     const EXCLUIVEL = [
-        [/arrepend|desist|n[ãa]o (quer|quero) mais|mudou de ideia/i, 'o comprador se arrependeu da compra e o produto está em perfeitas condições'],
-        [/por engano|comprou errado|engano/i, 'o comprador iniciou a reclamação por engano'],
-        [/n[ãa]o reconhe[cç]/i, 'o comprador não reconhece a compra'],
-        [/(aparece|consta|marcad[oa]) como entregue/i, 'o comprador não recebeu o produto, mas o envio aparece como entregue'],
-        [/correios|transportadora|mercado envios|demora (na|da) entrega|atraso (na|da) entrega/i, 'a reclamação foi aberta pela demora do transporte, com o envio dentro do prazo estabelecido'],
-        [/trocar? (de |o |por outro )?(tamanho|modelo|numera)|tamanho errado|n[ãa]o serviu/i, 'o comprador quer trocar por outro tamanho ou modelo (autopeças, vestuário, bolsas e calçados)'],
-        [/meio de contato|s[óo] queria (falar|perguntar)|d[úu]vida sobre/i, 'o comprador usou a reclamação como meio de contato'],
+        [/arrepend|desist|n[ãa]o (quer|quero) mais|mudou de ideia/i, 'o comprador se arrependeu da compra e o produto está em perfeitas condições', 'o produto voltou sem uso e em perfeitas condições'],
+        [/por engano|compr(ei|ou) errad/i, 'o comprador iniciou a reclamação por engano', 'a conversa mostra que foi engano do comprador'],
+        [/n[ãa]o reconhe[cç]/i, 'o comprador não reconhece a compra', 'o pedido foi entregue no endereço da compra'],
+        [/(aparece|consta|marcad[oa]) como entregue/i, 'o comprador não recebeu o produto, mas o envio aparece como entregue', 'o rastreio mostra a entrega'],
+        [/correios|transportadora|mercado envios|demora (na|da) entrega|atraso (na|da) entrega/i, 'a reclamação foi aberta pela demora do transporte, com o envio dentro do prazo estabelecido', 'você despachou dentro do prazo'],
+        [/trocar? (de |o |por outro )?(tamanho|modelo|numera)|tamanho errado|n[ãa]o serviu/i, 'o comprador quer trocar por outro tamanho ou modelo (autopeças, vestuário, bolsas e calçados)', 'o anúncio é de autopeças, vestuário, bolsas ou calçados'],
+        [/meio de contato|s[óo] queria (falar|perguntar)|d[úu]vida sobre/i, 'o comprador usou a reclamação como meio de contato', 'a reclamação só trazia uma pergunta'],
     ];
+    // Revisão 07/10/2026: "Me arrependi porque veio com defeito" ou "o vendedor não postou nos Correios" casavam com a 1ª regra parecida.
+    // Culpa do vendedor no motivo (a mesma DEV_CULPA das devoluções, fora o erro do próprio comprador; despacho; envio errado; dano no
+    // transporte; estoque) VETA antes de qualquer regra. "Não chegou" só entra quando o rastreio diz entregue.
+    const EXCL_VETO = /n[ãa]o (despach|envi|post|mand)|enviad[oa] (por engano|errad)|veio (outr[oa]|errad)|mand(ou|aram) (outr[oa]|errad)|estoque|\bquebr|danific|avari|amassad|extravi|r[ée]plica|pirat/i;
+    const excluivel = t => {
+        const s = String(t || '');
+        if ((DEV_CULPA.test(s) && !DEV_COMPRADOR.test(s)) || EXCL_VETO.test(s)) return null;
+        if (/n[ãa]o (chegou|recebi|recebeu|foi entregue)/i.test(s) && !EXCLUIVEL[3][0].test(s)) return null;
+        return EXCLUIVEL.find(([re]) => re.test(s)) || null;
+    };
     /** Motivo do comprador → a regra de exclusão do ML em que ele se encaixa ('' = não é excluível: corrija a causa). */
-    SHC.motivoExcluivel = t => { const x = EXCLUIVEL.find(([re]) => re.test(String(t || ''))); return x ? x[1] : ''; };
+    SHC.motivoExcluivel = t => { const x = excluivel(t); return x ? x[1] : ''; };
+    /** O que o seller confere antes de mandar o pedido de exclusão desse motivo ('' = não é excluível). */
+    SHC.confereExclusao = t => { const x = excluivel(t); return x ? x[2] : ''; };
     /**
      * Pedido de exclusão (reputação e experiência de compra) para os casos com um motivo excluível. g = { motivo, casos, naReputacao, produtos?:[título/SKU], pedidos?:[nº] }.
      * '' quando o motivo não está nas regras de exclusão.
@@ -1435,7 +1453,7 @@
             intro: 'Recebemos reclamações que se enquadram nas regras de exclusão do Mercado Livre e não deveriam afetar a nossa reputação nem a experiência de compra dos anúncios.',
             fatos: ['Motivo informado pelo comprador: “' + String(g.motivo).slice(0, 120) + '” (' + SHC.qtd(g.casos || 0, 'caso', 'casos') + (g.naReputacao ? ', ' + g.naReputacao + ' contando na reputação' : '') + ').',
                 'Regra de exclusão em que se enquadra: ' + regra + '.', (g.produtos || []).length ? 'Anúncios: ' + g.produtos.slice(0, 5).join('; ') + '.' : '',
-                peds.length > 1 ? 'Pedidos: ' + peds.map(n => '#' + n).join(', ') + '.' : '', 'As reclamações já foram respondidas/resolvidas por nós.'],
+                peds.length > 1 ? 'Pedidos: ' + peds.map(n => '#' + n).join(', ') + '.' : ''],
             regras: ['exclusao', 'experiencia'],
             pedido: 'a análise e a exclusão destas reclamações do cálculo da nossa reputação e da experiência de compra dos anúncios (Métricas › Atendimento aos seus compradores › Vendas com problemas).' });
     };
@@ -1529,11 +1547,11 @@
             } else if (x) {
                 cor = 'amarelo'; regra = 'motivo_incerto';
                 motivo = mot ? 'O motivo (“' + mot + '”) não diz de quem foi a responsabilidade.' : 'O pós-venda não diz o motivo nem de quem foi a responsabilidade.';
-                porque = 'Gostaria de entender por que a tarifa ficou comigo' + (mot ? ': o motivo informado foi “' + mot + '”.' : '.');
+                porque = mot ? 'O motivo informado foi “' + mot + '”, que não diz de quem foi a responsabilidade.' : 'O pós-venda não informa o motivo nem de quem foi a responsabilidade.';
             } else {
                 cor = 'amarelo'; regra = 'sem_dado';
                 motivo = soPrimeira ? 'Reclamação não lida (o Copiloto leu só a 1ª página do pós-venda).' : 'Sem dado do pós-venda para decidir.';
-                porque = 'Gostaria de entender por que esta tarifa foi cobrada e se o valor está correto.';
+                porque = '';   // o texto 🟡 já pergunta (SHC.chamadoDevolucao)
             }
             if (cor === 'cinza') recuperar = 0;
             const it = { pedido: String(p.pedido), itemId: p.itemId || '', data: p.data || '', valor: p.valor, cor, regra, motivo, recuperar: r2(recuperar) };

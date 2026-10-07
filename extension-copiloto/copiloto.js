@@ -488,11 +488,13 @@ box-shadow:0 12px 32px rgba(0,0,0,.35);font-size:12.5px}
     chrome.storage.onChanged.addListener((mud, area) => {
         if (area !== 'local') return;
         let repinta = false;
+        const pinta = () => { itens.forEach((it, chave) => pintaEtiqueta(chave)); atualizaPainel(); if (janelaAberta) desenhaJanela(false); };
         for (const k in mud) {
-            if (k === 'cfg') { cfg = Object.assign({}, SHC.PADRAO, mud.cfg.newValue || {}); repinta = true; }
+            // v3.3 multi-empresa: o cfg (imposto, margem) é o da empresa da conta aberta → relido por SHC.lerCfg, nunca o cru (o da outra empresa).
+            if (k === 'cfg' || k === 'ml:conta') SHC.lerCfg().then(c => { cfg = c; pinta(); }).catch(() => {});
             else if (k.indexOf('c|' + CANAL + '|') === 0) { custos.set(k, mud[k].newValue || null); repinta = true; }
         }
-        if (repinta) { itens.forEach((it, chave) => pintaEtiqueta(chave)); atualizaPainel(); if (janelaAberta) desenhaJanela(false); }
+        if (repinta) pinta();
     });
     window.addEventListener('resize', () => { if (janelaAberta) desenhaJanela(false); });
 

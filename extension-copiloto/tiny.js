@@ -110,15 +110,17 @@
      * noMl = quantos custos gravados são de SKU com anúncio no ML (null sem retrato). erp = 'tiny' | 'omie' (fica em c|sku|….erp).
      * → { atualizados, semCusto, mantidos, noMl }
      */
-    SHC.tinyGravar = async function (produtos, erp) {
+    SHC.tinyGravar = async function (produtos, erp, opc) {
         const chaves = [...new Set((produtos || []).map(p => SHC.chaveSku(p.sku)).filter(Boolean))];
-        // v3.3 multi-empresa: lê e grava pelo caminho da empresa da conta aberta (SHC.areaEmpresa): o ERP de uma empresa nunca grava na outra.
-        const area = SHC.areaEmpresa ? SHC.areaEmpresa() : chrome.storage.local;
+        // v3.3 multi-empresa: lê e grava pelo caminho da empresa (SHC.areaEmpresa): o ERP de uma empresa nunca grava na outra.
+        // opc.empresa: a empresa do COMEÇO da leitura do ERP (revisão 07/10/2026: a conta do ML pode mudar durante os minutos da leitura).
+        const emp = opc && typeof opc.empresa === 'string' ? opc.empresa : undefined;
+        const area = SHC.areaEmpresa ? SHC.areaEmpresa(emp) : chrome.storage.local;
         const atuais = chaves.length ? await area.get(chaves) : {};
         // F17a (auditoria 30/09): os retratos de TODAS as contas (antes só a aberta) e TODOS os SKUs de cada anúncio (antes só o 1º).
         // v3.3: todas as contas DA MESMA EMPRESA (conta separada em Ajustes não entra na conta das outras).
         let cs = [];
-        try { cs = SHC.contasDaEmpresa ? await SHC.contasDaEmpresa() : SHC.contas ? await SHC.contas() : []; } catch (e) { cs = []; }
+        try { cs = SHC.contasDaEmpresa ? await SHC.contasDaEmpresa(emp) : SHC.contas ? await SHC.contas() : []; } catch (e) { cs = []; }
         const contas = cs.length ? cs : [{ sellerId: undefined, nome: '' }];
         const retratos = await Promise.all(contas.map(c => SHC.lerAnuncios(c.sellerId).catch(() => null)));
         const doMl = new Map(), porConta = contas.map(() => new Set());   // c|sku|X → [{familia, itemId}] dos anúncios dos retratos

@@ -179,8 +179,10 @@
     };
 
     /** O Tiny lido pela TELA (painel/painel lateral): grava o retrato e pede a conferência ao fundo. avisar = 1ª importação (janela do resumo). */
-    SHC.erpRetratoDaTela = async function (erp, produtos, avisar) {
-        await SHC.gravarChave('erp:produtos:' + erp, { ts: Date.now(), itens: SHC.erpNormaliza(produtos) });
+    // empresa (v3.3, opcional): a do começo da leitura (SHC.areaEmpresa(empresa)), para o retrato ir para o ERP da mesma empresa.
+    SHC.erpRetratoDaTela = async function (erp, produtos, avisar, empresa) {
+        const A = SHC.areaEmpresa ? SHC.areaEmpresa(typeof empresa === 'string' ? empresa : undefined) : null, k = 'erp:produtos:' + erp, v = { ts: Date.now(), itens: SHC.erpNormaliza(produtos) };
+        await (A ? A.set({ [k]: v }) : SHC.gravarChave(k, v));
         try { await chrome.runtime.sendMessage({ acao: 'erp_conferir', avisar: !!avisar }); } catch (e) { /* fundo reiniciando: confere na próxima sincronização */ }
     };
 

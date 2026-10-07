@@ -19,15 +19,17 @@ A 3.3.0 traz, em relação à 3.2.1:
   - A sincronização confere a conta da sessão antes e depois de cada etapa e no fim. Se o login trocou, ela para (`outra_conta`) e os meses lidos voltam para a fila.
   - A tela do ML de outra conta fica sem etiqueta.
   - "Outra empresa" em Ajustes separa custos por SKU, imposto, despesas e ERP (`store.js`, `SHC.empresaSeparada`).
+  - A importação do ERP grava sempre na empresa em que começou, e o "Esquecer" de uma empresa não apaga o ERP da outra.
 - **Full pela saúde do anúncio:**
   - Anúncio parado não usa o ano passado, e a sazonalidade usa um índice.
-  - Não envia para anúncio fora do ar, com experiência ruim ou pausado pela experiência.
+  - Não envia para anúncio fora do ar, com experiência ruim ou pausado pela experiência. Anúncio esgotado (pausado pelo ML por falta de estoque) recebe a reposição.
   - Cautela (só 15 dias) com experiência mediana, problema na reputação, qualidade básica ou sem a Buy Box.
   - Aviso de estoque empacado.
 - **Experiência de compra:** leitor no formato oficial do ML, alertas no sino e os avisos de exposição do próprio ML.
 - **Textos de contestação:**
   - No modelo da dona, com a regra da Central e o pedido explícito.
-  - Novos textos: remessa do Full e exclusão de reclamação. A exclusão sai só nos casos que as regras do ML aceitam.
+  - Novos textos: remessa do Full e exclusão de reclamação. A exclusão sai só nos casos que as regras do ML aceitam, e nunca com culpa do vendedor no motivo.
+  - Caso incerto vira "Pedido de revisão", com o estorno só se a diferença se confirmar.
 
 Também já estavam no código atual em relação à 3.2.1:
 

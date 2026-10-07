@@ -186,10 +186,13 @@
     TT.ler = async function (conta) {
         conta = conta || (await area().get('tt:conta'))['tt:conta'] || null;
         if (!TT.contaValida(conta)) return null;
-        const pre = k(conta, ''), ks = (await chavesCom(pre, 'c|sku|', 'c|tiktok|')).concat(['cfg']);
-        const t = await area().get(ks), d = { conta, peds: [], custos: {}, cfg: Object.assign({}, SHC.PADRAO || {}, t.cfg || {}) };
+        // v3.3 multi-empresa (revisão 07/10/2026): custos por SKU e cfg da empresa da conta do ML aberta, como no painel ('c|sku' pega também
+        // 'c|sku@<conta>|'; SHC.chaveLogica devolve a chave lógica da empresa aberta e null para a da outra).
+        const e = SHC.empresaSeparada ? await SHC.empresaSeparada() : '', logica = x => (SHC.chaveLogica ? SHC.chaveLogica(x, e) : x);
+        const pre = k(conta, ''), ks = (await chavesCom(pre, 'c|sku', 'c|tiktok|')).concat(['cfg']);
+        const t = await area().get(ks), d = { conta, peds: [], custos: {}, cfg: SHC.lerCfg ? await SHC.lerCfg() : Object.assign({}, SHC.PADRAO || {}, t.cfg || {}) };
         Object.keys(t).forEach(x => {
-            if (x.indexOf('c|') === 0) d.custos[x] = t[x];
+            if (x.indexOf('c|') === 0) { const l = logica(x); if (l !== null) d.custos[l] = t[x]; }
             else if (x.indexOf(pre + 'ped:') === 0) d.peds.push(t[x]);
             else if (x.indexOf(pre) === 0) d[x.slice(pre.length)] = t[x];
         });

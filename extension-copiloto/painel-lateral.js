@@ -649,8 +649,15 @@
         const o = { bloqueia: [], reduz: [] }, l = (its || []).filter(Boolean);
         if (!l.length) return o;
         f = f || {};
-        const comStatus = l.filter(i => i.status), fora = comStatus.filter(i => !SHC.anuncioAtivo(i));
-        if (comStatus.length && fora.length === l.length) o.bloqueia.push('O anúncio está pausado ou inativo no ML: sem venda, o estoque no Full só gera armazenagem.');
+        // Esgotado não é "fora do ar" (revisão 07/10/2026): o ML pausa sozinho o anúncio que ficou sem unidades (restrição out_of_stock) e é o
+        // envio ao Full que o reativa. Linha sem o motivo: produto do Full com 0 aptas (f.aptas) conta como esgotado.
+        const semUn = P.un(f.aptas) === 0, motivo = i => (i.restricao && i.restricao.id) || '';
+        const esgotado = i => motivo(i) === 'out_of_stock' || /sem estoque/i.test(String(i.estoque || '')) || (semUn && !motivo(i));
+        const comStatus = l.filter(i => i.status), fora = comStatus.filter(i => !SHC.anuncioAtivo(i) && !esgotado(i));
+        if (comStatus.length && fora.length === l.length) {
+            const pq = fora.map(i => ({ paused: 'pausado por você', closed_finalized: 'finalizado', under_review: 'em revisão pelo ML' })[motivo(i)]).find(Boolean);
+            o.bloqueia.push('O anúncio está ' + (pq ? 'fora do ar (' + pq + ')' : 'pausado ou inativo no ML') + ': sem venda, o estoque no Full só gera armazenagem.');
+        }
         const ex = (f.exp && f.exp.porItem) || {}, exUp = (f.exp && f.exp.porUp) || {}, vistos = new Set();
         const exps = [].concat(...l.map(i => [ex[i.itemId], i.userProductId ? exUp[i.userProductId] : null])).filter(x => x && !vistos.has(x.id) && vistos.add(x.id));
         // Vale o MELHOR anúncio do produto: o Full abastece todos; se um vende bem, o estoque não empaca.
@@ -3830,7 +3837,7 @@
             + a.motivos.slice(0, nMot).map((x, i) => `<div class="hb"><div class="l"><b>${esc(curtoTxt(x.motivo, 40))}</b><span class="v">${x.casos}${x.valor > 0 ? ' · <small>' + SHC.moeda(x.valor) + '</small>' : ''}</span></div>`
                 + `<div class="medidor"><i class="${i === 0 ? 'pr' : x.casos > 1 ? 'at' : ''}" style="width:${Math.max(4, Math.round(x.casos / max * 100))}%"></i></div>`
                 // v3.3: motivo que as regras de exclusão do ML aceitam → o pedido de exclusão pronto (reputação e experiência de compra).
-                + (SHC.motivoExcluivel(x.motivo) ? `<small class="det" style="display:block">Pode sair da reputação: ${esc(SHC.motivoExcluivel(x.motivo))}. <button class="lnk" data-pos-excluir="${esc(x.motivo)}">${posCopiado === x.motivo ? '✓ Texto copiado' : 'Copiar pedido de exclusão'}</button></small>` : '')
+                + (SHC.motivoExcluivel(x.motivo) ? `<small class="det" style="display:block">Pode sair da reputação: ${esc(SHC.motivoExcluivel(x.motivo))}. Envie só se ${esc(SHC.confereExclusao(x.motivo))}. <button class="lnk" data-pos-excluir="${esc(x.motivo)}">${posCopiado === x.motivo ? '✓ Texto copiado' : 'Copiar pedido de exclusão'}</button></small>` : '')
                 + '</div>').join('')
             + (a.motivos.length > 5 ? `<p class="rs">${btVer('pos:motivos', `Ver mais (${a.motivos.length - 5})`)}</p>` : '')
             + `<p class="rs">${esc(a.naReputacao + ' de ' + a.total)} contaram na sua reputação.</p></div>`;
@@ -3877,7 +3884,7 @@
         return P.planoFull(full, {
             hoje: SHC.hoje(), dias: fullDias, idsDe, mesesLidos,
             // v3.3: saúde do anúncio antes de sugerir envio (experiência de compra, fora do ar, reputação, qualidade).
-            saudeDe: p => P.saudeEnvioFull(doFull(p), { exp: experiencia, editor, reputacao }),
+            saudeDe: p => P.saudeEnvioFull(doFull(p), { exp: experiencia, editor, reputacao, aptas: p.aptas }),
             // Sem nenhum anúncio ligado: vendas do ano passado desconhecidas (null), não "ainda não lidas".
             vmDe: p => { const ids = idsDe(p); return ids.length ? P.somaMeses(ids.map(id => vm[id])) : null; },
             lucroDe: p => {
@@ -6051,7 +6058,7 @@
         document.querySelectorAll('[data-apelido]').forEach(i => { txt[i.dataset.apelido] = i.value; });
         const sep = {}, temCaixa = !!document.querySelector('[data-empresa]');   // v3.3: contas de outra empresa (só existe com 2+ contas)
         document.querySelectorAll('[data-empresa]').forEach(i => { if (i.checked && /^\d{6,15}$/.test(i.dataset.empresa)) sep[i.dataset.empresa] = true; });
-        try { cfg = await SHC.salvarCfg(Object.assign({ apelidos: P.lerApelidos(txt) }, temCaixa ? { empresaSeparada: sep } : {})); } catch (e) { return falhaGravar(e); }
+        try { cfg = await SHC.salvarCfg(Object.assign({ apelidos: P.lerApelidos(txt) }, temCaixa ? { empresaSeparada: sep } : {}), { semMarcar: true }); } catch (e) { return falhaGravar(e); }   // apelido e empresa não são "imposto informado"
         $('#okApelidos').textContent = '✓ Salvo';
         setTimeout(() => { $('#okApelidos').textContent = ''; }, 2500);
         desenhaConta();
@@ -6107,7 +6114,7 @@
     $('#salvarModulos').addEventListener('click', async () => {
         const modulos = {};
         P.MODULOS.forEach(m => { const on = $('#mod-' + m).checked; if (!on) modulos[m] = false; else if (SHC.MODULOS_OPCIONAIS.indexOf(m) >= 0) modulos[m] = true; });   // v3.2: opcional só liga com true
-        try { cfg = await SHC.salvarCfg({ modulos }); } catch (e) { return falhaGravar(e); }
+        try { cfg = await SHC.salvarCfg({ modulos }, { semMarcar: true }); } catch (e) { return falhaGravar(e); }   // módulos não são "imposto informado"
         atualizaAbasVisiveis();
         $('#okModulos').textContent = '✓ Salvo';
         setTimeout(() => { $('#okModulos').textContent = ''; }, 2500);
@@ -6138,13 +6145,15 @@
         ['#abrirTiny', '#tinyConectar'].forEach(x => { $(x).disabled = true; });
         tinyMsg('Lendo os produtos do Tiny…');
         $('#tinyProg').hidden = false; $('#tinyBarra').style.width = '0%'; $('#tinyPct').textContent = '';
+        // v3.3 multi-empresa (revisão 07/10/2026): tudo vai para a empresa da conta aberta NO CLIQUE, mesmo se o ML trocar de conta durante a leitura.
         try {
+            const e0 = await SHC.empresaSeparada(), A = SHC.areaEmpresa(e0);
             const produtos = await SHC.tinyPuxar(token, { fetch: (u, i) => fetch(u, i), espera: ms => new Promise(r => setTimeout(r, ms)),
                 progresso: (pg, n) => { const pc = n ? Math.round(pg / n * 100) : 0; $('#tinyBarra').style.width = pc + '%'; $('#tinyPct').textContent = pc + '% · ' + pg + ' de ' + n + (n === 1 ? ' página' : ' páginas'); } });
-            const r = await SHC.tinyGravar(produtos, 'tiny');
-            const antes = await SHC.lerChave(SHC.TINY_CHAVE);
-            await SHC.gravarChave(SHC.TINY_CHAVE, { token, ultima: Object.assign({ ts: Date.now() }, r) });
-            if (SHC.erpRetratoDaTela) await SHC.erpRetratoDaTela('tiny', produtos, !(antes && antes.ultima));   // v3.2: cruzamento ERP × ML
+            const r = await SHC.tinyGravar(produtos, 'tiny', { empresa: e0 });
+            const antes = (await A.get(SHC.TINY_CHAVE))[SHC.TINY_CHAVE] || null;
+            await A.set({ [SHC.TINY_CHAVE]: { token, ultima: Object.assign({ ts: Date.now() }, r) } });
+            if (SHC.erpRetratoDaTela) await SHC.erpRetratoDaTela('tiny', produtos, !(antes && antes.ultima), e0);   // v3.2: cruzamento ERP × ML
             tinyToken = token; tinyRecusado = false; $('#tinyToken').value = ''; $('#tinyBox').hidden = true;
             tinyMsg('✓ ' + SHC.tinyResumo(r) + '.');
         } catch (e) {

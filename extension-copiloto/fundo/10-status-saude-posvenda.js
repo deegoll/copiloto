@@ -21,12 +21,16 @@ emFilaStatus(async () => {
 // v2.5.3 (D5b): e uma sincronização que ficou "sincronizando" num worker que morreu vira 'interrompida' (e é retomada 1 vez).
 retomarInterrompida().catch(() => {});
 let custosAndando = null;
-function sincronizarCustos(erp, intervaloMs) {
+// empresa (opcional, v3.3): a empresa do começo (SHC.empresaSeparada). Revisão 07/10/2026: a leitura do ERP leva minutos e a conta do ML pode
+// mudar no meio — credencial, retrato do ERP e custos são lidos e gravados SEMPRE na empresa do começo (SHC.areaEmpresa(empresa)).
+function sincronizarCustos(erp, intervaloMs, empresa) {
     const E = ERPS[erp] || ERPS.tiny;
     // Outro ERP lendo agora: espera ele acabar e então lê ESTE (a resposta é sempre do ERP pedido, nunca a do outro).
-    if (custosAndando) return custosAndando.catch(() => {}).then(() => sincronizarCustos(erp, intervaloMs));
+    if (custosAndando) return custosAndando.catch(() => {}).then(() => sincronizarCustos(erp, intervaloMs, empresa));
     custosAndando = (async () => {
-        const t = await SHC.lerChave(E.chave()), cred = E.cred(t);
+        const e0 = typeof empresa === 'string' ? empresa : await SHC.empresaSeparada(), A = SHC.areaEmpresa(e0);
+        const ler = async k => (await A.get(k))[k] || null, gravar = (k, v) => A.set({ [k]: v });
+        const t = await ler(E.chave()), cred = E.cred(t);
         if (!cred) return { semToken: true, erp };
         let pode = false;
         try { pode = !!(chrome.permissions && await chrome.permissions.contains({ origins: [].concat(E.origem()) })); } catch (e) { /* sem permissão */ }
@@ -34,22 +38,24 @@ function sincronizarCustos(erp, intervaloMs) {
         if (intervaloMs && t.ultima && Date.now() - (t.ultima.ts || 0) < intervaloMs) return { recente: true, erp, ultima: t.ultima };
         try {
             await custosProgresso({ erp, feito: 0, de: null, unidade: 'páginas' });
-            const produtos = await E.puxar(cred, { fetch: (u, i) => fetch(u, comTempo(i)), espera, progresso: (pg, pgs) => { custosProgresso({ erp, feito: pg, de: pgs, unidade: 'páginas' }).catch(() => {}); } });
+            const produtos = await E.puxar(cred, { fetch: (u, i) => fetch(u, comTempo(i)), espera, empresa: e0, progresso: (pg, pgs) => { custosProgresso({ erp, feito: pg, de: pgs, unidade: 'páginas' }).catch(() => {}); } });
             // v3.2: retrato do ERP para o cruzamento ERP × ML (erp:produtos:<erp>, mesma forma nos 3 ERPs). SKU repetido: o ATIVO vale por
             // último no custo (o Bling agora traz também os inativos, criterio=5).
-            await SHC.gravarChave('erp:produtos:' + erp, { ts: Date.now(), itens: SHC.erpNormaliza(produtos) });
+            await gravar('erp:produtos:' + erp, { ts: Date.now(), itens: SHC.erpNormaliza(produtos) });
             produtos.sort((a, b) => (b.situacao === 'I') - (a.situacao === 'I'));   // inativos primeiro (sort estável)
-            const r = await SHC.tinyGravar(produtos, erp);   // a tabela mostra de qual ERP veio
+            const r = await SHC.tinyGravar(produtos, erp, { empresa: e0 });   // a tabela mostra de qual ERP veio
             if (produtos.porFaixa) r.porFaixa = produtos.porFaixa;   // F5: Bling — quantos vieram com estoque positivo, zerado e negativo
-            r.faltam = await skusSemCusto();
-            const agora = await SHC.lerChave(E.chave());   // desconectou no meio: não volta a guardar a credencial
-            if (E.mesma(E.cred(agora), cred)) await SHC.gravarChave(E.chave(), Object.assign({}, agora, { ultima: Object.assign({ ts: Date.now() }, r) }));
+            // SKUs sem custo e cruzamento ERP × ML: só com a mesma empresa aberta (são da conta aberta; a outra empresa tem o ERP dela).
+            const mesma = (await SHC.empresaSeparada()) === e0;
+            r.faltam = mesma ? await skusSemCusto() : null;
+            const agora = await ler(E.chave());   // desconectou no meio: não volta a guardar a credencial
+            if (E.mesma(E.cred(agora), cred)) await gravar(E.chave(), Object.assign({}, agora, { ultima: Object.assign({ ts: Date.now() }, r) }));
             // Cruzamento ERP × ML em todas as contas. 1ª importação depois de conectar (sem "ultima" antes): o painel abre a janela do resumo.
-            await erpConferirTodas({ avisar: !(t && t.ultima) }).catch(() => {});
-            if (r.atualizados) await atualizarAlertas().catch(() => {});
+            if (mesma) await erpConferirTodas({ avisar: !(t && t.ultima) }).catch(() => {});
+            if (r.atualizados && mesma) await atualizarAlertas().catch(() => {});
             return Object.assign({ ok: true, erp, resumo: E.resumo(r) }, r);
         } catch (e) {
-            if (erp === 'bling' && e && e.erro === 'reconectar') await salvarBling(cred, null).catch(() => {});   // refresh vencido: some o token, o painel pede "Conectar de novo"
+            if (erp === 'bling' && e && e.erro === 'reconectar') await salvarBling(cred, null, e0).catch(() => {});   // refresh vencido: some o token, o painel pede "Conectar de novo"
             return { ok: false, erp, erro: (e && e.erro) || 'outro', msg: (e && e.msg) || 'Não consegui falar com o ' + E.nome + '. Tente de novo em alguns minutos.' };
         }
         finally { await custosProgresso(null).catch(() => {}); }
@@ -138,12 +144,24 @@ async function contaSegue(conta, forcar) {
 // leitura desta conta (ml:cobrancas.releer e vbAnuncio.meses[m].completo = false). Nada é apagado: a próxima leitura da conta certa substitui.
 async function marcaReler(conta, desde) {
     if (!conta || conta === 'atual' || !(desde > 0)) return;
-    const dia = new Date(desde - 3 * 3600e3).toISOString().slice(0, 10);   // lidoEm é o dia de Brasília (UTC−3)
+    // lidoEm/cortadoEm são o dia LOCAL do Chrome (SHC.hoje). Revisão 07/10/2026: comparar com o dia de Brasília perdia, fora do UTC−3, os meses
+    // lidos perto da meia-noite → vale o MENOR dos dois (na dúvida, relê a mais).
+    const d = new Date(desde), local = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const dia = [local, new Date(desde - 3 * 3600e3).toISOString().slice(0, 10)].sort()[0];
     const kc = 'ml:cobrancas:' + conta, mc = await SHC.lerChave(kc);
-    if (mc && mc.lidoEm) {
-        const re = Object.keys(mc.lidoEm).filter(m => String(mc.lidoEm[m] || '') >= dia);
+    if (mc) {
+        const desdeDia = o => Object.keys(o || {}).filter(m => String(o[m] || '') >= dia);
+        const re = desdeDia(mc.lidoEm).concat(desdeDia(mc.cortadoEm));   // cortado (80+ páginas) também: tem cobranças da conta errada
         if (re.length) await SHC.gravarChave(kc, Object.assign({}, mc, { releer: [...new Set((mc.releer || []).concat(re))].sort() }));
     }
+    // Vendas brutas (vb:<conta>): mês lido depois da troca sai de mesesLidos (o atual e o anterior já são relidos sempre). Na fila do vb.
+    await emFilaVb(async () => {
+        const kb = 'vb:' + conta, vb = await SHC.lerChave(kb), ts = (vb && vb.lidoTs) || {};
+        const sai = Object.keys(ts).filter(m => ts[m] >= desde);
+        if (!sai.length) return;
+        const mesesLidos = (vb.mesesLidos || []).filter(m => sai.indexOf(m) < 0);
+        await SHC.gravarChave(kb, Object.assign({}, vb, { mesesLidos, completo13: false }));
+    }).catch(() => {});
     const kv = 'vbAnuncio:' + conta, va = await SHC.lerChave(kv);
     if (va && va.meses) {
         let mudou = false;

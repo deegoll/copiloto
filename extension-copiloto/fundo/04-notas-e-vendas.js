@@ -147,8 +147,12 @@ async function sincronizarVendasBrutas(sellerId, progresso, soMeses) {
         Object.keys(todos).forEach(d => { if (d < limite) delete todos[d]; });
         const mesesLidos = treze.filter(m => jaLidos.has(m));
         const nl = [...new Set((soMeses ? (v.naoLidos || []) : []).concat(naoLidos))].filter(m => lidosAgora.indexOf(m) < 0 && treze.indexOf(m) >= 0);
+        // lidoTs (v3.3): quando cada mês foi lido — marcaReler tira de mesesLidos o lido depois de uma troca de conta no meio da leitura.
+        const lidoTs = Object.assign({}, v.lidoTs);
+        lidosAgora.forEach(m => { lidoTs[m] = Date.now(); });
+        Object.keys(lidoTs).forEach(m => { if (treze.indexOf(m) < 0) delete lidoTs[m]; });
         const snap = { ts: Date.now(), dias: todos, resumo: resumo || v.resumo || {}, porAnuncio: porAnuncio || v.porAnuncio || [], mesesLidos, completo13: mesesLidos.length === VB_MESES,
-            naoLidos: nl, periodoLido: soMeses && v.periodoLido ? v.periodoLido : { de: primeiroDia, ate: ultimoDia, lidoEm: hoje } };
+            naoLidos: nl, periodoLido: soMeses && v.periodoLido ? v.periodoLido : { de: primeiroDia, ate: ultimoDia, lidoEm: hoje }, lidoTs };
         await SHC.salvarVendasBrutas(sellerId, snap);
         return snap;
     });

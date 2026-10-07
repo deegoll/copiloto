@@ -33,9 +33,15 @@
         }
         return k;
     };
-    const area = () => ({
+    // forcada (revisão 07/10/2026): a empresa FIXA ('' = a das contas não separadas; sellerId = a conta separada). Quem lê do ERP por minutos
+    // passa a empresa do começo da leitura: trocar a conta do ML no meio nunca grava os custos de uma empresa na outra. Sem ela: a conta aberta.
+    const area = forcada => {
+        const emp = () => (typeof forcada === 'string' ? Promise.resolve(forcada) : SHC.empresaSeparada());
+        return areaDe(emp);
+    };
+    const areaDe = emp => ({
         async get(ks) {
-            const e = await SHC.empresaSeparada();
+            const e = await emp();
             if (ks === null || ks === undefined) {
                 const t = await crua().get(null), o = {};
                 Object.keys(t).forEach(k => { const l = SHC.chaveLogica(k, e); if (l !== null) o[l] = t[k]; });
@@ -47,15 +53,23 @@
             return o;
         },
         async set(obj) {
-            const e = await SHC.empresaSeparada();
+            const e = await emp();
             if (!e) return crua().set(obj);
             const o = {};
             Object.keys(obj).forEach(k => { o[SHC.chaveFisica(k, e)] = obj[k]; });
             return crua().set(o);
         },
-        async remove(ks) { const e = await SHC.empresaSeparada(); return crua().remove(e ? [].concat(ks).map(k => SHC.chaveFisica(k, e)) : ks); },
+        async remove(ks) { const e = await emp(); return crua().remove(e ? [].concat(ks).map(k => SHC.chaveFisica(k, e)) : ks); },
     });
     SHC.areaEmpresa = area;   // para quem grava custo em lote (tiny.js) passar pelo mesmo caminho
+    /**
+     * Alguma OUTRA empresa ainda tem este ERP guardado ('erp:tiny' → 'erp:tiny' ou 'erp@<id>:tiny', fora o da empresa aberta)?
+     * A permissão do Chrome para o site do ERP é uma só: o "Esquecer" de uma empresa só a tira quando nenhuma outra usa.
+     */
+    SHC.erpEmOutraEmpresa = async function (chave) {
+        const minha = SHC.chaveFisica(chave, await SHC.empresaSeparada()), resto = String(chave).replace(/^erp:/, ''), t = await crua().get(null);
+        return Object.keys(t).some(k => k !== minha && !!t[k] && (k === chave || (/^erp@\d+:/.test(k) && k.replace(/^erp@\d+:/, '') === resto)));
+    };
 
     SHC.chave = (canal, id) => 'c|' + canal + '|' + id;
 
@@ -299,8 +313,9 @@
             .sort((a, b) => (b.atual - a.atual) || (b.visto - a.visto));
     };
     // v3.3 multi-empresa: as contas da MESMA empresa da conta aberta (conta separada = só ela; as outras = todas as não separadas).
-    SHC.contasDaEmpresa = async function () {
-        const [cs, e, r] = await Promise.all([SHC.contas(), SHC.empresaSeparada(), crua().get('cfg')]), sep = (r.cfg && r.cfg.empresaSeparada) || {};
+    // empresa (opcional): a de SHC.empresaSeparada guardada no começo de uma leitura longa (SHC.areaEmpresa(empresa)).
+    SHC.contasDaEmpresa = async function (empresa) {
+        const [cs, e, r] = await Promise.all([SHC.contas(), typeof empresa === 'string' ? empresa : SHC.empresaSeparada(), crua().get('cfg')]), sep = (r.cfg && r.cfg.empresaSeparada) || {};
         return cs.filter(c => (e ? c.sellerId === e : sep[c.sellerId] !== true));
     };
     /** Dados de cada conta para SHC.consolidado(…, mes): vb:<c>, fech:<c>:<mes> e shc:anomalias:<c> (gravado pelo fundo em atualizarAlertas). */
@@ -810,24 +825,28 @@
     };
 
     // v3.3 multi-empresa: números que são da EMPRESA (a conta separada tem os dela em cfg.porConta[sellerId]; sem eles, os padrões — nunca os da outra).
-    SHC.CAMPOS_EMPRESA = ['imposto_pct', 'margem_alvo_pct', 'despesas_fixas', 'sp_comissao_pct', 'sp_taxa_fixa'];
+    // configurado (revisão 07/10/2026) também é da empresa: a conta separada sem números próprios não pode herdar o "imposto informado" da outra
+    // (o 0% padrão viraria imposto de verdade no lucro), e salvar os números dela não marca a outra como configurada.
+    SHC.CAMPOS_EMPRESA = ['imposto_pct', 'margem_alvo_pct', 'despesas_fixas', 'sp_comissao_pct', 'sp_taxa_fixa', 'configurado'];
     SHC.lerCfg = async function () {
         const r = await area().get('cfg'), c = r.cfg || {}, e = await SHC.empresaSeparada();
         if (!e) return Object.assign({}, SHC.PADRAO, c);
         const meu = (c.porConta && c.porConta[e]) || {}, proprio = {};
-        SHC.CAMPOS_EMPRESA.forEach(k => { proprio[k] = k in meu ? meu[k] : SHC.PADRAO[k]; });
-        return Object.assign({}, SHC.PADRAO, c, proprio, { empresa: e, empresaSemNumeros: !Object.keys(meu).length });
+        SHC.CAMPOS_EMPRESA.forEach(k => { proprio[k] = k in meu ? meu[k] : k === 'configurado' ? false : SHC.PADRAO[k]; });
+        return Object.assign({}, SHC.PADRAO, c, proprio, { empresa: e });
     };
     // opc.semMarcar: não marca cfg.configurado (as despesas fixas não podem inventar "imposto 0%").
     SHC.salvarCfg = async function (patch, opc) {
-        const r = await crua().get('cfg'), base = Object.assign({}, r.cfg || {}), e = await SHC.empresaSeparada(), p = Object.assign({}, patch);
-        delete p.empresa; delete p.empresaSemNumeros;   // são da leitura (SHC.lerCfg), não se gravam
+        const r = await crua().get('cfg'), base = Object.assign({}, r.cfg || {}), e = await SHC.empresaSeparada();
+        const p = Object.assign({}, patch, opc && opc.semMarcar ? {} : { configurado: true });
+        delete p.empresa; delete p.empresaSemNumeros;   // são da leitura (SHC.lerCfg; empresaSemNumeros: a da 3.3.0 em teste), não se gravam
+        delete p.porConta;   // só esta função mexe nele: um cfg lido e devolvido inteiro traria o porConta velho por cima do novo
         if (e) {
             const meu = Object.assign({}, (base.porConta || {})[e]);
             SHC.CAMPOS_EMPRESA.forEach(k => { if (k in p) { meu[k] = p[k]; delete p[k]; } });
             base.porConta = Object.assign({}, base.porConta, { [e]: meu });
         }
-        await crua().set({ cfg: Object.assign(base, p, opc && opc.semMarcar ? {} : { configurado: true }) });
+        await crua().set({ cfg: Object.assign(base, p) });
         empCache = null;   // empresaSeparada pode ter mudado neste patch
         return SHC.lerCfg();
     };

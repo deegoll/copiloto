@@ -330,7 +330,7 @@
     /** Texto do chamado de um frete cobrado a mais (mesmo formato de F.textoChamado; só pede a revisão). */
     // v3.1: é só o frete de ENVIO da venda; a tarifa de devolução do mesmo pedido (dev) fica fora e o texto diz isso (nunca pede revisão dela).
     F.chamadoFrete = (p, titulo) => F.textoChamado({ pedido: p.pedido, data: p.data, itemId: p.itemId, titulo: titulo || '', cobranca: 'Frete de envio da venda (Mercado Envios)',
-        valor: p.cobrado, esperado: p.esperado, diferenca: p.valor,
+        valor: p.cobrado, esperado: p.esperado, diferenca: p.valor, regra: 'frete',   // regra: cita as regras do frete do ML (40538 e 4413)
         motivo: 'O frete cobrado ficou acima do custo de envio que o anúncio mostra (' + SHC.moeda(p.esperado) + ').'
             + (p.dev > 0 ? ' A tarifa de devolução deste pedido (' + SHC.moeda(p.dev) + ') não está nesta conta.' : '') });
     /**
@@ -442,8 +442,10 @@
                 const it = itensPorId[id];
                 if (t === 'tarifa_venda' && it && it.tarifa > 0) {
                     const razao = v / it.tarifa;
+                    // estimado = a frase para o suporte: o esperado é uma estimativa (o texto pede a conferência, não afirma erro).
                     if (razao >= F.TARIFA_RAZAO && !variasUnidades(razao) && v - it.tarifa >= F.DIF_MIN) out.push(base(c, { regra: 'tarifa', valor: v, esperado: it.tarifa, diferenca: r2(v - it.tarifa),
-                        motivo: 'No preço de hoje (' + SHC.moeda(it.preco) + '), este anúncio paga ' + SHC.moeda(it.tarifa) + ' de tarifa por unidade. Se o preço da venda foi outro, pode estar certo.' }));
+                        motivo: 'No preço de hoje (' + SHC.moeda(it.preco) + '), este anúncio paga ' + SHC.moeda(it.tarifa) + ' de tarifa por unidade. Se o preço da venda foi outro, pode estar certo.',
+                        estimado: 'Pelo preço atual do anúncio (' + SHC.moeda(it.preco) + '), a tarifa de venda seria de ' + SHC.moeda(it.tarifa) + ' por unidade.' }));
                 }
                 if (t === 'frete' && id && !/comprador/i.test(c.texto)) (freteItem[id] || (freteItem[id] = [])).push({ c: base(c, {}), v, envios: ops[k] ? ops[k].size : 0 });
             });
@@ -458,7 +460,8 @@
                 if (x.v >= med * F.FRETE_RAZAO && x.v - med >= F.DIF_MIN && !variasUnidades(x.v / med)) out.push(Object.assign(x.c, { regra: 'frete', valor: x.v, esperado: med, diferenca: r2(x.v - med),
                     motivo: x.envios >= 2 ? 'O frete deste pedido soma ' + x.envios + ' envios diferentes (pacote dividido ou reenvio): cada envio tem o seu frete e pode estar certo — confira no detalhe da venda.'
                         : 'O frete deste pedido ficou bem acima do que este anúncio costuma pagar (' + SHC.moeda(med) + ' nos outros ' + outros.length + ' pedidos). Se o pedido teve mais de 1 unidade, pode estar certo.' },
-                    x.envios >= 2 ? { duvida: 'O frete deste pedido soma ' + x.envios + ' envios diferentes. Os ' + x.envios + ' envios foram necessários (pacote dividido ou reenvio) ou algum foi cobrado a mais?' } : {}));
+                    x.envios >= 2 ? { duvida: 'O frete deste pedido soma ' + x.envios + ' envios diferentes. Os ' + x.envios + ' envios foram necessários (pacote dividido ou reenvio) ou algum foi cobrado a mais?' }
+                        : { estimado: 'Nos outros ' + outros.length + ' pedidos deste anúncio no mesmo período, o frete ficou em torno de ' + SHC.moeda(med) + ' por pedido.' }));
             });
         });
         return out.sort((a, b) => b.diferenca - a.diferenca);
@@ -523,6 +526,14 @@
             'Podem conferir se esta cobrança está correta? Obrigado.'].join('\n');
         // v3.3: formato de contestação (SHC.textoContestacao) — com a regra do ML quando ela se aplica e o pedido explícito do estorno da diferença.
         const REGRA = { frete: ['frete_tabela', 'frete_calculo'], devolucao: ['devolucao'] }, regra = REGRA[x.regra] || (/devolu/i.test(x.cobranca || '') ? ['devolucao'] : []);
+        // Esperado ESTIMADO (tarifa pelo preço de hoje, frete pela mediana dos outros pedidos; revisão 07/10/2026): pede a conferência e o
+        // estorno só se a diferença se confirmar — nunca "cobrança indevida" nem "valor devido".
+        // Item guardado por versão anterior (sem .estimado): o motivo para a dona diz "pode estar certo".
+        const est = x.estimado || (/pode estar certo/i.test(x.motivo || '') ? (x.regra === 'tarifa' ? 'Pelo preço atual do anúncio.' : 'Pelo frete dos outros pedidos deste anúncio.') : '');
+        if (est) return SHC.textoContestacao({ assunto: 'Pedido de revisão de cobrança: ' + x.cobranca, ids: [['Pedido', '#' + x.pedido], ['Anúncio', x.itemId || '']],
+            intro: 'Uma cobrança do Faturamento' + (x.data ? ' de ' + dataBR(x.data) : '') + (x.titulo ? ' (anúncio “' + x.titulo + '”)' : '') + ' ficou acima do valor que esperávamos. Gostaríamos de confirmar se ela está correta.',
+            fatos: ['Valor cobrado: ' + SHC.moeda(x.valor), 'Valor esperado (estimativa nossa): ' + SHC.moeda(x.esperado), 'Diferença: ' + SHC.moeda(x.diferenca), 'Como estimamos: ' + est],
+            regras: regra, pedido: 'a conferência desta cobrança e, se a diferença se confirmar, o estorno de ' + SHC.moeda(x.diferenca) + ' na nossa conta.' });
         return SHC.textoContestacao({ assunto: 'Contestação de cobrança indevida: ' + x.cobranca, ids: [['Pedido', '#' + x.pedido], ['Anúncio', x.itemId || '']],
             intro: 'Identificamos uma cobrança acima do valor devido no Faturamento' + (x.data ? ' em ' + dataBR(x.data) : '') + (x.titulo ? ' (anúncio “' + x.titulo + '”)' : '') + '.',
             fatos: ['Valor cobrado: ' + SHC.moeda(x.valor), 'Valor devido: ' + SHC.moeda(x.esperado), 'Diferença: ' + SHC.moeda(x.diferenca), 'Por quê: ' + x.motivo],
@@ -1283,12 +1294,13 @@
 
         async function carregar() {
             const conta = await SHC.contaAtual();
-            const tudo = await chrome.storage.local.get(null);
+            // v3.3 multi-empresa (revisão 07/10/2026): pela camada da empresa (custos por SKU da empresa da conta) e o cfg dela (SHC.lerCfg).
+            const tudo = await SHC.areaEmpresa().get(null);
             const itens = ((tudo['ml:anuncios:' + conta] || {}).itens) || [];
             const vm = {};
             Object.keys(tudo).forEach(k => { if (k.indexOf('vm|ml|') === 0) vm[k.slice(6)] = tudo[k]; });
             const temMP = chrome.permissions ? await chrome.permissions.contains({ origins: [MP + '/*'] }).catch(() => false) : false;
-            dados = { conta, tudo, itens, vm, cfg: Object.assign({}, SHC.PADRAO, tudo.cfg || {}), vb: tudo['vb:' + conta] || null,
+            dados = { conta, tudo, itens, vm, cfg: await SHC.lerCfg(), vb: tudo['vb:' + conta] || null,
                 fat: tudo['fat:' + conta] || null, afil: tudo['afil:' + conta] || null, rep: tudo['mp:repasse:' + conta] || null, st: tudo['shc:status'] || {}, temMP };
         }
         function doMes(m) {
