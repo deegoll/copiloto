@@ -183,6 +183,8 @@
     SHC.erpRetratoDaTela = async function (erp, produtos, avisar, empresa) {
         const A = SHC.areaEmpresa ? SHC.areaEmpresa(typeof empresa === 'string' ? empresa : undefined) : null, k = 'erp:produtos:' + erp, v = { ts: Date.now(), itens: SHC.erpNormaliza(produtos) };
         await (A ? A.set({ [k]: v }) : SHC.gravarChave(k, v));
+        // A conta aberta agora é de OUTRA empresa: a conferência (e a janela do resumo) seria dela — fica para a próxima sincronização da certa.
+        if (typeof empresa === 'string' && SHC.empresaSeparada && (await SHC.empresaSeparada()) !== empresa) return;
         try { await chrome.runtime.sendMessage({ acao: 'erp_conferir', avisar: !!avisar }); } catch (e) { /* fundo reiniciando: confere na próxima sincronização */ }
     };
 

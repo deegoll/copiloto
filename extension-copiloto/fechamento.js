@@ -311,9 +311,9 @@
         // v3.3: dúvida (pode ser legítima: 1 cobrança por pagamento/envio, frete de venda cancelada já despachada) fica só no "para conferir".
         const cf = (d.conferir || []).filter(x => x && !x.duvida && x.diferenca > 0 && SHC.tipoCustoFechamento(x.cobranca) !== 'devolucao');
         add('cobrancas', 'Cobranças acima do esperado', 'Cobranças para conferir (tarifa acima, repetida, frete fora da curva)',
-            cf.filter(x => x.regra !== 'sem_estorno' && !doFrete(x)).map(x => Object.assign({}, x, { valor: x.diferenca })));
+            cf.filter(x => x.regra !== 'sem_estorno' && !doFrete(x)).map(x => Object.assign({}, x, { valor: x.diferenca, cobrado: x.valor })));
         add('estorno', 'Cancelada ou devolvida sem estorno', 'Venda cancelada: a tarifa voltou, outra cobrança do pedido não',
-            cf.filter(x => x.regra === 'sem_estorno').map(x => Object.assign({}, x, { valor: x.diferenca })));
+            cf.filter(x => x.regra === 'sem_estorno').map(x => Object.assign({}, x, { valor: x.diferenca, cobrado: x.valor })));
         add('full', 'Remessas do Full com diferença', 'Custo cobrado da remessa com inconformidade (ainda dá para reclamar)',
             (d.inconformes || []).filter(r => r && r.custo > 0 && SHC.remessaPendente(r)).map(r => ({ id: r.id, quando: r.quando, prazo: r.prazo, motivos: r.motivos, link: r.link, valor: r.custo })));
         // v3.2 (pedido da dona: "temos como questionar essa tarifa?"): tarifa de devolução × pós-venda (SHC.devolucoesContestar).
@@ -515,6 +515,8 @@
     };
 
     /** Texto educado e factual para o chamado. Só pede a revisão (nunca promete reembolso). */
+    /** Item de uma parcela do "quanto dá para recuperar" (valor = a recuperar, cobrado = o cobrado) → o item do chamado (valor = o cobrado). */
+    F.itemDoChamado = x => (x && typeof x.cobrado === 'number' ? Object.assign({}, x, { valor: x.cobrado }) : x);
     F.textoChamado = function (x) {
         // v3.3: na dúvida o texto só pergunta (sem "valor esperado" nem "diferença", que afirmariam erro).
         if (x.duvida) return ['Olá! Tenho uma dúvida sobre uma cobrança do meu Faturamento.', '',
@@ -1405,7 +1407,8 @@
                 const p = pid === 'devconf' ? rec && rec.devConferir : rec && rec.parcelas.find(x => x.id === pid), x = p && p.itens[+i];   // v3.2: 🟡 da devolução
                 if (!x) return;
                 const tit = ((dados.itens.find(it => it.itemId === x.itemId)) || {}).titulo;
-                try { await navigator.clipboard.writeText(x.texto ? x.texto : pid === 'frete' ? F.chamadoFrete(x, tit) : F.textoChamado(x)); bt.textContent = 'Copiado'; }
+                // valor da parcela = o que dá para recuperar; o texto do chamado usa o valor COBRADO (revisão 07/10/2026: saía "cobrado R$ 10 × esperado R$ 20").
+                try { await navigator.clipboard.writeText(x.texto ? x.texto : pid === 'frete' ? F.chamadoFrete(x, tit) : F.textoChamado(F.itemDoChamado(x))); bt.textContent = 'Copiado'; }
                 catch (e) { bt.textContent = 'Não copiou: selecione e copie à mão'; }
                 return;
             }

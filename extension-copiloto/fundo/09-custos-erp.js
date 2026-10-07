@@ -23,14 +23,23 @@ async function salvarBling(cred, tk, empresa) {
 }
 // {acao:'bling_conectar', code}: o painel fez o launchWebAuthFlow (state conferido lá) e já guardou Client ID/Secret; aqui o code vira tokens
 // (só em erp:bling) e os custos são importados na hora. → a resposta de sincronizarCustos('bling') | {ok:false, msg}.
-async function conectarBling(code) {
-    const e0 = await SHC.empresaSeparada(), t = (await SHC.areaEmpresa(e0).get(SHC.BLING_CHAVE))[SHC.BLING_CHAVE] || null;   // v3.3: a empresa do clique
+async function conectarBling(code, empresa) {
+    const e0 = typeof empresa === 'string' ? empresa : await SHC.empresaSeparada(), t = (await SHC.areaEmpresa(e0).get(SHC.BLING_CHAVE))[SHC.BLING_CHAVE] || null;   // v3.3: a empresa do clique
     if (!t || !t.clientId || !t.clientSecret) return { ok: false, erp: 'bling', msg: 'Cole o Client ID e o Client Secret do seu aplicativo do Bling.' };
     try {
         const tk = await SHC.blingTrocarCodigo(t, code, { fetch: (u, i) => fetch(u, comTempo(i)) });
         await salvarBling(t, tk, e0);
     } catch (e) { return { ok: false, erp: 'bling', erro: (e && e.erro) || 'outro', msg: (e && e.msg) || 'Não consegui falar com o Bling. Tente de novo.' }; }
     return sincronizarCustos('bling', 0, e0);
+}
+// v3.3 multi-empresa: a empresa que a tela mandou junto com o pedido ({empresa}: '' ou o sellerId de uma conta marcada como outra empresa).
+// Ausente ou inválida (ex.: id que não está mais separado) → undefined: sincronizarCustos usa a empresa da conta aberta agora.
+async function empresaDoPedido(msg) {
+    const e = msg && msg.empresa;
+    if (e === '') return '';
+    if (typeof e !== 'string' || !/^\d{6,15}$/.test(e)) return undefined;
+    const cfg = (await chrome.storage.local.get('cfg')).cfg || {};
+    return (cfg.empresaSeparada || {})[e] === true ? e : undefined;
 }
 // v3.2 Cruzamento ERP × ML (erp-cruzar.js): só o que já está guardado (erp:produtos:<erp>, ml:anuncios, editor, ml:full), nenhuma chamada.
 // O ERP é o conectado com o retrato mais novo; sem ERP conectado, o erpx:<conta> velho sai. → erpx:<conta> | null.

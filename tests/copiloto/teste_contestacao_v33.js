@@ -95,6 +95,13 @@ console.log('Exclusão de reclamação e experiência de compra: só o que as re
     ok(!passou.length, 'culpa do vendedor no motivo VETA a exclusão (defeito, não postou, tamanho errado enviado, veio outro, faltando, não chegou, quebrado, estoque)'
         + (passou.length ? ': ' + passou.join(' | ') : ''));
     ok(SHC.motivoExcluivel('Comprei o tamanho errado, quero trocar') && SHC.motivoExcluivel('Comprou errado'), 'o erro do PRÓPRIO comprador continua excluível (troca, engano)');
+    // 2ª revisão (07/10): despacho demorado e mensagem sem resposta são do vendedor; o engano e o "não foi usado" do comprador voltam a valer.
+    const veto2 = ['Desisti porque demorou para despachar', 'Me arrependi, demorou demais para postar', 'Desisti, o vendedor não respondeu', 'Mensagem sem resposta, desisti', 'Engano no envio'];
+    const vazou = veto2.filter(m => SHC.motivoExcluivel(m));
+    ok(!vazou.length, 'despacho demorado, vendedor que não respondeu e engano no envio: sem pedido de exclusão' + (vazou.length ? ': ' + vazou.join(' | ') : ''));
+    const comprador = ['Me arrependi, o produto não foi usado', 'Me arrependi, nunca usado', 'Escolhi o tamanho errado', 'Engano na compra', 'Foi engano'];
+    const travou = comprador.filter(m => !SHC.motivoExcluivel(m));
+    ok(!travou.length, 'erro ou arrependimento do comprador ("não foi usado", "escolhi errado", "foi engano"): excluível' + (travou.length ? ': ' + travou.join(' | ') : ''));
     ok(SHC.confereExclusao('Atraso na entrega') === 'você despachou dentro do prazo' && SHC.confereExclusao('Me arrependi da compra') === 'o produto voltou sem uso e em perfeitas condições'
         && SHC.confereExclusao('Produto com defeito') === '', 'cada regra diz o que o seller confere antes de enviar (nada quando não é excluível)');
     ok(!/respondidas|resolvidas/.test(ex), 'o pedido de exclusão não afirma o que o Copiloto não sabe ("já respondidas/resolvidas")');
@@ -118,6 +125,10 @@ console.log('Caso incerto: pede a conferência, nunca afirma cobrança indevida'
         && /Como estimamos: Pelo preço atual do anúncio \(R\$ 150,00\)/.test(ta) && /se a diferença se confirmar, o estorno de R\$ 10,00/.test(ta) && !/indevida|Valor devido/.test(ta),
         'tarifa estimada pelo preço de hoje: revisão com a base da estimativa, estorno só se confirmar');
     ok(/^Assunto: Pedido de revisão de cobrança/.test(SHC.fech.textoChamado(base)), 'item guardado por versão anterior (sem .estimado, "pode estar certo"): também revisão');
+    // 2ª revisão: o item do "quanto dá para recuperar" tem valor = a diferença; o texto copiado usa o valor COBRADO.
+    const rec = Object.assign({}, base, { valor: 10, cobrado: 30 });
+    ok(/- Valor cobrado: R\$ 30,00\n- Valor esperado \(estimativa nossa\): R\$ 20,00\n- Diferença: R\$ 10,00/.test(SHC.fech.textoChamado(SHC.fech.itemDoChamado(rec))),
+        'texto copiado do "Como pedir de volta": cobrado R$ 30 × esperado R$ 20 (antes saía "cobrado R$ 10")');
     const fr = SHC.fech.chamadoFrete({ pedido: '2000000124', data: '2026-09-21', itemId: 'MLB8000000002', cobrado: 58.75, esperado: 45.35, valor: 13.4 }, 'Bomba');
     ok(/^Assunto: Contestação de cobrança indevida: Frete de envio da venda/.test(fr) && /ajuda\/40538/.test(fr), 'frete acima do custo que o anúncio mostra: contestação firme, com a regra do frete do ML');
 }

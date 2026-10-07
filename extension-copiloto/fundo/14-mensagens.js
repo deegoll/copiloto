@@ -40,7 +40,8 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         if (!daExtensao(sender)) return false;
         // Sem erp (painel lateral sem Tiny/Omie guardado): o Tiny, ou o Bling se só ele estiver conectado.
         const escolhe = async () => (['tiny', 'omie', 'bling'].indexOf(msg.erp) >= 0 ? msg.erp : (!((await SHC.lerChave(SHC.TINY_CHAVE)) || {}).token && ERPS.bling.cred(await SHC.lerChave(SHC.BLING_CHAVE)) ? 'bling' : 'tiny'));
-        escolhe().then(erp => sincronizarCustos(erp, 0).then(responder, () => responder({ ok: false, erp, msg: 'Não consegui falar com o ' + ERPS[erp].nome + '. Tente de novo em alguns minutos.' })));
+        // v3.3 multi-empresa: a empresa da conta aberta NO CLIQUE (empresaDoPedido) — trocar a conta do ML durante a leitura não muda o destino.
+        Promise.all([escolhe(), empresaDoPedido(msg)]).then(([erp, emp]) => sincronizarCustos(erp, 0, emp).then(responder, () => responder({ ok: false, erp, msg: 'Não consegui falar com o ' + ERPS[erp].nome + '. Tente de novo em alguns minutos.' })));
         return true;
     }
     // v3.2 cruzamento ERP × ML: {acao:'erp_conferir'} ("Conferir agora") refaz erpx:<conta> com o que já está guardado (nenhuma chamada ao ML);
@@ -60,7 +61,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     }
     if (msg.acao === 'bling_conectar') {   // só o painel (a extensão): o code do launchWebAuthFlow vira tokens aqui no fundo
         if (!daExtensao(sender) || !/^[\w.~-]{4,512}$/.test(String(msg.code || ''))) return false;
-        conectarBling(String(msg.code)).then(responder, () => responder({ ok: false, erp: 'bling', msg: 'Não consegui falar com o Bling. Tente de novo.' }));
+        empresaDoPedido(msg).then(emp => conectarBling(String(msg.code), emp)).then(responder, () => responder({ ok: false, erp: 'bling', msg: 'Não consegui falar com o Bling. Tente de novo.' }));
         return true;
     }
     // F1 (licenca.js): só as telas da própria extensão. 'licenca_entrar': o painel fez o launchWebAuthFlow (state conferido lá) e manda

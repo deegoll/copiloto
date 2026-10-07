@@ -650,9 +650,12 @@
         if (!l.length) return o;
         f = f || {};
         // Esgotado não é "fora do ar" (revisão 07/10/2026): o ML pausa sozinho o anúncio que ficou sem unidades (restrição out_of_stock) e é o
-        // envio ao Full que o reativa. Linha sem o motivo: produto do Full com 0 aptas (f.aptas) conta como esgotado.
+        // envio ao Full que o reativa. O motivo da linha manda: out_of_stock = esgotado; outro motivo (pausado por você, finalizado, em revisão)
+        // = fora do ar, mesmo com "Sem estoque" ou 0 aptas. Sem motivo: só o PAUSADO com "Sem estoque" ou com 0 aptas no Full (f.aptas).
         const semUn = P.un(f.aptas) === 0, motivo = i => (i.restricao && i.restricao.id) || '';
-        const esgotado = i => motivo(i) === 'out_of_stock' || /sem estoque/i.test(String(i.estoque || '')) || (semUn && !motivo(i));
+        const stId = i => { const s = i.status; return String((s && typeof s === 'object' ? s.id || s.label : s) || '').trim().toLowerCase(); };
+        const esgotado = i => motivo(i) === 'out_of_stock'
+            || (!motivo(i) && /^(paused|pausad[oa])$/.test(stId(i)) && (/sem estoque/i.test(String(i.estoque || '')) || semUn));
         const comStatus = l.filter(i => i.status), fora = comStatus.filter(i => !SHC.anuncioAtivo(i) && !esgotado(i));
         if (comStatus.length && fora.length === l.length) {
             const pq = fora.map(i => ({ paused: 'pausado por você', closed_finalized: 'finalizado', under_review: 'em revisão pelo ML' })[motivo(i)]).find(Boolean);
@@ -5922,7 +5925,7 @@
         if (erp && erp.dataset.erp === 'bling' && blingLigado) {   // Bling já conectado: "Puxar custos agora" importa aqui mesmo (só leitura)
             custosMsg = 'Importando os custos do Bling…'; desenhaCatalogo();
             let r = null;
-            try { r = await chrome.runtime.sendMessage({ acao: 'sincronizar_custos', erp: 'bling' }); } catch (e) { r = null; }
+            try { r = await chrome.runtime.sendMessage({ acao: 'sincronizar_custos', erp: 'bling', empresa: await SHC.empresaSeparada() }); } catch (e) { r = null; }   // v3.3: a empresa do clique
             custosMsg = r && r.ok ? '✓ ' + (r.resumo || 'Custos importados') + '.' : (r && r.msg) || 'Não consegui importar agora. Tente de novo em alguns minutos.';
             desenhaCatalogo(); return;
         }
@@ -5931,7 +5934,7 @@
             custosMsg = 'Importando os custos do ERP…'; desenhaCatalogo();
             // Qual ERP: os que têm chave guardada (Tiny: token; Omie: appKey + appSecret; Bling: Client ID/Secret + refresh); vários → um depois
             // do outro; nenhum → o fundo responde {semToken}.
-            const erps = [];
+            const erps = [], e0 = await SHC.empresaSeparada().catch(() => undefined);   // v3.3: todos os ERPs vão para a empresa do clique
             let blingVenceu = false;
             try { if (((await SHC.lerChave(SHC.TINY_CHAVE)) || {}).token) erps.push('tiny'); } catch (e) { /* sem chave */ }
             try { const o = await SHC.lerChave(SHC.OMIE_CHAVE); if (o && o.appKey && o.appSecret) erps.push('omie'); } catch (e) { /* sem chave */ }
@@ -5939,7 +5942,7 @@
             const partes = [];
             for (const erp of erps.length ? erps : [null]) {
                 let r = null;
-                try { r = await chrome.runtime.sendMessage(erp ? { acao: 'sincronizar_custos', erp } : { acao: 'sincronizar_custos' }); } catch (e) { r = null; }
+                try { r = await chrome.runtime.sendMessage(Object.assign(erp ? { acao: 'sincronizar_custos', erp } : { acao: 'sincronizar_custos' }, typeof e0 === 'string' ? { empresa: e0 } : {})); } catch (e) { r = null; }
                 partes.push(r && r.ok ? '✓ ' + (r.resumo || 'Custos importados') + '.' : (r && r.semToken ? (blingVenceu ? 'Conecte o Bling de novo: a entrada venceu (30 dias sem uso).' : 'Conecte o Tiny, o Omie ou o Bling primeiro: o custo entra sozinho.') : (r && r.msg) || 'Não consegui importar agora. Tente de novo em alguns minutos.'));
             }
             custosMsg = partes.join(' ');

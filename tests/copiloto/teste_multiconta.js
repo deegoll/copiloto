@@ -148,6 +148,16 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         ok(mem['c|sku|IMP-01'] && mem['c|sku|IMP-01'].custo === 33 && !mem['c|sku@' + OUTRA + '|IMP-01'], 'tinyGravar com a empresa do começo: grava nela, mesmo com a outra aberta');
         await S.areaEmpresa('').set({ 'erp:produtos:tiny': { ts: 1, itens: [] } });
         ok(mem['erp:produtos:tiny'] && !mem['erp@' + OUTRA + ':produtos:tiny'], 'SHC.areaEmpresa(empresa) grava na empresa pedida');
+        // 2ª revisão: erp@<id> de uma conta que NÃO está mais separada é sobra e não segura a permissão do Chrome.
+        mem['ml:conta'] = A; await espera();
+        mem['erp@900000099:omie'] = { appKey: 'x', appSecret: 'y' };
+        ok(await S.erpEmOutraEmpresa('erp:omie') === false, 'ERP de conta desmarcada (sobra invisível) não impede tirar a permissão');
+        // O retrato da tela com a empresa do começo diferente da aberta: grava nela e não pede a conferência (a janela seria da outra empresa).
+        const enviados = [];
+        global.chrome.runtime.sendMessage = async m => { enviados.push(m); return {}; };
+        require(path.join(EXT, 'erp-cruzar.js'));
+        await S.erpRetratoDaTela('tiny', [{ sku: 'R1', custo: 1 }], true, OUTRA);
+        ok(mem['erp@' + OUTRA + ':produtos:tiny'] && !enviados.some(m => m.acao === 'erp_conferir'), 'retrato do ERP na empresa do começo, sem abrir o resumo na empresa aberta agora');
     }
 
     // Importação pelo fundo: o ML troca para a conta da OUTRA empresa no meio da leitura do Tiny → tudo vai para a empresa do começo.
@@ -160,6 +170,15 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         ok(r && r.ok && fd['c|sku|ERP-01'] && fd['c|sku|ERP-01'].custo === 12 && !Object.keys(fd).some(k => k.indexOf('@' + OUTRA) >= 0),
             'custos do Tiny na empresa do começo; nada gravado na empresa que abriu no meio');
         ok(fd['erp:tiny'].ultima && fd['erp:produtos:tiny'] && fd['erp:produtos:tiny'].itens.length === 1, 'o "última importação" e o retrato do ERP também ficam na empresa do começo');
+        // A tela manda a empresa do clique: só vale '' ou uma conta AINDA marcada como outra empresa.
+        ok(await I.ctx.empresaDoPedido({ empresa: OUTRA }) === OUTRA && await I.ctx.empresaDoPedido({ empresa: '' }) === ''
+            && await I.ctx.empresaDoPedido({ empresa: '900000777' }) === undefined && await I.ctx.empresaDoPedido({ empresa: 'x;y' }) === undefined && await I.ctx.empresaDoPedido({}) === undefined,
+            'empresa do pedido conferida: conta separada ou a principal; qualquer outra coisa → a empresa aberta agora');
+        fd['ml:conta'] = OUTRA; fd['erp:omie'] = { appKey: 'KEY-A-00000', appSecret: 'SEC-A-00000' };
+        I.ctx.SHC.omiePuxar = async () => [{ sku: 'OMIE-01', custo: 7 }];
+        await new Promise(r => setTimeout(r, 1600));
+        const ro = await I.envia({ acao: 'sincronizar_custos', erp: 'omie', empresa: '' });
+        ok(ro && ro.ok && fd['c|sku|OMIE-01'] && fd['c|sku|OMIE-01'].custo === 7 && !fd['c|sku@' + OUTRA + '|OMIE-01'], 'importação pedida pela tela com a empresa do clique: grava nela mesmo com a outra aberta');
     }
 
     // Nenhuma tela lê custos, cfg ou ERP cru (sem a camada da empresa): as leituras que a revisão achou não voltam.

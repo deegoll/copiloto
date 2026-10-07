@@ -59,6 +59,12 @@ const HOJE = '2026-10-07';   // 30 dias ≈ setembro; mês alvo (hoje + 15) = ou
         ok(/fora do ar \(pausado por você\)/.test(P.saudeEnvioFull([{ itemId: 'MLB7000000009', status: 'paused', restricao: { id: 'paused' } }], { aptas: 0 }).bloqueia[0] || ''),
             'pausado pelo seller (mesmo com 0 aptas): não envia e diz o motivo');
         ok(/fora do ar \(em revisão pelo ML\)/.test(P.saudeEnvioFull([{ itemId: 'MLB7000000009', status: 'under_review', restricao: { id: 'under_review' } }], {}).bloqueia[0] || ''), 'em revisão pelo ML: não envia');
+        // 2ª revisão: o MOTIVO da linha manda — "Sem estoque" ou 0 aptas não liberam o que está fora do ar por outro motivo.
+        const trava = (it, f) => P.saudeEnvioFull([Object.assign({ itemId: 'MLB7000000009' }, it)], f).bloqueia.length > 0;
+        ok(trava({ status: 'paused', estoque: 'Sem estoque', restricao: { id: 'paused' } }, { aptas: 0 }) && trava({ status: 'closed', estoque: 'Sem estoque', restricao: { id: 'closed_finalized' } }, {}),
+            'pausado por você ou finalizado com "Sem estoque": continua travado');
+        ok(['under_review', 'closed', 'inactive'].every(s => trava({ status: s }, { aptas: 0 })), 'em revisão, finalizado ou inativo sem motivo e 0 aptas: continua travado (só o PAUSADO conta como esgotado)');
+        ok(trava({ status: 'paused' }, { aptas: 5 }), 'pausado sem motivo com 5 aptas no Full: não é falta de estoque → travado');
         const fullEsg = { produtos: [{ titulo: 'Esgotado', sku: 'X1', itemIds: ['MLB7000000009'], aptas: 0, aCaminho: 0, vendas30: 30 }], espaco: [] };
         const le = P.planoFull(fullEsg, { hoje: HOJE, dias: 30, vmDe: () => null, lucroDe: () => 10, saudeDe: p => P.saudeEnvioFull(P.anunciosDoFull(p, [esg]), { aptas: p.aptas }) }).linhas[0];
         ok(le.qtd === 30 && !le.travas.length, 'plano: produto que vendeu 30 e esgotou no Full → repor 30 (antes: 0, "Não enviar agora")');

@@ -42,6 +42,18 @@ Uma revisão independente do código da 3.3.0 achou 9 problemas antes do envio. 
 | 8 | Importação do ERP que durava minutos podia gravar na empresa errada se o ML trocasse de conta no meio | A importação grava sempre na empresa do começo (Tiny, Omie e Bling, pelo painel e pelo fundo) |
 | 9 | A releitura depois de troca de conta perdia meses: fuso fora de Brasília perto da meia-noite, mês cortado (80+ páginas) e vendas brutas | Compara pelo menor dia (local ou Brasília) e também põe na fila o mês cortado (`cortadoEm`) e o das vendas brutas (`lidoTs`) |
 
+### Segunda revisão (só das correções)
+
+Uma segunda revisão independente confirmou as 9 correções sem regressão para quem tem uma empresa só, e achou mais 7 pontos, também corrigidos e testados:
+
+- **Full:** quem manda é o motivo da linha. "Sem estoque" ou 0 aptas não liberam anúncio pausado por você, finalizado, em revisão ou inativo; só o pausado sem outro motivo conta como esgotado.
+- **Exclusão:** despacho demorado ("demorou para postar"), vendedor que não respondeu e "engano no envio" vetam. "Não foi usado", "escolhi o tamanho errado" e "foi engano" (do comprador) voltam a ser excluíveis.
+- **Omie e Bling pela tela:** gravam, importam e limpam a chave recusada na empresa do clique. A tela manda a empresa junto (`empresaDoPedido` confere).
+- **Cartões do ERP** se redesenham quando o ML abre a conta de outra empresa.
+- **O retrato do ERP** importado pela tela não abre o resumo na empresa errada.
+- **Permissão do ERP:** sobra de conta desmarcada não segura mais a permissão.
+- **Fechamento (bug antigo):** o texto copiado em "Como pedir de volta" dizia "Valor cobrado" com o valor da diferença. Agora usa o valor cobrado (`F.itemDoChamado`).
+
 ## O que mudou, por arquivo
 
 - `store.js`:

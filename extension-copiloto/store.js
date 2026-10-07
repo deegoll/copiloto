@@ -66,9 +66,11 @@
      * Alguma OUTRA empresa ainda tem este ERP guardado ('erp:tiny' → 'erp:tiny' ou 'erp@<id>:tiny', fora o da empresa aberta)?
      * A permissão do Chrome para o site do ERP é uma só: o "Esquecer" de uma empresa só a tira quando nenhuma outra usa.
      */
+    // Só conta a de conta AINDA marcada como outra empresa: o erp@<id> de uma conta desmarcada é sobra invisível e não segura a permissão.
     SHC.erpEmOutraEmpresa = async function (chave) {
         const minha = SHC.chaveFisica(chave, await SHC.empresaSeparada()), resto = String(chave).replace(/^erp:/, ''), t = await crua().get(null);
-        return Object.keys(t).some(k => k !== minha && !!t[k] && (k === chave || (/^erp@\d+:/.test(k) && k.replace(/^erp@\d+:/, '') === resto)));
+        const sep = (t.cfg && t.cfg.empresaSeparada) || {}, dono = k => (/^erp@(\d+):/.exec(k) || [])[1];
+        return Object.keys(t).some(k => k !== minha && !!t[k] && (k === chave || (dono(k) && sep[dono(k)] === true && k.replace(/^erp@\d+:/, '') === resto)));
     };
 
     SHC.chave = (canal, id) => 'c|' + canal + '|' + id;

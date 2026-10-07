@@ -1347,7 +1347,7 @@
     const DEV_FOI_RESP = /(foi|é) (sua|de sua) responsabilidade/i;
     // Limite de palavra em "errad"/"usad" ("causado" não é "usado"); "tamanho" sozinho saiu (quase sempre é escolha do comprador).
     const DEV_CULPA = /defeit|n[ãa]o funciona|parou de funcionar|diferente|\berrad[oa]s?\b|descri[çc]|incomplet|\bfalt|\busad[oa]s?\b|vencid|falsific|n[ãa]o (é|e) original/i;
-    const DEV_COMPRADOR = /\bcompr(ei|ou)\b.*(\berrad|\btamanho)|\bpedi(u)? (o )?(tamanho|modelo|cor) errad/i;   // o comprador escolheu errado
+    const DEV_COMPRADOR = /\b(compr(ei|ou)|escolh(i|eu)|selecion(ei|ou))\b.*(\berrad|\btamanho)|\bpedi(u)? (o )?(tamanho|modelo|cor) errad/i;   // o comprador escolheu errado
     const DEV_ARREP = /arrepend|desist|mudou de ideia|n[ãa]o (quer|quero|gostou|gostei|precisa|precisou)|comprou por engano|n[ãa]o serviu/i;
     const DEV_TRANSP = /danific|embalage|amassad|quebrad|avari|extravi|transport|pacote sem|chegou (aberto|vazio)/i;
     SHC.DEV_COR = { verde: '🟢 dá para questionar', amarelo: '🟡 vale conferir', cinza: '⚪ foi sua responsabilidade' };
@@ -1420,7 +1420,7 @@
     // [motivo do comprador, a regra do ML, o que o seller confere antes de enviar (o Copiloto não tem como saber)].
     const EXCLUIVEL = [
         [/arrepend|desist|n[ãa]o (quer|quero) mais|mudou de ideia/i, 'o comprador se arrependeu da compra e o produto está em perfeitas condições', 'o produto voltou sem uso e em perfeitas condições'],
-        [/por engano|compr(ei|ou) errad/i, 'o comprador iniciou a reclamação por engano', 'a conversa mostra que foi engano do comprador'],
+        [/\bengano\b|compr(ei|ou) errad/i, 'o comprador iniciou a reclamação por engano', 'a conversa mostra que foi engano do comprador'],
         [/n[ãa]o reconhe[cç]/i, 'o comprador não reconhece a compra', 'o pedido foi entregue no endereço da compra'],
         [/(aparece|consta|marcad[oa]) como entregue/i, 'o comprador não recebeu o produto, mas o envio aparece como entregue', 'o rastreio mostra a entrega'],
         [/correios|transportadora|mercado envios|demora (na|da) entrega|atraso (na|da) entrega/i, 'a reclamação foi aberta pela demora do transporte, com o envio dentro do prazo estabelecido', 'você despachou dentro do prazo'],
@@ -1430,10 +1430,15 @@
     // Revisão 07/10/2026: "Me arrependi porque veio com defeito" ou "o vendedor não postou nos Correios" casavam com a 1ª regra parecida.
     // Culpa do vendedor no motivo (a mesma DEV_CULPA das devoluções, fora o erro do próprio comprador; despacho; envio errado; dano no
     // transporte; estoque) VETA antes de qualquer regra. "Não chegou" só entra quando o rastreio diz entregue.
-    const EXCL_VETO = /n[ãa]o (despach|envi|post|mand)|enviad[oa] (por engano|errad)|veio (outr[oa]|errad)|mand(ou|aram) (outr[oa]|errad)|estoque|\bquebr|danific|avari|amassad|extravi|r[ée]plica|pirat/i;
+    // 2ª revisão: despacho demorado ("demorou para postar") e mensagem sem resposta também são do vendedor; o engano do vendedor ("enviou por
+    // engano", "engano no envio") veta, o do comprador ("foi engano", "engano na compra") não; "não foi usado"/"sem uso" é estado bom, não "usado".
+    const EXCL_VETO = new RegExp(['n[ãa]o (despach|envi|post|mand)', 'enviad[oa] (por engano|errad)', 'envi(ou|aram) (por engano|errad|outr)', 'mand(ou|aram) (por engano|outr[oa]|errad)',
+        'veio (outr[oa]|errad)', 'engano (no|do|de) (envio|despacho|separa|vendedor)', 'demor\\w*( \\S+){0,2} (para|pra|a|em) (despach|post|envi|mand|sair|respond)', 'atras\\w* n[oa] (despach|postag)',
+        'n[ãa]o (me )?respond', 'sem resposta', 'estoque', '\\bquebr', 'danific', 'avari', 'amassad', 'extravi', 'r[ée]plica', 'pirat'].join('|'), 'i');
+    const BOM_ESTADO = /(n[ãa]o (foi |era |est[áa] |esta )?|nunca (foi )?|nem )usad[oa]s?|sem uso/gi;
     const excluivel = t => {
-        const s = String(t || '');
-        if ((DEV_CULPA.test(s) && !DEV_COMPRADOR.test(s)) || EXCL_VETO.test(s)) return null;
+        const s = String(t || ''), semBom = s.replace(BOM_ESTADO, ' ');
+        if ((DEV_CULPA.test(semBom) && !DEV_COMPRADOR.test(semBom)) || EXCL_VETO.test(s)) return null;
         if (/n[ãa]o (chegou|recebi|recebeu|foi entregue)/i.test(s) && !EXCLUIVEL[3][0].test(s)) return null;
         return EXCLUIVEL.find(([re]) => re.test(s)) || null;
     };

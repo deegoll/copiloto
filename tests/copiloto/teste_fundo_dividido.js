@@ -16,6 +16,7 @@ const NOVAS = {
     marcaReler: 'v3.3 multi-empresa: meses lidos depois de uma troca de conta voltam para a fila (fundo/10)',
     experienciaNaFaixa: 'v3.3 experiência de compra vinda da aba: tipos e tamanhos conferidos (fundo/13)',
     juntarExperiencia: 'v3.3 experiência de compra: grava exp:<conta> com a nota anterior (fundo/13)',
+    empresaDoPedido: 'v3.3 multi-empresa: a empresa do clique que a tela manda com a importação do ERP, conferida (fundo/09)',
 };
 let falhas = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) falhas++; };

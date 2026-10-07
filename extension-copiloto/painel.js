@@ -1244,9 +1244,12 @@
         ['#omieConectar', '#omieAtualizar', '#omieEsquecer'].forEach(s => { $(s).disabled = true; });
         tinyMsg('Lendo os produtos do Omie…');
         impBarra({ erp: 'omie' });
+        let A = null;   // v3.3: a empresa do clique — gravar, ler e limpar sempre nela (a conta do ML pode mudar durante a leitura)
         try {
-            if (chaves) await SHC.gravarChave(SHC.OMIE_CHAVE, chaves);
-            const r = await chrome.runtime.sendMessage({ acao: 'sincronizar_custos', erp: 'omie' });
+            const e0 = await SHC.empresaSeparada();
+            A = SHC.areaEmpresa(e0);
+            if (chaves) await A.set({ [SHC.OMIE_CHAVE]: chaves });
+            const r = await chrome.runtime.sendMessage({ acao: 'sincronizar_custos', erp: 'omie', empresa: e0 });
             if (!r || !r.ok) throw Object.assign(new Error('omie'), { msg: (r && r.msg) || 'Não consegui ler o Omie agora. Tente de novo em alguns minutos.' });
             $('#omieKey').value = ''; $('#omieSecret').value = '';
             await lerDados();
@@ -1254,7 +1257,7 @@
             tinyMsg('✓ Custos do Omie importados.' + (txtPrincipais() ? ' Agora: ' + txtPrincipais() + '.' : ''));
             impResumo(r, 'Omie');
         } catch (e) {
-            if (chaves) await SHC.areaEmpresa().remove(SHC.OMIE_CHAVE).catch(() => {});   // chave que o Omie recusou não fica guardada (v3.3: só a desta empresa)
+            if (chaves && A) await A.remove(SHC.OMIE_CHAVE).catch(() => {});   // chave que o Omie recusou não fica guardada (v3.3: só a da empresa do clique)
             tinyMsg((e && e.msg) || FALHA, true);
         } finally {
             omieRodando = false;
@@ -1300,12 +1303,14 @@
         if (blingRodando) return;
         blingRodando = true;
         blingBotoes(true);
-        let antes = null;
+        let antes = null, A = null, e0 = '';   // v3.3: a empresa do clique — gravar, ler, voltar o de antes e importar sempre nela
         try {
+            e0 = await SHC.empresaSeparada();
+            A = SHC.areaEmpresa(e0);
             let r;
             if (cred) {
-                antes = (await SHC.lerChave(SHC.BLING_CHAVE)) || {};
-                await SHC.gravarChave(SHC.BLING_CHAVE, antes.clientId === cred.clientId && antes.clientSecret === cred.clientSecret ? Object.assign({}, antes, cred) : cred);
+                antes = (await A.get(SHC.BLING_CHAVE))[SHC.BLING_CHAVE] || {};
+                await A.set({ [SHC.BLING_CHAVE]: antes.clientId === cred.clientId && antes.clientSecret === cred.clientSecret ? Object.assign({}, antes, cred) : cred });
                 tinyMsg('Entre no Bling na janela que abriu e clique em “Autorizar”…');
                 const state = SHC.blingEstado();
                 let volta = '';
@@ -1315,11 +1320,11 @@
                 if (!v.ok) throw { msg: v.msg };
                 tinyMsg('Lendo os produtos do Bling…');
                 impBarra({ erp: 'bling' });
-                r = await chrome.runtime.sendMessage({ acao: 'bling_conectar', code: v.code });
+                r = await chrome.runtime.sendMessage({ acao: 'bling_conectar', code: v.code, empresa: e0 });
             } else {
                 tinyMsg('Lendo os produtos do Bling…');
                 impBarra({ erp: 'bling' });
-                r = await chrome.runtime.sendMessage({ acao: 'sincronizar_custos', erp: 'bling' });
+                r = await chrome.runtime.sendMessage({ acao: 'sincronizar_custos', erp: 'bling', empresa: e0 });
             }
             if (!r || !r.ok) throw { msg: (r && r.msg) || 'Não consegui ler o Bling agora. Tente de novo em alguns minutos.' };
             $('#blingId').value = ''; $('#blingSecret').value = '';
@@ -1330,9 +1335,9 @@
         } catch (e) {
             // Entrada que não deu certo (e não chegou a conectar): volta o que estava guardado antes (Client ID/Secret e tokens);
             // só apaga quando não havia nada antes.
-            if (cred && antes) {
-                const b = await SHC.lerChave(SHC.BLING_CHAVE).catch(() => null);
-                if (b && !b.refresh) await (antes.clientId ? SHC.gravarChave(SHC.BLING_CHAVE, antes) : SHC.areaEmpresa().remove(SHC.BLING_CHAVE)).catch(() => {});
+            if (cred && antes && A) {
+                const b = await A.get(SHC.BLING_CHAVE).then(o => o[SHC.BLING_CHAVE] || null, () => null);
+                if (b && !b.refresh) await (antes.clientId ? A.set({ [SHC.BLING_CHAVE]: antes }) : A.remove(SHC.BLING_CHAVE)).catch(() => {});
             }
             tinyMsg((e && e.msg) || FALHA, true);
         } finally {
@@ -1393,7 +1398,8 @@
         clearTimeout(espera);
         espera = setTimeout(async () => {
             await lerDados();
-            if (contasMudou) { contasMudou = false; desenhaContaTab().catch(() => {}); }
+            // A empresa aberta mudou: os cartões do ERP mostram a conexão DELA (senão "Esquecer" agiria numa e o cartão mostraria a outra).
+            if (contasMudou) { contasMudou = false; desenhaContaTab().catch(() => {}); [desenhaTiny, desenhaOmie, desenhaBling].forEach(f => { try { Promise.resolve(f()).catch(() => {}); } catch (e) { /* ok */ } }); }
             if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#corpo')) { redesenharDepois = true; return; }
             desenhaTabela();
         }, 300);
