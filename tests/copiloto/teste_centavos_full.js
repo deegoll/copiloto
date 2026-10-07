@@ -20,8 +20,8 @@
 // Divergências achadas nesta auditoria (repro em scratchpad/centavos/ e no relatório da tarefa). As corrigidas viraram asserção (#n):
 //   1) #16 CORRIGIDA: o gasto do mês é um só (SHC.remessasPorMes) no cabeçalho do cartão, nas linhas "o ML cobrou" e na sincronização, com
 //      remessa vencida, cancelada ou aberta já cobrada (antes: R$ 120,50 no cartão × R$ 200,50 na sincronização) — seção O;
-//   2) SHC.simulaRemessa usa REM_FECHADA (inclui cancelada e vencida) na média do custo da coleta: a penalidade de uma remessa que nem foi
-//      coletada vira "custo da coleta" (R$ 1,60/un. na simulação × R$ 1,21/un. no cartão de remessas);
+//   2) #17 CORRIGIDA: SHC.simulaRemessa usa só remessas recebidas (closed_ok/closed_with_changes) no custo da coleta, o filtro do cartão
+//      (antes REM_FECHADA, com cancelada e vencida: R$ 1,60/un. na simulação × R$ 1,21/un. no cartão) — seção G;
 //   3) #18 CORRIGIDA: custo por unidade do mês = cobrança ÷ unidades só das remessas recebidas COM unidades (antes R$ 2,00/un. em vez de
 //      R$ 1,00: somava o custo da remessa sem units_count e não as unidades dela) — seção D;
 //   4) SHC.alertasDe (número do ícone e sino) recalcula a previsão sem o índice sazonal da v3.3 (P.previsaoFull): o painel diz "Crítico,
@@ -378,6 +378,30 @@ console.log('G. Próxima remessa: SHC.simulaRemessa (custo estimado da coleta) e
             && c.min <= c.valor && c.valor <= c.max && Math.abs(c.porUnidade - med) <= 0.005 + 1e-9 && Math.abs(c.porUnidade * un - c.valor) <= 0.005 * un + 0.005 + 1e-9, { k, un, bs, c });
     }
     okLote(l, 'simulações geradas: estimado = média por unidade × un. (meio centavo), mín ≤ estimado ≤ máx, e "por unidade" × un. difere no máximo meio centavo por unidade');
+    // #17: só remessas RECEBIDAS entram no custo da coleta (o mesmo filtro do R$/un. do cartão); a cobrança de remessa vencida ou cancelada
+    // (penalidade de remessa que nem foi coletada) não vira custo de coleta. Antes: R$ 160,25 (R$ 1,60/un.) em vez de R$ 120,50.
+    const v17 = [{ id: '9100001', status: 'closed_ok', recebida: '2026-09-10', unidades: 100, custo: 120.5 },
+        { id: '9100002', status: 'expired', agendada: '2026-09-15', unidades: 40, custo: 80, multaFlag: true, multaTipo: 'NO_SHOW' },
+        { id: '9100003', status: 'cancelled', agendada: '2026-09-16', unidades: 10, custo: 35 }];
+    const c17 = SHC.simulaRemessa({ skus: [{ sku: 'S1', qtd: 100, medidas: { ordenadas: [10, 10, 10], pesoKg: 1 } }], remessasAnteriores: v17 }).custoEstimado;
+    ok(c17 && c17.base === 1 && c17.valor === 120.5 && c17.min === 120.5 && c17.max === 120.5 && c17.porUnidade === 1.21
+        && c17.porUnidade === SHC.remessasResumo(v17, null, '2026-09', HOJE).custoPorUnidade,
+        'recebida R$ 120,50/100 un. + vencida R$ 80,00 + cancelada R$ 35,00: custo estimado R$ 120,50 (R$ 1,21/un., o mesmo R$/un. do cartão de remessas)');
+    ok(SHC.simulaRemessa({ skus: [{ sku: 'S1', qtd: 5 }], remessasAnteriores: v17.slice(1) }).custoEstimado === null, 'só vencida e cancelada cobradas: sem custo estimado (nenhuma coleta recebida para aprender)');
+    const r17 = lcg(1717), g17 = lote();
+    let comPen = 0;
+    for (let k = 0; k < 400; k++) {
+        const rs = Array.from({ length: ent(r17, 0, 9) }, (_, j) => ({ id: String(j), status: pega(r17, STS.concat(['canceled'])), recebida: dia(ent(r17, 0, 200)),
+            unidades: ent(r17, 0, 3) ? ent(r17, 0, 500) : null, custo: ent(r17, 0, 3) ? ent(r17, 0, 300000) / 100 : null }));
+        const un = ent(r17, 1, 900), x = SHC.simulaRemessa({ skus: [{ sku: 'K', qtd: un }], remessasAnteriores: rs });
+        const bs = rs.filter(q => /^closed_(ok|with_changes)$/.test(q.status) && q.custo > 0 && q.unidades > 0).sort((a, b) => b.recebida.localeCompare(a.recebida)).slice(0, 5);
+        if (rs.some(q => /cancel|expired/.test(q.status) && q.custo > 0 && q.unidades > 0)) comPen++;
+        if (!bs.length) { g17.conta(x.custoEstimado === null, { k, rs, c: x.custoEstimado }); continue; }
+        const pu = bs.map(q => q.custo / q.unidades), med = pu.reduce((a, b) => a + b, 0) / pu.length, c = x.custoEstimado;
+        g17.conta(c && c.base === bs.length && Math.abs(c.valor - med * un) <= 0.005 + 1e-9 && Math.abs(c.min - Math.min(...pu) * un) <= 0.005 + 1e-9
+            && Math.abs(c.max - Math.max(...pu) * un) <= 0.005 + 1e-9, { k, rs, un, c });
+    }
+    okLote(g17, `#17 simulações com todos os status (${comPen} com vencida/cancelada cobrada): só as recebidas entram no custo da coleta`);
 }
 
 console.log('H. Rateio do Full na etiqueta (SHC.fullRateioUn): armazenagem + coleta de 30 dias ÷ unidades vendidas');

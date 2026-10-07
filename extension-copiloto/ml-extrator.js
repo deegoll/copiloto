@@ -5159,8 +5159,10 @@
         const volumes = { caixas, pallets, texto: pallets ? SHC.qtd(pallets, 'pallet', 'pallets') + ' (cerca de ' + String(vol).replace('.', ',') + ' m³)' : caixas ? 'cerca de ' + SHC.qtd(caixas, 'caixa', 'caixas') : '' };
         const completo = un > 0 && !semMedida.length, cabe = VEICULOS.find(v => vol <= v.m3 && peso <= v.kg);
         const veiculo = !completo ? null : (cabe ? cabe.nome : 'mais de um truck (acima de 40 m³/12 t)');
-        // Custo: média por unidade das remessas FECHADAS com cobrança (total_charged ÷ units_count), faixa mín–máx das últimas 5.
-        const base = rs.filter(r => r && REM_FECHADA.test(String(r.status || '')) && r.custo > 0 && r.unidades > 0)
+        // Custo: média por unidade das remessas RECEBIDAS (closed_ok/closed_with_changes) com cobrança (total_charged ÷ units_count), faixa mín–máx
+        // das últimas 5 — o mesmo filtro do custo por unidade do cartão (SHC.remessasResumo). Vencida/cancelada fica fora: a cobrança dela é
+        // penalidade de remessa que nem foi coletada, não custo de coleta.
+        const base = rs.filter(r => r && /^closed_(ok|with_changes)$/.test(String(r.status || '')) && r.custo > 0 && r.unidades > 0)
             .sort((a, b) => String(b.recebida || b.agendada || '').localeCompare(String(a.recebida || a.agendada || ''))).slice(0, 5);
         let custo = null, custoMotivo = '';
         if (base.length && un > 0) {
