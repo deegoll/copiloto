@@ -1095,6 +1095,19 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
             'GMV Pay na tela (#33): "Ads pago com o repasse −R$ 30,00", Repasse R$ 54,00 = o que o TikTok pagou (antes R$ 84,00 e "a menor" −R$ 30,00); Preço − tarifas − Ads = Repasse; Repasse − custo − imposto = Lucro R$ 38,00; produto com repasse R$ 54,00');
     }
 
+    {   // #33, revisão 2: o README do núcleo descreve a conta que o motor faz com o Ads tirado do repasse (origem_pagamento 'venda').
+        const rd = fs.readFileSync(path.join(RAIZ, 'copiloto-nucleo', 'README.md'), 'utf8'), bloco = (/## Fórmula\s+```([\s\S]*?)```/.exec(rd) || [])[1] || '';
+        const pg = M.garantir('pedido', { canal: 'tiktok', conta: 'x', fonte: 'tela', id: 'G33', data_venda: '2026-09-20', status: 'entregue', itens: [{ sku: 'GMV-33', qtd: 1, total: 100 }] });
+        const tg = [{ pedido_id: 'G33', tipo: 'comissao', valor: 16, data: '2026-09-20' }, { pedido_id: 'G33', tipo: 'ads', valor: 30, data: '2026-09-20', origem_pagamento: 'venda' },
+            { pedido_id: 'G33', tipo: 'ads', valor: 5, data: '2026-09-20', origem_pagamento: 'fatura' }];
+        const rg = MO.lucroPedido(pg, { tarifas: tg, custos: [{ sku: 'GMV-33', custo: 10 }], imposto_pct: 0 });
+        ok(rg.repasse === 54 && rg.ads_no_repasse === 30 && rg.lucro_antes_ads === 74 && rg.lucro_real === 39
+            && /^repasse\s+=.*'ads' fica fora, SALVO o Ads com\s*\n\s+− Ads tirado do repasse\s+origem_pagamento 'venda': esse sai do repasse\)/m.test(bloco)
+            && /^lucro_antes_ads = repasse \+ Ads tirado do repasse − custo/m.test(bloco) && /^lucro_real\s+= lucro_antes_ads − Ads do pedido \(o tirado do repasse \+ o rateado/m.test(bloco)
+            && /\*\*Ads tirado do repasse:\*\* a tarifa `ads` com `origem_pagamento: 'venda'`/.test(rd),
+            'README do núcleo (#33, revisão 2): a fórmula diz que o Ads com origem_pagamento \'venda\' (GMV Pay) sai do repasse e entra uma vez no lucro — como o motor: repasse R$ 54,00, lucro R$ 39,00 (antes o README dizia "\'ads\' fica fora")');
+    }
+
     {   // #34: o extrato do pedido com o custo do frete vazio ({amount:""}), settlement R$ 80,00 e o cliente pagou R$ 12,00.
         const C34 = '7000000034', a34 = v => ({ amount: v, currency: 'BRL' }), id34 = '5770000000000000800';
         const ext34 = { code: 0, data: { order_record: { statement_detail_id: '5770000000000000801', statement_id: '8800000034', trade_order_id: id34, placed_time: msDia('2026-09-20'), settlement_status: 2,
