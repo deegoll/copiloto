@@ -15,8 +15,9 @@
 //   I. núcleo (copiloto-nucleo): adaptador adsDosAnuncios e motor.rateioAds — o Ads rateado + o não rateado = o Ads lido.
 // Casos gerados com semente fixa (LCG): o resultado é o mesmo em toda execução (nada de Math.random).
 // Divergências achadas nesta auditoria (fora deste teste para a suíte seguir verde; repro e esperado × obtido no relatório da tarefa):
-//   1) ads.js A.rs0 arredonda o negativo para cima (Math.round(−2,5) = −2): lucro de −R$ 2,50 → KPI "−R$ 2", manchete "prejuízo de R$ 3" e
-//      o rodapé "sobra R$ 30 − Ads R$ 33" (= −3). Os três arredondamentos independentes também não fecham entre si (sobra − Ads ≠ lucro).
+//   1) [corrigida, #22] ads.js A.rs0 arredondava o negativo para cima (Math.round(−2,5) = −2): lucro de −R$ 2,50 → KPI "−R$ 2", manchete
+//      "prejuízo de R$ 3". Agora o meio real vai para longe do zero nos dois sinais e o rodapé mostra a conta em centavos, fechando
+//      ("sobra R$ 30,00 − Ads R$ 32,50 = −R$ 2,50").
 //   2) ads.js: SKU com lucro depois do Ads de R$ 0,00 (Ads = sobra, no centavo) ganha o selo "Acima do equilíbrio" e a ação "Ajustar" por
 //      ruído de ponto flutuante (ACOS 23,791193949216638 > margem 23,791193949216634); a manchete diz "Nenhum produto passa do equilíbrio".
 //   3) ads.js: SKU com gasto e sem venda entra na contagem da manchete ("1 produto passa do equilíbrio", A.resultado.acima) mas não no
@@ -104,11 +105,16 @@ console.log('A. Régua: centavos inteiros × SHC.moeda, soma com SHC.r2 (A.soma)
         const c = I(rnd, 0, 99999999), t = A.rs0(c / 100);
         return (deRs0(t) === Math.floor((c + 50) / 100) && t === 'R$ ' + milhar(Math.floor((c + 50) / 100))) || `${c} → ${t}`;
     });
-    prop('A.rs0 de valor negativo fora do meio real = −(centavos arredondados) (o meio real é a divergência 1)', vezes(2000), () => {
-        let c = -I(rnd, 1, 99999999); if (Math.abs(c) % 100 === 50) c -= 1;
-        const t = A.rs0(c / 100), r = Math.floor((-c + 50) / 100);
-        return (deRs0(t) === (r ? -r : 0)) || `${c} → ${t}`;
+    prop('A.rs0 de valor negativo = −(centavos arredondados), meio real para longe do zero (#22)', vezes(2000), () => {
+        const c = -I(rnd, 1, 99999999), t = A.rs0(c / 100), r = Math.floor((-c + 50) / 100);
+        return (deRs0(t) === (r ? -r : 0) && (r ? t === '−' + A.rs0(-c / 100) : t === 'R$ 0')) || `${c} → ${t}`;
     });
+    prop('A.rs0 simétrico no meio real: −R$ X,50 = "−" + o texto de +R$ X,50 (nunca "−R$ 2" × "R$ 3") (#22)', vezes(1000), () => {
+        const c = I(rnd, 0, 999999) * 100 + 50;
+        return (A.rs0(-c / 100) === '−' + A.rs0(c / 100) && deRs0(A.rs0(c / 100)) === (c + 50) / 100) || `${c} → ${A.rs0(-c / 100)} × ${A.rs0(c / 100)}`;
+    });
+    ok(A.rs0(-2.5) === '−R$ 3' && A.rs0(2.5) === 'R$ 3' && A.rs0(-127.5) === '−R$ 128' && A.rs0(-1433.5) === '−R$ 1.434' && A.rs0(-0.4) === 'R$ 0' && A.rs0(-0.5) === '−R$ 1',
+        'A.rs0: −2,50 → "−R$ 3", −1.433,50 → "−R$ 1.434", −0,40 → "R$ 0" (sem "−R$ 0") (#22)');
     ok([null, undefined, NaN, Infinity, -Infinity].every(v => SHC.moeda(v) === '—' && A.rs0(v) === '—' && A.xTxt(v) === '—'),
         'vazio, NaN e Infinity viram "—" (SHC.moeda, A.rs0, A.xTxt): nunca "R$ 0,00", "R$ NaN" ou "Infinityx"');
 }
@@ -350,21 +356,22 @@ console.log('F. Texto da tela de ads.html = os números da conta');
             && deInt(imp) === c.tot.imp && deInt(cli) === c.tot.cli && b !== null;
         return (bom && textoLimpo(h)) || `conta ${c.k}: inv ${inv} rec ${rec} cpc ${cpc} orc ${orc} roas ${roas} acos ${acos}`;
     });
-    prop('KPIs de cima (A.htmlKpis4): Investimento e Receita em R$ inteiro, lucro = A.rs0(lucro), "sobra R$ a − Ads R$ b" = A.rs0 de cada um, variação vs 30 dias antes', contas, c => {
+    prop('KPIs de cima (A.htmlKpis4): Investimento e Receita em R$ inteiro, lucro = A.rs0(lucro), rodapé "sobra R$ a − Ads R$ b = R$ c" em centavos e fechando, variação vs 30 dias antes', contas, c => {
         const h = A.htmlKpis4(c.an), r = c.an.res, v = l => { const m = new RegExp('<div class="l">' + l + '</div><div class="v">(.*?)</div><div class="s">(.*?)</div>').exec(h); return m ? [tiraTags(m[1]), tiraTags(m[2])] : [null, null]; };
         const [inv, invS] = v('Investimento'), [rec] = v('Receita pelo Ads'), [luc, lucS] = v('Lucro depois do Ads ⓘ');
         const rs0c = cc => Math.sign(cc) * Math.floor((Math.abs(cc) + 50) / 100);
         let bom = deRs0(inv) === rs0c(c.tot.costC) && deRs0(rec) === rs0c(c.tot.recC);
         if (r.lucro === null) bom = bom && luc === '—' && /informe o custo/.test(lucS);
         else {
-            const m = /^sobra (.+?) − Ads (R\$ [\d.]+)/.exec(lucS);
-            bom = bom && luc === A.rs0(r.lucro) && !!m && m[1] === A.rs0(r.sobra) && m[2] === A.rs0(r.ads) && (Math.abs(cent(r.lucro)) % 100 === 50 || deRs0(luc) === rs0c(cent(r.lucro)));
+            const m = /^sobra (.+?) − Ads (R\$ [\d.]+,\d\d) = (−?R\$ [\d.]+,\d\d)/.exec(lucS);
+            bom = bom && luc === A.rs0(r.lucro) && !!m && deMoeda(m[1]) === cent(r.sobra) && deMoeda(m[2]) === cent(r.ads) && deMoeda(m[3]) === cent(r.lucro)
+                && deMoeda(m[1]) - deMoeda(m[2]) === deMoeda(m[3]) && deRs0(luc) === rs0c(cent(r.lucro));
         }
         const pv = /^([▲▼]) (.+) vs 30 dias antes$/.exec(invS), a0 = c.tot.costC, b0 = c.totAnt.costC;
         bom = bom && (b0 > 0 ? !!pv && pv[1] === (a0 >= b0 ? '▲' : '▼') && Math.abs(dePct(pv[2]) - Math.abs(a0 - b0) / b0 * 100) <= 0.05 + 1e-9 : invS === '');
         return (bom && textoLimpo(h)) || `conta ${c.k}: ${inv} · ${rec} · ${luc} (${lucS}) · ${invS}`;
     });
-    prop('manchete: "prejuízo de R$ N" / "lucro de R$ N" = o mesmo número do KPI "Lucro depois do Ads" (fora do meio real — divergência 1)', contas.filter(c => c.an.res.lucro !== null && Math.abs(cent(c.an.res.lucro)) % 100 !== 50), c => {
+    prop('manchete: "prejuízo de R$ N" / "lucro de R$ N" = o mesmo número do KPI "Lucro depois do Ads" (meio real incluso, #22)', contas.filter(c => c.an.res.lucro !== null), c => {
         const mc = c.an.manchete, r = c.an.res, kp = deRs0(A.rs0(r.lucro));
         const m = /dá (prejuízo|lucro) de (R\$ [\d.]+)/.exec(mc.fato);
         if (r.lucro < 0) return (!!m && m[1] === 'prejuízo' && -deRs0(m[2]) === kp && mc.cls === 'pr') || `conta ${c.k}: ${mc.fato} × KPI ${A.rs0(r.lucro)}`;
@@ -568,6 +575,31 @@ console.log('I. Núcleo (copiloto-nucleo): adsDosAnuncios e rateio do Ads por pe
         const porAd = {}; pp.forEach(p => Object.keys(p.porAnuncio).forEach(a => { porAd[a] = (porAd[a] || 0) + cent(p.porAnuncio[a]); }));
         return Object.keys(porAd).every(a => porAd[a] === x.ads.find(z => z.id === a).costC) || JSON.stringify(porAd);
     });
+}
+
+console.log('J. Divergências corrigidas: os casos fixos dos repros (#22–#28)');
+// Conta de 1 tela: anúncios crus (nomes da API) → retrato como o fundo grava; campanhas = Σ dos anúncios dela; resumo = Σ de todos (ou sem ele).
+const somaCru = l => { const s = {}; ['cost', 'totalAmount', 'prints', 'clicks', 'unitsQuantity'].forEach(k => { s[k] = SHC.r2(l.reduce((t, a) => t + (a[k] || 0), 0)); }); return s; };
+const contaFixa = (ads, o) => {
+    o = o || {};
+    const ids = [...new Set(ads.map(a => a.campaignId))];
+    return { temAds: true, completo: o.completo !== false, anterior: { campanhas: {}, total: null },
+        campanhas: SHC.adsCampanhas({ results: ids.map(id => ({ id, name: 'Campanha teste ' + id, status: 'A', dailyBudget: 10, metrics: (o.campMetr || {})[id] || somaCru(ads.filter(a => a.campaignId === id)) })) }).campanhas,
+        anuncios: SHC.adsAnuncios({ results: ads }).anuncios,
+        resumo: o.semResumo ? null : SHC.adsResumo({ summary: { metricsSummary: Object.assign(somaCru(ads), o.resumoExtra || {}) } }) };
+};
+const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v">(.*?)<\/div><div class="s">(.*?)<\/div>/.exec(A.htmlKpis4(an)); return v ? [v[1], v[2]] : [null, null]; };
+{
+    const cfg = { imposto_pct: 0, margem_alvo_pct: 10 };
+    const it = [{ itemId: 'MLB9000000001', sku: 'TST-1', titulo: 'Produto teste', preco: 100, recebe: 80 }];
+    const an = A.analisa(contaFixa([{ id: 'MLB9000000001', title: 'Produto teste', campaignId: 111, cost: 32.5, totalAmount: 100, prints: 1000, clicks: 20, unitsQuantity: 1 }]), it, () => ({ custo: 50 }), cfg, []);
+    const [v, s] = kpiLucro(an);
+    ok(an.res.lucro === -2.5 && an.manchete.fato === 'O Ads dá prejuízo de R$ 3 no período.' && v === '−R$ 3' && s === 'sobra R$ 30,00 − Ads R$ 32,50 = −R$ 2,50',
+        `#22 lucro −R$ 2,50: manchete "prejuízo de R$ 3", KPI "−R$ 3" e o rodapé "sobra R$ 30,00 − Ads R$ 32,50 = −R$ 2,50" (obtido: ${an.manchete.fato} | ${v} | ${s})`);
+    const an2 = A.analisa(contaFixa([{ id: 'MLB9000000001', title: 'Produto teste', campaignId: 111, cost: 0.6, totalAmount: 100, prints: 1000, clicks: 20, unitsQuantity: 1 }]), it, () => ({ custo: 69.6 }), cfg, []);
+    const [v2, s2] = kpiLucro(an2);
+    ok(an2.res.lucro === 9.8 && an2.manchete.fato === 'O Ads dá lucro de R$ 10 nos produtos com custo.' && v2 === 'R$ 10' && s2 === 'sobra R$ 10,40 − Ads R$ 0,60 = R$ 9,80',
+        `#22 sobra 10,40 − Ads 0,60: o rodapé fecha em centavos (= R$ 9,80) e o KPI/manchete mostram R$ 10 (obtido: ${an2.manchete.fato} | ${v2} | ${s2})`);
 }
 
 console.log(`\n${nChecks} verificações.`);
