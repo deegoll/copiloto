@@ -223,6 +223,13 @@ console.log('Exclusão de reclamação e experiência de compra: só o que as re
     ok(!passou.length, 'culpa do vendedor no motivo VETA a exclusão (defeito, não postou, tamanho errado enviado, veio outro, faltando, não chegou, quebrado, estoque)'
         + (passou.length ? ': ' + passou.join(' | ') : ''));
     ok(SHC.motivoExcluivel('Comprei o tamanho errado, quero trocar') && SHC.motivoExcluivel('Comprou errado'), 'o erro do PRÓPRIO comprador continua excluível (troca, engano)');
+    // Decisão da local (07/10, zero risco): "demorou demais/muito" sem dizer quem atrasou pode ser o despacho; só com Correios, transportadora
+    // ou Mercado Envios no motivo é demora do transporte.
+    const vaga = ['Demorou demais para chegar', 'Demorou muito para chegar', 'A entrega demorou demais', 'Desisti porque demorou muito', 'Muito demorado', 'Demorou muito mesmo para entregar'];
+    const vagaPassou = vaga.filter(m => SHC.motivoExcluivel(m));
+    ok(!vagaPassou.length, 'demora vaga ("demorou demais/muito" sem Correios ou transportadora): sem pedido de exclusão' + (vagaPassou.length ? ': ' + vagaPassou.join(' | ') : ''));
+    const comQuem = ['Os Correios demoraram demais', 'A transportadora demorou demais', 'Demorou demais pelo Mercado Envios', 'Demorou demais, os Correios atrasaram a entrega'];
+    ok(comQuem.every(m => /demora do transporte/.test(SHC.motivoExcluivel(m))), 'demora com Correios, transportadora ou Mercado Envios no motivo continua na regra da demora do transporte');
     // 2ª revisão (07/10): despacho demorado e mensagem sem resposta são do vendedor; o engano e o "não foi usado" do comprador voltam a valer.
     const veto2 = ['Desisti porque demorou para despachar', 'Me arrependi, demorou demais para postar', 'Desisti, o vendedor não respondeu', 'Mensagem sem resposta, desisti', 'Engano no envio'];
     const vazou = veto2.filter(m => SHC.motivoExcluivel(m));
