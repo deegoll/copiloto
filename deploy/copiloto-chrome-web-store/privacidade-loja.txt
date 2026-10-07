@@ -1,92 +1,112 @@
-======================================
-1) DESCRIÇÃO DO ÚNICO PROPÓSITO  (692 caracteres)
-======================================
-Mostrar ao vendedor do Mercado Livre a rentabilidade real e a saúde dos seus anúncios (promoções, frete, Full, Ads, fechamento do mês, notas e dados fiscais, fotos, medidas, visitas, faturamento por família, pós-venda, perguntas, reputação e remessas), com os números do próprio painel do vendedor e com o custo que ele informa. A extensão só lê o painel; as exceções são a Agenda do Canal de transmissão (pré-preenche o formulário e o vendedor clica em Criar), a calculadora do Simulador de custos e a busca de NF-e (só consultas). Os robôs de fotos e de promoções apenas sugerem; o robô do Canal (desligado até o vendedor ligar) só monta a agenda. Nenhum dado sai do computador do vendedor.
+(Gerado por go-live-3.3.0/gerar-colar.js a partir de go-live-3.3.0/textos-loja-3.3.0.md. Não edite aqui: edite o .md e rode o gerador.)
 
 ======================================
-2) Permissão: storage  (920 caracteres)
+4. Finalidade única (956 caracteres)
 ======================================
-Guardar no navegador do vendedor, e só nele, o que a extensão precisa entre uma leitura e outra: custos por SKU (digitados no painel ou na Agenda do Canal), configurações (imposto, meta de margem, meta do mês, estoque mínimo, despesas fixas, regras dos robôs e dos avisos), o retrato dos anúncios e das variações (Editor em massa), a agenda do Canal, o histórico de frete e de cobranças, as tarifas de cada fatura do ML por categoria, a contagem de fotos, as medidas da embalagem, as visitas por dia, as vendas de cada anúncio mês a mês, as vendas novas no prejuízo e os anúncios que saíram da promoção (sem dados do comprador), os resumos do Faturamento e do Ads, os totais e motivos do pós-venda (sem dados do comprador), os totais de afiliados e as campanhas exclusivas (sem nome de afiliado), a reputação, as remessas do Full e o id e o nome de exibição da própria conta do vendedor. Nada é enviado a servidor algum.
+Mostrar ao vendedor do Mercado Livre e do TikTok Shop a rentabilidade real e a saúde dos seus anúncios (promoções, frete, Full, Ads, fechamento do mês, notas e dados fiscais, fotos, medidas, visitas, experiência de compra, faturamento por família, pós-venda, perguntas, reputação e remessas), com os números do próprio painel de cada canal e com o custo que ele informa. A extensão só lê o painel; as exceções são a Agenda do Canal de transmissão (pré-preenche o formulário e o vendedor clica em Criar), a calculadora do Simulador de custos e a busca de NF-e (só consultas). Os robôs de fotos e de promoções apenas sugerem; o robô do Canal (desligado até o vendedor ligar) só monta a agenda. O TikTok Shop é opcional: só é lido se o vendedor ligar, e só nas telas que ele abre, sem nenhuma chamada da extensão. Nada vai para servidores do SellerHub nem para terceiros; a extensão só fala com o Mercado Livre, o Mercado Pago e o ERP que o vendedor conectar.
 
 ======================================
-2) Permissão: unlimitedStorage  (228 caracteres)
+5. Justificativa de storage (999 caracteres)
+======================================
+Guardar só no navegador do vendedor o que a extensão precisa entre uma leitura e outra: custos por SKU e configurações (imposto, metas, despesas fixas, regras dos robôs e dos avisos), com custos, imposto, margem, despesas e ERP à parte na conta marcada como "Outra empresa"; o retrato dos anúncios e variações; histórico de frete, cobranças, faturas e vendas por anúncio; a tarifa conferida no detalhe da venda; fotos, medidas e visitas; a nota e os problemas da experiência de compra; vendas no prejuízo e saídas de promoção; resumos do Faturamento, Ads, pós-venda e afiliados (sem nome de afiliado); reputação, remessas do Full, agenda do Canal, o id e o nome de exibição da própria conta e o token ou as chaves do ERP, que só vão a esse ERP. Com o TikTok Shop ligado: número da loja, pedidos, demonstrativos, saldo, produtos, devoluções em aberto, indicadores, pendências de afiliados e campanhas das telas que ele abre, e o custo e o Ads que digita. Nada do comprador. Nada vai a servidor nosso.
+
+======================================
+5.1 Justificativa de unlimitedStorage (228 caracteres)
 ======================================
 Contas grandes (milhares de anúncios e 13 meses de histórico de vendas, frete e Faturamento) passam do limite padrão de 10 MB; sem esta permissão a atualização pararia no meio. Tudo continua guardado só no navegador do vendedor.
 
 ======================================
-2) Permissão: alarms  (774 caracteres)
+5.2 Justificativa de alarms (887 caracteres)
 ======================================
-Com o Chrome aberto: atualizar os números sozinho a cada 3 horas; a cada hora, ler aos poucos (1 anúncio a cada poucos segundos) as fotos, as medidas, a categoria e as visitas dos anúncios ativos e o detalhe das remessas do Full; uma vez por dia rodar o Robô de fotos, só se o vendedor tiver ligado (ele só sugere); a cada 6 horas ver se o robô do Canal está ligado e, no máximo 1 vez por dia, montar a agenda (não cria nada no ML); a cada 30 minutos ver se já chegou a hora escolhida em Ajustes para preparar o texto do resumo do dia ou da semana com o que já está guardado; e, enquanto houver meses antigos para ler, a cada 5 minutos ler aos poucos o histórico de 13 meses (Faturamento, vendas por anúncio e notas fiscais). Nenhuma dessas rotinas envia dado a lugar algum.
+Com o Chrome aberto: atualizar os números sozinho a cada 3 horas; a cada hora, ler aos poucos (1 anúncio a cada poucos segundos) as fotos, as medidas, a categoria e as visitas dos anúncios ativos e o detalhe das remessas do Full; uma vez por dia rodar o Robô de fotos, só se o vendedor tiver ligado (ele só sugere); a cada 6 horas ver se o robô do Canal está ligado e, no máximo 1 vez por dia, montar a agenda (não cria nada no ML); a cada 30 minutos ver se já chegou a hora escolhida em Ajustes para preparar o texto do resumo do dia ou da semana com o que já está guardado; e, enquanto houver meses antigos para ler, a cada 5 minutos ler aos poucos o histórico de 13 meses (Faturamento, vendas por anúncio e notas fiscais). Nenhuma dessas rotinas envia dado a servidor nosso nem a terceiros: elas só consultam o Mercado Livre e os serviços que o vendedor conectou (Mercado Pago e ERP).
 
 ======================================
-2) Permissão: sidePanel  (186 caracteres)
+6. Justificativa de sidePanel (300 caracteres)
 ======================================
-Abrir o painel do Copiloto ao lado da página do Mercado Livre, onde ficam as abas Geral, Promoções, Frete, Catálogo, Ads, Full, Saúde, Conciliação, Canal, Afiliados, Pós-venda e Ajustes.
+Abrir o painel do Copiloto ao lado da página do Mercado Livre ou do TikTok Shop, onde ficam as abas Geral, Promoções, Frete, Catálogo, Ads, Full, Saúde, Conciliação, Canal, Afiliados, Pós-venda e Ajustes. Com o TikTok Shop ligado, cada aba ganha o filtro de canal (Todos, Mercado Livre, TikTok Shop).
 
 ======================================
-2) Permissão: background (opcional)  (339 caracteres)
+6.1 Justificativa de background (opcional) (339 caracteres)
 ======================================
 Opcional: só é pedida se o vendedor ligar, em Ajustes, "Continuar sincronizando com o Chrome fechado". Com ela o Chrome continua rodando escondido depois que as janelas são fechadas, para que a atualização a cada 3 horas continue enquanto o computador estiver ligado. Não lê nada a mais e não envia nada; o vendedor desliga no mesmo lugar.
 
 ======================================
-2) Permissão: identity (opcional)  (296 caracteres)
+6.2 Justificativa de identity (opcional) (296 caracteres)
 ======================================
 Opcional: só é pedida se o vendedor clicar em "Conectar" o Bling. Serve só para abrir a janela de entrada oficial do Bling, onde o vendedor autoriza o aplicativo que ele mesmo criou lá a ler os produtos. Não lê a conta Google, o e-mail nem nada do navegador; o vendedor desconecta no mesmo lugar.
 
 ======================================
-3) Host — https://vendedores.mercadolivre.com.br/*  (992 caracteres)
+7. Justificativa de scripting (opcional) (902 caracteres)
 ======================================
-Ler, com a sessão que o vendedor já tem aberta, as páginas do próprio painel: Anúncios (inclusive famílias e opções de venda fechadas), Editor em massa (só quando o vendedor abre essa tela; só leitura), Vendas (número, dia, envio, situação, produto, SKU e valores, sem dados do comprador), Central de promoções, Faturamento (e as tarifas de cada fatura por categoria), Métricas, Full e remessas, Pós-venda (totais e, da 1ª página, produto, valor, motivo e situação de cada reclamação, sem dados do comprador), Perguntas (só quantidades e tempos), Reputação, Venda com afiliados (totais por produto e campanhas exclusivas, sem nome de afiliado), Faturador e notas fiscais (a mesma busca invoice/search da página de notas, só consulta), Canal de transmissão (e os anúncios da agenda que ainda faltam ler) e Simulador de custos. É de onde saem todos os números; não cria nem altera nada no painel, salvo a Agenda do Canal, que pré-preenche o formulário e deixa o clique em Criar para o vendedor.
+Opcional: só é pedida quando o vendedor liga o TikTok Shop em Ajustes, no mesmo clique e junto com o acesso a https://seller-br.tiktok.com/*. Serve só para registrar (chrome.scripting.registerContentScripts) os 2 scripts do próprio pacote que leem, de forma passiva, as telas do Seller Center do TikTok Shop que o vendedor abre: Finanças, Pedidos, Gerenciar produtos, Avaliação da integridade da conta, Pontuação de desempenho da loja, Gerenciar devoluções e reembolsos, Afiliados, Campanhas e Página inicial. Um deles roda no mundo da página e embrulha o fetch e o XMLHttpRequest dela: a chamada da tela segue igual, e ele copia só a resposta de uma lista fechada de rotas dessas telas. Não faz nenhuma chamada nova, não navega e não clica. Só roda em seller-br.tiktok.com. Ao desligar, a leitura é removida antes de a permissão ser devolvida. Quem não liga o TikTok Shop nunca concede esta permissão.
 
 ======================================
-3) Host — https://pa.mercadolivre.com.br/*  (379 caracteres)
+7.1 Sites — SE o painel tiver UM campo só para todos os sites (976 caracteres)
 ======================================
-Ler, com a mesma sessão, os números do Mercado Ads (campanhas, anúncios patrocinados, impressões, cliques, investimento, receita, orçamento) para mostrar ACOS, equilíbrio e resumo da conta. Quando o ML desvia essa leitura feita pelo fundo, a mesma consulta é feita por uma aba aberta do painel do vendedor. Só leitura: a extensão não cria nem altera campanha, orçamento ou lance.
+vendedores.mercadolivre.com.br: ler, com a sessão do vendedor, o próprio painel (anúncios, vendas e seu detalhe sem dados do comprador, promoções, Faturamento, Full, pós-venda, reputação, notas fiscais, Simulador); só a Agenda do Canal pré-preenche um formulário, e o vendedor clica em Criar. pa.mercadolivre.com.br: ler o Mercado Ads (só leitura); se o ML exigir, abre a página do Mercado Ads numa aba em segundo plano, no máximo 1 vez a cada 6 horas por conta, e a fecha. Opcionais, pedidos só no clique do vendedor: www e produto.mercadolivre.com.br (fotos, medidas e visitas dos próprios anúncios e ofertas públicas do catálogo); www.mercadopago.com.br (vendas e reembolsos da Atividade); Tiny, Omie e Bling (custo e estoque pela API oficial, com as credenciais dele); seller-br.tiktok.com, com scripting, depois do "Concordo e ligar" (copia, das telas do Seller Center que ele abre, só as respostas de uma lista fechada, sem chamadas próprias). Nada vai a servidor nosso.
 
 ======================================
-3) Host (opcional) — https://api.tiny.com.br/*  (268 caracteres)
+7.2 Site https://vendedores.mercadolivre.com.br/* (955 caracteres)
 ======================================
-Opcional: só se o vendedor clicar em "Conectar" o Tiny, para ler o preço de custo dos produtos e se cada um está ativo ou inativo (para comparar com o Mercado Livre) pela API oficial com o token que ele mesmo colou. O token fica só no navegador e só é enviado ao Tiny.
+Ler, com a sessão que o vendedor já tem aberta, as páginas do próprio painel: Anúncios (inclusive famílias e opções de venda fechadas, os avisos e a experiência de compra que a tela já traz), Editor em massa (só quando o vendedor abre essa tela; só leitura), Vendas e o detalhe de cada venda (número, dia, envio, situação, produto, SKU e valores, sem dados do comprador), Central de promoções, Faturamento (e as tarifas de cada fatura), Métricas, Full e remessas, Pós-venda (totais e, da 1ª página, produto, valor, motivo e situação de cada reclamação, sem dados do comprador), Perguntas (só quantidades e tempos), Reputação, Afiliados (totais por produto e campanhas exclusivas, sem nome de afiliado), Faturador e notas fiscais (a mesma busca da página de notas, só consulta), Canal de transmissão e Simulador de custos. Não cria nem altera nada no painel, salvo a Agenda do Canal, que pré-preenche o formulário e deixa o clique em Criar para o vendedor.
 
 ======================================
-3) Host (opcional) — https://app.omie.com.br/*  (366 caracteres)
+7.3 Site https://pa.mercadolivre.com.br/* (556 caracteres)
 ======================================
-Opcional: só se o vendedor clicar em "Conectar" o Omie, para ler o preço de custo e o estoque (posição de estoque) e, do cadastro de produtos, quais estão inativos (para comparar com o Mercado Livre) pela API oficial com a App Key e a App Secret da própria conta dele, guardadas só no navegador e enviadas só ao Omie. A chamada é de consulta: nada é gravado no Omie.
+Ler, com a mesma sessão, os números do Mercado Ads (campanhas, anúncios patrocinados, impressões, cliques, investimento, receita e orçamento) para mostrar ACOS e o resumo da conta. Se o ML desvia a leitura feita pelo fundo, a mesma consulta é feita pela aba aberta do painel do vendedor; se o ML exige que a conta de anúncios seja aberta antes, a extensão abre a página do Mercado Ads numa aba em segundo plano (no máximo 1 vez a cada 6 horas por conta) e a fecha, sem clicar nem escolher nada. Só leitura: não cria nem altera campanha, orçamento ou lance.
 
 ======================================
-3) Host (opcional) — https://www.bling.com.br/* e https://api.bling.com.br/*  (465 caracteres)
+7.4 Site (opcional) https://www.mercadolivre.com.br/* e https://produto.mercadolivre.com.br/* (566 caracteres)
 ======================================
-Opcional: só se o vendedor clicar em "Conectar" o Bling, para entrar pela autorização oficial (OAuth 2.0) com o aplicativo que ele mesmo criou no Bling, só com leitura de Produtos, e ler o código, o nome, o preço de custo, o estoque e se cada produto está ativo ou inativo (para comparar com o Mercado Livre) pela API oficial. O Client ID, o Client Secret e as chaves de acesso ficam só no navegador e só são enviados ao Bling. Só consulta: nada é gravado no Bling.
+Opcional: só se o vendedor clicar em "Ver quem está ganhando" (competição de catálogo), para ler a página pública do produto (preço, frete e loja que está ganhando) e guardar a lista de ofertas públicas desse catálogo (preço, parcelas, prazo e nome da loja concorrente); ou em "Permitir ler fotos e medidas dos anúncios", para abrir a tela "Alterar anúncio" dos próprios anúncios e ler fotos, categoria, medidas da embalagem, visitas e a competição de catálogo (só leitura; nada é alterado). O endereço de entrega mostrado nessas páginas não é extraído nem guardado.
 
 ======================================
-3) Host (opcional) — https://www.mercadolivre.com.br/* e https://produto.mercadolivre.com.br/*  (564 caracteres)
-======================================
-Opcional: só se o vendedor clicar em "Ver quem está ganhando" (competição de catálogo), para ler a página pública do produto (preço, frete e loja que está ganhando) e guardar a lista de ofertas públicas desse catálogo (preço, parcelas, prazo e nome da loja concorrente); ou em "Permitir ler fotos e medidas dos anúncios", para abrir a tela "Alterar anúncio" dos próprios anúncios e ler fotos, categoria, medidas da embalagem, visitas e a competição de catálogo (só leitura; nada é alterado). O endereço de entrega mostrado nessas páginas nunca é lido nem guardado.
-
-======================================
-3) Host (opcional) — https://www.mercadopago.com.br/*  (306 caracteres)
+7.5 Site (opcional) https://www.mercadopago.com.br/* (306 caracteres)
 ======================================
 Opcional: só se o vendedor clicar em "Conectar Mercado Pago" no Fechamento do mês, para ler na página Atividade os valores que entraram de vendas do Mercado Livre e os reembolsos, e comparar com o líquido do mês. Não lê saldo, cartões nem dados de outras pessoas; compras e outros movimentos são ignorados.
 
 ======================================
-4) USA CÓDIGO REMOTO?  (60 caracteres)
+7.6 Site (opcional) https://api.tiny.com.br/* (328 caracteres)
 ======================================
-Não. Todo o código está no pacote; nada é carregado de fora.
+Opcional: só se o vendedor clicar em "Conectar" o Tiny, para ler o preço de custo dos produtos e se cada um está ativo ou inativo (para comparar com o Mercado Livre) pela API oficial com o token que ele mesmo colou (um por empresa, se ele marcar contas como "Outra empresa"). O token fica só no navegador e só é enviado ao Tiny.
 
 ======================================
-5) USO DE DADOS (marque)  (519 caracteres)
+7.7 Site (opcional) https://app.omie.com.br/* (427 caracteres)
 ======================================
-• Conteúdo do site: sim (números das páginas do painel do vendedor e do Mercado Ads, só para o cálculo, guardados no navegador).
-• Informações financeiras e de pagamento: sim (tarifas, fretes, Ads e estornos do Faturamento; e, se conectar, vendas e reembolsos do Mercado Pago). Só no navegador.
-• Informações de autenticação: sim, se conectar Tiny, Omie ou Bling (token/chaves ficam só no navegador e vão só ao próprio ERP).
-• As demais: não. Não coleta dados de compradores. Nada é vendido nem transferido a terceiros.
+Opcional: só se o vendedor clicar em "Conectar" o Omie, para ler o preço de custo e o estoque (posição de estoque) e, do cadastro de produtos, quais estão inativos (para comparar com o Mercado Livre) pela API oficial com a App Key e a App Secret da própria conta dele (uma por empresa, se ele marcar contas como "Outra empresa"), guardadas só no navegador e enviadas só ao Omie. A chamada é de consulta: nada é gravado no Omie.
 
 ======================================
-6) CERTIFICAÇÕES  (19 caracteres)
+7.8 Sites (opcionais) https://www.bling.com.br/* e https://api.bling.com.br/* (534 caracteres)
 ======================================
-Marque as 3 caixas.
+Opcional: só se o vendedor clicar em "Conectar" o Bling, para entrar pela autorização oficial (OAuth 2.0) com o aplicativo que ele mesmo criou no Bling, só com leitura de Produtos, e ler o código, o nome, o preço de custo, o estoque e se cada produto está ativo ou inativo (para comparar com o Mercado Livre) pela API oficial. O Client ID, o Client Secret e as chaves de acesso (uma conexão por empresa, se ele marcar contas como "Outra empresa") ficam só no navegador e só são enviados ao Bling. Só consulta: nada é gravado no Bling.
 
 ======================================
-7) URL DA POLÍTICA DE PRIVACIDADE  (76 caracteres)
+8. Site (opcional) https://seller-br.tiktok.com/* (983 caracteres)
+======================================
+Opcional: pedido junto com scripting, só quando o vendedor liga o TikTok Shop em Ajustes. Nas telas do Seller Center que o vendedor abriu (Finanças, Pedidos, Gerenciar produtos, Avaliação da integridade da conta, Pontuação de desempenho da loja, Gerenciar devoluções e reembolsos, Afiliados, Campanhas e Página inicial), a extensão lê os números da própria loja: vendas, tarifas, frete, repasses, valores em espera, devoluções em aberto, indicadores e nota da loja, pendências de afiliados, campanhas e o SKU do vendedor de cada produto, para mostrar o lucro por canal ao lado do Mercado Livre. Para isso, um script do pacote embrulha o fetch e o XMLHttpRequest da página e copia só a resposta de uma lista fechada de rotas. Não lê as telas de pagamentos, saques, conta bancária, faturas nem mensagens, e não guarda dado bancário ou fiscal. Não guarda nome, CPF, endereço, telefone nem observações de comprador. Não faz chamadas por conta própria. Nada sai do computador do vendedor.
+
+======================================
+9. Você está usando código remoto? (182 caracteres)
+======================================
+Não. Todo o código está no pacote; nada é carregado de fora. Os 2 scripts que leem o TikTok Shop também estão no pacote e só são registrados depois que o vendedor liga o TikTok Shop.
+
+======================================
+10. Uso de dados: marque 5 caixas (1.503 caracteres)
+======================================
+• Conteúdo do site: sim (números das páginas do painel do vendedor, do Mercado Ads e, se o vendedor ligar, das telas do Seller Center do TikTok Shop que ele abre, só para o cálculo, guardados no navegador).
+• Informações financeiras e de pagamento: sim (tarifas, fretes, Ads e estornos do Faturamento e os valores do detalhe da venda; se conectar, vendas e reembolsos do Mercado Pago; e, do TikTok Shop, demonstrativos, repasses, tarifas, saldo e o gasto de Ads que o vendedor digita). Só no navegador.
+• Informações de autenticação: sim, se conectar Tiny, Omie ou Bling (token ou chaves, um por empresa se o vendedor marcar "Outra empresa", ficam só no navegador e vão só ao próprio ERP).
+• Atividade do usuário: sim, só com o TikTok Shop ligado (nas telas do Seller Center que o vendedor abre, o script confere o endereço de cada chamada que a própria página faz e copia só a resposta das telas de uma lista fechada; não registra cliques, teclas, rolagem nem histórico de navegação). Só no navegador.
+• Informações de identificação pessoal: sim. Da conta do próprio vendedor: o id e o nome de exibição de cada conta dele no Mercado Livre e o número da loja no TikTok Shop, para separar os dados por conta (o e-mail não é guardado). E o nome público das lojas concorrentes do catálogo que ele pede para comparar. Só no navegador.
+• Histórico da Web: não (a extensão não guarda a lista de páginas visitadas).
+• As demais: não. Não guarda dados de compradores. Nada é vendido nem transferido a terceiros.
+
+======================================
+12. URL da política de privacidade (76 caracteres) — não muda
 ======================================
 https://especialistaemmarketplace.com.br/sellerhub/copiloto/privacidade.html
+
+======================================
+11. Certificações
+======================================
+Marque as 3 caixas.

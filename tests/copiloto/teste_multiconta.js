@@ -75,6 +75,22 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
     ok(pedidosLista <= 4, 'a troca foi vista com poucos pedidos à lista (' + pedidosLista + '), sem martelar o ML');
     void outra;
 
+    // 3.3.0 (revisão da junção): a troca DEPOIS da 1ª conferência, com o guardado de 60 s ainda valendo, deixava as etapas seguintes gravarem
+    // a outra empresa marcadas 'ok' (só a conferência forçada do fim via). A conferência de depois de cada etapa agora é sem o guardado.
+    console.log('c2) login trocado logo depois da 1ª conferência');
+    const dados2 = {};
+    let pedidos2 = 0;
+    const H2 = montaFundo({ dados: dados2, hoje: '2026-10-07', rota: u => {
+        if (/\/anuncios\/lista/.test(u)) { pedidos2++; return { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], pedidos2 >= 3 ? OUTRA : A) }; }   // 1º: anúncios; 2º: 1ª conferência
+        return null;
+    } });
+    await H2.ctx.sincronizar('manual');
+    const st2 = dados2['shc:status'] || {}, et2 = st2.etapas || {}, depois2 = Object.keys(et2).filter(k => k !== 'anuncios');
+    ok(st2.estado === 'erro' && st2.erro === 'outra_conta' && et2.vendasBrutas && et2.vendasBrutas.inicio > 0 && !et2.faturamento.inicio,
+        'a 1ª etapa passou pela conferência de antes (sessão da A) e a troca veio no meio dela');
+    ok(depois2.length > 5 && depois2.every(k => et2[k].estado === 'erro' && /mudou de conta/.test(et2[k].erro || '')),
+        'a etapa da troca e todas as seguintes param com "mudou de conta": nenhuma fica "ok" com a sessão da outra empresa (' + depois2.length + ' etapas)');
+
     console.log('d) certificado sem a conta da página');
     const C1 = montaFundo({ dados: { 'ml:conta': A, 'ml:contas': { [A]: { visto: 1 } } } });
     const r1 = await C1.envia({ acao: 'certificado', titulo: 'Certificado digital vencido', texto: 'Seu certificado digital venceu.' }, ABA);
@@ -158,6 +174,44 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         require(path.join(EXT, 'erp-cruzar.js'));
         await S.erpRetratoDaTela('tiny', [{ sku: 'R1', custo: 1 }], true, OUTRA);
         ok(mem['erp@' + OUTRA + ':produtos:tiny'] && !enviados.some(m => m.acao === 'erp_conferir'), 'retrato do ERP na empresa do começo, sem abrir o resumo na empresa aberta agora');
+
+        // 3.3.0 (revisão da junção): a loja do TikTok (tt:…) também passa pela camada da empresa, como o ERP. Antes a tt:conta era uma só e a
+        // loja da empresa principal aparecia na outra, com o lucro pelos custos da empresa aberta.
+        console.log('e2) a loja do TikTok é de 1 empresa só: a da conta do ML aberta na 1ª captura');
+        const fs = require('fs'), vm = require('vm');
+        global.CopilotoNucleo = undefined;
+        ['nucleo/util.js', 'nucleo/modelo.js', 'nucleo/tarifas.js', 'nucleo/motor.js', 'nucleo/conciliacao.js', 'nucleo/adaptador.js', 'nucleo/adaptadores/tiktok.js']
+            .forEach(f => vm.runInThisContext(fs.readFileSync(path.join(EXT, f), 'utf8'), { filename: f }));
+        const TT = require(path.join(EXT, 'tiktok.js'));
+        // saldo inventado com a forma do retrato real (retratos_tiktok/ tem dado de cliente e não vai para o GitHub)
+        const saldo = { code: 0, message: 'success', data: { amount: { amount: '1000.00', currency: 'BRL', symbol: 'R$',
+            format_with_symbol: 'R$ 1.000,00', format_without_symbol: '1.000,00' } } };
+        const LA = '7495000000000000001', LB = '7495000000000000002';
+        mem['ml:conta'] = A; await espera();
+        await TT.gravarCaptura('saldo', saldo, LA, Date.now() - 60e3);
+        ok(mem['tt:conta'] === LA && mem['tt:' + LA + ':saldo'] && !Object.keys(mem).some(k => /^tt@/.test(k)), 'empresa principal: as mesmas chaves de sempre (tt:<loja>:…)');
+        mem['ml:conta'] = OUTRA; await espera();
+        ok(await TT.ler() === null, 'a outra empresa não vê a loja do TikTok da principal');
+        await TT.gravarCaptura('saldo', saldo, LB, Date.now() - 60e3);
+        ok(mem['tt@' + OUTRA + ':conta'] === LB && mem['tt@' + OUTRA + ':' + LB + ':saldo'] && mem['tt:conta'] === LA && !mem['tt:' + LB + ':saldo'],
+            'a loja lida com a outra empresa aberta grava só nela (tt@<conta>:…); a da principal fica intacta');
+        const dB = await TT.ler();
+        ok(dB && dB.conta === LB && dB.saldo && dB.custos['c|sku|KIT-01'] && dB.custos['c|sku|KIT-01'].custo === 25, 'a outra empresa lê a loja dela, com os custos dela (KIT-01 = R$ 25)');
+        // Revisão da junção (achado da reconferência): a loja é da empresa da 1ª captura (tt:lojas), não da conta do ML aberta na hora. Antes, ler
+        // a loja da principal com o ML da outra empresa aberto gravava tt@<outra>:<loja>:… e a loja aparecia nas 2, partida e com os custos da outra.
+        const emTt = Date.now() - 30e3;
+        await TT.gravarCaptura('saldo', saldo, LA, emTt);
+        ok(mem['tt:' + LA + ':saldo'].lido_em === emTt && !Object.keys(mem).some(x => x.indexOf('tt@' + OUTRA + ':' + LA + ':') === 0) && mem['tt@' + OUTRA + ':conta'] === LB
+            && (await TT.ler()).conta === LB, 'a loja da principal lida com o ML da outra empresa aberto grava só na principal; a outra continua vendo só a loja dela');
+        delete mem['tt:lojas'];   // loja com dados de antes do tt:lojas: fica onde os dados estão
+        const LC = '7495000000000000003';
+        await TT.gravarCaptura('saldo', saldo, LA, emTt); await TT.gravarCaptura('saldo', saldo, LC, emTt);
+        ok(mem['tt:lojas'][LA] === '' && mem['tt:lojas'][LC] === OUTRA && !Object.keys(mem).some(x => x.indexOf('tt@' + OUTRA + ':' + LA + ':') === 0) && mem['tt@' + OUTRA + ':' + LC + ':saldo'],
+            'sem tt:lojas: a loja que já tem dados fica na empresa deles; a loja nova é da empresa da conta do ML aberta');
+        mem['ml:conta'] = A; await espera();
+        const dA = await TT.ler();
+        ok(dA && dA.conta === LA && dA.custos['c|sku|KIT-01'].custo === 10 && !Object.keys(dA.custos).some(x => /@/.test(x)), 'de volta à principal: a loja dela, com os custos dela (KIT-01 = R$ 10)');
+        ok(await TT.apagarDados() >= 4 && !Object.keys(mem).some(k => /^tt[:@]/.test(k)), '"Apagar dados do TikTok" apaga a loja das 2 empresas');
     }
 
     // Importação pelo fundo: o ML troca para a conta da OUTRA empresa no meio da leitura do Tiny → tudo vai para a empresa do começo.

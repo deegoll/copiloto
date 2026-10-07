@@ -468,35 +468,7 @@
         return out;
     };
 
-    // ── v3.3: detalhe da venda (/vendas/<pedido>/detalhe; mapa em tests/copiloto/_vendas_etiqueta/MAPA-VENDA.md) ──
-    // Lê SÓ os grupos de valores (account_rows-*) e o rótulo "Venda por publicidade" do produto. buyer_*, address_*, billing_*, notes e
-    // account_title (nº do pagamento) nunca são lidos.
-    const rsSinal = t => { const s = txtF(t), n = SHC.valorRS(s); return n === null ? null : (/^\s*[-−]/.test(s) ? -n : n); };
-    /** Estado do detalhe → { preco, tarifa, tarifaPct, acrescimo, frete, fretePagoComprador, cancelada, recebe, ads, pedidos } | null. */
-    SHC.mlVendaDetalhe = function (r) {
-        const pp = r && r.appProps && r.appProps.pageProps, resp = (pp && pp.response) || (r && r.response);
-        if (!resp || typeof resp !== 'object') return null;
-        const g = k => { const b = resp[k]; return b && typeof b === 'object' ? (b.data || b) : null; };
-        const rows = b => (b && Array.isArray(b.rows) ? b.rows : []);
-        const prod = g('account_rows-PRODUCT'), ch = g('account_rows-CHARGES'), su = g('account_rows-SURCHARGE'), sh = g('account_rows-SHIPMENT'), tot = g('account_rows-TOTAL');
-        if (!prod || !tot) return null;
-        const preco = rsSinal(prod.subTotal) !== null ? rsSinal(prod.subTotal) : r2(rows(prod).reduce((t, x) => t + (rsSinal(x.price) || 0), 0));
-        const recebe = rows(tot).length ? rsSinal(rows(tot)[0].price) : rsSinal(tot.subTotal);
-        if (!(preco > 0) || recebe === null) return null;
-        const pctM = /(\d+(?:,\d+)?)\s*%/.exec(rows(ch).map(x => txtF(x.label)).join(' '));
-        const acr = rows(su).find(x => /acr[eé]scimo/i.test(txtF(x.label)));
-        const pagoC = rows(sh).find(x => /comprador/i.test(txtF(x.label)) && rsSinal(x.price) > 0);
-        const ids = new Set(), ads = Object.keys(resp).some(k => {
-            const m = /^product_(\d+)_title_description$/.exec(k);
-            if (!m) return false;
-            ids.add(m[1]);
-            return !!txtF((g(k) || {}).advertisingLabel).trim();
-        });
-        Object.keys(resp).forEach(k => { const m = /^product_(\d+)_/.exec(k); if (m) ids.add(m[1]); });
-        return { preco, tarifa: ch ? -(rsSinal(ch.subTotal) || 0) : 0, tarifaPct: pctM ? parseFloat(pctM[1].replace(',', '.')) : null,
-            acrescimo: acr ? Math.abs(rsSinal(acr.price) || 0) : 0, frete: sh ? -(rsSinal(sh.subTotal) || 0) : 0, fretePagoComprador: pagoC ? rsSinal(pagoC.price) : 0,
-            cancelada: !!g('account_rows-CANCELLATION'), recebe, ads, pedidos: ids.size };
-    };
+    // v3.4: SHC.mlVendaDetalhe (detalhe da venda) foi para o ml-extrator.js: o Fechamento e o painel também conferem a tarifa nele.
     /** Linhas cob (Faturamento › cobranças) → { orderId: { venda (CVVML), mp (CVVPRC), parc (CVVFN) } }, estornos (B…) descontados. */
     SHC.cobPorPedido = function (linhas) {
         const out = {}, campo = { VVML: 'venda', VVPRC: 'mp', VVFN: 'parc' };

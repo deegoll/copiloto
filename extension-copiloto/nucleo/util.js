@@ -83,5 +83,8 @@
     /** Cópia simples (JSON) — os objetos do núcleo são dados puros. */
     const copia = v => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
 
-    return { r2, num, soma, dia, diaValido, somaDias, diasEntre, mes, hoje, copia };
+    /** Chave do SKU, a mesma regra do SHC.normalizaSku do Copiloto (store.js:15; o ml.test confere): sem "SKU:", maiúsculas, '|' vira '-'. */
+    const normalizaSku = s => String(s || '').replace(/^\s*SKU[:\s]*/i, '').trim().toUpperCase().replace(/\s+/g, ' ').replace(/\|/g, '-').slice(0, 80);
+
+    return { r2, num, soma, dia, diaValido, somaDias, diasEntre, mes, hoje, copia, normalizaSku };
 });

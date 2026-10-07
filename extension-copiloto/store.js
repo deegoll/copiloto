@@ -10,6 +10,8 @@
     // Conta do ML marcada em Ajustes como OUTRA EMPRESA (cfg.empresaSeparada = {sellerId: true}) tem só dela, enquanto ela é a conta aberta:
     //   · os custos por SKU: a chave lógica 'c|sku|X' é guardada como 'c|sku@<sellerId>|X';
     //   · o ERP (credencial e produtos lidos): 'erp:…' é guardado como 'erp@<sellerId>:…';
+    //   · 3.3.0 (junção): a loja do TikTok (o prefixo do canal, SHC.PREFIXO_CANAL.tiktok) como o ERP: é da empresa da conta do ML aberta quando a
+    //     tela do TikTok foi lida (o espaço entra depois de SHC.CANAIS, mais abaixo);
     //   · os números da empresa (SHC.CAMPOS_EMPRESA: imposto, margem, despesas fixas, plano da Shopee) em cfg.porConta[sellerId].
     // As contas não marcadas são a mesma empresa e dividem tudo, como sempre. O resto já é por conta (ml:anuncios:<c>, frete:<c>…) ou por
     // anúncio (c|ml|MLB…, ids únicos no ML). Tudo passa por area(): telas e fundo continuam usando a chave lógica; a de outra empresa some.
@@ -39,8 +41,12 @@
         const emp = () => (typeof forcada === 'string' ? Promise.resolve(forcada) : SHC.empresaSeparada());
         return areaDe(emp);
     };
+    // Junção 3.3.0: chave fora de ESPACOS é a mesma em toda empresa, então vai direto, sem ler a empresa antes. A leitura a mais atrasava
+    // cada get/set (o status gravado saía com o batimento de depois e quebrava o "1 por segundo"; a estimativa da sincronização mudava).
+    const daEmpresa = ks => [].concat(ks).some(k => typeof k === 'string' && ESPACOS.some(([pre]) => k.indexOf(pre) === 0));
     const areaDe = emp => ({
         async get(ks) {
+            if (ks !== null && ks !== undefined && !daEmpresa(ks)) return crua().get(ks);
             const e = await emp();
             if (ks === null || ks === undefined) {
                 const t = await crua().get(null), o = {};
@@ -53,13 +59,16 @@
             return o;
         },
         async set(obj) {
+            if (!daEmpresa(Object.keys(obj))) return crua().set(obj);
             const e = await emp();
             if (!e) return crua().set(obj);
             const o = {};
             Object.keys(obj).forEach(k => { o[SHC.chaveFisica(k, e)] = obj[k]; });
             return crua().set(o);
         },
-        async remove(ks) { const e = await emp(); return crua().remove(e ? [].concat(ks).map(k => SHC.chaveFisica(k, e)) : ks); },
+        async remove(ks) { if (!daEmpresa(ks)) return crua().remove(ks); const e = await emp(); return crua().remove(e ? [].concat(ks).map(k => SHC.chaveFisica(k, e)) : ks); },
+        // Só as chaves desta empresa, com o nome lógico (como o get(null)). getKeys é do Chrome 130+; sem ele, o get(null).
+        async getKeys() { const e = await emp(), c = crua(), ks = typeof c.getKeys === 'function' ? await c.getKeys() : Object.keys(await c.get(null)); return ks.map(k => SHC.chaveLogica(k, e)).filter(k => k !== null); },
     });
     SHC.areaEmpresa = area;   // para quem grava custo em lote (tiny.js) passar pelo mesmo caminho
     /**
@@ -242,11 +251,32 @@
     //   Os dados de quem usa a 3.2.1 ficam onde estão (sem migração). Canal novo SEMPRE leva o prefixo dele, antes da conta:
     //     ML           <familia>:<conta>[:<resto>]             ads:123 · fech:123:2026-09 · frete:123:hist (como sempre foi)
     //     outro canal  <prefixo>:<conta>:<familia>[:<resto>]   tt:765:afil · tt:765:ped:<pedido> (o jeito que o tiktok.js já grava)
-    //   Prefixo de cada canal em SHC.PREFIXO_CANAL (ids do copiloto-nucleo; tiktok → tt). Nenhuma família do ML começa com prefixo de
-    //   canal: o mesmo número de conta em dois canais nunca dá a mesma chave (teste_chave_canal.js confere).
+    //   Prefixo de cada canal em SHC.PREFIXO_CANAL (sai de SHC.CANAIS; ids do copiloto-nucleo; tiktok → tt). Nenhuma família do ML começa
+    //   com prefixo de canal: o mesmo número de conta em dois canais nunca dá a mesma chave (teste_chave_canal.js confere).
     //   Código NOVO monta a chave por SHC.chaveConta(familia, conta, canal, resto). As chamadas antigas do ML ('ads:' + conta …) ficam
     //   como estão: dão o mesmo nome. (SHC.chave é outra coisa: o custo c|<canal>|<id>; chave por anúncio já leva o canal.)
-    SHC.PREFIXO_CANAL = { ml: '', tiktok: 'tt', shopee: 'shopee', magalu: 'magalu', amazon: 'amazon', shein: 'shein', temu: 'temu' };
+    // v3.3 (E1): registro ÚNICO dos canais (Ajustes, filtro e prefixo da chave). Canal novo = 1 linha a mais.
+    //   telas: o que o canal lê, com os nomes de hoje de cada site (Ajustes); perm: permissões opcionais (null = nenhuma);
+    //   ads_nas_tarifas: true = o Ads vem nas cobranças (fatura do ML); false = campo manual por mês (TikTok).
+    SHC.CANAIS = [
+        { id: 'ml', nome: 'Mercado Livre', curto: 'ML', prefixo: '', cor: '#B8890A', perm: null, ads_nas_tarifas: true,
+            telas: ['Vendas', 'Faturamento', 'Anúncios', 'Pós-venda', 'Promoções', 'Mercado Ads', 'Full', 'Reputação', 'Afiliados', 'Canal de transmissão', 'Mercado Pago'] },
+        { id: 'tiktok', nome: 'TikTok Shop', curto: 'TikTok', prefixo: 'tt', cor: '#0E9488', ads_nas_tarifas: false,
+            perm: { permissions: ['scripting'], origins: ['https://seller-br.tiktok.com/*'] },   // = TT.PERM (tiktok.js)
+            // E9: só as telas que o Copiloto lê de fato (TT.TELA do tiktok.js, nomes de 03/10); o chat de Mensagens e os Anúncios da loja ficam fora
+            telas: ['Finanças › Resumo financeiro', 'Finanças › Demonstrativos', 'Finanças › Em espera', 'Finanças › detalhe do pedido', 'Pedidos', 'Gerenciar produtos',
+                'Avaliação da integridade da conta', 'Pontuação de desempenho da loja', 'Gerenciar devoluções e reembolsos', 'Afiliados', 'Campanhas', 'Lista de tarefas da Página inicial'] },
+    ];
+    // Os do registro + os canais do núcleo ainda sem leitura (prefixo = id), já reservados na chave. Mesmos nomes e valores da 3.2.1.
+    SHC.PREFIXO_CANAL = {};
+    SHC.CANAIS.forEach(c => { SHC.PREFIXO_CANAL[c.id] = c.prefixo; });
+    ['shopee', 'magalu', 'amazon', 'shein', 'temu'].forEach(id => { SHC.PREFIXO_CANAL[id] = id; });
+    // 3.3.0 (junção, multi-empresa): a loja do TikTok na camada da empresa (ver ESPACOS no começo do arquivo).
+    { const t = SHC.PREFIXO_CANAL.tiktok; ESPACOS.push([t + ':', e => t + '@' + e + ':', new RegExp('^' + t + '@[0-9]+:')]); }
+    // Canais que entram no filtro. ML sempre. Canal com permissão opcional só com as 3: cfg.modulos[id] === true, fora de
+    // SHC.MODULOS_TRAVADOS (calc.js) e perms[id] === true (o painel lê com chrome.permissions.contains(canal.perm)). Travado = ['ml'].
+    SHC.canaisLigados = (cfg, perms) => SHC.CANAIS.filter(c => !c.perm || (SHC.MODULOS_TRAVADOS.indexOf(c.id) < 0
+        && !!(cfg && cfg.modulos && cfg.modulos[c.id] === true) && !!(perms && perms[c.id] === true))).map(c => c.id);
     SHC.chaveConta = function (familia, conta, canal, resto) {
         const p = SHC.PREFIXO_CANAL[canal || 'ml'], fim = resto ? ':' + resto : '';
         if (typeof p !== 'string') throw new Error('SHC.chaveConta: canal desconhecido (' + canal + ')');   // canal errado nunca cai na chave do ML

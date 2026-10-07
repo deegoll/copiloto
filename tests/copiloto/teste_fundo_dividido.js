@@ -1,7 +1,8 @@
 // 02/10: o background.js virou só o carregador e o código foi para fundo/ (partes por assunto, cortadas em instrução de topo).
-// (a) a junção das partes, na ordem, é IGUAL byte a byte ao background.js do commit 7f7f312 (do git; sem git, da cópia guardada em
-// _referencia_divisao/background.js.orig); (b) o carregador só tem o importScripts das partes, na ordem; (c) o fundo sobe no ambiente de
-// mentira e registra os mesmos listeners, funções e alarmes que o background.js inteiro de antes; (d) nada que roda na carga usa nome de
+// (a) a junção das 14 partes do commit 8eefe81, guardadas em _referencia_divisao/fundo-8eefe81/, é IGUAL byte a byte ao background.js
+// do commit 7f7f312 (cópia em _referencia_divisao/background.js.orig); com git, cada cópia também é conferida com o próprio commit. Assim
+// a prova vale sem git; o fundo/ de hoje só pode mudar na 01-carga-e-eventos.js, as outras 13 = cópia guardada (3.3.0, E0); (b) o carregador só tem o importScripts das partes, na ordem;
+// (c) o fundo sobe no ambiente de mentira e registra os mesmos listeners (3.3.0, E8: mais só os do TikTok), funções e alarmes que o background.js inteiro de antes; (d) nada que roda na carga usa nome de
 // topo (função, const) de parte POSTERIOR — num arquivo só, a função declarada no fim já existe no começo (içamento); dividido, não.
 // Rodar: node tests/copiloto/teste_fundo_dividido.js
 'use strict';
@@ -9,6 +10,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm'), { execFile
 const montaFundo = require('./fundo_falso');
 const EXT = path.join(__dirname, '../../extension-copiloto'), FUNDO = path.join(EXT, 'fundo');
 const COMMIT = '7f7f312', REF = path.join(__dirname, '_referencia_divisao', 'background.js.orig');
+const DIVISAO = '8eefe81', REF_PARTES = path.join(__dirname, '_referencia_divisao', 'fundo-' + DIVISAO);
 // Funções de topo NOVAS no fundo depois da divisão (o resto continua igual ao background.js de 7f7f312). Função nova no fundo entra aqui,
 // com a versão: assim o teste ainda pega função perdida ou criada por engano, e a divisão (a) continua provada pela cópia de referência.
 const NOVAS = {
@@ -148,15 +150,42 @@ function cargaTardia(partes) {
 }
 
 (async () => {
-    console.log('a) junção das partes = background.js do commit ' + COMMIT);
+    console.log('a) junção das partes guardadas do ' + DIVISAO + ' = background.js do commit ' + COMMIT);
     const ref = fs.readFileSync(REF);
-    let orig = null;
-    try { orig = execFileSync('git', ['show', COMMIT + ':extension-copiloto/background.js'], { cwd: path.join(__dirname, '../..'), stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1 << 24 }); } catch (e) { orig = null; }
+    const gitShow = alvo => { try { return execFileSync('git', ['show', alvo], { cwd: path.join(__dirname, '../..'), stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1 << 24 }); } catch (e) { return null; } };
+    let orig = gitShow(COMMIT + ':extension-copiloto/background.js');
+    const comGit = !!orig;
     if (orig) ok(orig.equals(ref), 'a cópia de referência (_referencia_divisao/background.js.orig) = git show ' + COMMIT + ' (' + orig.length + ' bytes)');
-    else { console.log('  (sem git: compara com a cópia de referência)'); orig = ref; }
+    else { console.log('  (sem git: compara com as cópias de referência)'); orig = ref; }
+    const guardadas = fs.readdirSync(REF_PARTES).sort(), tGuardadas = guardadas.map(f => fs.readFileSync(path.join(REF_PARTES, f)));
+    ok(guardadas.length === 14 && Buffer.concat(tGuardadas).equals(orig), 'junção das ' + guardadas.length + ' partes guardadas em _referencia_divisao/fundo-' + DIVISAO + '/, na ordem = background.js do ' + COMMIT + ', byte a byte');
+    if (comGit) {
+        const dif = guardadas.filter((f, i) => { const g = gitShow(DIVISAO + ':extension-copiloto/fundo/' + f); return !g || !g.equals(tGuardadas[i]); });
+        ok(!dif.length, 'cada parte guardada = git show ' + DIVISAO + ':extension-copiloto/fundo/<parte>' + (dif.length ? ' (diferente: ' + dif.join(', ') + ')' : ''));
+    }
     const partes = fs.readdirSync(FUNDO).sort(), textos = partes.map(f => fs.readFileSync(path.join(FUNDO, f)));
     ok(partes.length >= 2 && partes.every((f, i) => f.startsWith(String(i + 1).padStart(2, '0') + '-') && /^\d\d-[a-z0-9-]+\.js$/.test(f)),
         partes.length + ' partes em fundo/, numeradas 01..' + String(partes.length).padStart(2, '0') + ' e só .js');
+    // Trava o fundo de hoje: só a 01 (carga e eventos) muda livre (E8 e E10). As outras têm conta de dinheiro (03-faturamento...).
+    // Uma parte que precisar mudar entra em MUDADAS com o sha256 da parte nova e o motivo ao lado (a 3.3.0 juntou as 8 abaixo, da nuvem).
+    const LIVRE = '01-carga-e-eventos.js', MOTIVO_NUVEM = 'v3.3 multi-empresa, Full pela saúde, experiência e contestação (sessão na nuvem de 07/10, juntada na 3.3.0)';
+    const MUDADAS = {
+        // trava do frete (07/10, achado da reconferência): o R$ de conferir:<conta> deixa de fora todo frete de envio (SHC.fech.freteSemChamado),
+        // como o total do Fechamento; as cobranças e a fatura não mudam (era 181f0bba…)
+        '03-faturamento.js': ['109498eba3b4bef74f42531fb84bbad53232697a76373f6a7f7231fe3dacd976', MOTIVO_NUVEM + '; trava do frete no R$ de conferir:<conta>'],
+        '04-notas-e-vendas.js': ['ff48695f2aed371de42b2791f7ba789ac71ca9bdcb263c93fbba2e696c137ee5', MOTIVO_NUVEM],
+        '07-alertas-promocoes-full.js': ['bc720a36842536c3ef14992645e41cd65337ec442a655539c90f805b76847e8e', MOTIVO_NUVEM],
+        // revisão da junção (07/10): a conferência da conta depois de cada etapa e no fim do histórico é sem o guardado de 60 s (era 1983b6d8…)
+        '08-sincronizacao.js': ['395293adee8c0cdd70182f125515ab9dc195144dec25140ecb37e3e25efe5e1b', MOTIVO_NUVEM + '; conferência sem o guardado depois de cada etapa'],
+        '09-custos-erp.js': ['8d321ea6750a5572baf8bc3dba44515d8eaff3fffab88124eecd88856faf7c3c', MOTIVO_NUVEM],
+        '10-status-saude-posvenda.js': ['32f29550fc6104352264903131ad4c3eacc319d70c820d454263a7a51866b0ec', MOTIVO_NUVEM],
+        '13-aba-do-ml-e-canal.js': ['66e8e6f2cb71bcf6133d5edb69b801ab9b233e28ab85f5a6cc03ff64e9cd85bd', MOTIVO_NUVEM],
+        '14-mensagens.js': ['9aec476741b80807c1404957bcf798523fb689190ac0da7e617705b58abec049', MOTIVO_NUVEM]
+    };
+    const sha = b => require('crypto').createHash('sha256').update(b).digest('hex');
+    const mudou = guardadas.filter((f, i) => { const a = path.join(FUNDO, f); if (f === LIVRE) return false; if (!fs.existsSync(a)) return true;
+        const b = fs.readFileSync(a); return !(b.equals(tGuardadas[i]) || (MUDADAS[f] && sha(b) === MUDADAS[f][0])); });
+    ok(guardadas.length === 14 && !mudou.length, 'fundo/02..14 = partes guardadas do ' + DIVISAO + ' ou a versão travada em MUDADAS (sha256, com o motivo); só a ' + LIVRE + ' muda livre' + (mudou.length ? ' (mudou ou sumiu: ' + mudou.join(', ') + ')' : ''));
     // Depois da divisão o fundo evolui: a junção é a de 7f7f312 + as funções de NOVAS (e mudanças dentro das que já existiam).
     const junta = Buffer.concat(textos).toString('utf8'), declaradas = src => new Set((src.match(/^(?:async )?function\s+([\w$]+)/gm) || []).map(x => x.replace(/^(async )?function\s+/, '')));
     const antes = declaradas(orig.toString('utf8')), agora = declaradas(junta);
@@ -176,8 +205,14 @@ function cargaTardia(partes) {
 
     console.log('c) o fundo sobe igual ao de antes');
     const velho = montaFundo({ background: orig.toString('utf8') }), novo = montaFundo();
-    const qtd = f => Object.keys(f.registros).map(k => k + ' ' + f.registros[k].length).join(', ');
-    ok(qtd(novo) === qtd(velho) && Object.keys(novo.registros).every(k => novo.registros[k].length >= 1), 'listeners do Chrome registrados na carga: ' + qtd(novo));
+    // 3.3.0 (E8): o TikTok destravado (SHC.tt.instalarFundo, na 01) põe na carga 1 ouvinte de mensagens, os 2 de permissão e o do storage;
+    // os listeners a mais são exatamente esses (o corpo chama o TT), e fora eles o fundo registra o mesmo que o background.js de antes.
+    const doTT = f => /\bTT\.(gravarCaptura|sincronizarScripts)\(/.test(String(f));
+    const qtd = (f, ehTT) => Object.keys(f.registros).map(k => k + ' ' + f.registros[k].filter(x => !!ehTT === doTT(x)).length).join(', ');
+    const DE_ANTES = ['onMessage', 'onInstalled', 'onStartup', 'onAlarm'];
+    ok(qtd(novo) === qtd(velho) && DE_ANTES.every(k => novo.registros[k].filter(x => !doTT(x)).length >= 1), 'listeners do Chrome registrados na carga, fora os do TikTok: ' + qtd(novo));
+    ok(Object.keys(velho.registros).every(k => !velho.registros[k].some(doTT)) && qtd(novo, true) === 'onMessage 1, onInstalled 0, onStartup 0, onAlarm 0, permissions.onAdded 1, permissions.onRemoved 1, storage.onChanged 1',
+        'os listeners a mais são exatamente os do TikTok: ' + qtd(novo, true));
     const funcoes = f => Object.keys(f.ctx).filter(k => typeof f.ctx[k] === 'function').sort().join();
     const comNovas = f => funcoes(f).split(',').concat(f === velho ? Object.keys(NOVAS) : []).sort().join();
     ok(comNovas(novo) === comNovas(velho) && funcoes(novo).split(',').length > 100, 'mesmas funções de topo no fundo, mais as novas listadas (' + funcoes(novo).split(',').length + ')');

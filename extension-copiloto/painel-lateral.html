@@ -77,6 +77,15 @@
   .menu-abas .rod{grid-column:1/-1;font-size:11px;color:#64748B;text-align:center;padding-top:6px;border-top:1px solid #F1F5F9}
   .menu-abas .rod .lnk{font-size:11px}
   .corpo{flex:1;overflow:auto;padding:12px}
+  /* v3.3 (E2): filtro de canal (só com 2 canais). Quebra a linha em vez de rolar; abaixo de 440 px vira "ML" e "TikTok" (o nome inteiro no title) */
+  .fc{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0 0 8px}
+  .fc>button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;box-shadow:inset 0 0 0 1px #E2E8F0;background:#fff;color:#475569;font-size:11.5px;font-weight:600;line-height:1.35;white-space:nowrap}
+  .fc>button>i{width:6px;height:6px;border-radius:50%;background:var(--c);flex:none}
+  .fc>button:hover{box-shadow:inset 0 0 0 1px #CBD5E1;color:var(--tinta)}.fc>button[aria-pressed="true"]{background:var(--tinta);color:#fff;box-shadow:none}
+  .fc>button:focus-visible{outline:2px solid var(--azul);outline-offset:1px}
+  .fc .nc{display:none}@media (max-width:440px){.fc .nl{display:none}.fc .nc{display:inline}}
+  .escopo,.recnota.escopo{margin:0 0 8px}.so-ml{display:inline-block;font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 8px;background:#F2F4F7;color:#344054;white-space:nowrap}
+  .canal-l{display:flex;align-items:center;gap:6px;margin:12px 0 6px;font-size:11.5px;font-weight:700;color:#475569}.canal-l i,.tb i.pc{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--c);flex:none}.tb i.pc{margin-right:6px;vertical-align:middle}   /* v3.3 (E16): rótulo e bolinha do canal na aba Afiliados (filtro Todos) */
   .aba{display:none}.aba.on{display:block}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
   .kpi{all:unset;cursor:pointer;background:var(--card);border:1px solid var(--linha);border-radius:12px;padding:7px 8px;text-align:left}
@@ -175,6 +184,12 @@
   .canais button.on{box-shadow:inset 0 0 0 1.5px currentColor}
   .alerta{grid-column:1 / -1;font-size:11px;color:#92400E;background:var(--ambar-bg);border-radius:7px;padding:4px 7px}
   .linha-comp{border-top:1px dashed var(--linha);margin-top:7px;padding-top:6px}.linha-comp b{display:block;font-size:12px;line-height:1.3}.linha-comp small{display:block;color:var(--suave);font-size:10.5px}
+  /* 3.3.0 (E12): aba Canal com 2 canais (comparação): linhas métrica × canal, barra fina na cor do canal, legenda do gráfico */
+  #canalCmp .cmp-l{display:grid;grid-template-columns:minmax(58px,1fr) 2fr 2fr;gap:6px;align-items:start;border-top:1px dashed var(--linha);margin-top:6px;padding-top:6px;font-size:12px}#canalCmp .cmp-cab{border-top:0;margin-top:0;padding-top:0}#canalCmp .cmp-cab .cmp-v{font-weight:600;color:var(--suave)}
+  #canalCmp .cmp-r{color:var(--suave);font-weight:600}#canalCmp .cmp-v{min-width:0;font-variant-numeric:tabular-nums;font-weight:700}#canalCmp .cmp-v.ok{color:var(--verde)}#canalCmp .cmp-v small{display:block;color:var(--suave);font-weight:500;font-size:10.5px}
+  #canalCmp .cb{display:block;height:4px;border-radius:99px;background:var(--c);margin-top:3px}#canalCmp .cmp-fr{margin:0 0 8px;padding-left:18px;font-size:12px;line-height:1.4}#canalCmp .cmp-fr li{margin:2px 0}
+  .pt-c{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--c);margin-right:4px;vertical-align:1px}
+  #canalEvolucao svg{width:100%;height:auto;display:block}#canalEvolucao .leg{display:flex;gap:10px;font-size:11px;color:var(--suave);margin-top:4px}
   /* Aba Canal: tipo da transmissão com as cores das etiquetas da Agenda */
   .tipo-canal{display:inline-block;padding:0 7px;border-radius:999px;font-size:10.5px;font-weight:700;background:#F1F5F9;color:#475569}.tipo-canal.t-channel{background:#DBEAFE;color:#1E40AF}.tipo-canal.t-story{background:#FCE7F3;color:#9D174D}.tipo-canal.t-ambos{background:#EDE9FE;color:#5B21B6}
   button:focus-visible,.lnk:focus-visible,.kpi:focus-visible,.chip:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
@@ -221,6 +236,7 @@
   .medidas{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.medidas div{background:#F8FAFC;border-radius:9px;padding:7px 9px;font-size:12px}.medidas small{display:block;color:var(--suave);font-size:10.5px;font-weight:700;margin-bottom:2px}
   .aviso-custo{margin:8px 0 0;font-size:12px;font-weight:650;color:#92400E;background:var(--ambar-bg);border-radius:8px;padding:6px 9px}
   .linha-sem{display:flex;gap:8px;align-items:center;border-top:1px dashed var(--linha);padding:6px 0}.linha-sem>span:first-child{flex:1;min-width:0}.linha-sem b{display:block;font-size:12px;line-height:1.3}.linha-sem small{color:var(--suave);font-size:10.5px}
+  .tt-lig{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}.tt-lig .cst-ed{grid-row:auto}.tt-lig .inp{width:118px}   /* 3.3.0 (E14): "ligar à mão" um produto do TikTok (SKU ou só o custo) */
   .conc{background:#F8FAFC;border-radius:9px;padding:7px 9px;margin-top:6px;font-size:12px}.conc p{margin:0 0 4px}.conc .alerta{display:block;margin:4px 0}
   .linha-tempo{margin-top:4px;border-left:2px solid #CBD5E1;padding-left:7px}
   /* v3.1 competição pela tela "Alterar anúncio": KPIs, "O que fazer para ganhar" e a linha do tempo por mês (verde ganhando, cinza dividindo, vermelho perdendo) */
@@ -265,6 +281,17 @@
   .fseta{font-weight:750;font-size:11px;white-space:nowrap}.fseta.up{color:var(--verde)}.fseta.down{color:var(--verm)}.fseta.eq{color:var(--suave)}
   .seg{display:inline-flex;border:1px solid #D0D5DD;border-radius:8px;overflow:hidden;flex:none}.seg button{all:unset;cursor:pointer;padding:3px 8px;font-size:11px;font-weight:600;color:#344054}
   .seg button[aria-pressed="true"]{background:var(--tinta);color:#fff}.seg button:focus-visible{outline:2px solid var(--azul)}
+  /* 3.3.0 (E13): Ficha do SKU */
+  .ficha-volta{margin:0 0 6px}.ficha-tit{margin:0 0 2px;font-size:15px;line-height:1.3}.ficha-per{margin:6px 0 8px}.ficha-tab th:not(:first-child){width:31%}.ficha-abrir{font:inherit;color:var(--tinta);text-align:left}.ficha-abrir:hover{color:var(--azul)}
+  .ficha-vrs{list-style:none;margin:0;padding:0}.ficha-vrs li{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid #F1F5F9;font-size:12px}.ficha-vrs li:first-child{border-top:0}.ficha-vrs small{display:block;color:var(--suave);font-size:10.5px}.ficha-filho{padding-left:14px!important}
+  .ficha-pos{margin:-2px 0 8px}
+  /* a lupa: à direita da linha dos canais (as 2 flutuam; o que vem depois limpa). Sem a linha (1 canal), some junto. */
+  #filtroCanal:not([hidden]){float:left;width:calc(100% - 34px)}#filtroCanal[hidden]+.fl{display:none}.fl~*{clear:both}
+  .fl{float:right;position:relative;margin:0 0 8px}.fl-b{all:unset;cursor:pointer;display:grid;place-items:center;width:26px;height:22px;border-radius:999px;box-shadow:inset 0 0 0 1px #E2E8F0;background:#fff;color:#475569}
+  .fl-b:hover,.fl-b[aria-expanded="true"]{color:var(--tinta);box-shadow:inset 0 0 0 1px #CBD5E1}.fl-b:focus-visible{outline:2px solid var(--azul);outline-offset:1px}.fl-b svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round}
+  .fl-c{position:absolute;right:0;top:28px;z-index:6;width:min(340px,calc(100vw - 40px));box-sizing:border-box;background:#fff;border:1px solid var(--linha);border-radius:10px;box-shadow:0 8px 24px rgba(15,23,42,.14);padding:8px}
+  .fl-c .busca{margin:0 0 6px}.fl-v{margin:2px}.fl-l{list-style:none;margin:0;padding:0;max-height:260px;overflow:auto}.fl-l li+li{border-top:1px solid #F1F5F9}
+  .fl-l button{display:block;width:100%;text-align:left;padding:6px 2px;font:inherit;color:var(--tinta)}.fl-l b{display:block;font-size:12px;line-height:1.3;font-weight:650}.fl-l small{display:block;color:var(--suave);font-size:10.5px}
   .fam-svg{width:100%;height:auto;display:block;margin-top:8px}
   .fam-sku{border-top:1px dashed var(--linha);padding:6px 0;font-size:12px}.fam-sku>b{display:block;font-size:12px;line-height:1.3}.fam-sku small{display:block;color:var(--suave);font-size:10.5px}
   .causas{margin:4px 0 0;padding-left:18px;font-size:11.5px;color:#344054}.causas li{margin:2px 0}
@@ -398,11 +425,11 @@
   #promo .ch .selo{margin:0 0 0 auto}#promo .ajuda{all:unset;cursor:help;margin-left:auto;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1px #CBD5E1;color:#64748B;font-size:11px;font-weight:700;text-align:center;line-height:20px;flex:none}
   #promo .acao .tx b{white-space:normal;overflow:hidden;text-overflow:clip;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}#promo .acao .tx>span{margin-top:1px}   /* lista densa: até 2 linhas, o nome inteiro no title */
   #afiliados .rlt b,#afiliados .acao .tx b{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}   /* nome inteiro: quebra a linha, nunca "…" */
-  /* v3.2 aba TikTok: pedido que abre (details nativo) com a conta, no mesmo visual das linhas do ML */
-  #tiktok details.tt-ped{border-top:1px dashed var(--linha);margin-top:7px;padding-top:6px}#tiktok details.tt-ped summary{list-style:none;cursor:pointer}#tiktok details.tt-ped summary::-webkit-details-marker{display:none}
-  #tiktok details.tt-ped summary small{display:block;color:var(--suave);font-size:10.5px}#tiktok details.tt-ped[open] summary small::after{content:" ▴"}#tiktok details.tt-ped:not([open]) summary small::after{content:" ▾"}
-  #tiktok .conta-ped{background:var(--bg);border-radius:9px;padding:6px 8px;margin-top:6px;font-size:12px}#tiktok .conta-ped .selo{margin:0 0 0 4px}
-  #tiktok details.tt-mais>summary{display:inline-block;margin-top:8px}#tiktok .rlt b{display:block;-webkit-line-clamp:unset;white-space:normal;overflow:visible;overflow-wrap:anywhere}#tiktok .sim .inp{max-width:90px}
+  /* 3.3.0: pedido do TikTok que abre (details nativo) com a conta, no "Lucro de cada pedido" da Conciliação (filtro TikTok); E21: sem o CSS da aba velha */
+  #conciliacao details.tt-ped{border-top:1px dashed var(--linha);margin-top:7px;padding-top:6px}#conciliacao details.tt-ped summary{list-style:none;cursor:pointer}#conciliacao details.tt-ped summary::-webkit-details-marker{display:none}
+  #conciliacao details.tt-ped summary small{display:block;color:var(--suave);font-size:10.5px}#conciliacao details.tt-ped[open] summary small::after{content:" ▴"}#conciliacao details.tt-ped:not([open]) summary small::after{content:" ▾"}
+  #conciliacao .tt-ped .conta-ped{background:var(--bg);border-radius:9px;padding:6px 8px;margin-top:6px;font-size:12px}#conciliacao .tt-ped .conta-ped .selo{margin:0 0 0 4px}
+  #conciliacao .tt-ped .rlt b{display:block;-webkit-line-clamp:unset;white-space:normal;overflow:visible;overflow-wrap:anywhere}
   #promo .pr-v{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;flex:none}#promo .pr-v b{display:block;font-size:13.5px;color:#B91C1C}#promo .pr-v.at b{color:#92400E}#promo .pr-v small{font-size:10.5px;color:#64748B}
   #promo .pr-mais{display:flex;align-items:center;gap:8px;border-top:1px solid #F1F5F9;padding:8px 0 0;margin-top:2px;font-size:12px;color:var(--suave)}#promo .pr-mais .lnk{margin-left:auto}
   #promo .pr-abaixo{margin:4px 0 0}#promo .est{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--suave);padding:4px 0}#promo .est b{color:var(--tinta)}
@@ -493,9 +520,11 @@
   #posvenda .tb .dica{color:#1D4ED8;font-size:11px;font-weight:500}#posvenda .tb .dica::before{content:none}
   #posProdutos .tb td.pc{font-weight:600}#posProdutos .tb td.pc.pr{color:#B91C1C;font-weight:750}
   body.larga #listaPos{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:12px;align-items:start}body.larga #listaPos>*{grid-column:1/-1}body.larga #listaPos>#posMotivos,body.larga #listaPos>#posProdutos{grid-column:auto}
+  #listaPos[data-canal="tiktok"]~[data-abrir-posvenda]{display:none}   /* 3.3.0 (E18): no filtro TikTok o botão do ML sai; o do TikTok vem dentro do cartão */
   /* v2.9 aba Saúde: termômetro do ML (5 faixas) e cada variável da reputação contra o limite */
   .lider{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;line-height:1.6;padding:0 8px;border-radius:999px;background:#FEF9C3;color:#854D0E;box-shadow:inset 0 0 0 1px #FDE68A;white-space:nowrap}
   #rep-saude .ch{flex-wrap:wrap}#rep-saude .ch .selo{margin-bottom:0}
+  #tt-saude .ch{flex-wrap:wrap}#tt-saude .ch .selo{margin-bottom:0}   /* v3.3 (E20): a saúde da loja do TikTok, ao lado da reputação do ML */
   .termo{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;align-items:end;margin:26px 0 4px;position:relative}
   .termo i{display:block;height:10px;border-radius:3px;opacity:.35}
   .termo i.on{height:16px;opacity:1;box-shadow:0 0 0 2px var(--card),0 0 0 3px var(--tinta);position:relative}
@@ -565,6 +594,7 @@
   #geral .kpi.meta .v{font-size:17px;font-weight:750;margin:2px 0;font-variant-numeric:tabular-nums;white-space:nowrap}#geral .kpi .v small{display:inline;font-size:12px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--suave)}
   #geral .kpi.meta .medidor{height:8px;margin:6px 0 5px}#geral .medidor i.az{background:#1D4ED8}#geral .kpi .fseta{font-size:11.5px;margin-left:4px}
   #geral .kpi.kn .v{font-size:17px}#geral .kpi.kn .s{white-space:normal}
+  #geral .medidor.gc{display:flex;gap:1px;height:8px;margin:6px 0 5px}#geral .medidor.gc>i{border-radius:0;flex:none}#geral .mods .medidor.gc{height:4px;margin:3px 0 0}#geral .tag.cn{margin-left:4px}#geral .cdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}   /* 3.3.0 (E10): a Geral por canal (barra dividida pela cor de cada canal, a etiqueta do canal, o ponto do rateio) */
   #geralPrecisa .ch .selo{margin:0 0 0 2px}#geralPrecisa .acao .tx b{font-size:13px;white-space:normal;overflow:hidden;text-overflow:clip;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}#geralPrecisa .acao .tx>span{margin-top:2px}
   #geral .tag{display:inline-block;font-size:10px;font-weight:750;line-height:1.6;padding:0 6px;margin-right:6px;border-radius:5px;background:#F1F5F9;color:#475569;text-transform:uppercase;letter-spacing:.03em;vertical-align:1px}
   #geral .acao .prazo{margin-right:6px;vertical-align:1px}#geralPrecisa .rs{margin-top:6px}
@@ -598,6 +628,15 @@
   #ajustes .aj-sw input.tg:disabled{opacity:.5;cursor:default}#ajustes .aj-sw.trava{cursor:default}
   #listaModulos .aj-sw:has(input:not(:checked)) .nm,#listaModulos .aj-sw:has(input:not(:checked))>svg.i{opacity:.55}
   #ajustes #salvarModulos{margin-top:6px}#cardSyncAj #infoSync{margin:4px 0 0}
+  /* 3.3.0 (E9): Canais de venda (bolinha da cor do canal, "N telas" com o balão) e os meses do Ads do TikTok */
+  #listaCanais .aj-sw{cursor:default}#listaCanais .aj-sw:first-child{border-top:0;padding-top:2px}#listaCanais .aj-cor{width:10px;height:10px;border-radius:50%;flex:none}
+  #listaCanais .aj-sw.off .nm,#listaCanais .aj-sw.off .aj-cor{opacity:.55}#listaCanais .aj-tl{text-decoration:underline dotted;cursor:help}#listaCanais .aj-fora{margin:0 0 6px}#listaCanais #ttApagar{margin:6px 0 0}
+  #cardCanais .ch .d{margin-top:0}#cardCanais .ch .d+.ajuda{margin-left:6px}
+  #ajustes #salvarCanais{margin-top:6px}#cardAdsTT details.aj-mais>summary{cursor:pointer;color:var(--azul);font-size:12px;font-weight:650;margin:0 0 8px;list-style:none}#cardAdsTT details.aj-mais>summary::-webkit-details-marker{display:none}
+  #cardAdsTT .aj-pre .inp{padding-right:11px}#cardAdsTT #erroAdsTT:empty{display:none}
+  /* 3.3.0 (C1): quadro do TikTok antes de ligar (<dialog> nativo), embaixo como o .modal */
+  dialog.modal{border:0;margin:auto 0 0;max-width:100%;box-sizing:border-box;color:var(--tinta)}dialog.modal::backdrop{background:rgba(11,18,32,.45)}body.larga dialog.modal{margin:auto auto 0}
+  #quadroTT p{margin:0 0 8px;font-size:12.5px;line-height:1.45}#quadroTT .qt-aviso{background:var(--ambar-bg);border-left:3px solid var(--ambar);border-radius:6px;padding:7px 9px}
   #ajustes details.aj-vm>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px}#ajustes details.aj-vm>summary::-webkit-details-marker{display:none}
   #ajustes details.aj-vm>summary::after{content:"Ver mais";margin-left:auto;color:var(--azul);font-size:12px;font-weight:650;white-space:nowrap}#ajustes details.aj-vm[open]>summary::after{content:"Ver menos"}
   #ajustes details.aj-vm>summary:focus-visible{outline:2px solid #93C5FD;outline-offset:2px;border-radius:6px}
@@ -666,7 +705,6 @@
         <button data-a="saude" role="tab" aria-selected="false" aria-controls="saude" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-saude"/></svg>Saúde<span class="b" hidden></span></button>
         <button data-a="conciliacao" role="tab" aria-selected="false" aria-controls="conciliacao" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-conciliacao"/></svg>Conciliação<span class="b" hidden></span></button>
         <button data-a="canal" role="tab" aria-selected="false" aria-controls="canal" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-canal"/></svg>Canal<span class="b" hidden></span></button>
-        <button data-a="tiktok" role="tab" aria-selected="false" aria-controls="tiktok" tabindex="-1" hidden><svg class="i" aria-hidden="true"><use href="#i-tiktok"/></svg>TikTok<span class="b" hidden></span></button>
         <button data-a="ajustes" role="tab" aria-selected="false" aria-controls="ajustes" tabindex="-1"><svg class="i" aria-hidden="true"><use href="#i-ajustes"/></svg>Ajustes<span class="b" hidden></span></button>
       </div>
       <button class="todas" id="todasAbas" aria-expanded="false" aria-controls="menuAbas" aria-haspopup="true" title="Ver todas as abas"><svg class="i" aria-hidden="true"><use href="#i-mais"/></svg>Todas<span class="b" hidden></span></button>
@@ -682,7 +720,6 @@
         <button data-a="saude" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-saude"/></svg>Saúde<span class="b" hidden></span></button>
         <button data-a="conciliacao" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-conciliacao"/></svg>Conciliação<span class="b" hidden></span></button>
         <button data-a="canal" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-canal"/></svg>Canal<span class="b" hidden></span></button>
-        <button data-a="tiktok" role="menuitem" hidden><svg class="i" aria-hidden="true"><use href="#i-tiktok"/></svg>TikTok<span class="b" hidden></span></button>
         <button data-a="ajustes" role="menuitem"><svg class="i" aria-hidden="true"><use href="#i-ajustes"/></svg>Ajustes<span class="b" hidden></span></button>
         <div class="rod">Esconder o que você não usa: Ajustes › Quais módulos você usa</div>
       </div>
@@ -690,7 +727,13 @@
   </div>
 
   <div class="corpo">
+    <!-- v3.3 (E2): filtro de canal "Todos · Mercado Livre · TikTok Shop", desenhado pelo painel só com 2 canais ligados -->
+    <div id="filtroCanal" hidden></div>
+    <!-- 3.3.0 (E13): a lupa da Ficha do SKU, ao lado dos canais (o CSS a mostra só junto com a linha do filtro, isto é, com 2 canais) -->
+    <div class="fl" id="fichaLupa"><button type="button" class="fl-b" id="fichaLupaB" aria-expanded="false" aria-controls="fichaLupaC" aria-label="Procurar produto" title="Procurar um produto (SKU ou parte do nome) e ver por canal"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4L14 14"/></svg></button><div class="fl-c" id="fichaLupaC" tabindex="-1" hidden><input type="search" class="busca" id="fichaBusca" placeholder="SKU ou parte do nome (ex.: garrafa)" autocomplete="off" aria-label="SKU ou parte do nome"><div id="fichaAchados"></div></div></div>
     <div class="recnota ruim" id="aviso" role="alert" hidden style="margin:0 0 8px"></div>
+    <!-- v3.4: conta aberta no ML ≠ conta que o painel mostra (P.conferirContaAberta) -->
+    <div class="recnota aviso" id="avisoConta" role="status" aria-live="polite" hidden style="margin:0 0 8px"></div>
     <section class="aba on" id="geral">
       <div id="ta-geral"></div>
       <div class="card gb" id="cardSync"><div id="syncLista"></div></div>
@@ -726,6 +769,7 @@
 
     <section class="aba" id="frete">
       <div id="ta-frete"></div>
+      <div id="freteCanais"></div>
       <div id="freteTopo"></div>
       <div id="listaFrete"></div>
       <div id="fa-frete"></div>
@@ -739,6 +783,11 @@
         <input class="busca" id="buscaCat" placeholder="Buscar produto, SKU ou MLB">
         <div id="listaCat"></div>
       </div>
+    </section>
+
+    <!-- 3.3.0 (E13): Ficha do SKU, fora das abas (não está em P.ABAS): abre pelo produto no Catálogo com 2 canais; "‹ Voltar" fecha -->
+    <section class="aba" id="ficha">
+      <div id="listaFicha"></div>
     </section>
 
     <section class="aba" id="ads">
@@ -780,11 +829,6 @@
       <div id="listaAfil"></div>
     </section>
 
-    <section class="aba" id="tiktok">
-      <div id="ta-tiktok"></div>
-      <div id="listaTT"></div>
-    </section>
-
     <section class="aba" id="ajustes">
       <!-- v3.1 (imagem tela-ajustes e ESPEC §6 Ajustes): Sua conta → Seus números → Abas que aparecem → Sincronização → [Ver mais] Custos, Aprender, Ajuda -->
       <div class="card" id="cardContas">
@@ -824,6 +868,19 @@
         <div class="ch"><h3>Abas que aparecem</h3><button type="button" class="ajuda" title="Desligue o que você não usa: a aba some do topo, da Geral e do sino. Nada do que já foi lido é apagado.">?</button></div>
         <div id="listaModulos"></div>
         <button class="bt" id="salvarModulos">Salvar abas</button><span class="ok-msg" id="okModulos"></span>
+      </div>
+      <!-- 3.3.0 (E9): canais de venda — 1 linha por canal (lido em, telas lidas no balão, chave "Mostrar nas telas"); a chave do TikTok pede as 2 permissões no clique -->
+      <div class="card" id="cardCanais">
+        <div class="ch"><h3>Canais de venda</h3><span class="d det" aria-hidden="true">mostrar nas telas</span><button type="button" class="ajuda" title="Cada canal pede, uma vez, a permissão do Chrome para ler as páginas dele. Desligar tira a leitura e devolve a permissão. Nada do que já foi lido é apagado, a não ser que você peça.">?</button></div>
+        <div id="listaCanais"></div>
+        <p class="det" id="fraseCanais">Só lê as telas que você abre na sua conta de vendedor. Não usa robô e não muda nada nas suas lojas. Não guarda nome, endereço nem telefone de comprador.</p>
+        <button class="bt" id="salvarCanais">Salvar canais</button><span class="ok-msg" id="okCanais"></span>
+      </div>
+      <!-- 3.3.0 (E9): o gasto do GMV Max fica fora do repasse; o Custo líquido de Marketing › Anúncios da loja é digitado por mês (tt:<loja>:ads_manual). Só com o TikTok ligado. -->
+      <div class="card" id="cardAdsTT" hidden>
+        <div class="ch"><h3>Ads do TikTok (Custo líquido)</h3><button type="button" class="ajuda" title="Copie o Custo líquido de Marketing › Anúncios da loja, no período do mês. Sem o valor, o mês do TikTok sai com ≈. Campo vazio não vale zero.">?</button></div>
+        <div id="listaAdsTT"></div>
+        <button class="bt" id="salvarAdsTT">Salvar Ads</button><span class="ok-msg" id="okAdsTT"></span><p class="det" id="erroAdsTT" role="alert" style="color:var(--verm)"></p>
       </div>
       <div class="card" id="cardSyncAj">
         <div class="ch"><h3>Sincronização</h3><button type="button" class="ajuda" title="Ligado e não funcionou? No Chrome: Configurações › Sistema › “Continuar executando apps em segundo plano”.">?</button></div>
@@ -899,6 +956,8 @@
   </div>
 
   <div class="fundo" id="fundo"><div class="modal" id="modal"></div></div>
+  <!-- 3.3.0 (C1): quadro "Concordo e ligar" do TikTok (P.quadroTiktokHtml), fechado até a chave do TikTok ser ligada em Canais de venda -->
+  <dialog class="modal" id="quadroTT" aria-labelledby="quadroTTt" aria-describedby="quadroTTd"></dialog>
 
   <script src="calc.js"></script>
   <script src="store.js"></script>
@@ -915,6 +974,7 @@
   <script src="nucleo/motor.js"></script>
   <script src="nucleo/conciliacao.js"></script>
   <script src="nucleo/adaptador.js"></script>
+  <script src="nucleo/adaptadores/ml.js"></script>
   <script src="nucleo/adaptadores/tiktok.js"></script>
   <script src="tiktok.js"></script>
   <script src="tiktok-aba.js"></script>

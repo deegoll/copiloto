@@ -1,4 +1,4 @@
-// Copiloto · TikTok Shop (3.2.0): o que a captura passiva recebe vira dado guardado por loja e a conta de lucro e repasse.
+// Copiloto · TikTok Shop (3.2.0; telas de 03/10/2026 na 3.3.0): o que a captura passiva recebe vira dado guardado por loja e a conta de lucro e repasse.
 // REGRA DO CANAL (Termos do Vendedor BR: nada de robô): o Copiloto NÃO chama o TikTok, nem GET, NÃO navega sozinho e NÃO tem alarme
 // para o TikTok. Ele só lê a resposta que a própria tela do Seller Center já recebeu (tiktok-pagina.js → tiktok-tela.js → aqui).
 // As contas são do copiloto-nucleo: a pasta nucleo/ é uma CÓPIA byte a byte de copiloto-nucleo/src (o Chrome só carrega arquivos de
@@ -6,23 +6,35 @@
 // Carregar DEPOIS de nucleo/*.js (CopilotoNucleo) e de calc.js + store.js (SHC: custo por SKU e kit).
 //
 // Gravado por loja (a aba lê por SHC.tt.ler + SHC.tt.resumo; tiktok-aba.js só desenha):
-//   tt:conta                  → última loja vista (oec_seller_id da URL; sem ele, 'tiktok')
+//   tt:conta                  → última loja vista (oec_seller_id da URL; sem ele, 'tiktok'), por empresa
+//   tt:lojas                  → { <loja>: '' (empresa principal) | <sellerId> }: a empresa dona de cada loja, fixada na 1ª captura (3.3.0)
 //   tt:<loja>:ped:<pedido>    → { id, data, lido_em, tela, linhas: {<statement_detail_id>: linha do Financeiro (pedidosDaListaFinanceira)},
 //                                 trans: {<id>: extrato do pedido (transacaoDoExtrato)}, trans_sku: {…page_type 9}, det: {pedido, devolucao} (pedidoDoDetalhe) }
-//                                 (uma chave por pedido; até 180 dias / 3.000 pedidos)
-//   tt:<loja>:extratos        → { lista: Repasse[], lido_em, tela }        tt:<loja>:saldo → { valor, lido_em, tela }
+//                                 (uma chave por pedido; até 400 dias / 3.000 pedidos). 03/10: linhas e trans vêm das listas e da gaveta de Finanças
+//                                 (POST view/*), no mesmo formato; a linha "em espera" e o detalhe estimado saem quando o pedido liquida
+//   tt:<loja>:extratos        → { lista: Repasse[] (03/10: + total_pedidos, pagamento_id, tipos), lido_em, tela }   tt:<loja>:saldo → { valor, lido_em, tela }
+//   tt:<loja>:listas          → { <tipo>: { lidos, total, parcial, ids, lido_em, tela } }   lido menos linhas do que existem = "lido em parte"
+//   tt:<loja>:pago            → { total, … }   tt:<loja>:resumo_fin → { em_espera, pago_periodo, em_processamento, saldo, saldo_negativo, … }
+//   tt:<loja>:dev             → { contadores, abas: {<aba>: {linhas:[{pedido_id, devolucao_id, valor, produto_volta}], total, …}}, painel, … }
+//   tt:<loja>:anuncios        → { produtos: {<product_id>: {total_skus, comissao_pct, expandido?, skus: {<sku_id>: {sku, preco}}, lido_em}}, … }
+//   tt:<loja>:tarefas         → { mensagens_nao_lidas, … }   (só o contador da Página inicial; o chat não é lido)
+//   tt:<loja>:ads_manual      → { 'AAAA-MM': R$, nao_uso: bool }   Ads digitado em Ajustes (SHC.tt.salvarAds); não vem de tela nenhuma
 //   tt:<loja>:areceber        → { total, motivos:[{motivo:'em_transito'|'devolucao'|'entregue_no_prazo', codigo:1|2|3, titulo, valor}], prazo_dias, confere, lido_em, tela }
-//   tt:<loja>:saude           → { indicadores: Saude[], pontos|null, perf, prazo, viol, lido_em, tela }
+//   tt:<loja>:saude           → { indicadores: Saude[], pontos|null, perf, ind, prazo, viol, sps, lido_em, tela }
 //   tt:<loja>:afil            → { mensagens, sem_amostra, amostras, itens, lido_em, tela }
-//   tt:<loja>:camp            → { abertas:[{id, titulo, inscrita, inscricao_ate, inicio, fim}], inscritas, lido_em, tela }
-//   tt:<loja>:skumap          → { <sku_id>: '<SKU do vendedor>' }
+//   tt:<loja>:camp            → { abertas:[{id, titulo, inscrita, inscricao_ate, inicio, fim, …}], inscritas, inscritas_lista, convites,
+//                                 regras: {<subcampanha>: {fator, dias}}, produtos: {<campanha>: {lista}}, lido_em, tela }
+//   tt:<loja>:skumap          → { <sku_id>: '<SKU do vendedor>' }   (da lista de Pedidos e de Gerenciar produtos)
 //   c|tiktok|<sku_id>         → custo digitado na aba ({custo, outros?}) ou "ligar ao SKU" ({sku})
-// Nada do comprador é guardado (tiktok-pagina.js tira os campos; aqui o filtro do núcleo passa só a lista do que PODE).
+// Nada do comprador é guardado (tiktok-pagina.js deixa sair só a lista fechada de campos; aqui só se grava o que os conversores do núcleo leem).
 (function (root) {
     'use strict';
     const SHC = root.SHC || (root.SHC = {});
     const CN = root.CopilotoNucleo, N = CN.adaptadores.tiktok, U = CN.util, M = CN.modelo;
-    const area = () => root.chrome.storage.local;
+    // 3.3.0 (junção, multi-empresa): tt:* passa pela camada da empresa (store.js): a leitura é da empresa da conta do ML aberta e o lucro usa
+    // os custos dela. A gravação vai para a empresa DONA da loja (areaDaLoja). Com 1 empresa, as mesmas chaves de sempre.
+    const crua = () => root.chrome.storage.local, area = () => (SHC.areaEmpresa ? SHC.areaEmpresa() : crua());
+    const DE_TODAS = ['tt:', 'tt@', 'c|tiktok|'];   // "Apagar dados do TikTok": de todas as empresas
     const TT = SHC.tt = {};
 
     TT.ORIGEM = 'https://seller-br.tiktok.com/*';
@@ -30,11 +42,17 @@
     /** Tipos que a captura aceita (lista FECHADA, igual à de tiktok-pagina.js e tiktok-tela.js) → nome da tela de origem. */
     TT.TELA = {
         pedidos_fin: 'Financeiro', transacao: 'Financeiro (detalhe do pedido)', extratos: 'Financeiro (extratos)', areceber: 'Financeiro', saldo: 'Financeiro',
-        pedido: 'Pedidos', saude_perf: 'Saúde da conta', saude_prazo: 'Saúde da conta', saude_viol: 'Saúde da conta', afil: 'Afiliados',
-        camp_rec: 'Promoções', camp_insc: 'Promoções',
+        saude_perf: 'Saúde da conta', saude_prazo: 'Saúde da conta', saude_viol: 'Saúde da conta', afil: 'Afiliados', camp_rec: 'Promoções',
+        // 3.3.0 (E6): as telas de 03/10/2026, com o nome que elas têm hoje. Saíram 'pedido' (GET trade/orders/get) e 'camp_insc'
+        // (GET list_registered_campaigns): nenhuma tela chama mais; a ligação do SKU vem de 'pedidos' e as inscritas de 'camp_mgt'.
+        demonstrativos: 'Finanças › Demonstrativos', pedidos_liq: 'Finanças › Demonstrativos', pedidos_espera: 'Finanças › Em espera', detalhe: 'Finanças › detalhe do pedido',
+        resumo_fin: 'Finanças › Resumo financeiro', saude_ind: 'Avaliação da integridade da conta', saude_sps: 'Pontuação de desempenho da loja',
+        devolucoes: 'Gerenciar devoluções e reembolsos', devolucoes_painel: 'Gerenciar devoluções e reembolsos',
+        camp_mgt: 'Campanhas', camp_abertas: 'Campanhas', camp_detalhe: 'Campanhas', camp_produtos: 'Campanhas', camp_convites: 'Campanhas',
+        pedidos: 'Pedidos', tarefas: 'Página inicial', produtos: 'Gerenciar produtos', produtos_skus: 'Gerenciar produtos',
     };
     TT.TIPOS = Object.keys(TT.TELA);
-    TT.MAX_DIAS = 180;
+    TT.MAX_DIAS = 400;   // 3.3.0: os "12 meses" da ficha do SKU e da aba Canal
     TT.MAX_PEDIDOS = 3000;
     TT.contaValida = c => /^(tiktok|\d{5,25})$/.test(String(c || ''));
     const k = (conta, s) => SHC.chaveConta(s, conta, 'tiktok');   // tt:<loja>:<s> (regra do canal na chave: store.js)
@@ -46,21 +64,39 @@
     let fila = Promise.resolve();
     const emFila = f => { const p = fila.then(() => f()); fila = p.catch(() => {}); return p; };
 
-    async function chavesCom() {   // chaves que começam com qualquer um dos prefixos (getKeys: Chrome 130+; o mínimo é 137)
-        const a = area(), todas = typeof a.getKeys === 'function' ? await a.getKeys() : Object.keys(await a.get(null)), pre = [].slice.call(arguments);
+    async function chavesCom() { return chavesEm(area(), [].slice.call(arguments)); }
+    async function chavesEm(a, pre) {   // chaves que começam com qualquer um dos prefixos (getKeys só no Chrome 130+; o mínimo do manifest é 116, por isso o get(null) de reserva)
+        const todas = typeof a.getKeys === 'function' ? await a.getKeys() : Object.keys(await a.get(null));
         return todas.filter(x => pre.some(p => x.indexOf(p) === 0));
     }
+    // 3.3.0 (revisão da junção, "o sistema tem que ser assertivo para não misturar os dados"): a loja é de UMA empresa, fixada na 1ª captura
+    // em tt:lojas = {<loja>: '' (principal) | <sellerId>} (fora da camada da empresa). Antes ela ia para a empresa da conta do ML aberta na hora:
+    // ler a loja da A com o ML da B aberto gravava a loja nas 2 empresas. Loja sem dono com dados já guardados fica onde eles estão; empresa
+    // desmarcada em Ajustes volta para a principal (como os custos dela). ponytail: a 1ª captura decide; escolher a empresa em Ajustes se pedirem.
+    const LOJAS = 'tt:lojas';
+    async function empresaDaLoja(loja) {
+        const t = await crua().get([LOJAS, 'cfg']), m = t[LOJAS] || {}, sep = (t.cfg && t.cfg.empresaSeparada) || {};
+        let e = m[loja];
+        if (typeof e !== 'string') {
+            const ja = (await chavesEm(crua(), ['tt:', 'tt@'])).map(x => /^tt(?:@(\d+))?:([^:]+):/.exec(x) || []).find(r => r[2] === loja);
+            e = ja ? ja[1] || '' : (SHC.empresaSeparada ? await SHC.empresaSeparada() : '');
+            await crua().set({ [LOJAS]: Object.assign({}, m, { [loja]: e }) });
+        }
+        return e && sep[e] === true ? e : '';
+    }
+    const areaDaLoja = async loja => (SHC.areaEmpresa ? SHC.areaEmpresa(await empresaDaLoja(loja)) : crua());
     let podadoEm = 0;
-    /** Guarda no máximo 180 dias e 3.000 pedidos por loja (os mais novos ficam). */
-    async function podar(conta, forcar) {
+    /** Guarda no máximo 400 dias e 3.000 pedidos por loja (os mais novos ficam). a = a área da empresa da loja (padrão: areaDaLoja). */
+    async function podar(conta, forcar, a) {
         if (!forcar && Date.now() - podadoEm < 10 * 60e3) return 0;
         podadoEm = Date.now();
-        const ks = await chavesCom(k(conta, 'ped:'));
+        a = a || await areaDaLoja(conta);
+        const ks = await chavesEm(a, [k(conta, 'ped:')]);
         if (ks.length === 0) return 0;
-        const lidos = await area().get(ks), limite = U.somaDias(U.hoje(), -TT.MAX_DIAS);
+        const lidos = await a.get(ks), limite = U.somaDias(U.hoje(), -TT.MAX_DIAS);
         const fora = ks.map(x => [x, String((lidos[x] && lidos[x].data) || '')]).sort((a, b) => b[1].localeCompare(a[1]))
             .filter((x, i) => i >= TT.MAX_PEDIDOS || !x[1] || x[1] < limite).map(x => x[0]);
-        if (fora.length) await area().remove(fora);
+        if (fora.length) await a.remove(fora);
         return fora.length;
     }
     TT.podar = podar;
@@ -83,62 +119,117 @@
         };
     };
     const juntaTrans = ped => { const ts = valores(ped && ped.trans); return ts.length ? N.juntaPorPedido(ts)[0] || null : null; };
+    /** A leitura mais nova de um grupo (linhas da lista ou detalhes): { em, tela } — a tela é a que a gravou. */
+    const maisNova = (o, padrao) => { const x = valores(o).sort((a, b) => (b.lido_em || 0) - (a.lido_em || 0))[0]; return { em: (x && x.lido_em) || 0, tela: (x && x.tela) || padrao }; };
 
     /** Dia do pedido (a mais antiga das fontes: é por ele que a poda corta) e de onde veio a leitura mais nova. */
     function carimba(ped) {
         const f = TT.finDoPedido(ped), j = juntaTrans(ped), det = ped.det || null;
-        const fontes = [f && { em: f.lido_em, tela: TT.TELA.pedidos_fin }, j && { em: Math.max.apply(null, valores(ped.trans).map(t => t.lido_em || 0)), tela: TT.TELA.transacao },
-            det && { em: det.lido_em, tela: TT.TELA.pedido }].filter(Boolean).sort((a, b) => b.em - a.em);
+        const fontes = [f && maisNova(ped.linhas, TT.TELA.pedidos_fin), j && maisNova(ped.trans, TT.TELA.transacao),
+            det && { em: det.lido_em, tela: 'Pedidos' }].filter(Boolean).sort((a, b) => b.em - a.em);
         return Object.assign(ped, { data: [f && f.data, j && j.data, det && det.pedido.data_venda].filter(Boolean).sort()[0] || null,
             lido_em: fontes.length ? fontes[0].em : null, tela: fontes.length ? fontes[0].tela : '' });
     }
+
+    // ── 3.3.0 (E7): faixa dos números, como no ML (fundo/13-aba-do-ml-e-canal.js): o que vem da página não é verdade por si. ──
+    // Dinheiro em texto tem de ser número e ficar abaixo de R$ 10 milhões; os ids (pedido, demonstrativo, SKU, produto, pagamento, campanha)
+    // seguem ^\d{5,25}$; o dia da venda, da entrega, do demonstrativo e da liquidação fica entre 2024 e hoje. Fora disso nada é gravado e conta
+    // como "tela mudou". Um número possível e errado continua passando (NOVIDADES-3.3.0.md, "Riscos que ficam"). Vazio, null e "0" são
+    // "não veio" (o núcleo lê assim) e passam; "BRL 549.9" (moeda na frente) é número.
+    // ponytail: "hoje" com 7 dias de folga (fuso, relógio do computador atrasado e os retratos de 29/09–01/10 que os testes da 3.2.0 gravam com o
+    // relógio parado em 25/09). Barra 2099, 1970 e texto; para apertar, trocar a folga por 1 e o relógio desses testes.
+    const FOLGA_DIAS = 7;
+    const F_DIN = /^(amount|format_price|\w+_amount|\w+_price)$/;
+    const F_ID = /^(id|trade_order_id|expression_order_id|fund_order_id|main_order_id|reverse_main_order_id|reverse_order_id|statement_id|statement_detail_id|reference_id|sku_id|product_id|payment_order_id|payment_id|campaign_id|sub_campaign_id)$/;
+    const F_DIA = /^(placed_time|order_create_time|order_delivery_time|delivery_time|payment_time|statement_date|settlement_date|settlement_time)$/;
+    function naFaixa(v, campo, nivel) {
+        if (nivel > 40) return false;
+        if (Array.isArray(v)) return v.every(x => naFaixa(x, campo, nivel + 1));
+        if (v && typeof v === 'object') return Object.keys(v).every(c => naFaixa(v[c], c, nivel + 1));
+        if (v === null || v === undefined || v === '' || (typeof v !== 'string' && typeof v !== 'number')) return true;
+        if (F_DIN.test(campo)) { const n = U.num(String(v).replace(/^[A-Z]{3}\s*/, '')); return n !== null && Math.abs(n) < 1e7; }
+        if (v === 0 || v === '0') return true;
+        if (F_ID.test(campo)) return /^\d{5,25}$/.test(String(v));
+        if (F_DIA.test(campo)) { const d = U.dia(v); return !!d && d >= '2024-01-01' && d <= U.somaDias(U.hoje(), FOLGA_DIAS); }
+        return true;
+    }
+    TT.naFaixa = (dados, pedido) => naFaixa(dados, '', 0) && naFaixa(pedido || {}, '', 0);
 
     /**
      * Uma resposta capturada → gravada por loja. Resposta que não se reconhece NÃO grava nada (nunca vira zero).
      * → { ok, n (registros), motivo? }
      */
-    TT.gravarCaptura = (tipo, dados, conta, lidoEm) => emFila(async () => {
-        const r = await gravar(tipo, dados, conta, lidoEm);
+    TT.gravarCaptura = (tipo, dados, conta, lidoEm, pedido) => emFila(async () => {
+        if (!TT.contaValida(conta)) return { ok: false, motivo: 'formato' };
+        const a = await areaDaLoja(conta), r = await gravar(tipo, dados, conta, lidoEm, pedido, a);
         // O TikTok mudou o formato de uma tela: guarda a última falha (só tipo, tela e hora) para a aba avisar. Leu de novo: some.
         try {
             const kf = k(conta, 'falha');
-            if (r.motivo === 'nao_reconhecido') await area().set({ [kf]: { tipo, tela: TT.TELA[tipo], em: Date.now() } });
-            else if (r.ok) { const x = (await area().get(kf))[kf]; if (x && x.tipo === tipo) await area().remove(kf); }
+            if (r.motivo === 'nao_reconhecido') await a.set({ [kf]: { tipo, tela: TT.TELA[tipo], em: Date.now() } });
+            else if (r.ok) { const x = (await a.get(kf))[kf]; if (x && x.tipo === tipo) await a.remove(kf); }
         } catch (e) { /* o aviso é extra: nunca atrapalha a gravação */ }
         return r;
     });
-    async function gravar(tipo, dados, conta, lidoEm) {
+    const DA_LISTA = ['pedidos_fin', 'pedidos_liq', 'pedidos_espera'], DO_DETALHE = ['transacao', 'detalhe'];
+    const sem = (o, f) => { const x = {}; Object.keys(o || {}).forEach(c => { if (!f(o[c])) x[c] = o[c]; }); return x; };
+    // pedido = os ids que a página leu do pedido que a TELA fez (tiktok-pagina.js): de qual pedido é a gaveta, qual aba, qual campanha.
+    async function gravar(tipo, dados, conta, lidoEm, pedido, a) {
         if (TT.TIPOS.indexOf(tipo) < 0 || !TT.contaValida(conta) || !dados || typeof dados !== 'object') return { ok: false, motivo: 'formato' };
         const em = Number(lidoEm) > 0 ? Math.min(Number(lidoEm), Date.now()) : Date.now();
         // Resposta de erro do TikTok (sessão caiu, limite etc.) não é "tela mudou": não vira aviso.
         const falhou = typeof dados.code === 'number' && dados.code !== 0 ? { ok: false, motivo: 'erro_tiktok' } : { ok: false, motivo: 'nao_reconhecido' };
-        const carimbo = { lido_em: em, tela: TT.TELA[tipo] }, grava = {};
-        const ler = async key => (await area().get(key))[key] || null;
+        const semPedido = { ok: false, motivo: 'sem_pedido' };   // faltou o id do pedido da tela (ou a lista ainda não foi lida): também não é "tela mudou"
+        const carimbo = { lido_em: em, tela: TT.TELA[tipo] }, grava = {}, ped = {};
+        Object.keys(pedido && typeof pedido === 'object' ? pedido : {}).forEach(c => { if (/^\d{1,25}$/.test(String(pedido[c]))) ped[c] = String(pedido[c]); });   // só ids (dígitos)
+        if (!TT.naFaixa(dados, ped)) return { ok: false, motivo: 'nao_reconhecido' };   // E7: fora da faixa = "tela mudou"
+        const ler = async key => (await a.get(key))[key] || null;
         let n = 1;
+        // sku_id → SKU do vendedor, por sku_id (vários sku_id podem ter o mesmo SKU). SKU vazio não apaga o que já se sabe.
+        const ligaSkus = async pares => {
+            let mapa = (await ler(k(conta, 'skumap'))) || {}, mudou = false;
+            pares.forEach(p => { if (p[0] && p[1] && mapa[p[0]] !== p[1]) { mapa = Object.assign({}, mapa, { [p[0]]: p[1] }); mudou = true; } });
+            if (mudou) grava[k(conta, 'skumap')] = mapa;
+        };
+        // A tela pede 50 por vez: se ela diz que existem mais do que já foi lido, fica anotado "lido em parte" (o Copiloto NÃO pede a 2ª página).
+        // As páginas que a seller abrir somam pelas linhas (ids) enquanto o total da tela for o mesmo; total diferente = outra busca, recomeça.
+        const anotaLista = async ids => {
+            const total = Number((dados.data || {}).total_count), cur = (await ler(k(conta, 'listas'))) || {}, antes = cur[tipo] || {};
+            const vistos = Array.from(new Set((antes.total === total && Array.isArray(antes.ids) ? antes.ids : []).concat(ids)));
+            grava[k(conta, 'listas')] = Object.assign({}, cur, { [tipo]: Object.assign({ lidos: vistos.length, total: total >= 0 ? total : null, parcial: total > vistos.length, ids: vistos }, carimbo) });
+        };
 
-        if (tipo === 'pedidos_fin' || tipo === 'transacao' || tipo === 'pedido') {
-            let mapa = (await ler(k(conta, 'skumap'))) || {}, novoMapa = false;
+        if (DA_LISTA.indexOf(tipo) >= 0 || DO_DETALHE.indexOf(tipo) >= 0) {
             const mexe = {};   // pedido_id → função que altera as fontes guardadas
-            if (tipo === 'pedidos_fin') {
+            if (DA_LISTA.indexOf(tipo) >= 0) {
                 const regs = N.pedidosDaListaFinanceira(dados, { conta });
                 if (M.ehNaoLido(regs)) return falhou;
-                regs.forEach(r => { const antes = mexe[r.pedido_id]; mexe[r.pedido_id] = p => { if (antes) antes(p); p.linhas = Object.assign({}, p.linhas, { [M.ehNaoLido(r.repasse) ? r.pedido_id : r.repasse.id]: Object.assign(r, carimbo) }); }; });
+                regs.forEach(r => { const antes = mexe[r.pedido_id]; mexe[r.pedido_id] = p => {
+                    if (antes) antes(p);
+                    // um pedido guarda as linhas de UM formato só (o GET de antes ou as listas de 03/10): a leitura nova troca as do outro formato
+                    p.linhas = sem(p.linhas, l => (l.tela === TT.TELA.pedidos_fin) !== (tipo === 'pedidos_fin'));
+                    // 03/10: o pedido liquidou → a linha "em espera" e o detalhe estimado dele saem (senão o mesmo dinheiro contaria 2 vezes)
+                    if (tipo === 'pedidos_liq') { p.linhas = sem(p.linhas, l => l.estimado); if (p.trans) p.trans = sem(p.trans, t => t.pendente); }
+                    p.linhas = Object.assign({}, p.linhas, { [M.ehNaoLido(r.repasse) ? r.pedido_id : r.repasse.id]: Object.assign(r, carimbo) });
+                }; });
                 n = regs.length;
-            } else if (tipo === 'transacao') {
-                const t = N.transacaoDoExtrato(dados, { conta });
-                if (M.ehNaoLido(t) || !t.pedido_id) return falhou;
-                const d = dados.data || {}, campo = d.sku_record && !d.order_record ? 'trans_sku' : 'trans';   // page_type 9 (1 SKU) não soma com o pedido
-                mexe[t.pedido_id] = p => { p[campo] = Object.assign({}, p[campo], { [t.extrato_detalhe_id || 'sem_id']: Object.assign(t, carimbo) }); };
+                if (tipo !== 'pedidos_fin' && !ped.expression_order_id) await anotaLista(regs.map(r => (M.ehNaoLido(r.repasse) ? r.pedido_id : r.repasse.id)));   // a busca de 1 pedido só (ao abrir a gaveta) não é a lista
             } else {
-                const r = N.pedidoDoDetalhe(N.filtroPedidoSemComprador(dados), { conta });   // o filtro passa só o que PODE (nada do comprador)
-                if (M.ehNaoLido(r.pedido)) return falhou;
-                mexe[r.pedido.id] = p => { p.det = Object.assign({ pedido: r.pedido, devolucao: r.devolucao, avisos: r.avisos }, carimbo); };
-                r.pedido.itens.forEach(it => { if (it.sku && it.anuncio_id && mapa[it.anuncio_id] !== it.sku) { mapa = Object.assign({}, mapa, { [it.anuncio_id]: it.sku }); novoMapa = true; } });
+                let opts = { conta };
+                if (tipo === 'detalhe') {   // a gaveta pode vir sem o id e sem a data: o id vem do pedido da tela e a data, do que já foi lido da lista
+                    const id = String((dados.data && dados.data.trade_order_id) || ped.trade_order_id || ''), guardado = id ? await ler(k(conta, 'ped:' + id)) : null;
+                    opts = { conta, corpo: ped, data: guardado && guardado.data };
+                }
+                const t = N.transacaoDoExtrato(dados, opts);
+                if (M.ehNaoLido(t) || !t.pedido_id) return t && t.falta === 'pedido' ? semPedido : falhou;
+                const d = dados.data || {}, campo = d.sku_record && !d.order_record ? 'trans_sku' : 'trans';   // page_type 9 (1 SKU) não soma com o pedido
+                mexe[t.pedido_id] = p => {
+                    if (tipo === 'detalhe' && !t.pendente) p.trans = sem(p.trans, x => x.pendente);   // liquidou: o detalhe estimado sai
+                    p[campo] = Object.assign({}, p[campo], { [t.extrato_detalhe_id || 'sem_id']: Object.assign(t, carimbo) });
+                };
             }
-            const ids = Object.keys(mexe), keys = ids.map(id => k(conta, 'ped:' + id)), atual = await area().get(keys);
+            const ids = Object.keys(mexe), keys = ids.map(id => k(conta, 'ped:' + id)), atual = await a.get(keys);
             ids.forEach((id, i) => { const p = Object.assign({ id }, atual[keys[i]] || {}); mexe[id](p); grava[keys[i]] = carimba(p); });
-            if (novoMapa) grava[k(conta, 'skumap')] = mapa;
-        } else if (tipo === 'extratos') {
+        } else if (tipo === 'extratos' || tipo === 'demonstrativos') {
             const rs = N.repassesDosExtratos(dados, conta);
             if (M.ehNaoLido(rs)) return falhou;
             const cur = (await ler(k(conta, 'extratos'))) || {}, porId = {};
@@ -146,14 +237,23 @@
             const lista = valores(porId).sort((a, b) => String(b.data_liberada || b.data_prevista || '').localeCompare(String(a.data_liberada || a.data_prevista || ''))).slice(0, 200);
             grava[k(conta, 'extratos')] = Object.assign({ lista }, carimbo);
             n = rs.length;
+            if (tipo === 'demonstrativos') await anotaLista(rs.map(r => r.id));
         } else if (tipo === 'areceber') {
-            const a = N.aReceberPorMotivo(dados);
-            if (M.ehNaoLido(a)) return falhou;
-            grava[k(conta, 'areceber')] = Object.assign(a, carimbo);
+            const pago = N.totalPago(dados);   // 03/10: a mesma rota com amount_stat_type=3 traz o total já pago
+            if (!M.ehNaoLido(pago)) grava[k(conta, 'pago')] = Object.assign(pago, carimbo);
+            else {
+                const a = N.aReceberPorMotivo(dados);
+                if (M.ehNaoLido(a)) return falhou;
+                grava[k(conta, 'areceber')] = Object.assign(a, carimbo);
+            }
         } else if (tipo === 'saldo') {
             const s = N.saldoDisponivel(dados);
             if (M.ehNaoLido(s)) return falhou;
             grava[k(conta, 'saldo')] = Object.assign(s, carimbo);
+        } else if (tipo === 'resumo_fin') {   // cada chamada da tela traz uma parte dos cartões: junta
+            const r = N.resumoFinanceiro(dados);
+            if (M.ehNaoLido(r)) return falhou;
+            grava[k(conta, 'resumo_fin')] = Object.assign({}, await ler(k(conta, 'resumo_fin')), r, carimbo);
         } else if (tipo === 'afil') {
             const it = N.pendenciasAfiliados(dados);
             if (M.ehNaoLido(it)) return falhou;
@@ -163,22 +263,89 @@
             const parte = tipo.slice(6), cur = (await ler(k(conta, 'saude'))) || {};
             let x;
             if (parte === 'viol') x = N.violacoes(dados);
-            else { const it = N.saudeDaConta(parte === 'perf' ? { performance_list: dados } : { dynamic_settlement: dados }, conta); x = it.length ? { itens: it } : M.naoLido('vazio'); }
+            else if (parte === 'sps') x = N.pontuacaoDaLoja(dados);
+            else {
+                const it = parte === 'ind' ? N.indicadoresDaLoja(dados, conta) : N.saudeDaConta(parte === 'perf' ? { performance_list: dados } : { dynamic_settlement: dados }, conta);
+                x = Array.isArray(it) && it.length ? { itens: it } : M.naoLido('vazio');
+            }
             if (M.ehNaoLido(x)) return falhou;
             cur[parte] = Object.assign(x, carimbo);
-            cur.indicadores = [].concat((cur.perf && cur.perf.itens) || [], (cur.prazo && cur.prazo.itens) || []);
+            // indicadores: os da tela de 03/10 (ind) ou os de antes (perf), o que foi lido por último
+            const ind = [cur.ind, cur.perf].filter(Boolean).sort((a, b) => (b.lido_em || 0) - (a.lido_em || 0))[0];
+            cur.indicadores = [].concat((ind && ind.itens) || [], (cur.prazo && cur.prazo.itens) || []);
             cur.pontos = cur.viol ? cur.viol.pontos : null;
             grava[k(conta, 'saude')] = Object.assign(cur, carimbo);
-        } else {   // camp_rec | camp_insc
-            const c = N.campanhasAbertas(tipo === 'camp_rec' ? dados : null, tipo === 'camp_insc' ? dados : null);
-            if (tipo === 'camp_rec' ? c.abertas === null : c.inscritas === null) return falhou;
+        } else if (tipo === 'devolucoes' || tipo === 'devolucoes_painel') {
+            const cur = (await ler(k(conta, 'dev'))) || {};
+            if (tipo === 'devolucoes_painel') {
+                const p = N.painelDeDevolucoes(dados);
+                if (M.ehNaoLido(p)) return falhou;
+                cur.painel = Object.assign(p, carimbo);
+            } else {
+                const l = N.devolucoesDaLista(dados);
+                if (M.ehNaoLido(l)) return falhou;
+                cur.contadores = l.contadores;   // os contadores do topo não dependem da aba
+                // sem saber a aba (aguardando você, aguardando o TikTok/cliente, tudo…) a linha não diz se está em aberto: só os contadores
+                if (ped.tab) cur.abas = Object.assign({}, cur.abas, { [ped.tab]: Object.assign({ linhas: l.linhas, total: l.total }, carimbo) });
+                n = ped.tab ? l.linhas.length : 0;
+            }
+            grava[k(conta, 'dev')] = Object.assign(cur, carimbo);
+        } else if (tipo.indexOf('camp_') === 0) {
             const cur = (await ler(k(conta, 'camp'))) || {};
-            if (tipo === 'camp_rec') cur.abertas = c.abertas; else cur.inscritas = c.inscritas;
+            if (tipo === 'camp_rec') {
+                const c = N.campanhasAbertas(dados, null);
+                if (c.abertas === null) return falhou;
+                cur.abertas = c.abertas;
+            } else if (tipo === 'camp_abertas') {
+                const a = N.campanhasDaTela(dados);
+                if (M.ehNaoLido(a)) return falhou;
+                if (ped.campaign_id) return { ok: false, motivo: 'filtro' };   // a busca de 1 campanha só (tela de detalhe) não troca a lista inteira
+                cur.abertas = a;
+            } else if (tipo === 'camp_mgt') {
+                const i = N.campanhasInscritas(dados);
+                if (M.ehNaoLido(i)) return falhou;
+                cur.inscritas = i.inscritas; cur.inscritas_lista = i.lista;
+            } else if (tipo === 'camp_convites') {
+                const c = N.convitesDeCampanha(dados);
+                if (M.ehNaoLido(c)) return falhou;
+                cur.convites = c;
+            } else {   // camp_detalhe (regra de preço da subcampanha) | camp_produtos (faixa de preço por produto): guardados pelo id da campanha
+                const x = tipo === 'camp_detalhe' ? N.regraDePreco(dados) : N.produtosDaCampanha(dados), id = tipo === 'camp_detalhe' ? ped.sub_campaign_id : ped.campaign_id;
+                if (M.ehNaoLido(x)) return falhou;
+                if (!id) return semPedido;
+                const onde = tipo === 'camp_detalhe' ? 'regras' : 'produtos';
+                cur[onde] = Object.assign({}, cur[onde], { [id]: Object.assign(Array.isArray(x) ? { lista: x } : x, carimbo) });
+            }
+            // has_joined vem false mesmo inscrita: a campanha aberta que está em "Gerencie suas campanhas" como aprovada é inscrita
+            const dentro = (cur.inscritas_lista || []).filter(c => c.inscrita).map(c => c.id);
+            if (Array.isArray(cur.abertas)) cur.abertas = cur.abertas.map(c => (dentro.indexOf(c.id) >= 0 && !c.inscrita ? Object.assign({}, c, { inscrita: true }) : c));
             grava[k(conta, 'camp')] = Object.assign(cur, carimbo);
+        } else if (tipo === 'pedidos') {   // lista de Pedidos: só a ligação sku_id → SKU do vendedor (nada do comprador chega aqui)
+            const l = N.skusDaListaDePedidos(dados);
+            if (M.ehNaoLido(l)) return falhou;
+            await ligaSkus([].concat.apply([], l.pedidos.map(p => p.itens.map(it => [it.sku_id, it.sku]))));
+            n = l.pedidos.length;
+        } else if (tipo === 'produtos' || tipo === 'produtos_skus') {   // o que está anunciado: por produto, os SKUs lidos (1 por produto até a seller expandir)
+            const ps = tipo === 'produtos' ? N.produtosAnunciados(dados) : N.skusDoProduto(dados);
+            if (M.ehNaoLido(ps)) return falhou;
+            if (tipo === 'produtos_skus' && !ped.product_id) return semPedido;
+            const cur = (await ler(k(conta, 'anuncios'))) || {}, produtos = Object.assign({}, cur.produtos);
+            (tipo === 'produtos' ? ps : [{ produto_id: ped.product_id, skus: ps, expandido: true }]).forEach(p => {
+                const antes = produtos[p.produto_id] || {}, skus = Object.assign({}, antes.skus);
+                p.skus.forEach(s => { skus[s.sku_id] = { sku: s.sku, preco: s.preco }; });
+                produtos[p.produto_id] = Object.assign({}, antes, p.expandido ? { expandido: true } : { total_skus: p.total_skus, comissao_pct: p.comissao_pct }, { skus, lido_em: em });
+            });
+            grava[k(conta, 'anuncios')] = Object.assign({ produtos }, carimbo);
+            await ligaSkus([].concat.apply([], (tipo === 'produtos' ? ps : [{ skus: ps }]).map(p => p.skus.map(s => [s.sku_id, s.sku]))));
+            n = ps.length;
+        } else {   // tarefas: só o contador de mensagens não lidas de clientes (Página inicial)
+            const t = N.tarefasDaPaginaInicial(dados);
+            if (M.ehNaoLido(t)) return falhou;
+            grava[k(conta, 'tarefas')] = Object.assign(t, carimbo);
         }
-        grava['tt:conta'] = conta;
-        await area().set(grava);
-        if (tipo === 'pedidos_fin') await podar(conta);
+        grava['tt:conta'] = conta;   // a última loja vista DESTA empresa
+        await a.set(grava);
+        if (DA_LISTA.indexOf(tipo) >= 0) await podar(conta, false, a);
         return { ok: true, n };
     }
 
@@ -186,17 +353,23 @@
     TT.ler = async function (conta) {
         conta = conta || (await area().get('tt:conta'))['tt:conta'] || null;
         if (!TT.contaValida(conta)) return null;
-        // v3.3 multi-empresa (revisão 07/10/2026): custos por SKU e cfg da empresa da conta do ML aberta, como no painel ('c|sku' pega também
-        // 'c|sku@<conta>|'; SHC.chaveLogica devolve a chave lógica da empresa aberta e null para a da outra).
-        const e = SHC.empresaSeparada ? await SHC.empresaSeparada() : '', logica = x => (SHC.chaveLogica ? SHC.chaveLogica(x, e) : x);
+        // v3.3 multi-empresa (revisão 07/10/2026): custos por SKU e cfg da empresa da conta do ML aberta, como no painel. 3.3.0 (junção): a
+        // camada da empresa (area) já devolve só as chaves dela, com o nome lógico ('c|sku|X' guardado como 'c|sku@<conta>|X' na outra empresa).
         const pre = k(conta, ''), ks = (await chavesCom(pre, 'c|sku', 'c|tiktok|')).concat(['cfg']);
         const t = await area().get(ks), d = { conta, peds: [], custos: {}, cfg: SHC.lerCfg ? await SHC.lerCfg() : Object.assign({}, SHC.PADRAO || {}, t.cfg || {}) };
         Object.keys(t).forEach(x => {
-            if (x.indexOf('c|') === 0) { const l = logica(x); if (l !== null) d.custos[l] = t[x]; }
+            if (x.indexOf('c|') === 0) d.custos[x] = t[x];
             else if (x.indexOf(pre + 'ped:') === 0) d.peds.push(t[x]);
             else if (x.indexOf(pre) === 0) d[x.slice(pre.length)] = t[x];
         });
         return d;
+    };
+    /** 3.3.0 (E20): só a saúde da loja (tt:<loja>:saude) da última loja vista — 2 chaves, sem passar pelos pedidos. → objeto | null (nada lido). */
+    TT.lerSaude = async function (conta) {
+        conta = conta || (await area().get('tt:conta'))['tt:conta'] || null;
+        if (!TT.contaValida(conta)) return null;
+        const ch = k(conta, 'saude');
+        return (await area().get(ch))[ch] || null;
     };
 
     // ── Lucro pelo motor do núcleo ────────────────────────────────────────────────────────────────────────────
@@ -251,10 +424,8 @@
     TT.detalheCobre = function (ped, f, j) {
         if (!j) return { usar: false, parcial: false };
         if (!f || f.repasse === null) return { usar: true, parcial: false };
-        const abertos = valores(ped && ped.trans).map(t => t.extrato_detalhe_id).filter(Boolean);
-        const falta = f.repasses.some(r => !/#extrato$/.test(String(r.id)) && abertos.indexOf(r.id) < 0);
-        const parcial = falta || Math.abs(U.r2(U.soma(j.repasses, r => r.valor) - f.repasse)) > 0.01;
-        return { usar: !parcial, parcial };
+        const usar = N.pedidoTemDetalhe(f.repasses, valores(ped && ped.trans));   // a mesma regra do "N de M pedidos com detalhe" (núcleo)
+        return { usar, parcial: !usar };
     };
     const AVISO_VOLTOU = 'reembolso total sem saber se o produto voltou: o custo do produto foi contado';
 
@@ -313,22 +484,42 @@
         return Object.assign(r, {
             dia: data, canal_venda: pedido.canal_venda || null,
             estimado: !!((f && f.estimado) || (j && j.repasses.some(x => x.estimado)) || estimar || r.tarifas_estimadas || cob.parcial),
-            exato: !!j, lido_em: ped.lido_em || null, tela: j ? TT.TELA.transacao : (f ? TT.TELA.pedidos_fin : TT.TELA.pedido),
+            exato: !!j, lido_em: ped.lido_em || null, tela: j ? maisNova(ped.trans, TT.TELA.transacao).tela : (f ? maisNova(ped.linhas, TT.TELA.pedidos_fin).tela : 'Pedidos'),
             extratos: f ? f.extratos : [], data_prevista: (f && f.data_prevista) || null, status_repasse: f ? (f.estimado ? 'a_liberar' : 'disponivel') : null,
             itens: itens.map((x, i) => ({ sku: x.it.sku, sku_vendedor: x.s.sku || null, sku_id: x.it.anuncio_id || null, titulo: x.it.titulo, qtd: x.it.qtd, canal_venda: base[i].canal_venda || pedido.canal_venda || null })),
+            skus_lista: f && f.skus.length ? f.skus : null,   // os 3 grupos de cada SKU da linha da lista (TT.porGrupo)
             _modelo: { pedido, tarifas: Array.isArray(tarifas) ? tarifas : [], repasses: j ? j.repasses : (f ? f.repasses : []), devolucoes },
         });
     };
 
+    /**
+     * Pedido com mais de 1 SKU: vendas, taxas e imposto de cada SKU pelos 3 grupos dele (sku_records[].simple_breakdown da lista de Finanças, r.skus_lista)
+     * no lugar do rateio pela venda. → por_item (o mesmo, com 1 SKU ou cancelado) | null (sem os grupos ou sem bater com o pedido: fica o rateio, "≈").
+     * Regra única do lucro por SKU: a ficha, o Catálogo, a Geral e a aba Canal passam por aqui (TT.porProduto).
+     */
+    TT.porGrupo = function (r) {
+        const its = r.por_item || [], gs = r.skus_lista || [];
+        if (its.length < 2 || r.status === 'cancelado') return its;
+        const bate = gs.length === its.length && gs.every((g, i) => g && String(g.sku_id || '') === String(its[i].anuncio_id || '') && typeof g.receita === 'number' && typeof g.repasse === 'number')
+            && typeof r.repasse === 'number' && Math.abs(U.soma(gs, g => g.receita) - r.receita_liquida) <= 0.01 && Math.abs(U.soma(gs, g => g.repasse) - r.repasse) <= 0.01;
+        // o imposto também pela venda do grupo (o motor rateia pela venda bruta); o último grupo fica com o resto: a soma do pedido não muda
+        let resto = r.imposto_rs || 0;
+        return bate ? its.map((x, i) => { const imposto = i === its.length - 1 ? U.r2(resto) : U.r2(gs[i].receita * (r.imposto_pct || 0) / 100); resto -= imposto;
+            return Object.assign({}, x, { receita: gs[i].receita, tarifas: U.r2(gs[i].receita - gs[i].repasse), imposto }); }) : null;
+    };
+
     /** Por produto (SKU do vendedor; sem ligação, o sku_id do TikTok): vendas, receita, repasse, lucro, margem, % de afiliado e canais. */
     TT.porProduto = function (resultados) {
+        // pedido com mais de 1 SKU pelos grupos de cada SKU (TT.porGrupo); sem eles, o rateio pela venda (rateado: "≈")
+        resultados = resultados.map(r => { const p = TT.porGrupo(r); return p === r.por_item ? r : Object.assign({}, r, p ? { por_item: p } : { rateado: true }); });
         const ps = CN.motor.lucroPorProduto(resultados), extra = {};
+        // pela chave do lucroPorProduto (SKU normalizado): 2 grafias do mesmo SKU juntam também o título, os canais e o afiliado
         resultados.forEach(r => (r.por_item || []).forEach((x, i) => {
-            const e = extra[x.sku] || (extra[x.sku] = { titulo: '', sku_id: null, sku_vendedor: null, canais: {}, afiliado: 0, receita_exata: 0, aproximado: false });
+            const ks = U.normalizaSku(x.sku), e = extra[ks] || (extra[ks] = { titulo: '', sku_id: null, sku_vendedor: null, canais: {}, afiliado: 0, receita_exata: 0, aproximado: false });
             const it = (r.itens || [])[i] || {};
-            // Pedido com vários SKUs: as tarifas são repartidas pela receita do item, mas no TikTok o fixo é por unidade e o afiliado muda
-            // por SKU → a margem desse produto é aproximada. Tarifa estimada (só a lista) também.
-            if ((r.por_item || []).length > 1 || r.tarifas_estimadas) e.aproximado = true;
+            // Pedido com vários SKUs sem os grupos: as tarifas são repartidas pela receita do item, mas no TikTok o fixo é por unidade e o
+            // afiliado muda por SKU → o lucro desse produto é aproximado ("≈", como na ficha).
+            if (r.rateado) e.aproximado = true;
             e.titulo = e.titulo || it.titulo || ''; e.sku_id = e.sku_id || it.sku_id; e.sku_vendedor = e.sku_vendedor || it.sku_vendedor;
             if (it.canal_venda) e.canais[it.canal_venda] = (e.canais[it.canal_venda] || 0) + 1;
             if (r.exato && r.status === 'ok') {
@@ -337,7 +528,7 @@
             }
         }));
         return ps.map(p => {
-            const e = extra[p.sku] || {};
+            const e = extra[U.normalizaSku(p.sku)] || {};
             return Object.assign(p, { titulo: e.titulo || '', sku_id: e.sku_id || null, sku_vendedor: e.sku_vendedor || null, canais: e.canais || {}, aproximado: !!e.aproximado,
                 repasse: U.r2(p.receita - p.tarifas), afiliado_rs: e.afiliado || 0,
                 afiliado_pct: e.receita_exata > 0 ? Math.round(e.afiliado / e.receita_exata * 10000) / 100 : null });
@@ -385,7 +576,7 @@
         const porDia = {};
         pedidos.filter(r => r.status_repasse === 'a_liberar' && r.repasse !== null).forEach(r => { const x = r.data_prevista || 'sem data'; porDia[x] = U.r2((porDia[x] || 0) + r.repasse); });
         return {
-            conta: d.conta, vazio: !(d.peds || []).length && !['extratos', 'areceber', 'saldo', 'saude', 'afil', 'camp', 'falha'].some(c => d[c]),
+            conta: d.conta, vazio: !(d.peds || []).length && !['extratos', 'areceber', 'saldo', 'saude', 'afil', 'camp', 'falha', 'dev', 'anuncios', 'tarefas', 'resumo_fin', 'pago', 'listas'].some(c => d[c]),
             kpis: {
                 lucro_30d: lucro, margem_pct: margem, receita_30d: receita, pedidos_30d: mes.length,
                 sem_custo: mes.filter(r => r.status === 'sem_custo').length, nao_lidos: mes.filter(r => r.status === 'nao_lido').length, estimados: mes.filter(r => r.estimado).length,
@@ -405,10 +596,47 @@
         };
     };
 
+    /**
+     * Ads do TikTok digitado em Ajustes, por mês (o gasto do GMV Max fica FORA do repasse: Marketing › Anúncios da loja, "Custo líquido").
+     * Grava tt:<loja>:ads_manual = {'AAAA-MM': R$, nao_uso: bool}. mudanca = {'AAAA-MM': valor | null (apaga), nao_uso: true|false}.
+     * Campo vazio é "não informado" ("≈"), nunca 0; "não uso Ads no TikTok" (nao_uso) é o zero informado de propósito. Valor negativo é recusado.
+     */
+    TT.salvarAds = (conta, mudanca) => emFila(async () => {
+        if (!TT.contaValida(conta) || !mudanca || typeof mudanca !== 'object') return { ok: false, motivo: 'formato' };
+        const a = await areaDaLoja(conta), key = k(conta, 'ads_manual'), cur = Object.assign({}, (await a.get(key))[key]);
+        for (const c of Object.keys(mudanca)) {
+            const v = mudanca[c], x = num(v);
+            if (c === 'nao_uso') cur.nao_uso = v === true;
+            else if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(c)) return { ok: false, motivo: 'mes' };
+            else if (v === null || v === undefined || v === '') delete cur[c];
+            else if (x === null || x < 0) return { ok: false, motivo: 'valor' };
+            else cur[c] = U.r2(x);
+        }
+        await a.set({ [key]: cur });
+        return { ok: true, ads_manual: cur };
+    });
+
+    /**
+     * Mês do TikTok ('AAAA-MM', pela data da venda) no MESMO formato do mês do ML (nucleo: adaptadores.ml.mesDaCascata), para o motor.somaCanais.
+     * d = TT.ler(). A conta é do núcleo (adaptadores.tiktok.mesDosPedidos): vendas, taxas, frete, liquidação e lucro completos; tarifa por tipo só
+     * com TODOS os pedidos do mês com detalhe (por_tipo_completo, n_com_detalhe de n_pedidos); Ads pelo campo manual (sem ele: aprox, "≈").
+     */
+    TT.mes = function (d, mes) {
+        if (!d || !/^\d{4}-\d{2}$/.test(String(mes || ''))) return null;
+        const ctx = { conta: d.conta, custos: d.custos || {}, cfg: d.cfg || {}, skumap: d.skumap || {} };
+        const m = N.mesDosPedidos({ mes, conta: d.conta, resultados: (d.peds || []).map(p => TT.lucroDoPedido(p, ctx)), ads_manual: d.ads_manual });
+        // ponytail: a lista cortada (a tela trouxe 50 de N e o Copiloto não pede a 2ª página; some quando a seller abre as outras) põe "≈" em TODOS os meses, porque não dá para saber
+        // de que mês são os pedidos que faltam. Para afinar: conferir por demonstrativo (extratos.lista[].total_pedidos × linhas lidas dele).
+        const cortadas = ['pedidos_liq', 'pedidos_espera'].map(t => (d.listas || {})[t]).filter(l => l && l.parcial);
+        if (cortadas.length) Object.assign(m, { aprox: true, motivo: [m.motivo, 'o TikTok mostrou ' + cortadas.map(l => l.lidos + ' de ' + l.total).join(' e ') + ' pedidos'].filter(Boolean).join('; ') });
+        return m;
+    };
+
     /** "E se eu vender a R$ X?" no TikTok (tabela com vigência do núcleo). */
     TT.simular = (preco, ctx, cfg) => CN.tarifas.simular('tiktok', preco, Object.assign({ imposto_pct: num((cfg || {}).imposto_pct), margem_alvo_pct: num((cfg || {}).margem_alvo_pct) }, ctx || {}));
 
     // ── Fundo (background.js): mensagens e registro dos scripts de captura ─────────────────────────────────────────
+    // world: 'MAIN' no registerContentScripts pede o Chrome 102+ (o mínimo do manifest continua 116).
     TT.SCRIPTS = [
         { id: 'copiloto-tt-pagina', matches: [TT.ORIGEM], js: ['tiktok-pagina.js'], runAt: 'document_start', world: 'MAIN', persistAcrossSessions: true },
         { id: 'copiloto-tt-tela', matches: [TT.ORIGEM], js: ['tiktok-tela.js'], runAt: 'document_start', persistAcrossSessions: true },
@@ -418,9 +646,10 @@
      * 'scripting' (registrar a leitura da tela) + o site do Seller Center. A 3.1.0 não pedia nenhuma das duas.
      */
     TT.PERM = { permissions: ['scripting'], origins: [TT.ORIGEM] };
-    const moduloLigado = cfg => (SHC.moduloLigado ? SHC.moduloLigado(cfg, 'tiktok') : !!(cfg && cfg.modulos && cfg.modulos.tiktok === true));
+    // 3.3.0 (C1): sem o "Concordo e ligar" do quadro de Ajustes (cfg.consentimento_tiktok) nada é lido, mesmo com o resto ligado.
+    const moduloLigado = cfg => !!(cfg && cfg.consentimento_tiktok) && (SHC.moduloLigado ? SHC.moduloLigado(cfg, 'tiktok') : !!(cfg && cfg.modulos && cfg.modulos.tiktok === true));
     /**
-     * Scripts registrados ⇔ permissões concedidas E o TikTok ligado e SALVO em Ajustes (cfg.modulos.tiktok === true).
+     * Scripts registrados ⇔ permissões concedidas E o TikTok ligado e SALVO em Ajustes (cfg.modulos.tiktok === true) E o consentimento gravado.
      * Marcou a caixa e não salvou, desligou ou nunca ligou: nenhum script no TikTok (nada é lido nem gravado).
      */
     TT.sincronizarScripts = () => emFila(async () => {
@@ -445,12 +674,14 @@
         if (ja.length) await ch.scripting.unregisterContentScripts({ ids: ja });
         return { ok: true, ligado: false };
     });
-    /** "Apagar dados do TikTok": tudo o que o Copiloto guardou do TikTok neste Chrome (tt:* e os custos c|tiktok|*). → quantas chaves saíram */
+    /** "Apagar dados do TikTok": tudo o que o Copiloto guardou do TikTok neste Chrome (tt:*, tt@<empresa>:* e os custos c|tiktok|*). → quantas chaves saíram */
     TT.apagarDados = () => emFila(async () => {
-        const ks = await chavesCom('tt:', 'c|tiktok|');
-        if (ks.length) await area().remove(ks);
+        const ks = await chavesEm(crua(), DE_TODAS);
+        if (ks.length) await crua().remove(ks);
         return ks.length;
     });
+    // 3.3.0 (E9): há o que apagar? A tt:conta vem em toda captura; o resto (de todas as empresas) só é listado com o getKeys (Chrome 130+), sem ler tudo.
+    TT.temDados = async () => !!(await area().get('tt:conta'))['tt:conta'] || (typeof crua().getKeys === 'function' && (await chavesEm(crua(), DE_TODAS)).length > 0);
     TT.daAbaDoTikTok = s => !!(s && s.id === root.chrome.runtime.id && s.tab && /^https:\/\/seller-br\.tiktok\.com\//.test(s.url || s.tab.url || ''));
     const daExtensao = s => !!(s && s.id === root.chrome.runtime.id && /^chrome-extension:\/\//.test(s.url || ''));
 
@@ -458,10 +689,11 @@
         const ch = root.chrome;
         ch.runtime.onMessage.addListener((msg, sender, responder) => {
             if (!msg) return false;
-            if (msg.acao === 'tiktok_captura') {   // da aba do Seller Center: {tipo, dados, conta, lido_em}
+            if (msg.acao === 'tiktok_captura') {   // da aba do Seller Center: {tipo, dados, conta, lido_em, pedido}
                 if (!TT.daAbaDoTikTok(sender)) return false;
-                // Script que ficou para trás com o TikTok desligado em Ajustes: não grava nada.
-                area().get('cfg').then(o => (moduloLigado((o && o.cfg) || {}) ? TT.gravarCaptura(msg.tipo, msg.dados, msg.conta, msg.lido_em) : { ok: false, motivo: 'desligado' }))
+                // Script que ficou para trás com o TikTok desligado em Ajustes: não grava nada. Desmarcar devolve as permissões
+                // na hora (antes do "Salvar canais"): sem elas, a aba que já estava aberta também para de gravar.
+                area().get('cfg').then(async o => (moduloLigado((o && o.cfg) || {}) && await ch.permissions.contains(TT.PERM) ? TT.gravarCaptura(msg.tipo, msg.dados, msg.conta, msg.lido_em, msg.pedido) : { ok: false, motivo: 'desligado' }))
                     .then(responder, () => responder({ ok: false }));
                 return true;
             }

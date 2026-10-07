@@ -100,8 +100,7 @@ async function sincronizarCobrancas(sellerId, progresso, modo) {
     const base = ciclo && antes.ciclo && antes.ciclo.id === ciclo.id ? antes.ciclo.feitos : [...(antes.mesesLidos || []), ...(antes.incompletos || [])];
     const feitos = new Set(base), marcaCiclo = ciclo ? { id: ciclo.id, feitos: base } : undefined;
     // v2.11: cobranças guardadas do mês atual e do anterior (leitura a partir dos dias novos; o "para conferir" do mês não relido).
-    // cortadoEm (v3.3): o dia em que cada mês cortado (80+ páginas) foi lido — marcaReler põe na fila o cortado depois de uma troca de conta.
-    const lidoEm = Object.assign({}, antes.lidoEm), cortadoEm = Object.assign({}, antes.cortadoEm), guard = {};
+    const lidoEm = Object.assign({}, antes.lidoEm), guard = {};
     for (const m of [atual, anterior]) { const g = await SHC.lerChave(chaveCob(sellerId, m)); if (g && g.ate && Array.isArray(g.linhas)) guard[m] = g; }
     const fechadoLido = m => m < atual && feitos.has(m) && (lidoEm[m] || '') >= fechadoDesde(m) && (m !== anterior || !!guard[m]);
     // v3.1: releer = meses lidos pela versão que somava a tarifa de devolução ao frete (migrarFreteDevolucao): lidos de novo 1 vez.
@@ -152,7 +151,7 @@ async function sincronizarCobrancas(sellerId, progresso, modo) {
         todas.push(...r.linhas);
         cobs.push(...r.linhas.filter(c => /^(frete|ads|venda)/.test(c.tipo)));   // as outras cobranças não são usadas
         // Bateu no máximo de páginas: o mês ficou pela metade → fech e vm dele não são regravados (ficariam menores).
-        if (r.cortado) { cortados.add(j.mes); cortadoEm[j.mes] = hoje; } else { cortados.delete(j.mes); delete cortadoEm[j.mes]; lidos.add(j.mes); lidosAgora.push(j.mes); lidoEm[j.mes] = hoje; }
+        if (r.cortado) cortados.add(j.mes); else { cortados.delete(j.mes); lidos.add(j.mes); lidosAgora.push(j.mes); lidoEm[j.mes] = hoje; }
         releer.delete(j.mes);
         if (!r.cortado && (j.mes === atual || j.mes === anterior)) {
             guard[j.mes] = { ate: j.ate, linhas: r.linhas };
@@ -187,9 +186,9 @@ async function sincronizarCobrancas(sellerId, progresso, modo) {
         }
         if (!r.cortado) await gravarFechamento(sellerId, todas, [j.mes]);
         await SHC.salvarPendentes(sellerId, res.pendentes);
-        [lidoEm, cortadoEm].forEach(o => Object.keys(o).forEach(m => { if (!doze.some(x => x.mes === m)) delete o[m]; }));
+        Object.keys(lidoEm).forEach(m => { if (!doze.some(x => x.mes === m)) delete lidoEm[m]; });
         await SHC.gravarChave(marca, { completo12: doze.every(x => lidos.has(x.mes) || cortados.has(x.mes)), ate: hoje, ts: Date.now(),
-            incompletos: [...cortados].sort(), mesesLidos: [...lidos].sort().slice(-13), lidoEm, cortadoEm, ciclo: marcaCiclo, releer: [...releer].sort() });
+            incompletos: [...cortados].sort(), mesesLidos: [...lidos].sort().slice(-13), lidoEm, ciclo: marcaCiclo, releer: [...releer].sort() });
         pedidos =Object.keys(vendas).reduce((n, id) => n + Object.keys(vendas[id]).filter(o => vendas[id][o]).length, 0);
     }
     // v2.5.3: frete por pedido (30 × 30 dias, formatos, conciliação) e pagamento excedente, com o lido agora + o que já estava guardado.
@@ -284,8 +283,7 @@ async function gravarConferir(conta, cobs, lidosAgora, itens) {
     (itens || []).forEach(i => { if (i && i.itemId && !porId[i.itemId]) porId[i.itemId] = i; });
     const lista = SHC.fech.conferir((cobs || []).filter(c => c && meses.indexOf(String(c.data || '').slice(0, 7)) >= 0), porId);
     // v3.3: valor = só o que dá para pedir de volta (como o "Dá para recuperar"); as dúvidas ("pode estar certo") contam em qtd, sem R$.
-    // 3.3.0, trava do frete: todo frete de envio também (SHC.fech.freteSemChamado), como no total do Fechamento.
-    const snap = { ts: Date.now(), meses, qtd: lista.length, valor: SHC.r2(lista.reduce((s, x) => s + (x.duvida || SHC.fech.freteSemChamado(x) ? 0 : x.diferenca || 0), 0)), itens: lista.slice(0, 100) };
+    const snap = { ts: Date.now(), meses, qtd: lista.length, valor: SHC.r2(lista.reduce((s, x) => s + (x.duvida ? 0 : x.diferenca || 0), 0)), itens: lista.slice(0, 100) };
     await SHC.gravarChave('conferir:' + conta, snap);
     return snap;
 }

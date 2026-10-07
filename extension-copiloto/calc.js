@@ -37,11 +37,11 @@
     // Módulos que o seller pode desligar (cada um = 1 aba do painel); Geral e Ajustes nunca somem.
     SHC.MODULOS = ['full', 'posvenda', 'promo', 'ads', 'frete', 'catalogo', 'afiliados', 'saude', 'conciliacao', 'canal'];   // v2.9: + posvenda, na ordem das abas
     // v3.2: módulos opcionais começam DESLIGADOS (TikTok pede permissão de outro site): só cfg.modulos[id] === true liga.
+    // 3.3.0: cfg.modulos.tiktok === true é a marca "canal ligado" (SHC.canaisLigados); o TikTok não é mais aba (é o filtro de canal), por isso fica fora de MODULOS.
     SHC.MODULOS_OPCIONAIS = ['tiktok'];
-    // v3.2.0: TRAVADOS = desligados mesmo com cfg.modulos[id] === true, sem interruptor em Ajustes e sem aba. O TikTok fica fora da 3.2.0
-    // (a política e a ficha da loja não citam o TikTok). Para liberar: tirar daqui, pôr de volta em MODULOS, chamar SHC.tt.instalarFundo()
-    // no background.js e devolver 'scripting' + seller-br.tiktok.com às permissões opcionais do manifest.
-    SHC.MODULOS_TRAVADOS = ['tiktok'];
+    // TRAVADOS = desligados mesmo com cfg.modulos[id] === true. O TikTok ficou aqui na 3.2.x; a 3.3.0 (E8) o destravou, com 'scripting' e o site
+    // só nas permissões OPCIONAIS do manifest e o fundo chamando SHC.tt.instalarFundo(). A lista fica para travar outro módulo um dia.
+    SHC.MODULOS_TRAVADOS = [];
     /** true a não ser que o seller tenha desligado esse módulo em Ajustes (cfg.modulos[id] === false); opcional só com === true; travado nunca. */
     SHC.moduloLigado = (cfg, id) => (SHC.MODULOS_TRAVADOS.indexOf(id) >= 0 ? false
         : SHC.MODULOS_OPCIONAIS.indexOf(id) >= 0 ? !!(cfg && cfg.modulos && cfg.modulos[id] === true)

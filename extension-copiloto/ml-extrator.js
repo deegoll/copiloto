@@ -1116,6 +1116,45 @@
     SHC.tipoDevolucao = c => (c && /devolu[çc][ãa]o/i.test(String(c.texto || '')) && !/^devolucao/.test(String(c.tipo || '')))
         ? Object.assign({}, c, { tipo: c.estorno ? 'devolucao_estorno' : 'devolucao' }) : c;
 
+    // ── v3.3: detalhe da venda (/vendas/<pedido>/detalhe; mapa em tests/copiloto/_vendas_etiqueta/MAPA-VENDA.md) ──
+    // Lê SÓ os grupos de valores (account_rows-*), o rótulo "Venda por publicidade" e a quantidade de cada produto. buyer_*, address_*,
+    // billing_*, notes e account_title (nº do pagamento) nunca são lidos.
+    // v3.4 (05/10): veio do ml-tela.js (o Fechamento e o painel conferem a tarifa cobrada no detalhe da venda) e lê a quantidade.
+    const txtD = v => typeof v === 'string' ? v : (v && typeof v === 'object' ? String(v.text || v.label || v.title || '') : '');
+    const rsSinal = t => { const s = txtD(t), n = SHC.valorRS(s); return n === null ? null : (/^\s*[-−]/.test(s) ? -n : n); };
+    /** Estado do detalhe → { preco, tarifa, tarifaPct, acrescimo, frete, fretePagoComprador, cancelada, recebe, ads, pedidos, unidades } | null.
+     *  unidades = soma de product_<pedido>_quantity ("2 unidades"); null quando a página não mostra a quantidade. */
+    SHC.mlVendaDetalhe = function (r) {
+        const pp = r && r.appProps && r.appProps.pageProps, resp = (pp && pp.response) || (r && r.response);
+        if (!resp || typeof resp !== 'object') return null;
+        const g = k => { const b = resp[k]; return b && typeof b === 'object' ? (b.data || b) : null; };
+        const rows = b => (b && Array.isArray(b.rows) ? b.rows : []);
+        const prod = g('account_rows-PRODUCT'), ch = g('account_rows-CHARGES'), su = g('account_rows-SURCHARGE'), sh = g('account_rows-SHIPMENT'), tot = g('account_rows-TOTAL');
+        if (!prod || !tot) return null;
+        const preco = rsSinal(prod.subTotal) !== null ? rsSinal(prod.subTotal) : SHC.r2(rows(prod).reduce((t, x) => t + (rsSinal(x.price) || 0), 0));
+        const recebe = rows(tot).length ? rsSinal(rows(tot)[0].price) : rsSinal(tot.subTotal);
+        if (!(preco > 0) || recebe === null) return null;
+        const pctM = /(\d+(?:,\d+)?)\s*%/.exec(rows(ch).map(x => txtD(x.label)).join(' '));
+        const acr = rows(su).find(x => /acr[eé]scimo/i.test(txtD(x.label)));
+        const pagoC = rows(sh).find(x => /comprador/i.test(txtD(x.label)) && rsSinal(x.price) > 0);
+        const ids = new Set(), ads = Object.keys(resp).some(k => {
+            const m = /^product_(\d+)_title_description$/.exec(k);
+            if (!m) return false;
+            ids.add(m[1]);
+            return !!txtD((g(k) || {}).advertisingLabel).trim();
+        });
+        let unidades = null;
+        Object.keys(resp).forEach(k => {
+            const m = /^product_(\d+)_/.exec(k);
+            if (m) ids.add(m[1]);
+            const q = /^product_\d+_quantity$/.test(k) ? parseInt(txtD((g(k) || {}).label || g(k)).replace(/\D+/g, ''), 10) : 0;
+            if (q > 0) unidades = (unidades || 0) + q;
+        });
+        return { preco, tarifa: ch ? -(rsSinal(ch.subTotal) || 0) : 0, tarifaPct: pctM ? parseFloat(pctM[1].replace(',', '.')) : null,
+            acrescimo: acr ? Math.abs(rsSinal(acr.price) || 0) : 0, frete: sh ? -(rsSinal(sh.subTotal) || 0) : 0, fretePagoComprador: pagoC ? rsSinal(pagoC.price) : 0,
+            cancelada: !!g('account_rows-CANCELLATION'), recebe, ads, pedidos: ids.size, unidades };
+    };
+
     /**
      * Janelas para ler o Faturamento, UMA POR MÊS de calendário (o mês atual vai até hoje), do mês ATUAL para trás
      * (o Fechamento e o frete do mês aparecem primeiro): 12 meses na 1ª vez (desde o dia 1º do mês de 365 dias atrás),
@@ -1481,12 +1520,14 @@
         const ps = (r.produtos || []).filter(p => p && ((p.diferencas || 0) !== 0 || (p.naoAptas || 0) > 0));
         const fatos = ps.slice(0, 15).map(p => (p.sku ? 'SKU ' + p.sku : p.itemId || 'produto') + (p.itemId && p.sku ? ' (' + p.itemId + ')' : '') + ': declaradas ' + n(p.declaradas)
             + ', processadas ' + n(p.processadas) + (p.naoAptas ? ', não aptas ' + p.naoAptas : '') + (p.resultado ? ' — ' + p.resultado : '') + '.');
-        if (!ps.length) fatos.push('Unidades declaradas: ' + n(r.declaradas) + '; disponíveis para venda: ' + n(r.aptas) + '.');
+        // 3.3.0 (juntada com a nuvem): sem o detalhe por produto não há texto. Sem detalhe, "declaradas" vem do units_count da lista, que conta
+        // PRODUTOS, e "aptas" conta unidades (leitura ao vivo de 06/10).
+        if (!ps.length) return '';
         // Auditoria da loja (07/10/2026) e regra da dona: r.custo é o total_charged da remessa = coleta e/ou penalidade — nunca "multa" nem
         // "cobrado pela inconformidade". Só unidade não apta (sem diferença de contagem) não é erro de contagem: pode ter vindo do nosso preparo.
         if (r.custo) fatos.push('Total cobrado pelo Mercado Livre nesta remessa (coleta e/ou penalidade): ' + SHC.moeda(r.custo) + '.');
         if (r.prazo) fatos.push('Prazo para reclamar informado pelo ML: ' + dt(r.prazo) + '.');
-        const contagem = ps.some(p => (p.diferencas || 0) !== 0) || (!ps.length && r.declaradas !== null && r.aptas !== null && r.aptas < r.declaradas && !(r.motivos || []).every(m => /não aptas/.test(m)));
+        const contagem = ps.some(p => (p.diferencas || 0) !== 0);   // só com o detalhe por produto (sem ele já saiu acima)
         const naoAptas = ps.reduce((s, p) => s + (p.naoAptas || 0), 0), quando = r.quando ? ' (' + dt(r.quando) + ')' : '';
         return SHC.textoContestacao({ assunto: contagem ? 'Reclamação por diferenças na remessa do Full' : 'Pedido de revisão de unidades não aptas na remessa do Full', ids: [['Remessa', '#' + r.id]],
             intro: contagem ? 'A remessa foi recebida com diferença entre as unidades que declaramos e as que o centro de distribuição processou' + quando + '.'
@@ -2878,8 +2919,10 @@
             const k = p.itemId || 'pedido ' + p.pedido, x = porItem[k] || (porItem[k] = { n: 0, dif: 0 });
             x.n++; x.dif = SHC.r2(x.dif + p.diferenca);
         });
-        Object.keys(porItem).forEach(k => add('frete', nome(k) + ': frete cobrado acima do frete do anúncio em ' + SHC.qtd(porItem[k].n, 'pedido', 'pedidos') + ' (' + SHC.moeda(porItem[k].dif) + ' a mais).',
-            { chave: 'anom|frete|' + k, itemId: /^MLB/.test(k) ? k : '' }));
+        // 3.3.0, trava do frete (06/10): o aviso diz "para conferir", nunca "a mais": a régua (frete do anúncio de 1 unidade) não sabe a faixa de
+        // preço, o peso nem as unidades da venda, e o Copiloto não monta mais chamado de frete até a regra precisa (3.3.1).
+        Object.keys(porItem).forEach(k => add('frete', nome(k) + ': frete para conferir em ' + SHC.qtd(porItem[k].n, 'pedido', 'pedidos') + ' (' + SHC.moeda(porItem[k].dif)
+            + ' de diferença para o frete do anúncio). Pode estar certo: confira no detalhe da venda.', { chave: 'anom|frete|' + k, itemId: /^MLB/.test(k) ? k : '' }));
         Object.keys(fr.porAnuncio || {}).forEach(id => {
             const a = fr.porAnuncio[id];
             if (!a || !a.subiu || porItem[id]) return;
@@ -2891,7 +2934,9 @@
             if (!x || (x.regra === 'frete' && pedidosFrete.has(String(x.pedido)))) return;
             const k = String(x.pedido), y = pedPag[k] || (pedPag[k] = { dif: 0, motivo: x.motivo, itemId: x.itemId });
             // v3.3: dúvida ("pode estar certo") não soma R$: o pedido só com dúvidas aparece sem valor.
-            if (!x.duvida) y.dif = SHC.r2(y.dif + (x.diferenca || 0));
+            // 3.3.0, trava do frete: o frete fora da curva (regra 'frete') também, mesmo o guardado antes da trava (sem a dúvida), e todo frete de envio
+            // pelo tipo (SHC.fech.freteSemChamado: a repetida e a de venda cancelada) onde o fechamento.js está carregado (fundo e Fechamento).
+            if (!x.duvida && !(SHC.fech ? SHC.fech.freteSemChamado(x) : x.regra === 'frete')) y.dif = SHC.r2(y.dif + (x.diferenca || 0));
         });
         Object.keys(pedPag).forEach(k => add('pagamento', 'Pedido ' + k + ': ' + (pedPag[k].dif > 0 ? SHC.moeda(pedPag[k].dif) + ' a conferir. ' : 'cobrança para conferir (pode estar certa). ') + (pedPag[k].motivo || ''), { chave: 'anom|pag|' + k, itemId: pedPag[k].itemId || '' }));
         ((d.rateio && d.rateio.faturas) || []).forEach(f => {
@@ -2910,13 +2955,14 @@
         (rm.comInconformidade || []).forEach(r => { porRem[r.id] = (r.textos || []).slice(); });
         (rm.comMulta || []).forEach(r => { (porRem[r.id] || (porRem[r.id] = [])).push(r.texto); });
         // v2.9: remessa recebida com inconformidade (90 dias): motivo + o que o ML cobrou; o link abre a remessa, onde se reclama.
+        // 3.3.0 (regra da dona): o custo da remessa (total_charged) é coleta e/ou penalidade, nunca "cobrado pela inconformidade": o texto diz.
         // Reclamação já aberta ou o ML não aceita mais reclamar: sai do sino (a multa, se houver, continua).
         const multaIds = new Set((rm.comMulta || []).map(r => String(r.id)));
         (rm.inconformes || []).filter(r => !SHC.remessaPendente(r)).forEach(r => { if (!multaIds.has(r.id)) delete porRem[r.id]; });
         (rm.inconformes || []).filter(SHC.remessaPendente).forEach(r => {
             const t = porRem[r.id] || (porRem[r.id] = []);
             r.motivos.forEach(m => { if (!t.some(x => x.toLowerCase().indexOf(m.toLowerCase()) >= 0)) t.push(m); });   // "3 unidades não aptas…" do detalhe já diz o motivo
-            if (r.custo) t.push('o ML cobrou ' + SHC.moeda(r.custo));
+            if (r.custo) t.push('o ML cobrou ' + SHC.moeda(r.custo) + ' na remessa (coleta e/ou penalidade)');
         });
         Object.keys(porRem).forEach(id => add('full', 'Remessa ' + id + ' do Full: ' + [...new Set(porRem[id])].join('; ') + '.', { chave: 'anom|remessa|' + id, link: SHC.remessaLink(id), remessaId: id }));
         // v2.7: perguntas sem resposta (1 item; vermelho > 5 ou tempo médio comercial > 1 h) e reputação (1 por variável no alerta; vermelho ≥ 90% do limite).
@@ -4157,16 +4203,18 @@
     // v3.3: com a regra do ML (o frete sai do peso e das medidas da embalagem) e o pedido explícito: corrigir a medida E rever o frete cobrado.
     // Auditoria da loja (07/10/2026): "aumenta o custo de envio" e o estorno só quando o peso CONSIDERADO (o maior entre o físico e o
     // volumétrico) subiu; medida que diminuiu ou ficou igual pede só a correção do cadastro.
+    // 3.3.0 (junção, regras da dona): trava do frete, o chamado pede a REVISÃO do frete, nunca o estorno nem "aumenta o custo" (sem o número
+    // da diferença do frete); e contestação só com prova: sem a medida certa (ERP ou a do seller) é pedido de revisão.
     SHC.medidasChamado = (mu) => {
         const subiu = SHC.medidaConsiderada(mu.depois) > SHC.medidaConsiderada(mu.antes) + 0.001;
-        return SHC.textoContestacao({ assunto: subiu ? 'Contestação de cubagem alterada no anúncio' : 'Pedido de correção da cubagem do anúncio', ids: [['SKU', mu.sku || ''], ['Anúncio', mu.itemId]],
-            intro: 'As medidas da embalagem deste anúncio foram alteradas sem que nós mexêssemos' + (subiu ? ', e isso aumenta o custo de envio cobrado.' : '.'),
+        return SHC.textoContestacao({ assunto: !subiu ? 'Pedido de correção da cubagem do anúncio' : (mu.correta ? 'Contestação' : 'Pedido de revisão') + ' de cubagem alterada no anúncio', ids: [['SKU', mu.sku || ''], ['Anúncio', mu.itemId]],
+            intro: 'As medidas da embalagem deste anúncio foram alteradas sem que nós mexêssemos.',
             fatos: ['Medidas da embalagem: de ' + SHC.medidaTxt(mu.antes) + ' para ' + SHC.medidaTxt(mu.depois) + ' ' + SHC.medidasQuando(mu) + '. A alteração não foi feita por nós.',
                 'Peso considerado no frete (o maior entre o físico e o volumétrico): de ' + kgTxt(SHC.medidaConsiderada(mu.antes)) + ' kg para ' + kgTxt(SHC.medidaConsiderada(mu.depois)) + ' kg.',
                 mu.correta ? 'Medidas corretas (' + (mu.corretaDe === 'erp' ? 'do nosso cadastro' : 'as que deixamos no anúncio') + '): ' + SHC.medidaTxt(mu.correta) + '.' : ''],
             regras: ['frete_tabela', 'frete_calculo'], anexos: ['especificações técnicas do fabricante (medidas e peso)', 'foto da embalagem com trena e balança', 'nota fiscal do item'],
             pedido: 'a revisão da cubagem do anúncio' + (mu.correta ? ', a correção das medidas para ' + SHC.medidaTxt(mu.correta) + ' nos envios futuros' : '')
-                + (subiu ? ' e o estorno do custo de envio cobrado a mais desde ' + ddmm(mu.vistoAte || mu.em) + '.' : '.') });
+                + (subiu ? ' e a revisão do frete cobrado desde ' + ddmm(mu.vistoAte || mu.em) + '.' : '.') });
     };
     SHC.MEDIDAS_SELLER_MS = 48 * 36e5;   // mudança vista até 48 h depois de um clique em "Alterar no ML" = provavelmente do seller
     /**
@@ -5407,7 +5455,8 @@
         { id: 'comissao', re: /tarifa do premium|comiss/i, emo: '💸' }, { id: 'custo', re: /custo do produto/i, emo: '📦' }];
     SHC.prejuizoMotivoId = txt => MOTIVO_PREJ.find(m => m.re.test(String(txt || ''))) || { id: 'varios', emo: '🧮' };
     // Ação curta pelo motivo que mais tirou R$ no período; q = " do <SKU>" (1 produto só) ou " desses produtos".
-    const FAZ_PREJ = { frete: q => 'Conferir o frete' + q + ' (se veio cobrado a mais, contestar no Fechamento)',
+    // 3.3.0, trava do frete (06/10): o Fechamento não tem mais chamado de frete; a ação manda conferir na venda.
+    const FAZ_PREJ = { frete: q => 'Conferir o frete' + q + ' no detalhe da venda',
         promocao: q => 'Rever a promoção ou o desconto' + q + ' (a venda não paga o custo)', comissao: q => 'Rever o preço' + q + ' no Premium (a tarifa não cabe) ou passar para Clássico',
         custo: q => 'Subir o preço' + q + ': o ML repassa menos do que o produto custa', ads: q => 'Rever o Ads' + q,
         varios: q => 'Rever o preço' + q + ': tarifa, frete, imposto e custo passam do preço' };
@@ -5558,7 +5607,8 @@
         const fretePago = numF(conc.totalAMais) !== null ? SHC.r2(conc.totalAMais) : SHC.r2(pagos.reduce((s, p) => s + (p.diferenca || 0), 0));
         const nConf = cf.qtd > 0 ? cf.qtd : anT.pagamento > 0 ? anT.pagamento : 0, mesesConf = (cf.qtd > 0 && Array.isArray(cf.meses) ? cf.meses.slice().sort() : []).map(m => nomeMesFam(m).slice(0, 3));
         if (nConf) cobr.push('▸ ' + SHC.qtd(nConf, 'cobrança a conferir', 'cobranças a conferir') + (cf.valor > 0 || mesesConf.length ? ' (' + [cf.valor > 0 ? SHC.moeda(cf.valor) : '', mesesConf.join(' e ')].filter(Boolean).join(', ') + ')' : ''));
-        if (pagos.length) cobr.push('▸ Frete cobrado a mais em ' + SHC.qtd(pagos.length, 'pedido', 'pedidos') + ' (' + SHC.moeda(fretePago) + ', últimos 30 dias)');
+        // 3.3.0, trava do frete (06/10): "para conferir" e "de diferença", nunca "cobrado a mais" nem "contestar" (sem chamado até a 3.3.1).
+        if (pagos.length) cobr.push('▸ Frete para conferir em ' + SHC.qtd(pagos.length, 'pedido', 'pedidos') + ' (' + SHC.moeda(fretePago) + ' de diferença, últimos 30 dias)');
         const novos = d.fatura ? SHC.custosNovos(d.fatura).itens : [];
         novos.slice(0, 2).forEach(x => cobr.push('▸ ' + (x.novo ? 'Custo novo' : 'Custo que subiu') + ' na fatura: ' + SHC.custoNovoTxt(x)));
         const ce = SHC.certAgora(d.cert, Date.parse(h + 'T12:00:00'));
@@ -5574,7 +5624,7 @@
         (sk.caindo || []).forEach(s => { const c = causaPrincipal(s.gargalo); if (!c || !FAZ[c.id]) return; const perda = Math.abs(numF(s['variacaoR$']) || 0);
             acao(FAZ[c.id](s.sku || nomeCurto(s.titulo)) + ' (' + c.curto + (perda ? ' · −' + moedaCurta(perda) + ' no mês' : '') + ')', perda, 0); });
         if (cf.valor > 0) acao('Conferir as cobranças no Fechamento (' + SHC.moeda(cf.valor) + ')', cf.valor, 0);
-        if (fretePago > 0) acao('Contestar o frete cobrado a mais (' + SHC.moeda(fretePago) + ')', fretePago, 0);
+        if (fretePago > 0) acao('Conferir o frete no detalhe da venda (' + SHC.moeda(fretePago) + ' de diferença)', fretePago, 0);
         (rm.comMulta || []).forEach(r => acao('Ver a multa da remessa ' + r.id + (r.valor > 0 ? ' (' + SHC.moeda(r.valor) + ')' : ''), r.valor || 0, 0));
         // r.custo é a coleta da remessa, não o valor da diferença: sem R$ no texto nem na ordem (o valor da diferença o Copiloto não sabe).
         incPend.slice(0, 1).forEach(r => acao('Reclamar a diferença da remessa ' + r.id, 0, 0));

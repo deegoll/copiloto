@@ -3,6 +3,9 @@
 // E a trava: o pedido de exclusão só sai para os casos que as regras de exclusão do ML aceitam (nunca o que é responsabilidade do vendedor).
 // Revisão 07/10/2026: culpa do vendedor no motivo VETA a exclusão (mesmo com "me arrependi"/"engano" junto), e o caso incerto (🟡, valor
 // esperado estimado) pede a CONFERÊNCIA e o estorno só se confirmar — nunca afirma cobrança indevida.
+// Junção com a nossa 3.3.0 (07/10): regras da dona por cima do modelo da nuvem. Trava do frete (06/10, "o ML está negando os chamados de
+// frete"): nenhum texto de chamado nem de contestação de FRETE (P.textoChamado, F.chamadoFrete e F.textoChamado do frete dão ''; o frete
+// fica "para conferir" até a 3.3.1). Chamado só com prova: o esperado ESTIMADO (preço de hoje, mediana, "pode estar certo") também dá ''.
 // Rodar: node tests/copiloto/teste_contestacao_v33.js
 'use strict';
 require('./relogio').fixar();
@@ -30,33 +33,32 @@ console.log('Formato do modelo da dona (SHC.textoContestacao)');
     ok(/suporte da Magalu/.test(SHC.textoContestacao({ canal: 'magalu', assunto: 'X', pedido: 'y.' })), 'Magalu: saudação dela');
 }
 
-console.log('Frete do anúncio (P.textoChamado) no formato novo');
+console.log('Frete do anúncio (P.textoChamado): trava do frete');
 {
     const P = SHC.pl;
     const item = { itemId: 'MLB8000000001', sku: 'HA-14253', frete: 58.75 };
     // fh|ml|MLB: o frete do anúncio por dia (45,35 até 19/09; 58,75 desde 20/09). Pedidos (vd|ml): frete cobrado por pedido.
     const h = P.historicoFrete({ '2026-09-01': 45.35, '2026-09-19': 45.35, '2026-09-20': 58.75, '2026-10-01': 58.75 });
     const vendas = { '3000000001': { d: '2026-09-22', f: 58.75 }, '3000000002': { d: '2026-09-25', f: 58.75 } };
-    const t = P.textoChamado(item, h, vendas, true, '30×20×15 cm, 9,2 kg');
-    ok(/^Assunto: Contestação de cobrança indevida de frete – SKU: HA-14253 – Anúncio: MLB8000000001/.test(t), 'assunto com SKU e anúncio');
-    ok(/passou de R\$ 45,35 para R\$ 58,75 em 20\/09/.test(t) && /#3000000001 de 22\/09.*R\$ 13,40 a mais/.test(t) && /Diferença somada: R\$ 26,80/.test(t), 'a subida, os pedidos e a soma');
-    ok(/Não alterei peso, medidas nem embalagem\. Peso e medidas da embalagem no meu cadastro: 30×20×15 cm, 9,2 kg\./.test(t), 'medidas do cadastro quando o seller confirma');
-    ok(/Solicitamos a revisão da cubagem \(peso e medidas\).*a correção para os envios futuros e o estorno da diferença cobrada nos pedidos acima \(R\$ 26,80\)/.test(t),
-        'pede revisão da cubagem, correção para os envios futuros e o estorno (o modelo da dona)');
-    ok(/ajuda\/40538/.test(t) && /Seguem em anexo: especificações técnicas do fabricante/.test(t), 'com a regra do ML e os anexos');
-    const sc = P.textoChamado(item, h, vendas, false, '');
-    ok(/^Assunto: Pedido de revisão do custo de envio do anúncio/.test(sc) && /se houver erro na cubagem, a correção para os envios futuros e o estorno/.test(sc) && !/indevida/.test(sc),
-        'sem o seller confirmar que não mexeu em peso e medidas: pedido de revisão, estorno só se houver erro na cubagem');
+    // A nuvem tinha passado este texto ao formato de contestação (com e sem a caixa das medidas). Vale a trava (06/10, achado H1 da auditoria
+    // de 05/10: o frete também muda pela faixa de preço): sem texto, e o cartão #frChamado do detalhe do anúncio não aparece.
+    ok(P.textoChamado(item, h, vendas, true, '30×20×15 cm, 9,2 kg') === '' && P.textoChamado(item, h, vendas, false, '') === '',
+        'trava do frete (06/10, H1): sem texto de chamado do frete do anúncio, com ou sem a caixa das medidas');
 }
 
 console.log('Cobrança do Fechamento (SHC.fech.textoChamado)');
 {
-    const x = { pedido: '2000000123', data: '2026-09-20', itemId: 'MLB8000000002', titulo: 'Bomba d’água', cobranca: 'Tarifa de envio', valor: 58.75, esperado: 45.35, diferenca: 13.4, motivo: 'acima do frete do anúncio', regra: 'frete' };
+    // Trava do frete: a cobrança de frete (regra 'frete') não tem texto, nem de contestação nem de dúvida (antes da junção: contestação com ajuda/40538).
+    const fr = { pedido: '2000000123', data: '2026-09-20', itemId: 'MLB8000000002', titulo: 'Bomba d’água', cobranca: 'Tarifa de envio', valor: 58.75, esperado: 45.35, diferenca: 13.4, motivo: 'acima do frete do anúncio', regra: 'frete' };
+    ok(SHC.fech.textoChamado(fr) === '' && SHC.fech.textoChamado(Object.assign({}, fr, { duvida: 'pode ser 2 unidades' })) === '' && SHC.fech.freteSemChamado(fr),
+        'trava do frete: cobrança de frete sem texto (nem contestação nem dúvida); fica "para conferir"');
+    // Com prova (o detalhe da venda do ML, F.provaTarifa): o modelo da nuvem, cobrado × devido × diferença e o estorno.
+    const x = SHC.fech.provaTarifa({ pedido: '2000000123', data: '2026-09-20', itemId: 'MLB8000000002', titulo: 'Bomba d’água', cobrado: 30, cob: { venda: 30 } }, { preco: 150, tarifa: 20, tarifaPct: 13.33 });
     const t = SHC.fech.textoChamado(x);
-    ok(/^Assunto: Contestação de cobrança indevida: Tarifa de envio – Pedido: #2000000123 – Anúncio: MLB8000000002/.test(t), 'assunto com o tipo da cobrança, pedido e anúncio');
-    ok(/- Valor cobrado: R\$ 58,75\n- Valor devido: R\$ 45,35\n- Diferença: R\$ 13,40/.test(t) && /ajuda\/40538/.test(t), 'valor cobrado × devido × diferença, com a regra do frete');
-    ok(/Solicitamos a revisão desta cobrança e o estorno da diferença de R\$ 13,40 na nossa conta\./.test(t), 'pede o estorno da diferença');
-    const d = SHC.fech.textoChamado(Object.assign({}, x, { duvida: 'pode ser 2 unidades' }));
+    ok(/^Assunto: Contestação de cobrança indevida: Tarifa de venda \(Custo por vender\) – Pedido: #2000000123 – Anúncio: MLB8000000002/.test(t), 'assunto com o tipo da cobrança, pedido e anúncio');
+    ok(/- Valor cobrado: R\$ 30,00\n- Valor devido: R\$ 20,00\n- Diferença: R\$ 10,00/.test(t) && /No detalhe desta venda o Mercado Livre mostra tarifa de R\$ 20,00/.test(t), 'valor cobrado × devido × diferença, com a prova do detalhe da venda');
+    ok(/Solicitamos a revisão desta cobrança e o estorno da diferença de R\$ 10,00 na nossa conta\./.test(t), 'pede o estorno da diferença');
+    const d = SHC.fech.textoChamado({ pedido: '2000000125', data: '2026-09-20', itemId: 'MLB8000000002', cobranca: 'Tarifa de venda', valor: 30, esperado: 20, diferenca: 10, regra: 'repetida', duvida: 'pode ser 1 cobrança por pagamento' });
     ok(/^Olá! Tenho uma dúvida/.test(d) && !/estorno/.test(d) && !/Diferença/.test(d), 'na dúvida continua só perguntando (nunca afirma erro nem pede estorno)');
 }
 
@@ -86,7 +88,7 @@ console.log('Devolução, medidas, Full');
         && /se a inaptidão não decorreu do nosso preparo/.test(na), 'Full só com unidades não aptas: pede o motivo de cada uma, sem afirmar erro de contagem');
 }
 
-console.log('Frete casado pela data (auditoria da loja): só o par sem ambiguidade é contestável');
+console.log('Frete casado pela data (auditoria da loja): o par ambíguo vai para "para conferir"');
 {
     const fd = { MLB8000000001: { '2026-09-01': 45.35, '2026-09-19': 45.35, '2026-09-20': 58.75, '2026-10-01': 58.75 } };
     const ret = { MLB8000000001: { frete: 58.75 } };
@@ -97,9 +99,11 @@ console.log('Frete casado pela data (auditoria da loja): só o par sem ambiguida
         '2 vendas e 2 fretes do anúncio com outro número: nada vai para "cobrado a mais (confirmado)" nem vira chamado (antes: "cobrança indevida" falsa de R$ 13,40)');
     const um = SHC.conciliaFrete([{ pedido: '9100000003', itemId: 'MLB8000000001', data: '2026-09-23', cobrado: 58.75, formato: 'gratis' }],
         ret, [{ pedido: '2000000019', itemId: 'MLB8000000001', data: '2026-09-18' }], '2026-10-06', fd);
-    const p1 = SHC.fech.recuperar({ conc: um }).parcelas.find(x => x.id === 'frete');
-    ok(um.pagoAMais.length === 1 && !um.pagoAMais[0].talvezUnidades && p1 && /– Pedido: #2000000019 – Frete: #9100000003/.test(SHC.fech.chamadoFrete(p1.itens[0], 'Bomba')),
-        'par único (1 venda e 1 frete do anúncio no período): contestável, e o texto cita o número do frete');
+    // Trava do frete (06/10): nem o par único vira chamado (a nuvem tinha a parcela "frete" com o texto citando o número do frete). Ele fica
+    // no "para conferir" com o número do frete, para o "Conferir no ML" abrir a cobrança certa.
+    const r1 = SHC.fech.recuperar({ conc: um }), q1 = r1.freteConferir.itens[0];
+    ok(um.pagoAMais.length === 1 && !um.pagoAMais[0].talvezUnidades && !r1.parcelas.find(x => x.id === 'frete') && q1 && q1.pedido === '2000000019' && q1.pedidoFrete === '9100000003'
+        && SHC.fech.chamadoFrete(q1, 'Bomba') === '', 'par único (1 venda e 1 frete do anúncio no período): trava do frete, sem chamado; fica "para conferir" com o número do frete');
 }
 
 console.log('Exclusão de reclamação e experiência de compra: só o que as regras do ML aceitam');
@@ -162,17 +166,17 @@ console.log('Caso incerto: pede a conferência, nunca afirma cobrança indevida'
         'motivo misto ("comprei errado e veio com defeito"): 🟡 e pedido de revisão (antes: arrependimento com contestação firme)');
     const base = { pedido: '2000000123', data: '2026-09-20', itemId: 'MLB8000000002', cobranca: 'Tarifa de venda', regra: 'tarifa', valor: 30, esperado: 20, diferenca: 10,
         motivo: 'No preço de hoje (R$ 150,00), este anúncio paga R$ 20,00 de tarifa por unidade. Se o preço da venda foi outro, pode estar certo.' };
+    // Regra da dona (chamado só com prova; a tarifa só pelo detalhe da venda, F.provaTarifa, nunca pelo preço de hoje): o esperado estimado
+    // não vira texto, nem como "Pedido de revisão" (a nuvem tinha). Fica "para conferir".
     const ta = SHC.fech.textoChamado(Object.assign({ estimado: 'Pelo preço atual do anúncio (R$ 150,00), a tarifa de venda seria de R$ 20,00 por unidade.' }, base));
-    ok(/^Assunto: Pedido de revisão de cobrança: Tarifa de venda – Pedido: #2000000123/.test(ta) && /Valor esperado \(estimativa nossa\): R\$ 20,00/.test(ta)
-        && /Como estimamos: Pelo preço atual do anúncio \(R\$ 150,00\)/.test(ta) && /se a diferença se confirmar, o estorno de R\$ 10,00/.test(ta) && !/indevida|Valor devido/.test(ta),
-        'tarifa estimada pelo preço de hoje: revisão com a base da estimativa, estorno só se confirmar');
-    ok(/^Assunto: Pedido de revisão de cobrança/.test(SHC.fech.textoChamado(base)), 'item guardado por versão anterior (sem .estimado, "pode estar certo"): também revisão');
-    // 2ª revisão: o item do "quanto dá para recuperar" tem valor = a diferença; o texto copiado usa o valor COBRADO.
-    const rec = Object.assign({}, base, { valor: 10, cobrado: 30 });
-    ok(/- Valor cobrado: R\$ 30,00\n- Valor esperado \(estimativa nossa\): R\$ 20,00\n- Diferença: R\$ 10,00/.test(SHC.fech.textoChamado(SHC.fech.itemDoChamado(rec))),
-        'texto copiado do "Como pedir de volta": cobrado R$ 30 × esperado R$ 20 (antes saía "cobrado R$ 10")');
+    ok(ta === '' && SHC.fech.textoChamado(base) === '', 'tarifa estimada pelo preço de hoje e item guardado por versão anterior ("pode estar certo"): sem texto de chamado (só com prova)');
+    // 2ª revisão: o item do "quanto dá para recuperar" tem valor = a diferença; o texto copiado usa o valor COBRADO (item provado: cobrança repetida).
+    const rec = { pedido: '2000000123', data: '2026-09-20', itemId: 'MLB8000000002', cobranca: 'Tarifa de venda', regra: 'repetida', valor: 10, cobrado: 30, esperado: 20, diferenca: 10,
+        motivo: 'A mesma tarifa foi cobrada 2 vezes no pedido.' };
+    ok(/- Valor cobrado: R\$ 30,00\n- Valor devido: R\$ 20,00\n- Diferença: R\$ 10,00/.test(SHC.fech.textoChamado(SHC.fech.itemDoChamado(rec))),
+        'texto copiado do "Como pedir de volta": cobrado R$ 30 × devido R$ 20 (antes saía "cobrado R$ 10")');
     const fr = SHC.fech.chamadoFrete({ pedido: '2000000124', data: '2026-09-21', itemId: 'MLB8000000002', cobrado: 58.75, esperado: 45.35, valor: 13.4 }, 'Bomba');
-    ok(/^Assunto: Contestação de cobrança indevida: Frete de envio da venda/.test(fr) && /ajuda\/40538/.test(fr), 'frete acima do custo que o anúncio mostra: contestação firme, com a regra do frete do ML');
+    ok(fr === '', 'trava do frete (06/10): F.chamadoFrete não gera texto de contestação do frete de envio (fica "para conferir")');
 }
 
 console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK');

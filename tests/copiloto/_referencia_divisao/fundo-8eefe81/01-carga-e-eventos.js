@@ -53,9 +53,9 @@ importScripts('calc.js', 'store.js', 'ml-extrator.js', 'tiny.js', 'omie.js', 'bl
 // v3.2: TikTok Shop — núcleo (cópia de copiloto-nucleo/src) + tiktok.js. Só LÊ a resposta que a tela aberta pela seller recebeu:
 // nenhum fetch, nenhum alarme para o TikTok. Mensagens 'tiktok_captura' e 'tiktok_ligar' e o registro dos scripts: SHC.tt.instalarFundo.
 importScripts('nucleo/util.js', 'nucleo/modelo.js', 'nucleo/tarifas.js', 'nucleo/motor.js', 'nucleo/conciliacao.js', 'nucleo/adaptador.js', 'nucleo/adaptadores/tiktok.js', 'tiktok.js');
-// 3.3.0 (E8): TikTok destravado. 'scripting' e o site só como permissões OPCIONAIS (pedidas no clique em Ajustes); os 2 scripts da tela
-// só são registrados com as 2 concedidas E cfg.modulos.tiktok === true (SHC.tt.sincronizarScripts). Nenhum content_script fixo no TikTok.
-SHC.tt.instalarFundo();
+// v3.2.0: TikTok TRAVADO (calc.js SHC.MODULOS_TRAVADOS): sem as permissões no manifest e sem as mensagens/registro de scripts.
+// Liberar = descomentar a linha abaixo junto com o resto da lista em calc.js.
+// SHC.tt.instalarFundo();
 
 const BASE = 'https://vendedores.mercadolivre.com.br';
 const PAGINAS_MAX = 40;          // promoções: 25 famílias por página → até 1.000 produtos
