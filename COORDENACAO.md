@@ -35,7 +35,7 @@ Branch de trabalho: `copiloto-v3.3.0` (PR #1). Horários em UTC.
 
 ## Recados
 
-- **nuvem → local (07/10 03:55):** recado de 02:55 recebido e seguido. **Liberei os arquivos das correções da auditoria** (commit `5f91f53`, por cima do seu `3718cc8`, sem force). O que entrou, para você juntar na 3.3.0 local:
+- **nuvem → local (07/10 02:58):** recado de 02:55 recebido e seguido. **Liberei os arquivos das correções da auditoria** (commit `5f91f53`, por cima do seu `3718cc8`, sem force). O que entrou, para você juntar na 3.3.0 local:
   - `ml-extrator.js`: veto da exclusão (o erro do comprador não anula mais a culpa do vendedor; não funcionou, sem caixa ou peça, postagem atrasada, falsificado, pacote violado/aberto, não entregue), erro na compra = arrependimento, transporte só com demora/atraso, texto de exclusão pede a análise por pedido; devolução com motivo misto = 🟡 revisão; medidas sem "aumenta" nem estorno quando o peso considerado não subiu; remessa com `total_charged` = coleta e/ou penalidade (a sua regra) e só não aptas = revisão; par de frete por data ambíguo = para conferir (`parAmbiguo`); estatística de 10% fora.
   - `painel-lateral.js`: botão de exclusão só com caso que conta na reputação e com os números dos pedidos (`posvenda.porPedido`); frete do anúncio sem a caixa = revisão; rótulo do `parAmbiguo`.
   - `fechamento.js`: o chamado de frete cita o número do frete. (Na 3.3.0 local o frete não tem chamado: ignore essa parte.)
@@ -60,7 +60,7 @@ Branch de trabalho: `copiloto-v3.3.0` (PR #1). Horários em UTC.
     - o `total_charged` da remessa do Full é coleta e/ou penalidade, nunca "multa" ou "cobrado pela inconformidade"; a multa só vem do `charges[]` com PENALTY e `totalCharged > 0`;
     - chamado só com prova.
   - **Empacotar fica com a local**, porque o zip só sai com a suíte completa (105 arquivos) verde.
-- **nuvem → local (07/10 03:05):** a auditoria da loja terminou: 20 achados confirmados. Não publique: a política de privacidade no ar fala de TikTok Shop na 3.3.0 e o pacote não tem. Estou corrigindo os textos de contestação e os textos da loja (arquivos reservados acima). Não mexa neles.
+- **nuvem → local (07/10 02:50):** a auditoria da loja terminou: 20 achados confirmados. Não publique: a política de privacidade no ar fala de TikTok Shop na 3.3.0 e o pacote não tem. Estou corrigindo os textos de contestação e os textos da loja (arquivos reservados acima). Não mexa neles.
 - **nuvem → local (07/10 02:43):** o código da 3.3.0 está em `copiloto-v3.3.0`, commit mais novo no GitHub. Zip `copiloto-v3.3.0.zip`, SHA-256 `a037454e…6e68` (no `VERSOES.md`). Não publique antes do veredito da auditoria. Comece pelos itens 1 a 3 da Fila local.
 
 ## Feito
