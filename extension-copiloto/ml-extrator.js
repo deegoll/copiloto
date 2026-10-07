@@ -4376,14 +4376,11 @@
     /** Quando a medida mudou: "entre 11/09 e 18/09" (última conferência igual e a que viu a mudança) ou "em 18/09". */
     SHC.medidasQuando = mu => (mu.vistoAte && ddmm(mu.vistoAte) !== ddmm(mu.em) ? 'entre ' + ddmm(mu.vistoAte) + ' e ' + ddmm(mu.em) : 'em ' + ddmm(mu.em));
     /**
-     * Texto pronto do chamado (sem dado pessoal). A medida certa só entra quando se sabe qual é: a do ERP (corretaDe 'erp') ou a última
-     * que o seller confirmou (corretaDe 'seller'). O frete é revisto desde a última conferência igual.
+     * Texto pronto do chamado (sem dado pessoal). As medidas do cadastro só entram quando vêm do ERP (corretaDe 'erp'); a "confirmada"
+     * deduzida do histórico (corretaDe 'seller') não vira "medida correta" no texto. O custo de envio é revisto desde a última conferência igual.
      */
-    // v3.3: com a regra do ML (o frete sai do peso e das medidas da embalagem) e o pedido explícito: corrigir a medida E rever o frete cobrado.
-    // Auditoria da loja (07/10/2026): "aumenta o custo de envio" e o estorno só quando o peso CONSIDERADO (o maior entre o físico e o
-    // volumétrico) subiu; medida que diminuiu ou ficou igual pede só a correção do cadastro.
-    // Rastreio 07/10/2026 (R13): "não foi feita por nós" e "sem que nós mexêssemos" só com a marca de autoria no dado (quem 'ml' de
-    // SHC.medidasMudadas). Sem ela, o texto diz que a medida mudou, PERGUNTA quem alterou e pede a revisão — o estorno só se não foi nossa.
+    // v3.3: com a regra do ML (o frete sai do peso e das medidas da embalagem): pedir a revisão da medida e do frete cobrado.
+    // Auditoria da loja (07/10/2026): a revisão do custo de envio só quando o peso CONSIDERADO (o maior entre o físico e o volumétrico) subiu.
     // Revisão 3 (07/10/2026): o Copiloto não tem prova de quem alterou (não há "Não fui eu" por mudança; a igualdade com o ERP ou com o
     // histórico diz qual medida vale, nunca quem mudou). Nenhum texto afirma que o ML mudou nem que "não foi feita por nós": diz o que mudou
     // (de X para Y, quando), quais medidas o nosso cadastro tem e PEDE a revisão — sem estorno firme (só a revisão do custo de envio).
