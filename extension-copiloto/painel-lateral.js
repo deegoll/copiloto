@@ -7836,6 +7836,15 @@
     });
     // 3.4.0 (N-C): "Etiquetas nos outros canais" › Shopee. Ligar: pede as 2 permissões opcionais DENTRO do clique e grava cfg.etiquetas.shopee
     // (o fundo registra os scripts: SHC.etqSincronizar). Desligar: grava false, o fundo tira os scripts e só então as permissões voltam.
+    // TikTok (N-B): a etiqueta vem junto com a leitura do TikTok (as mesmas permissões); a chave só grava cfg.etiquetas.tiktok (false = desliga).
+    const cxEtqTt = $('#etq-tiktok');
+    if (cxEtqTt) {
+        SHC.lerCfg().then(c => { cxEtqTt.checked = !(c && c.etiquetas && c.etiquetas.tiktok === false); }).catch(() => {});
+        cxEtqTt.addEventListener('change', async () => {
+            try { cfg = await SHC.salvarCfg({ etiquetas: Object.assign({}, cfg.etiquetas, { tiktok: cxEtqTt.checked }) }, { semMarcar: true }); } catch (x) { return falhaGravar(x); }
+            avisa(cxEtqTt.checked ? '✓ Etiqueta do TikTok ligada (com o TikTok Shop ligado em Canais de venda).' : 'Etiqueta do TikTok desligada.', 5000);
+        });
+    }
     const PERM_ETQ_SP = { permissions: ['scripting'], origins: ['https://seller.shopee.com.br/*'] };
     const cxEtqSp = $('#etq-shopee');
     if (cxEtqSp) {

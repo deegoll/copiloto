@@ -19,11 +19,19 @@
     };
 
     /** SKUs (do produto e das variações) → as chaves c|sku|… do cadastro. */
-    SHC.etqChaves = produtos => {
+    SHC.etqChaves = (produtos, canal) => {
         const ks = new Set();
-        (produtos || []).forEach(p => [p.sku].concat((p.variacoes || []).map(v => v.sku)).forEach(s => { const k = s ? SHC.chaveSku(s) : ''; if (k) ks.add(k); }));
+        (produtos || []).forEach(p => {
+            [p.sku].concat((p.variacoes || []).map(v => v.sku)).forEach(s => { const k = s ? SHC.chaveSku(s) : ''; if (k) ks.add(k); });
+            if (canal === 'tiktok') (p.variacoes || []).forEach(v => { if (v.modelo_id) ks.add('c|tiktok|' + v.modelo_id); });
+        });
         return [...ks];
     };
+    /** TikTok › Gerenciar produtos (o que o núcleo lê: N.produtosAnunciados / N.skusDoProduto) → os produtos da etiqueta (sem o nome: o TikTok não manda). */
+    SHC.etqDoTikTok = lista => (Array.isArray(lista) ? lista : []).filter(p => p && p.produto_id).map(p => {
+        const vs = (p.skus || []).map(s => ({ modelo_id: s.sku_id, sku: s.sku || null, preco: s.preco }));
+        return { produto_id: p.produto_id, nome: '', sku: (vs.find(v => v.sku) || {}).sku || null, variacoes: vs, total_skus: p.total_skus };
+    });
 
     /**
      * produtos (do adaptador do canal: [{produto_id, nome, sku, preco, variacoes}]) + custos ({c|sku|…: {custo, outros}}) + cfg (SHC.lerCfg)
@@ -32,7 +40,23 @@
     SHC.etqDosProdutos = function (canal, produtos, custos, cfg, hoje) {
         const E = CN().etiqueta;
         if (!E) return [];
-        const c = cfg || {}, custoDe = sku => { const k = SHC.chaveSku(sku), x = k && custos ? custos[k] : null; return x && SHC.num(x.custo) > 0 ? { custo: SHC.num(x.custo), outros: SHC.num(x.outros) || 0 } : null; };
+        // O custo como no resto do Copiloto: SHC.custoDeAnuncio (o SKU, e o kit pela soma dos SKUs de dentro). TikTok: antes, o custo digitado
+        // ou ligado na aba do TikTok para a variação (c|tiktok|<sku_id>), como o TT.lucroDoPedido.
+        const cs = custos || {}, deDados = x => (x && SHC.num(x.custo) > 0 ? { custo: SHC.num(x.custo), outros: SHC.num(x.outros) || 0 } : null);
+        const doSku = sku => {
+            if (!sku) return null;
+            if (SHC.custoDeAnuncio) { const r = SHC.custoDeAnuncio(cs, { sku }); return r ? deDados(r.dados) : null; }
+            const k = SHC.chaveSku(sku); return k ? deDados(cs[k]) : null;
+        };
+        const custoDe = (sku, v) => {
+            if (canal === 'tiktok' && v && v.modelo_id) {
+                const lig = cs['c|tiktok|' + v.modelo_id];
+                if (lig && SHC.num(lig.custo) > 0) return deDados(lig);
+                if (lig && lig.sku) return doSku(lig.sku);
+            }
+            return doSku(sku);
+        };
+        const c = cfg || {};
         const base = { imposto_pct: SHC.num(c.imposto_pct) || 0, margem_alvo_pct: SHC.num(c.margem_alvo_pct) || 0, comissao_pct: canal === 'magalu' ? SHC.num(c.mg_comissao_pct) : undefined };
         const opc = canal === 'shopee' && SHC.calcular ? { calcular: SHC.etqCalcularSp(c) } : null;
         return (produtos || []).map(p => {

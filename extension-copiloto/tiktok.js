@@ -673,7 +673,10 @@
     // world: 'MAIN' no registerContentScripts pede o Chrome 102+ (o mínimo do manifest continua 116).
     TT.SCRIPTS = [
         { id: 'copiloto-tt-pagina', matches: [TT.ORIGEM], js: ['tiktok-pagina.js'], runAt: 'document_start', world: 'MAIN', persistAcrossSessions: true },
-        { id: 'copiloto-tt-tela', matches: [TT.ORIGEM], js: ['tiktok-tela.js'], runAt: 'document_start', persistAcrossSessions: true },
+        // 3.4.0 (N-B): a tela também desenha a etiqueta de ganho em Gerenciar produtos (etiqueta-canal.js + etiqueta-tela.js, com o núcleo
+        // para a conta). Nada disso grava: a etiqueta é feita na aba com o que a captura já manda ao fundo.
+        { id: 'copiloto-tt-tela', matches: [TT.ORIGEM], js: ['calc.js', 'store.js', 'nucleo/util.js', 'nucleo/modelo.js', 'nucleo/tarifas.js', 'nucleo/etiqueta.js',
+            'nucleo/adaptador.js', 'nucleo/adaptadores/tiktok.js', 'etiqueta-canal.js', 'etiqueta-tela.js', 'tiktok-tela.js'], runAt: 'document_start', persistAcrossSessions: true },
     ];
     /**
      * As 2 permissões OPCIONAIS do TikTok, pedidas juntas no mesmo clique em Ajustes e devolvidas juntas ao desligar:
@@ -691,10 +694,13 @@
         if (!ch.scripting || !ch.scripting.registerContentScripts || !ch.permissions || !ch.permissions.contains) return { ok: false, motivo: 'sem_scripting' };
         const cfg = (await area().get('cfg')).cfg || {};
         const tem = (await ch.permissions.contains(TT.PERM)) && moduloLigado(cfg), ids = TT.SCRIPTS.map(s => s.id);
-        const ja = (await ch.scripting.getRegisteredContentScripts({ ids })).map(s => s.id);
+        const reg = await ch.scripting.getRegisteredContentScripts({ ids }), ja = reg.map(s => s.id);
         if (tem) {
             const falta = TT.SCRIPTS.filter(s => ja.indexOf(s.id) < 0);
             if (falta.length) await ch.scripting.registerContentScripts(falta);
+            // 3.4.0: a extensão atualizada mudou a lista de arquivos de um script já registrado → troca (senão ficava a lista antiga)
+            const velhos = TT.SCRIPTS.filter(s => reg.some(r => r.id === s.id && (r.js || []).join() !== s.js.join()));
+            if (velhos.length && ch.scripting.updateContentScripts) await ch.scripting.updateContentScripts(velhos);
             return { ok: true, ligado: true };
         }
         if (ja.length) await ch.scripting.unregisterContentScripts({ ids: ja });

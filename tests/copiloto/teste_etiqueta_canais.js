@@ -71,6 +71,20 @@ console.log('d) Magalu');
     ok(mg.texto === 'Sobra R$ 40,10 · margem 40,1%', 'com 9,9% informado em Ajustes: R$ 100 − 9,90 − 50 = R$ 40,10 (' + mg.texto + ')');
 }
 
+console.log('d2) TikTok (N-B): a lista de Gerenciar produtos e o custo da aba do TikTok');
+{
+    const ps = SHC.etqDoTikTok([{ produto_id: '1', total_skus: 1, skus: [{ sku_id: '101', sku: 'CAM-P', preco: 79.9 }] }, { produto_id: '2', total_skus: 1, skus: [{ sku_id: '102', sku: 'BON-1', preco: 39.9 }] }]);
+    ok(ps[0].sku === 'CAM-P' && ps[0].variacoes[0].modelo_id === '101' && ps[0].nome === '', 'o produto do TikTok vem com o SKU e o id da variação (o TikTok não manda o nome)');
+    ok(SHC.etqChaves(ps, 'tiktok').indexOf('c|tiktok|102') >= 0 && SHC.etqChaves(ps, 'shopee').indexOf('c|tiktok|102') < 0, 'no TikTok também se lê o custo da aba do TikTok (c|tiktok|<sku_id>)');
+    // CAM-P R$ 79,90: 6% + R$ 6 + SFP 6% = R$ 15,58; custo R$ 30 pelo SKU; 4% de imposto R$ 3,20 → R$ 31,12.
+    // BON-1 R$ 39,90: 10% + R$ 4 + SFP 6% = R$ 10,38; custo R$ 15 digitado na aba do TikTok (manda sobre o do SKU, R$ 99); imposto R$ 1,60 → R$ 12,92.
+    const custos = { [SHC.chaveSku('CAM-P')]: { custo: 30 }, [SHC.chaveSku('BON-1')]: { custo: 99 }, 'c|tiktok|102': { custo: 15 } };
+    const es = SHC.etqDosProdutos('tiktok', ps, custos, { imposto_pct: 4 }, HOJE);
+    ok(es[0].texto === 'Sobra R$ 31,12 · margem 38,9%' && es[1].texto === 'Sobra R$ 12,92 · margem 32,4%', 'as contas do TikTok batem com a tabela oficial (' + es.map(e => e.texto).join(' | ') + ')');
+    const lig = SHC.etqDosProdutos('tiktok', ps, { [SHC.chaveSku('KIT-X')]: { custo: 15 }, 'c|tiktok|102': { sku: 'KIT-X' } }, { imposto_pct: 4 }, HOJE);
+    ok(lig[1].texto === 'Sobra R$ 12,92 · margem 32,4%' && lig[0].texto === 'Informe o custo', 'variação "ligada ao SKU" na aba do TikTok usa o custo desse SKU; sem nada, "Informe o custo"');
+}
+
 console.log('e) o leitor da página da Shopee (shopee-pagina.js) e o "achar o produto na linha" (etiqueta-tela.js)');
 {
     const vm = require('vm');

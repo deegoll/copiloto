@@ -12,7 +12,7 @@
         if (!ultima || !SHC || !CN || !CN.adaptadores || !CN.adaptadores.shopee || !E) return;
         const minha = ++conta, ps = CN.adaptadores.shopee.produtosDaLista(ultima);
         if (!Array.isArray(ps)) return;
-        const [custos, cfg] = await Promise.all([SHC.lerCustos(SHC.etqChaves(ps)), SHC.lerCfg()]);
+        const [custos, cfg] = await Promise.all([SHC.lerCustos(SHC.etqChaves(ps, 'shopee')), SHC.lerCfg()]);
         if (minha !== conta) return;   // chegou outra lista no meio: vale a nova
         E.mostra('shopee', SHC.etqDosProdutos('shopee', ps, custos, cfg, SHC.hoje()));
     }

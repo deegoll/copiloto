@@ -27,9 +27,14 @@
         const cfg = (await ch.storage.local.get('cfg')).cfg || {};
         for (const c of Object.keys(SHC.ETQ_CANAIS)) {
             const ss = registro(c), ids = ss.map(s => s.id);
-            const ja = (await ch.scripting.getRegisteredContentScripts({ ids })).map(s => s.id);
+            const reg = await ch.scripting.getRegisteredContentScripts({ ids }), ja = reg.map(s => s.id);
             const tem = SHC.etqLigada(cfg, c) && await ch.permissions.contains(SHC.etqPerm(c));
-            if (tem) { const falta = ss.filter(s => ja.indexOf(s.id) < 0); if (falta.length) await ch.scripting.registerContentScripts(falta); }
+            if (tem) {
+                const falta = ss.filter(s => ja.indexOf(s.id) < 0);
+                if (falta.length) await ch.scripting.registerContentScripts(falta);
+                const velhos = ss.filter(s => reg.some(r => r.id === s.id && (r.js || []).join() !== s.js.join()));   // extensão atualizada: lista nova
+                if (velhos.length && ch.scripting.updateContentScripts) await ch.scripting.updateContentScripts(velhos);
+            }
             else if (ja.length) await ch.scripting.unregisterContentScripts({ ids: ja });
             out[c] = !!tem;
         }

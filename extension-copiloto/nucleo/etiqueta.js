@@ -52,13 +52,14 @@
     /**
      * Um produto da lista com as variações → a etiqueta do produto + a de cada variação.
      * produto = { produto_id, nome?, sku?, preco?, variacoes: [{ modelo_id?, sku?, preco }] } (sem variações: o preço do produto vale).
-     * custoDe(sku) → { custo, outros?, imposto_pct? } | null (o cadastro do Copiloto). cfg = { imposto_pct, margem_alvo_pct, frete_padrao, comissao_pct }.
+     * custoDe(sku, variação|null) → { custo, outros?, imposto_pct? } | null (o cadastro do Copiloto). cfg = { imposto_pct, margem_alvo_pct, frete_padrao, comissao_pct }.
      * → { produto_id, classe, texto, variacoes: [{ modelo_id, sku, …daVariacao }] }. Variação sem custo não entra na faixa; nenhuma com custo → "Informe o custo".
      */
     function doProduto(canal, produto, custoDe, cfg, data, opc) {
         const c = cfg || {}, vs = (produto.variacoes && produto.variacoes.length ? produto.variacoes : [{ sku: produto.sku, preco: produto.preco }]);
         const vars = vs.map(v => {
-            const cad = (v.sku && custoDe ? custoDe(v.sku) : null) || (produto.sku && custoDe ? custoDe(produto.sku) : null);
+            // custoDe(sku, variação): o 2º argumento deixa o canal procurar também pelo id da variação (TikTok: c|tiktok|<sku_id>)
+            const cad = (custoDe ? custoDe(v.sku || null, v) : null) || (produto.sku && custoDe && produto.sku !== v.sku ? custoDe(produto.sku, null) : null);
             const ctx = { imposto_pct: cad && U.num(cad.imposto_pct) !== null ? cad.imposto_pct : c.imposto_pct, margem_alvo_pct: c.margem_alvo_pct,
                 frete_padrao: c.frete_padrao, comissao_pct: c.comissao_pct, custo: cad ? cad.custo : null, outros: cad ? cad.outros : 0 };
             return Object.assign({ modelo_id: v.modelo_id || null, sku: v.sku || produto.sku || null }, daVariacao(canal, v.preco, ctx, data, opc));
