@@ -18,7 +18,6 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
-| nuvem | **B1** (parte) · ruptura que o sino não vê: mesma previsão do painel no `SHC.alertasDe`, anúncios casados pelo SKU, 14 meses no `vm|ml`, "Acaba hoje", teste de paridade painel × sino | ramo `nuvem/b1-ruptura-sino`: `ml-extrator.js` (alertasDe, previsão), `painel-lateral.js` (previsaoFull, anunciosDoFull, acaoFull), `store.js` (gravaMeses), `fundo/07-alertas-promocoes-full.js`, teste novo | 07/10 19:10 |
 | nuvem 2 | **3.4.0 · etiquetas de sobra na Shopee e na Magalu** (pedido da dona, 07/10 11:05): na lista de produtos do Seller Center da Shopee e do painel da Magalu, a etiqueta "Sobra R$ X · margem Y%" por produto, com o custo cadastrado no Copiloto. A Shopee já tem a tabela oficial no núcleo (`tarifas.js`). A Magalu precisa da tabela oficial (M4). **Espera os retratos M2, M3 e M4 da local** | ramo `nuvem2/etiquetas-shopee-magalu` (a criar), só depois dos retratos | 07/10 11:05 |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
@@ -91,6 +90,12 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem → local (07/10 19:30 UTC): B1 pronta no ramo `nuvem/b1-ruptura-sino`, commit `cc276d9`** (base `local/3.3.0-final`). Mexe em código da extensão: **o zip e o SHA no `VERSOES.md` ficam com você**.
+  - O sino (`SHC.alertasDe`) agora usa a mesma previsão do painel (`SHC.previsaoFull`, com a sazonalidade e o "parado") e casa o produto do Full pelo SKU (`SHC.anunciosDoFull`). `P.previsaoFull` e `P.anunciosDoFull` apontam para elas. A `fundo/07` passa todos os anúncios e lê o `vm|ml` dos MLB casados.
+  - "Acaba hoje" no lugar de "0 dias", no sino e no painel.
+  - O `vm|ml` (e o `ad|ml`, mesma função) guarda 14 meses. Com 13, em 07/10 o mês base da sazonalidade (2025-09) já tinha saído.
+  - Teste novo `teste_ruptura_sino_b1.js` (paridade painel × sino num Full inventado). No código antigo dá 8 falhas: o produto sazonal e o achado só pelo SKU ficavam fora do sino. O hash novo da `fundo/07` está no `teste_fundo_dividido.js`. Suíte do GitHub: `TUDO OK` (10 arquivos + núcleo). **Rode a suíte completa de 111 arquivos**: o `teste_ml_intocado` e os retratos do Full da local podem pedir ajuste.
+  - Falta: a 1ª leitura do Faturamento lê 12 a 13 meses. Para a sazonalidade valer já na 1ª semana do mês, ela teria de ler 14. Fica para outra frente; não mexi na `fundo/03`.
 - **nuvem → local (07/10 18:55 UTC): M4 pronta no ramo `nuvem/m4-regras-canais`, commit `4f032db`** (base `local/3.3.0-final`).
   - Novos `docs/canais/shopee.md` (8 fontes oficiais: central do vendedor e central de ajuda) e `docs/canais/magalu.md` (4 fontes do Universo Magalu), cada regra com a fonte e a data lida (07/10/2026).
   - Shopee: disputa e provas aceitas, prazos de devolução (3, 7, 12, 30, 60 dias), recurso de pontos de penalidade (14 dias), cupons de frete, comissão de 01/10/2026 (fixo R$ 4,50; CPF +R$ 3 acima de 450 pedidos/90 dias). Os percentuais por faixa estão em imagem: "não encontrado em texto".
@@ -333,6 +338,7 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 | Lado | Tarefa | Commit |
 |---|---|---|
+| nuvem | B1: ruptura que o sino não via (mesma previsão do painel, anúncios pelo SKU, 14 meses no `vm|ml`, "Acaba hoje", teste de paridade) no ramo `nuvem/b1-ruptura-sino` | `cc276d9` |
 | nuvem | M4: regras oficiais da Shopee e da Magalu em `docs/canais/` com o `teste_canais_m4.js` (ramo `nuvem/m4-regras-canais`) | `4f032db` |
 | nuvem 2 | 3.3.0 final: código do computador + C2, política nova, zip e SHA (ramo `nuvem2/330-final`, PR #6) | `703209f` |
 | nuvem | N2a "cada centavo": 6 arquivos `teste_centavos_*.js`, 460 conferências (ramo `nuvem/testes-centavos`, PR depois da sua sincronização) | `643db14` |
