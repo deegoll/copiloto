@@ -33,6 +33,8 @@
 //      (Repasse R$ 100 × R$ 80 pagos, "a menor" falso). Agora vazio → null, frete ilegível = frete não lido com aviso, e o detalhe que não fecha
 //      (ou com valor ilegível) nunca é exato: vale a lista do Financeiro, ou o pedido fica "não lido" (seções A, G e K). Preço não lido
 //      (extrato, detalhe do pedido ou os dois) aparece "—", fora do KPI: nunca "Preço R$ 0,00" nem prejuízo inventado (seção K).
+//      Revisão 2: o extrato ilegível não perde o reembolso lido (antes "Imposto (6%)" sobre o preço cheio e sem a linha do reembolso);
+//      reembolso não lido (valor vazio, sem devolução no detalhe) → Imposto "—" (seção K).
 //   6) CORRIGIDA (#35): o KPI "Lucro 30 dias" somava só 'ok' e deixava de fora o prejuízo do CANCELADO (frete que ficou), que Produtos e a
 //      conciliação contam (KPI R$ 37,00 × produto R$ 28,50). Agora o KPI soma 'ok' e 'cancelado', como Produtos e o fechamento (seções I e K).
 //      Revisão 2: o cancelado conta só o que sobrou e foi LIDO; sem tarifa lida (visto só em Pedidos) o motor não estima pela tabela
@@ -1004,7 +1006,7 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
             if (l.rot === 'Custo do produto') return x.custo_rs === null ? null : -x.custo_rs;
             if (/^Custo do produto: informe/.test(l.rot) || /^Tarifas: abra/.test(l.rot)) return null;
             if (l.rot === 'Embalagem e outros') return -x.outros_rs;
-            if (/^Imposto \(/.test(l.rot)) return -x.imposto_rs;
+            if (/^Imposto \(/.test(l.rot)) return x.imposto_rs === null ? null : -x.imposto_rs;
             if (l.rot === 'Lucro' || l.rot === 'Prejuízo') return x.lucro_real;
             return NaN;
         };
@@ -1144,6 +1146,45 @@ console.log('H. Adaptador Shopee (núcleo): escrow fecha no centavo');
         const y34 = TT.resumo(await TT.ler('7000000234'), { hoje: '2026-09-25' }), u34 = y34.pedidos[0], ly34 = contaTela(ABA.html(y34, { hoje: '2026-09-25' }), id34d);
         ok(u34.status === 'nao_lido' && !u34.exato && u34.repasse === null && valorDe(ly34, 'Preço') === null && ly34.some(l => l.rot === 'Preço') && !ly34.some(l => l.c === 0),
             'extrato sem o bloco de receita (in_come renomeado) e sem o detalhe do pedido (#34): "não lido" e Preço "—" (antes "Preço R$ 0,00")');
+    }
+
+    {   // #34, revisão 2: extrato ilegível (frete vazio) NÃO perde o reembolso lido; reembolso não lido → imposto "—" (imposto 6% do cfg).
+        const a = v => ({ amount: v, currency: 'BRL' }), cfg0 = banco.cfg;
+        banco.cfg = { imposto_pct: 6 };
+        const ext = (id, sd, income, out, settle) => ({ code: 0, data: { order_record: { statement_detail_id: sd, statement_id: '8800000334', trade_order_id: id, placed_time: msDia('2026-09-20'), settlement_status: 2,
+            settlement_time: msDia('2026-09-24'), settlement_amount: a(settle), in_come: { fee_list: income }, out_come: { fee_list: out }, shipping_fee_detail: { fee_list: [{ type: 'fbm_shipping_fee', amount: a('') }] } } } });
+        const det = (id, rv) => ({ code: 0, data: { main_order: Object.assign({ main_order_id: id, main_order_create_time: segDia('2026-09-20'), payment_info: { main_order_origin_sale_price: fp(10000) },
+            skus: [{ seller_sku_name: 'SKU-34R', sku_id: '1730000000000000344', quantity: 1, total_price: fp(10000), sku_display_status: 122 }], logistic_info: { title: 'Package delivered', time: segDia('2026-09-21') } },
+            rv ? { reverse_info: { reverse_order_id: '4000000000000000344', reverse_status: 100, reverse_type: 1 } } : {}) } });
+        const caso = async (conta, id, capturas) => {
+            for (const c of capturas) await TT.gravarCaptura(c[0], c[1], conta, lidoEm);
+            const v = TT.resumo(await TT.ler(conta), { hoje: '2026-09-25' }), p = v.pedidos.find(x => x.pedido_id === id), h = ABA.html(v, { hoje: '2026-09-25' });
+            const b = h.slice(h.indexOf('data-k="ped:' + id + '"'), h.indexOf('</details>', h.indexOf('data-k="ped:' + id + '"')));
+            return { v, p, ls: contaTela(h, id), b };
+        };
+        const SFP = [{ type: 'sfp_service_fee', amount: a('-6.00') }], sub100 = { type: 'subtotal_before_discount', amount: a('100.00') };
+        // Reembolso total lido no extrato, frete vazio, sem a lista (o caso do revisor): "Reembolso ao cliente −R$ 100,00" e nada de imposto.
+        const t1 = await caso('7000000334', '5770000000000003401', [['transacao', ext('5770000000000003401', '5770000000000003402', [sub100, { type: 'subtotal_after_discount_refund', amount: a('-100.00') }], SFP, '-6.00')]]);
+        ok(t1.p.status === 'nao_lido' && t1.p.reembolso === 100 && t1.p.receita_liquida === 0 && t1.p.imposto_rs === 0 && t1.p.repasse === null && t1.p.lucro_real === null
+            && valorDe(t1.ls, 'Preço') === 10000 && valorDe(t1.ls, 'Reembolso ao cliente') === -10000 && !t1.ls.some(l => /^Imposto/.test(l.rot)) && valorDe(t1.ls, 'Repasse do TikTok') === null && t1.v.kpis.lucro_30d === null,
+            'extrato ilegível com reembolso total lido (#34, revisão 2): "Reembolso ao cliente −R$ 100,00" e sem imposto (antes o reembolso sumia e aparecia "Imposto (6%) −R$ 6,00" sobre o preço cheio); Repasse "—"');
+        // Reembolso parcial (R$ 40,00) lido, frete vazio: imposto de 6% só sobre os R$ 60,00 que ficaram (R$ 3,60).
+        const t2 = await caso('7000000434', '5770000000000003411', [['transacao', ext('5770000000000003411', '5770000000000003412', [sub100, { type: 'subtotal_after_discount_refund', amount: a('-40.00') }], SFP, '42.00')]]);
+        ok(t2.p.status === 'nao_lido' && t2.p.reembolso === 40 && t2.p.receita_liquida === 60 && t2.p.imposto_rs === 3.6 && valorDe(t2.ls, 'Preço') === 10000 && valorDe(t2.ls, 'Reembolso ao cliente') === -4000
+            && valorDe(t2.ls, 'Imposto (6%)') === -360 && valorDe(t2.ls, 'Repasse do TikTok') === null,
+            'extrato ilegível com reembolso parcial lido (#34, revisão 2): Reembolso −R$ 40,00 e Imposto (6%) −R$ 3,60 sobre os R$ 60,00 (antes −R$ 6,00 sobre o preço cheio e sem o reembolso)');
+        // Valor do reembolso vazio no extrato + detalhe do pedido entregue (sem devolução): reembolso não lido → Imposto "—", Preço do detalhe.
+        const t3 = await caso('7000000534', '5770000000000003421', [['transacao', ext('5770000000000003421', '5770000000000003422', [sub100, { type: 'subtotal_after_discount_refund', amount: a('') }], SFP, '-6.00')],
+            ['pedido', det('5770000000000003421', false)]]);
+        ok(t3.p.status === 'nao_lido' && t3.p.imposto_rs === null && t3.p.reembolso === 0 && valorDe(t3.ls, 'Preço') === 10000 && valorDe(t3.ls, 'Imposto (6%)') === null && t3.ls.some(l => l.rot === 'Imposto (6%)')
+            && !t3.ls.some(l => l.c === 0) && !/R\$ 0,00/.test(t3.b) && t3.p.linhas.find(l => /^Imposto/.test(l.rotulo)).valor === null,
+            'reembolso com valor vazio no extrato e o pedido entregue no detalhe (#34, revisão 2): Imposto (6%) "—" (reembolso não lido), nunca −R$ 6,00 sobre o preço cheio');
+        // O mesmo com o detalhe do pedido DEVOLVIDO (reembolso concluído): o reembolso do detalhe (total) entra, como no ramo só-Pedidos.
+        const t4 = await caso('7000000634', '5770000000000003431', [['transacao', ext('5770000000000003431', '5770000000000003432', [sub100, { type: 'subtotal_after_discount_refund', amount: a('') }], SFP, '-6.00')],
+            ['pedido', det('5770000000000003431', true)]]);
+        ok(t4.p.status === 'nao_lido' && t4.p.reembolso === 100 && t4.p.imposto_rs === 0 && valorDe(t4.ls, 'Reembolso ao cliente') === -10000 && !t4.ls.some(l => /^Imposto/.test(l.rot)),
+            'reembolso vazio no extrato e o detalhe devolvido (#34, revisão 2): Reembolso −R$ 100,00 (o do detalhe) e sem imposto');
+        if (cfg0 === undefined) delete banco.cfg; else banco.cfg = cfg0;
     }
 
     {   // #35: pedido cancelado com R$ 8,50 de frete que ficou + pedido ok de lucro R$ 37,00 (custo R$ 30, imposto 6%).

@@ -446,7 +446,7 @@
         const detIt = det ? det.pedido.itens : [];
         const detBruto = detIt.length && detIt.every(it => typeof it.total === 'number') ? U.soma(detIt, it => it.total) : null;   // null = preço não lido
         const detReceita = detBruto !== null ? U.r2(detBruto - (det.pedido.desconto_vendedor || 0)) : null;
-        let bruto = null, desconto = 0, reembolso = 0, tarifas, estimar = false, devolveu = false;
+        let bruto = null, desconto = 0, reembolso = 0, tarifas, estimar = false, devolveu = false, impostoIncerto = false;
         if (j) {
             bruto = j.receita.bruto; desconto = j.receita.desconto_vendedor; reembolso = j.receita.reembolso;
             tarifas = j.tarifas.slice();
@@ -465,6 +465,11 @@
             const recLida = j0.receita.bruto > 0 && !j0.avisos.some(a => /receita sem valor/.test(a)), doDet = detBruto !== null;
             bruto = doDet ? detBruto : (recLida ? j0.receita.bruto : null);
             desconto = doDet ? det.pedido.desconto_vendedor || 0 : (recLida ? j0.receita.desconto_vendedor : 0);
+            // Reembolso lido no extrato não some; sem ele, o do detalhe devolvido (como no ramo só-Pedidos). Receita do extrato não lida e sem
+            // devolução no detalhe: reembolso desconhecido → o imposto (sobre preço − reembolso) aparece "—", nunca sobre o preço cheio.
+            const reembDet = det && det.pedido.status === 'devolvido' && det.devolucao ? (det.pedido.reembolso > 0 ? det.pedido.reembolso : (bruto === null ? 0 : U.r2(bruto - desconto))) : 0;
+            reembolso = recLida && j0.receita.reembolso > 0 ? j0.receita.reembolso : reembDet;
+            impostoIncerto = !recLida && !reembDet;
             tarifas = M.naoLido(AVISO_ILEGIVEL);
             avisos.push(AVISO_ILEGIVEL); avisos.push.apply(avisos, j0.avisos);
         } else if (det) {
@@ -493,6 +498,8 @@
         const devolucoes = det && det.devolucao ? [Object.assign({}, det.devolucao, { pedido_id: id })] : [];
         const r = CN.motor.lucroPedido(pedido, { tarifas: estimar ? undefined : tarifas, estimar_tarifas: estimar, custos, devolucoes,
             imposto_pct: num(ctx.cfg.imposto_pct), margem_alvo_pct: num(ctx.cfg.margem_alvo_pct) });
+        // Extrato ilegível sem saber o reembolso: imposto não lido (null → "—"), nunca o do preço cheio. Cancelado: receita 0, imposto 0 lido.
+        if (impostoIncerto && pedido.status !== 'cancelado') { r.imposto_rs = null; (r.linhas || []).forEach(l => { if (/^Imposto \(/.test(l.rotulo)) l.valor = null; }); }
         // Reembolso total visto só pela lista (sem o preço de origem, a receita já vem 0): o motor não percebe o reembolso → o aviso vem daqui.
         const voltou = devolucoes.map(d => d.produto_voltou).find(v => v === true || v === false);
         r.avisos = (r.avisos || []).concat(avisos);

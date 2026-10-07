@@ -95,7 +95,8 @@
         h += cl('Repasse do TikTok', moeda(r.repasse), 'tot', !!r.estimado);
         h += r.custo_rs === null || r.custo_rs === undefined ? `<div class="cl fora"><span>Custo do produto: informe no Catálogo</span><b>—</b></div>` : cl('Custo do produto', menos(r.custo_rs));
         if (r.outros_rs) h += cl('Embalagem e outros', menos(r.outros_rs));
-        if (r.imposto_rs) h += cl('Imposto (' + String(r.imposto_pct).replace('.', ',') + '%)', menos(r.imposto_rs));
+        // Imposto null = não lido (extrato ilegível sem saber o reembolso): "—", nunca o do preço cheio.
+        if (r.imposto_rs || (r.imposto_rs === null && n(r.imposto_pct))) h += cl('Imposto (' + String(r.imposto_pct).replace('.', ',') + '%)', menos(r.imposto_rs));
         const adsFora = n(r.ads_rs) !== null ? Math.round((r.ads_rs - (n(r.ads_no_repasse) || 0)) * 100) / 100 : 0;   // Ads fora do repasse (rateado)
         if (adsFora) h += cl('Ads', menos(adsFora));
         if (n(r.lucro_real) !== null) h += cl(r.lucro_real < 0 ? 'Prejuízo' : 'Lucro', moeda(r.lucro_real), 'tot' + (r.lucro_real < 0 ? ' mais' : ' est'));
