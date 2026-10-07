@@ -2010,6 +2010,28 @@
         return { total: totalPaging(j), anuncios };
     };
 
+    /**
+     * F8: o patrocinado de CATÁLOGO vem com o id do produto de catálogo. Liga ao anúncio da seller pelo título quando só UM anúncio tem esse
+     * título (a mesma regra de ads.js A.porSku). Uma ligação só para o painel (P.adsLigaCatalogo), o ícone e o sino (SHC.alertasDe) e a
+     * etiqueta da venda (SHC.vendaExtras): o mesmo anúncio com as mesmas linhas nas telas. → cópia do snapshot com o itemId do anúncio
+     * ligado, catalogoLigados e catalogoSemLigacao (Ads do catálogo sem ligação, R$).
+     */
+    SHC.adsLigaCatalogo = function (snap, itens) {
+        if (!snap || !Array.isArray(snap.anuncios)) return snap;
+        const porTitulo = new Map(), gasto = o => { for (const k of ['cost', 'custo', 'investimento', 'gasto']) { const v = SHC.num(o[k]); if (v !== null) return v; } return 0; };
+        (itens || []).forEach(i => { const t = i && SHC.normalizaTitulo(i.titulo); if (t) porTitulo.set(t, porTitulo.has(t) && porTitulo.get(t) !== i.itemId ? '' : i.itemId); });
+        let semLig = 0, ligados = 0;
+        const anuncios = snap.anuncios.map(a => {
+            const o = Object.assign({}, (a && a.metrics) || {}, (a && a.metricas) || {}, a || {});
+            if (!(o.catalogoProduto || o.type === 'catalog')) return a;
+            const id = porTitulo.get(SHC.normalizaTitulo(o.titulo || o.title));
+            if (id) { ligados++; return Object.assign({}, a, { itemId: id, catalogoProduto: false, type: 'catalogo_ligado', catalogoLigado: true }); }
+            semLig += gasto(o);
+            return a;
+        });
+        return Object.assign({}, snap, { anuncios, catalogoLigados: ligados, catalogoSemLigacao: SHC.r2(semLig) });
+    };
+
     /** campaigns/<id>/metrics → "Desempenho ao competir por impressões" em % (0,03 → 3%). */
     SHC.adsShare = function (j) {
         if (!j || typeof j !== 'object' || j.impressionShare === undefined) return null;
@@ -2700,9 +2722,10 @@
                 titulo: p.titulo || '', texto, dias, aptas: tem, aCaminho: cam, vendas30: v30, minUn: fm.minUn, abaixoMin: fm.abaixo, faltam: fm.faltam, sugerido: fm.sugerido });
         });
         const porId = new Map((dados.itens || []).filter(i => i && i.itemId).map(i => [String(i.itemId), i]));
-        // #26: o anúncio em várias campanhas (uma linha por anúncio e campanha) é UM aviso, com as campanhas somadas (como o painel).
-        const doAnuncio = new Map();
-        ((dados.ads && dados.ads.anuncios) || []).forEach(a => { if (a && a.itemId && porId.has(a.itemId)) (doAnuncio.get(a.itemId) || doAnuncio.set(a.itemId, []).get(a.itemId)).push(a); });
+        // #26: o anúncio em várias campanhas (uma linha por anúncio e campanha) é UM aviso, com as campanhas somadas (como o painel), também a
+        // linha de catálogo ligada a ele pelo título (SHC.adsLigaCatalogo, a ligação do painel).
+        const doAnuncio = new Map(), adsL = SHC.adsLigaCatalogo(dados.ads, dados.itens);
+        ((adsL && adsL.anuncios) || []).forEach(a => { if (a && a.itemId && porId.has(a.itemId)) (doAnuncio.get(a.itemId) || doAnuncio.set(a.itemId, []).get(a.itemId)).push(a); });
         doAnuncio.forEach((ls, id) => {
             const gasto = SHC.r2(ls.reduce((t, a) => t + (SHC.num(a.custo) || 0), 0));
             if (!(gasto > 0)) return;
