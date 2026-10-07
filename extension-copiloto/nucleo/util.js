@@ -6,11 +6,14 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
 
-    /** Arredonda em centavos (igual ao SHC.r2 do Copiloto) e nunca devolve −0. */
+    /**
+     * Arredonda em centavos (igual ao SHC.r2 do Copiloto): meio centavo sempre para longe do zero e igual nos dois sinais
+     * (16,935 → 16,94; −1,285 → −1,29) e nunca devolve −0. O toPrecision(15) tira o ruído do binário antes do Math.round.
+     */
     function r2(v) {
         if (v === null || v === undefined || !isFinite(v)) return null;
-        const x = Math.round((v + (v >= 0 ? Number.EPSILON : -Number.EPSILON)) * 100) / 100;
-        return x === 0 ? 0 : x;
+        const c = Math.round(+(Math.abs(v) * 100).toPrecision(15));
+        return c === 0 ? 0 : (v < 0 ? -c : c) / 100;
     }
 
     /**
