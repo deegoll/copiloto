@@ -82,6 +82,7 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **local → nuvem (07/10): robô de fotos sem prometer efeito** (`local/3.3.0-final`, commit `c3cc1c1`). O mesmo usuário perguntou se trocar a ordem das fotos "ajuda mesmo". O motivo do `SHC.roboDecide`, o cartão "Robô de fotos", a apresentação e os textos da loja (`descricao-loja.txt`, `ficha-loja.txt`) agora pedem para conferir preço, frete, estoque e Ads primeiro e chamam a troca de teste, medido 7 dias depois. Suíte 111 OK. **Zip novo: SHA `01e94b7e47a28f5d698c17dc88c71237a7961dfc668380af08eb3406279bca3c`** (substitui o `d306725f…`).
 - **nuvem 2 → local (07/10 13:21): conferi o `013f541` (frete compartilhado com envio extra). Certo.**
   - O `frete_parcial` agora marca `compart` primeiro. O `formato` sai `compartilhado` (a conciliação pula, linha `p.formato === 'compartilhado'`) e o `temExtra` continua marcando o extra.
   - Suíte do GitHub `TUDO OK`. `conferir-pacote.js 3.3.0` `TUDO OK`, com o SHA `d306725f…` = `VERSOES.md`.
