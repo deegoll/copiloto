@@ -158,6 +158,10 @@
                 soma: r.custo, proprio: !!c && c.dados.origem !== 'kit', faltam: r.faltam, outros: SHC.num(k.dados.outros) || 0 };
         });
     };
+    // #15: "✓ Kit salvo" mostra o MESMO total da coluna "Custo do kit" (custo + embalagem/outros), não só a soma dos itens.
+    P.msgKitSalvo = l => l && l.custo !== null
+        ? '✓ Kit salvo: ' + SHC.moeda(SHC.r2(l.custo + l.outros)) + (l.outros ? ' (' + SHC.moeda(l.custo) + ' + ' + SHC.moeda(l.outros) + ' de embalagem/outros)' : '')
+        : '✓ Kit salvo. Falta o custo de: ' + (l ? l.faltam.join(', ') : '');
 
     // ── v3.2 (A3): custos PAI → VARIAÇÕES + ESTOQUE. Só a tela muda: as linhas de P.montaLinhas, as chaves c|sku|… e o CSV ficam iguais. ──
     // Anúncio finalizado no ML (closed; inclui o antigo "closed_migrated_to_up", que virou família e AINDA mostra estoque) não conta estoque.
@@ -873,7 +877,7 @@
         try { await SHC.salvarKit(sku, r.itens, o.valor || 0); } catch (err) { msg.className = 'msg erro'; msg.textContent = FALHA; return; }
         await lerDados(); desenhaTabela();
         const l = P.linhasKits(kits).find(x => x.sku === sku);
-        msg.textContent = l && l.custo !== null ? '✓ Kit salvo: ' + SHC.moeda(l.custo) : '✓ Kit salvo. Falta o custo de: ' + (l ? l.faltam.join(', ') : '');
+        msg.textContent = P.msgKitSalvo(l);
         $('#kSku').value = ''; $('#kItens').value = ''; $('#kOutros').value = '';
     });
 

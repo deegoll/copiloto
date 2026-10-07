@@ -34,7 +34,8 @@
 //   7) [corrigida, #14] SHC.calcular: frete grátis sem valor (≥ R$ 79 ou Full) entrava como R$ 0,00 e a sobra saía como número firme (só com "⚠").
 //      Agora a classe é 'semfrete' (a sobra é um teto), o SHC.precoMinimo não dá número que dependa desse frete e o popup mostra "Lucro até" (B, C, E, K).
 //   8) SHC.valorRS/dinheiro tiram o sinal: "Você recebe −R$ 63,00" (frete grátis maior que preço − tarifa) é lido +63 e a etiqueta diz "Dá lucro".
-//   9) painel.js: "✓ Kit salvo: R$ X" mostra o custo SEM embalagem/outros; a tabela de kits mostra custo + outros.
+//   9) [corrigida, #15] painel.js: "✓ Kit salvo: R$ X" mostrava o custo SEM embalagem/outros e a tabela de kits custo + outros. Agora a
+//      mensagem (P.msgKitSalvo) mostra o mesmo total da tabela, com a parte da embalagem ao lado (F).
 //  10) Abaixo de R$ 79: SHC.calcular (popup) usa a taxa fixa por faixa (9,50) e SHC.canalLucro a % + o custo operacional do anúncio.
 // Rodar: node tests/copiloto/teste_centavos_lucro.js
 'use strict';
@@ -319,6 +320,11 @@ console.log('E. SHC.precoMinimo: o menor preço que deixa a meta (busca centavo 
         ok(lk[0].custo === 41.33 && lk[0].soma === 41.33 && lk[0].outros === 1.5 && lk[0].proprio === false && SHC.moeda(r2(lk[0].custo + lk[0].outros)) === 'R$ 42,83'
             && lk[1].custo === null && lk[1].faltam.join() === 'C' && lk[2].custo === 50 && lk[2].proprio === true && lk[2].soma === 12.34,
             'tabela de kits (P.linhasKits): "R$ 42,83" = 41,33 + 1,50; incompleto = "Falta o custo de: C"; digitado = custo do próprio kit e a soma dos itens ao lado');
+        // #15: a mensagem "✓ Kit salvo" mostra o mesmo total da coluna "Custo do kit" (antes "R$ 41,33", sem os R$ 1,50 de embalagem/outros).
+        const msgK = typeof PN.msgKitSalvo === 'function' ? PN.msgKitSalvo : () => '';
+        ok(msgK(lk[0]) === '✓ Kit salvo: R$ 42,83 (R$ 41,33 + R$ 1,50 de embalagem/outros)' && msgK(lk[0]).indexOf(SHC.moeda(r2(lk[0].custo + lk[0].outros))) === 13
+            && msgK(lk[1]) === '✓ Kit salvo. Falta o custo de: C' && msgK(lk[2]) === '✓ Kit salvo: R$ 50,00' && msgK(undefined) === '✓ Kit salvo. Falta o custo de: ',
+            '"✓ Kit salvo: R$ 42,83 (R$ 41,33 + R$ 1,50 de embalagem/outros)": o mesmo total da tabela; sem embalagem, só o custo; incompleto, o que falta');
         const r = lcg(7701), G = lote();
         for (let i = 0; i < 2000; i++) {
             const n = ent(r, 1, 6), cs2 = {}, kit = [];
