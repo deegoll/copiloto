@@ -316,24 +316,32 @@
      * em fullConferir (sem valor): r.custo é o total_charged da remessa = coleta e/ou penalidade, não o valor da diferença, que o Copiloto
      * não sabe (o mesmo do SHC.chamadoRemessa e do resumo). Revisão 07/10/2026: antes o custo inteiro entrava como "dá para recuperar".
      * d = { conc (hist.conciliacao), conferir (lista de itens), inconformes (lista) }
-     * → { total, parcelas:[{id, rotulo, origem, valor, itens:[…]}], devConferir:{valor, itens}, fullConferir:{itens:[{id, quando, prazo, motivos, link}]} }
+     * → { total, parcelas:[{id, rotulo, origem, valor, n (itens + os fora da lista), itens:[…], resto?:{n, valor}}], devConferir:{valor, itens},
+     *     fullConferir:{itens:[{id, quando, prazo, motivos, link}]} }
      */
     const ORIGEM_CURTA = { frete: 'Faturamento × anúncio · 30 dias', cobrancas: '',estorno: 'venda cancelada', devolucao: 'devolução × pós-venda · 30 dias' };
     F.recuperar = function (d) {
         d = d || {};
-        const parcelas = [], add = (id, rotulo, origem, itens) => {
-            const valor = r2(itens.reduce((s, x) => s + (x.valor || 0), 0));
-            if (itens.length && valor > 0) parcelas.push({ id, rotulo, origem, curta: ORIGEM_CURTA[id], valor, itens });
+        // resto = {n, valor}: o que fica fora da lista de itens (só o frete, acima do corte de 200) — entra no valor e na contagem.
+        const parcelas = [], add = (id, rotulo, origem, itens, resto) => {
+            const valor = r2(itens.reduce((s, x) => s + (x.valor || 0), 0) + (resto ? resto.valor : 0));
+            if (itens.length && valor > 0) parcelas.push(Object.assign({ id, rotulo, origem, curta: ORIGEM_CURTA[id], valor, n: itens.length + (resto ? resto.n : 0), itens }, resto ? { resto } : {}));
         };
         const fr = ((d.conc && d.conc.pagoAMais) || []).filter(p => p && p.diferenca > 0 && !p.talvezUnidades);
+        // Revisão 07/10/2026: a lista pagoAMais vem cortada em 200 (SHC.conciliaFrete) e o confirmado acima disso sumia. O total e a contagem
+        // são os de ANTES do corte (totalAMais e Σ porItem.n), os mesmos da aba Frete; os itens são os chamados dos 200 maiores.
+        const cc = d.conc || {}, nConf = cc.porItem ? Object.keys(cc.porItem).reduce((n, k) => n + ((cc.porItem[k] && cc.porItem[k].n) || 0), 0) : 0;
+        const somaFr = r2(fr.reduce((s, p) => s + p.diferenca, 0)), cortado = nConf > fr.length && typeof cc.totalAMais === 'number' && cc.totalAMais > somaFr;
         // O frete vem com OUTRO número que a venda (conciliaFrete casa por anúncio e data): o mesmo frete no "para conferir" (regra 'frete')
-        // sai pelo número do frete (pedidoFrete) ou, no guardado antes dele, por anúncio + data + valor cobrado.
-        const pedFrete = new Set(), chFrete = new Set();
+        // sai pelo número do frete (pedidoFrete) ou, no guardado antes dele, por anúncio + data + valor cobrado. Com o corte, os números de
+        // TODOS os fretes confirmados vêm em numsFrete (confirmados primeiro: os nConf primeiros).
+        const pedFrete = new Set(cortado && Array.isArray(cc.numsFrete) ? cc.numsFrete.slice(0, nConf).map(String) : []), chFrete = new Set();
         fr.forEach(p => { pedFrete.add(String(p.pedido)); if (p.pedidoFrete) pedFrete.add(String(p.pedidoFrete)); chFrete.add(p.itemId + '|' + p.data + '|' + r2(p.cobrado)); });
         const doFrete = x => x.regra === 'frete' && (pedFrete.has(String(x.pedido)) || chFrete.has(x.itemId + '|' + x.data + '|' + r2(x.valor)));
         // "(confirmado)": aqui só entra o confirmado; o cartão da aba Frete soma também o "para conferir" (mesmo nome, outro total).
         add('frete', 'Frete cobrado a mais (confirmado)', 'Faturamento × frete do anúncio · últimos 30 dias',
-            fr.map(p => Object.assign({ pedido: p.pedido, itemId: p.itemId, data: p.data, valor: p.diferenca, cobrado: p.cobrado, esperado: p.esperado }, p.dev > 0 ? { dev: p.dev } : {}, p.pedidoFrete ? { pedidoFrete: p.pedidoFrete } : {})));
+            fr.map(p => Object.assign({ pedido: p.pedido, itemId: p.itemId, data: p.data, valor: p.diferenca, cobrado: p.cobrado, esperado: p.esperado }, p.dev > 0 ? { dev: p.dev } : {}, p.pedidoFrete ? { pedidoFrete: p.pedidoFrete } : {})),
+            cortado ? { n: nConf - fr.length, valor: r2(cc.totalAMais - somaFr) } : null);
         // v3.1: "para conferir" gravado pela versão anterior pode ter a tarifa de devolução: ela nunca entra no que dá para recuperar.
         // v3.3: dúvida (pode ser legítima: 1 cobrança por pagamento/envio, frete de venda cancelada já despachada) fica só no "para conferir".
         // Lista guardada antes da revisão de 07/10/2026 pode ter 2 regras na mesma cobrança: conta 1 vez só (teto = o cobrado líquido da outra regra).
@@ -824,9 +832,11 @@
                 + `<span class="acoes"><button class="bt sec pq" data-copiar-rec="${p.id}:${i}">Copiar texto do chamado</button>`
                 + (p.id === 'estorno' ? `<a class="lnk" href="${esc(SHC.POSVENDA_URL || F.URL.faturamento)}" target="_blank" rel="noopener">Ver no pós-venda</a>` : `<a class="lnk" href="${esc(F.URL.cobranca(x.pedido))}" target="_blank" rel="noopener">Abrir a cobrança</a>`) + '</span></li>';
         };
-        return cab + `<p class="rec-tot"><b>${esc(SHC.moeda(rec.total))}</b> em ${esc(SHC.qtd(rec.parcelas.reduce((s, p) => s + p.itens.length, 0), 'item', 'itens'))}</p>`
+        // Frete acima do corte de 200: 1 linha com os que ficaram fora da lista (a soma da tela fecha com o valor da parcela).
+        const resto = p => (p.resto ? `<ul class="rec-it"><li><span><b>Mais ${esc(SHC.qtd(p.resto.n, 'pedido', 'pedidos'))}</b><small>Os de menor diferença: a lista mostra os ${p.itens.length} maiores. O total é o mesmo da aba Frete.</small></span><b class="num">${esc(SHC.moeda(p.resto.valor))}</b></li></ul>` : '');
+        return cab + `<p class="rec-tot"><b>${esc(SHC.moeda(rec.total))}</b> em ${esc(SHC.qtd(rec.parcelas.reduce((s, p) => s + (p.n || p.itens.length), 0), 'item', 'itens'))}</p>`
             + rec.parcelas.map(p => `<div class="parc ${p.id}"><div class="pc-cab"><b>${p.id === 'devolucao' ? '<span class="pt ok"></span>' : ''}${esc(p.rotulo)}</b><b class="num">${esc(SHC.moeda(p.valor))}</b></div><span class="mini">Origem: ${esc(p.origem)}</span>`
-                + `<div data-vm-box><ul class="rec-it">${p.itens.slice(0, 5).map((x, i) => item(p, x, i)).join('')}</ul>${p.itens.length > 5 ? `<ul class="rec-it vm-x">${p.itens.slice(5).map((x, i) => item(p, x, i + 5)).join('')}</ul>` : ''}${F.vmBotao(p.itens.length, 5)}</div></div>`).join('') + blocoDc() + blocoFull() + rod;
+                + `<div data-vm-box><ul class="rec-it">${p.itens.slice(0, 5).map((x, i) => item(p, x, i)).join('')}</ul>${p.itens.length > 5 ? `<ul class="rec-it vm-x">${p.itens.slice(5).map((x, i) => item(p, x, i + 5)).join('')}</ul>` : ''}${F.vmBotao(p.itens.length, 5)}</div>${resto(p)}</div>`).join('') + blocoDc() + blocoFull() + rod;
     };
     const curto = (s, n) => (String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s));
     /** v3.1: seção "Custo novo na fatura" (SHC.custosNovos de fat:<conta>). Sem 2 faturas lidas não compara → nada; sem custo novo → 1 linha verde. */

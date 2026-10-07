@@ -13,8 +13,8 @@
 //   J. fundo/03-faturamento.js gravarFreteHist: estorno lido num mês depois da tarifa (cobrado e cheio, desconto do ML, releitura).
 // Casos gerados com semente fixa (LCG): o resultado é o mesmo em toda execução (nada de Math.random).
 // Divergências achadas nesta auditoria (fora deste teste para a suíte seguir verde; repro no relatório da tarefa):
-//   1) SHC.fech.recuperar soma o "Frete cobrado a mais (confirmado)" da lista guardada (cortada em 200), e a aba Frete soma o totalAMais
-//      (sem corte): com mais de 200 pedidos contestáveis em 30 dias as duas telas mostram valores diferentes;
+//   1) (corrigida; caso do corte em D) SHC.fech.recuperar somava o "Frete cobrado a mais (confirmado)" da lista guardada (cortada em 200), e a
+//      aba Frete soma o totalAMais (sem corte): com mais de 200 pedidos contestáveis em 30 dias as duas telas mostravam valores diferentes;
 //   2) SHC.freteHistorico: "Comprador paga" com a taxa operacional não lida soma R$ 0 por pedido (custoOperacional R$ 0,00 inventado).
 //   3) (corrigida; caso J) fundo/03-faturamento.js gravarFreteHist: estorno parcial lido num mês depois da tarifa baixava o cobrado mas não o
 //      cheio, e a diferença aparecia como "Desconto do ML no frete" (o mesmo estorno lido junto com a tarifa, em SHC.freteDasCobrancas, baixa os dois).
@@ -316,9 +316,12 @@ console.log('D. Conciliação em casos gerados (semente fixa): oráculo em centa
             && fc.todos.every(y => cent(y.tot) === cent(y.v) + cent(y.vt)), { s, fc: fc && { total: fc.total, n: fc.n, contestar: fc.contestar, conferir: fc.conferir, resto: fc.resto } });
         const geral = P.freteConta({ conciliacao: cc, vendasLidas: true });
         Tela.conta(geral.total === fc.total && (fc.n === 0 ? !/cobrados? a mais/.test(geral.resumo) : geral.resumo.indexOf('(' + reais(cent(fc.total))) > 0), { s, resumo: geral.resumo, total: fc.total });
-        if (!cortado) {
-            const rec = F.recuperar({ conc: cc }), pf = rec.parcelas.find(p => p.id === 'frete'), nC = pa.filter(p => !p.talvezUnidades).length;
-            Rec.conta(cc.totalAMais > 0 ? (pf && pf.valor === cc.totalAMais && pf.itens.length === nC && rec.total === cc.totalAMais) : (!pf && rec.total === 0), { s, totalAMais: cc.totalAMais, rec: rec.total });
+        {   // também acima do corte de 200: valor = totalAMais e contagem = Σ porItem.n (antes do corte); itens = os da lista (os chamados)
+            const rec = F.recuperar({ conc: cc }), pf = rec.parcelas.find(p => p.id === 'frete'), nL = pa.filter(p => !p.talvezUnidades).length;
+            const nC = Object.keys(cc.porItem).reduce((t, k) => t + cc.porItem[k].n, 0);
+            Rec.conta(cc.totalAMais > 0 ? (pf && pf.valor === cc.totalAMais && pf.n === nC && pf.itens.length === nL && rec.total === cc.totalAMais
+                && (nC > nL ? pf.resto.n === nC - nL && cent(pf.resto.valor) === cent(cc.totalAMais) - somaC(pf.itens.map(x => x.valor)) : !pf.resto)) : (!pf && rec.total === 0),
+                { s, totalAMais: cc.totalAMais, rec: rec.total, n: pf && pf.n, nC });
             if (pf) pf.itens.slice(0, 5).forEach(x => {
                 const t = F.chamadoFrete(x, '');
                 Txt.conta(t.indexOf('- Valor cobrado: ' + reais(cent(x.cobrado)) + '\n- Valor devido: ' + reais(cent(x.esperado)) + '\n- Diferença: ' + reais(cent(x.valor)) + '\n') > 0
@@ -365,13 +368,26 @@ console.log('D. Conciliação em casos gerados (semente fixa): oráculo em centa
     ok(fc.contestar.v === cc.totalAMais && fc.contestar.n === 260 && fc.conferir.n === 30 && cent(fc.total) === esperado + espT && fc.n === 290,
         'cartão "Frete cobrado a mais" usa o porItem (sem o corte): confirmado = totalAMais, 290 pedidos');
     confere({ fretes: fs }, cc, 'corte', false);   // o caso do corte entra nas mesmas conferências abaixo
+    // "Dá para recuperar" (Fechamento e Conciliação) = a aba Frete: 260 pedidos e totalAMais (antes: só os 200 da lista). A tela fecha:
+    // 200 itens + "Mais 60 pedidos" = a parcela = o total do topo, "em 260 itens".
+    const rc = F.recuperar({ conc: cc }), pfc = rc.parcelas.find(p => p.id === 'frete'), hc = F.htmlRecuperar(rc, () => 'Produto', true);
+    const numsTela = [...hc.matchAll(/<b class="num">([^<]*)<\/b>/g)].map(m => cent(SHC.num(m[1].replace(/[R$\s.]/g, '').replace(',', '.'))));
+    ok(rc.total === cc.totalAMais && pfc.n === 260 && pfc.itens.length === 200 && pfc.resto.n === 60 && hc.indexOf('<b>' + reais(esperado) + '</b> em 260 itens') > 0
+        && hc.indexOf('Mais 60 pedidos') > 0 && numsTela[0] === esperado && numsTela.slice(1).reduce((t, v) => t + v, 0) === esperado,
+        `"Dá para recuperar" acima do corte: ${SHC.moeda(rc.total)} em 260 pedidos (= totalAMais), e na tela 200 itens + "Mais 60 pedidos" fecham com a parcela`);
+    // Frete confirmado FORA da lista (posição 250) também no "para conferir" do Fechamento (regra 'frete'): não conta 2 vezes; o de um
+    // "para conferir" da conciliação (posição 270) continua no "para conferir".
+    const cfx = (i, dif) => ({ regra: 'frete', pedido: cc.numsFrete[i], itemId: 'MLB9700000001', data: '2026-09-01', cobranca: 'Tarifa de envio', valor: 60, esperado: 60 - dif, diferenca: dif, motivo: 'm', estimado: 'mediana' });
+    const rx = F.recuperar({ conc: cc, conferir: [cfx(250, 7), cfx(270, 9)] }), pcx = rx.parcelas.find(p => p.id === 'cobrancas');
+    ok(cent(rx.total) === esperado + 900 && pcx && pcx.itens.length === 1 && pcx.itens[0].pedido === cc.numsFrete[270],
+        'frete confirmado fora da lista não entra de novo pelo "para conferir" (o "para conferir" da conciliação entra): ' + SHC.moeda(rx.total));
     okLote(Or, '60 casos com o mesmo número: contagens, cada diferença, quem é "para conferir", totalAMais e talvez.total = oráculo em centavos inteiros');
     okLote(Iv, 'Σ porItem.v = totalAMais, Σ porItem.vt = talvez.total, Σ n+nt = pedidos, e Σ diferença dos contestáveis = totalAMais (120 casos gerados + o do corte)');
     okLote(Lin, 'cada pedido a mais: 2 casas, diferença > 0, cobrado − esperado = diferença, cobrado = o frete lido (pelo pedidoFrete quando o número é outro)');
     okLote(Un, 'nada contado 2 vezes: cada venda e cada número de frete uma vez só, pedidoFrete nunca é a venda de outra linha, nada da venda de antes da janela');
     okLote(Ord, 'contestáveis sempre antes dos "para conferir" (o corte de 200 nunca tira um contestável antes de uma dúvida)');
     okLote(Tela, 'cartão (P.freteCobrado) e Geral (P.freteConta): contestar = totalAMais, conferir = talvez.total, Σ anúncios + resto = total, e o resumo mostra esse R$');
-    okLote(Rec, '"Dá para recuperar" (SHC.fech.recuperar) = totalAMais em cada caso sem corte');
+    okLote(Rec, '"Dá para recuperar" (SHC.fech.recuperar) = totalAMais e a contagem de antes do corte, em cada caso (também no do corte de 200)');
     okLote(Txt, 'textos dos chamados e a conta linha a linha mostram os mesmos centavos (cobrado, devido, diferença, estorno)');
 }
 

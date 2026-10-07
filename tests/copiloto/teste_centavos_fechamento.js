@@ -11,7 +11,7 @@
 //   1. (corrigida) F.conferir + F.recuperar somavam 2 regras sobre a MESMA cobrança (repetida + sem estorno; repetida + tarifa acima) → recuperar > cobrado;
 //   2. (corrigida) F.recuperar contava o custo inteiro da remessa do Full (coleta) como "dá para recuperar";
 //   3. SHC.r2 perde 1 centavo em parte dos empates de meio centavo (ex.: imposto de 5% sobre R$ 42,70 = 2,135 → R$ 2,13);
-//   4. F.recuperar usa a lista pagoAMais cortada em 200: o frete confirmado acima disso some do total;
+//   4. (corrigida; caso em teste_centavos_frete.js, D) F.recuperar usava a lista pagoAMais cortada em 200: o frete confirmado acima disso sumia do total;
 //   5. (corrigida) F.conferirFatura no modo exato (pela fatura) aceitava R$ 0,01 de diferença como "✓ bate" (tela: ML R$ 100,01 · Copiloto R$ 100,00 ✓);
 //   6. (corrigida) F.motivoTotal só citava o resto que passa de R$ 1: total ✗ por R$ 0,50 com o motivo "Diferença nos custos (+R$ 0,00).";
 //   7. Rateio (SHC.rateioFaturas → F.htmlRateio): "✓ bate com o total da fatura" com até R$ 1,00 de diferença (partes por mês ≠ total mostrado).
