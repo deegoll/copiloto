@@ -9,7 +9,7 @@
 // Divergências encontradas no produto (registradas para a equipe, com repro em scratchpad/centavos/). As marcadas "corrigida" têm caso
 // próprio que falhava antes da correção; as outras ficam FORA das asserções:
 //   1. (corrigida) F.conferir + F.recuperar somavam 2 regras sobre a MESMA cobrança (repetida + sem estorno; repetida + tarifa acima) → recuperar > cobrado;
-//   2. (corrigida) F.recuperar contava o custo inteiro da remessa do Full (coleta) como "dá para recuperar";
+//   2. (corrigida) F.recuperar contava o custo inteiro da remessa do Full (coleta) como "dá para recuperar" (e a Conciliação, concTopo, mostra a remessa "para conferir");
 //   3. SHC.r2 perde 1 centavo em parte dos empates de meio centavo (ex.: imposto de 5% sobre R$ 42,70 = 2,135 → R$ 2,13);
 //   4. (corrigida; caso em teste_centavos_frete.js, D) F.recuperar usava a lista pagoAMais cortada em 200: o frete confirmado acima disso sumia do total;
 //   5. (corrigida) F.conferirFatura no modo exato (pela fatura) aceitava R$ 0,01 de diferença como "✓ bate" (tela: ML R$ 100,01 · Copiloto R$ 100,00 ✓);
@@ -880,6 +880,47 @@ console.log('Faturas × meses (rateio): as partes por mês somam o total das cob
         if (!r.conferido && (ns[3] !== C(r.total) || ns[4] !== C(r.totalFatura) || ns[3] - ns[4] !== ns[5])) return 'frase da diferença: ' + ns.join(' ');
         return semLixo(h) || 'lixo';
     }, 'cada fatura: agosto + setembro = Σ das cobranças do ciclo (23/08 a 22/09); diferença = Σ − total da fatura; a frase da tela fecha (soma − fatura = diferença)');
+}
+
+console.log('Conciliação (concTopo): a remessa do Full pendente aparece "para conferir", fora do total e sem R$, como no Fechamento');
+{
+    // Revisão 07/10/2026: com a remessa em rec.fullConferir (não é mais parcela), a Conciliação a perdia do "Como pedir de volta" e o KPI
+    // "Dá para recuperar" ficava verde com "nada". concTopo é função interna do painel: sai do arquivo e roda com o estado mínimo da tela.
+    require(path.join(EXT, 'painel-lateral.js'));
+    const src = require('fs').readFileSync(path.join(EXT, 'painel-lateral.js'), 'utf8'), i0 = src.indexOf('    function concTopo(x) {');
+    let j = src.indexOf('{', i0), prof = 0;
+    for (; i0 >= 0 && j < src.length; j++) { if (src[j] === '{') prof++; else if (src[j] === '}' && --prof === 0) break; }
+    ok(i0 >= 0 && j < src.length, 'concTopo achada no painel-lateral.js');
+    const kpiN = (cls, rot, v, sub) => `<div class="kpi kn ${cls || ''}"><div class="l">${esc(rot)}</div><div class="v">${v}</div><div class="s">${sub || '&nbsp;'}</div></div>`;
+    const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const roda = (inconf, conf) => new Function('SHC', 'P', 'esc', 'kpiN', 'inconf', 'conf', `
+        let concNoRec = null, conferir = conf, freteHist = null, remessas = {}, anom = null, conta = '1', recFrCopiado = null, devCopiado = null, concCopiado = null;
+        const incRemessas = () => inconf, devContestar = () => null, custoNovoHtml = () => '', aberto = () => false, btVer = (k, m) => '<button>' + m + '</button>';
+        const vmLista = (k, arr, n) => [arr.slice(0, n), arr.length > n ? btVer(k, 'Ver mais (' + (arr.length - n) + ')') : ''];
+        const tituloDe = id => id, curtoTxt = (t, n) => String(t || '').slice(0, n);
+        ${src.slice(i0, j + 1)}
+        return concTopo;`)(SHC, SHC.pl, esc, kpiN, inconf, conf);
+    const x = { custos: F.custosTopicos({ casc: { linhas: [], bruto: 1000 } }, null, {}), casc: { lucro: 100, bruto: 1000, liquido: 500, custosML: 300 }, nome: 'setembro de 2026', mes: '2026-09',
+        b: { casc: { bruto: 900, custosML: 280 }, m: '2026-08' } };
+    const rem = { id: 'R123', quando: '2026-09-28', prazo: '2026-10-12', motivos: ['Faltaram 3 unidades'], custo: 27, link: 'https://www.mercadolivre.com.br/x', status: 'closed_with_changes' };
+    const kpi = h => (/<div class="kpi kn (\w*)"><div class="l">Dá para recuperar<\/div><div class="v">([^<]*)<\/div><div class="s">([^<]*)<\/div>/.exec(h) || []).slice(1);
+    const card = h => { const a = h.indexOf('id="concRec"'); return a < 0 ? '' : h.slice(a, h.indexOf('id="concCustos"')); };
+    const blocoFull = h => { const c = card(h), a = c.indexOf('Remessas do Full com diferença'); return a < 0 ? '' : c.slice(a, c.indexOf('Quem decide o que devolve')); };
+    const h1 = roda([rem], null)(x), k1 = kpi(h1), c1 = card(h1);
+    ok(SHC.remessaPendente(rem) && k1.join(' · ') === 'at · nada · 1 remessa para conferir',
+        'só 1 remessa pendente (R$ 27,00 cobrados): KPI "Dá para recuperar" âmbar, "nada · 1 remessa para conferir", sem R$ (antes: verde, "nada · nas cobranças lidas"): ' + k1.join(' · '));
+    ok(/Remessa R123/.test(c1) && /Faltaram 3 unidades · até 12\/10/.test(c1) && /Reclamar no ML/.test(c1) && /para conferir<\/span>/.test(c1) && /coleta e\/ou penalidade/.test(c1)
+        && !/R\$/.test(c1.replace(/<[^>]*>/g, '')) && !/multa/i.test(h1),
+        '"Como pedir de volta" lista a remessa com o motivo, o prazo e o "Reclamar no ML"; "coleta e/ou penalidade", sem R$ e sem "multa" (antes: o cartão sumia)');
+    const h0 = roda([], null)(x);
+    ok(!card(h0) && kpi(h0).join(' · ') === 'ok · nada · nas cobranças lidas', 'sem remessa: sem cartão e KPI verde (como antes)');
+    // Com cobrança a recuperar e 4 remessas: o total é só o da cobrança; as remessas ficam à parte (3 à vista + "Ver mais"), sem R$.
+    const conf = { itens: [{ pedido: '9100000888', itemId: 'MLB8000000009', data: '2026-09-24', cobranca: 'Custo por vender', valor: 30, esperado: 25, diferenca: 5, regra: 'tarifa', motivo: 'm' }] };
+    const rems = ['R1', 'R2', 'R3', 'R4'].map((id, i) => Object.assign({}, rem, { id, custo: 10 + i }));
+    const h2 = roda(rems, conf)(x), k2 = kpi(h2), b2 = blocoFull(h2);
+    ok(k2.join(' · ') === 'at · R$ 5,00 · estimativa' && /Remessa R1/.test(b2) && /Remessa R3/.test(b2) && !/Remessa R4/.test(b2) && /Ver mais \(1\)/.test(b2) && /fora do total/.test(b2)
+        && !/R\$/.test(b2.replace(/<[^>]*>/g, '')) && moedasDe(card(h2).replace(/<[^>]*>/g, '')).every(v => v === 500),
+        'cobrança de R$ 5,00 + 4 remessas: KPI R$ 5,00 (as remessas fora do total), o bloco das remessas mostra 3 + "Ver mais (1)" e nenhum R$ (o cartão só cita os R$ 5,00)');
 }
 
 console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK');

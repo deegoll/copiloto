@@ -4746,6 +4746,8 @@
         if (!F || !t) return '';
         const rec = F.recuperar({ conc: P.concDe(freteHist), conferir: cf, inconformes: incRemessas(), devolucoes: devContestar() }), recLido = !!(P.concDe(freteHist) || conferir || remessas || (freteHist && freteHist.devolucoes));   // v3.2: + tarifa de devolução 🟢 (igual ao Fechamento)
         const devConf = !!(rec.devConferir && rec.devConferir.valor > 0);   // 🟡 aparece mesmo sem nada a recuperar (igual ao Fechamento)
+        // Revisão 07/10/2026: remessa do Full com diferença = para conferir, fora do total e SEM R$ (a cobrança é coleta e/ou penalidade), igual ao Fechamento.
+        const fullConf = rec.fullConferir && rec.fullConferir.itens && rec.fullConferir.itens.length ? rec.fullConferir.itens : null;
         const c = x.casc, lucro = c.lucro, bruto = c.bruto, Nome = x.nome.charAt(0).toUpperCase() + x.nome.slice(1).replace(/ de \d{4}$/, '');
         // Com as vendas dos 2 meses, a cor segue o peso nas vendas (como os tópicos logo abaixo): subir junto com as vendas = cinza.
         const bAnt = x.b.casc.bruto, cAnt = x.b.casc.custosML;
@@ -4762,23 +4764,28 @@
             + kpiN(lucro === null ? '' : lucro < 0 ? 'pr' : 'ok', 'Lucro de ' + P.mesLongo(x.mes), lucro === null ? '—' : SHC.moeda(lucro), esc(lucro !== null ? (bruto > 0 ? SHC.pctTxt(lucro / bruto * 100) + ' das vendas' : '') : (lp && lp.valor === null ? lp.motivo : 'ainda não lido')))
             + kpiN(sML.cls === 'sobe' ? 'pr' : sML.cls === 'desce' ? 'ok' : '', 'Custos do ML', c.custosML === null ? '—' : SHC.moeda(c.custosML),
                 esc([c.custosML !== null && bruto > 0 ? SHC.pctTxt(c.custosML / bruto * 100) + (sML.txt ? '' : ' das vendas') : '', sML.txt].filter(Boolean).join(' · ')), 'Custos do ML em % das vendas e a mudança contra ' + P.mesLongo(x.b.m))
-            + kpiN(rec.total > 0 || devConf ? 'at' : recLido ? 'ok' : '', 'Dá para recuperar', rec.total > 0 ? SHC.moeda(rec.total) : recLido ? 'nada' : '—', rec.total > 0 ? 'estimativa' : devConf ? SHC.moeda(rec.devConferir.valor) + ' vale conferir' : recLido ? 'nas cobranças lidas' : 'ainda não lido') + '</div>';
+            + kpiN(rec.total > 0 || devConf || fullConf ? 'at' : recLido ? 'ok' : '', 'Dá para recuperar', rec.total > 0 ? SHC.moeda(rec.total) : recLido ? 'nada' : '—',
+                rec.total > 0 ? 'estimativa' : devConf ? SHC.moeda(rec.devConferir.valor) + ' vale conferir' : fullConf ? SHC.qtd(fullConf.length, 'remessa', 'remessas') + ' para conferir' : recLido ? 'nas cobranças lidas' : 'ainda não lido') + '</div>';
         h += '<!--faixa-->' + custoNovoHtml();   // v3.1: logo depois dos números: custo novo na fatura (a faixa dos cartões de 1 linha entra no marcador)
         // Dá para recuperar: até 3 itens por parcela, cada um com o botão certo (chamado do frete, texto copiado, reclamar a remessa).
-        if (rec.parcelas.length || devConf) {
+        if (rec.parcelas.length || devConf || fullConf) {
             const it = (p, y) => {
                 if (p.id === 'frete') return `<li class="acao at"><div class="tx"><b title="${esc(tituloDe(y.itemId) || y.itemId)}">${esc(tituloDe(y.itemId) || y.itemId)}</b><span>pedido ${esc(y.pedido)} · ${SHC.moeda(y.valor)} a mais</span></div><button class="bt leve pq" data-recfr-copiar="${esc(y.pedido)}">${recFrCopiado === String(y.pedido) ? '✓ Copiado' : 'Copiar chamado'}</button></li>`;
-                if (p.id === 'full') return `<li class="acao ${y.prazo ? 'pr' : 'at'}"><div class="tx"><b>Remessa ${esc(y.id)}</b><span>${esc(y.motivos[0] || '')} · ${SHC.moeda(y.valor)}${y.prazo ? ' · até ' + esc(P.dataBr(y.prazo).slice(0, 5)) : ''}</span></div><a class="bt ml pq" href="${esc(y.link)}" target="_blank" rel="noopener">Reclamar no ML</a></li>`;
                 if (p.id === 'devolucao') return `<li class="acao ok"><div class="tx"><b>Pedido ${esc(y.pedido)}</b><span>${esc(y.motivo)} · ${SHC.moeda(y.valor)}</span></div><button class="bt leve pq" data-dev-copiar="${esc(y.pedido)}">${devCopiado === y.pedido ? '✓ Copiado' : 'Copiar chamado'}</button></li>`;
                 const n = cf.indexOf(cf.find(z => z.pedido === y.pedido && z.regra === y.regra && z.cobranca === y.cobranca));
                 if (n >= 0) concNoRec.add(n);
                 return `<li class="acao at"><div class="tx"><b>Pedido ${esc(y.pedido)}</b><span>${esc(curtoTxt(y.cobranca, 34))} · ${SHC.moeda(y.valor)} a mais</span></div><button class="bt leve pq" data-conc-copiar="${n}">${concCopiado === n ? '✓ Copiado' : 'Copiar chamado'}</button></li>`;
             };
+            // Remessa do Full pendente (rec.fullConferir; não é mais parcela): o motivo, o prazo e o "Reclamar no ML", sem R$.
+            const itFull = y => `<li class="acao ${y.prazo ? 'pr' : 'at'}"><div class="tx"><b>Remessa ${esc(y.id)}</b><span>${esc([(y.motivos || [])[0], y.prazo ? 'até ' + P.dataBr(y.prazo).slice(0, 5) : ''].filter(Boolean).join(' · '))}</span></div><a class="bt ml pq" href="${esc(y.link)}" target="_blank" rel="noopener">Reclamar no ML</a></li>`;
             // v3.2.0: "Dá para recuperar" aparece 1 vez só (no KPI); o cartão diz o que fazer.
-            h += `<div class="card" id="concRec"><div class="ch"><h3>Como pedir de volta</h3><span class="selo at">${rec.parcelas.length ? 'estimativa' : 'vale conferir'}</span></div>`
+            h += `<div class="card" id="concRec"><div class="ch"><h3>Como pedir de volta</h3><span class="selo at">${rec.parcelas.length ? 'estimativa' : devConf ? 'vale conferir' : 'para conferir'}</span></div>`
                 + rec.parcelas.map(p => `<p class="rs" style="margin:8px 0 2px"><b>${esc(p.rotulo)}</b> · ${SHC.moeda(p.valor)}${p.curta ? ` · <span title="${esc('Origem: ' + p.origem)}">${esc(p.curta)}</span>` : ''}</p><ul class="acoes">${vmLista('conc:rec:' + p.id, p.itens, 3)[0].map(y => it(p, y)).join('')}</ul>`
                     + (p.itens.length > 3 ? `<p class="rs">${vmLista('conc:rec:' + p.id, p.itens, 3)[1]}</p>` : '')).join('')
                 + (devConf ? `<p class="det"><span class="pt at"></span>Fora do total: ${SHC.moeda(rec.devConferir.valor)} em tarifas de devolução que valem conferir (aba Frete).</p>` : '')
+                + (fullConf ? `<p class="rs" style="margin:8px 0 2px"><b>Remessas do Full com diferença: para conferir</b> · fora do total</p><ul class="acoes">${vmLista('conc:rec:full', fullConf, 3)[0].map(itFull).join('')}</ul>`
+                    + (fullConf.length > 3 ? `<p class="rs">${vmLista('conc:rec:full', fullConf, 3)[1]}</p>` : '')
+                    + '<p class="det">Ainda dá para reclamar. O ML cobrou a remessa (coleta e/ou penalidade), mas quanto a diferença custou o Copiloto não sabe.</p>' : '')
                 + '<p class="det">Quem decide o que devolve é o ML; o chamado só pede a revisão. O valor devolvido ao comprador fica fora: o ML não informa se o dinheiro voltou.</p></div>';
         }
         // Custos × mês anterior: uma linha por custo, ▲ vermelho quando sobe, ▼ verde quando cai, e o peso em % das vendas.
