@@ -8,7 +8,9 @@
 // Rodar: node tests/copiloto/teste_multiconta.js
 'use strict';
 require('./relogio').fixar();
-const montaFundo = require('./fundo_falso'), { B, paginaAnuncios } = montaFundo;
+const montaFundo = require('./fundo_falso'), { B, paginaAnuncios, html } = montaFundo;
+// Ordem das etapas da sincronização (SHC.SYNC_ETAPAS do fundo).
+const SHC_ETAPAS = F => F.ctx.SHC.SYNC_ETAPAS.map(e => e.id);
 let falhas = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) falhas++; };
 const A = '900000001', OUTRA = '900000002';
@@ -56,10 +58,11 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
 
     console.log('c) sincronização com o login trocado no meio');
     const dados = {};
-    let pedidosLista = 0;
-    // Até a conta ser registrada (fim da leitura dos anúncios), a sessão é da conta A; depois, alguém entrou na outra empresa.
+    let pedidosLista = 0, trocouC = false;
+    // Até os anúncios serem lidos e conferidos, a sessão é da conta A; no 1º pedido de outra tela, alguém já entrou na outra empresa.
     const H = montaFundo({ dados, hoje: '2026-10-07', rota: u => {
-        if (/\/anuncios\/lista/.test(u)) { pedidosLista++; return { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], dados['ml:conta'] ? OUTRA : A) }; }
+        if (!/\/anuncios/.test(u) && dados['ml:conta']) trocouC = true;
+        if (/\/anuncios\/lista/.test(u)) { pedidosLista++; return { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], trocouC ? OUTRA : A) }; }
         return null;
     } });
     await H.ctx.sincronizar('manual');
@@ -84,6 +87,187 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
     ok(r2 && r2.ok === false && r2.motivo === 'conta' && !C2.dados['cert:' + A], '2 contas no Chrome: aviso sem a conta da página é descartado (não marca a empresa errada)');
     const r3 = await C2.envia({ acao: 'certificado', titulo: 'Certificado digital vencido', texto: 'Seu certificado digital venceu.', conta: { sellerId: A } }, ABA);
     ok(r3 && r3.ok !== false && C2.dados['cert:' + A], 'com a conta da página igual à aberta: vale');
+    // Bloqueio 5: 1 conta conhecida, mas a sessão do ML aberta é de OUTRA empresa (ainda não sincronizou): o aviso sem conta não marca a A.
+    const C3 = montaFundo({ dados: { 'ml:conta': A, 'ml:contas': { [A]: { visto: 1 } } }, rota: u => (/\/anuncios\/lista/.test(u) ? { html: paginaAnuncios([{ itemId: 'MLB2000000002', frete: 20 }], OUTRA) } : null) });
+    const r4 = await C3.envia({ acao: 'certificado', titulo: 'Certificado digital vencido', texto: 'Seu certificado digital venceu.' }, ABA);
+    ok(r4 && r4.ok === false && r4.motivo === 'conta' && !C3.dados['cert:' + A], '1 conta no Chrome e o ML aberto em outra empresa: o aviso sem conta é descartado (1 GET confere a sessão)');
+
+    console.log('g) bloqueio 5: troca de login no meio de uma etapa ou dentro do minuto guardado — nada da outra empresa fica nas chaves da A');
+    {   // g1: a sessão vira a da OUTRA no pedido do pós-venda (meio da etapa, 60 s depois da última conferência ainda não passaram)
+        const dados = { ['posvenda:' + A]: { reclamacoes: 1, mensagens: 0, devolucoes: 0, ts: 1 } };
+        let trocou = false;
+        const F = montaFundo({ dados, hoje: '2026-10-07', rota: u => {
+            if (/\/anuncios\/lista/.test(u)) return { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], trocou ? OUTRA : A) };
+            if (/post-purchase/.test(u)) { trocou = true; return { html: html({ x: [{ value: 'problems-to-manage', text: 'Reclamações', badge: { label: '7' } }] }) }; }
+            return null;
+        } });
+        await F.ctx.sincronizar('manual');
+        const st = dados['shc:status'] || {}, et = st.etapas || {}, ids = SHC_ETAPAS(F), depois = ids.slice(ids.indexOf('posvenda'));
+        ok(dados['posvenda:' + A] && dados['posvenda:' + A].reclamacoes === 1, 'pós-venda lido com a sessão da OUTRA não fica em posvenda:A (continua o de antes: 1 reclamação)');
+        ok(!JSON.stringify(dados['shc:anomalias:' + A] || {}).includes('7 reclamações') && !JSON.stringify(dados['shc:anomalias'] || {}).includes('7 reclamações'), 'e não vira alerta falso na A');
+        ok(st.erro === 'outra_conta' && depois.every(k => et[k] && et[k].estado === 'erro' && /mudou de conta/.test(et[k].erro || '')),
+            'a etapa da troca e as seguintes saem com "mudou de conta" (nenhuma "ok")');
+    }
+    {   // g2: troca no meio da etapa Alertas (no pedido do Resumo): resumo, perguntas e alertas da OUTRA não ficam na A
+        const resumoB = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'fixtures/resumo_content_exemplo.json'), 'utf8'));
+        const dados = {};
+        let trocou = false;
+        const F = montaFundo({ dados, hoje: '2026-10-07', rota: u => {
+            if (/\/resumo\/api\/content/.test(u)) { trocou = true; return { json: resumoB }; }
+            if (/\/anuncios\/lista/.test(u)) return { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], trocou ? OUTRA : A) };
+            return null;
+        } });
+        await F.ctx.sincronizar('manual');
+        const st = dados['shc:status'] || {};
+        ok(!dados['resumo:' + A] && !dados['perguntas:' + A] && !dados['shc:anomalias:' + A] && !dados['shc:anomalias'], 'resumo, perguntas e alertas lidos com a sessão da OUTRA: nada gravado na A');
+        ok(st.etapas.alertas.estado === 'erro' && /mudou de conta/.test(st.etapas.alertas.erro || '') && st.erro === 'outra_conta', 'etapa Alertas com erro "mudou de conta"');
+    }
+    {   // g3: troca entre Vendas brutas e Faturamento (dentro do minuto guardado): as cobranças da OUTRA nunca ficam em cob:A
+        const cob = (id, dia) => ({ detail_1: 'Tarifa de envio (Por sua conta)', date: dia.slice(8, 10) + '/' + dia.slice(5, 7) + '/2026', amount: { value: { fraction: '-10', cents: '00' } },
+            modalTrigger: { entityId: id, conceptId: 'c', type: 'X', documentCloseDate: '2026-10-04' }, permalink: 'MLB-1000000001', detail_2: 'Venda #2000000001' });
+        const dados = {}, q = { dono: A, troca: true };
+        const mk = () => montaFundo({ dados, rota: u => {
+            if (/\/anuncios\/lista/.test(u)) return { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], q.dono) };
+            if (/charges-summary/.test(u)) {
+                if (q.troca) q.dono = OUTRA;
+                const de = /fromDateCustom=(\d{4}-\d{2}-\d{2})/.exec(u)[1], ate = /toDateCustom=(\d{4}-\d{2}-\d{2})/.exec(u)[1], quem = q.dono === OUTRA ? 'O' : 'A';
+                return { json: { charges: { data: ['2026-09-10', '2026-09-24', '2026-08-15'].filter(d => d >= de && d <= ate).map((d, k) => cob(quem + '-' + d + '-' + k, d)) } } };
+            }
+            return null;
+        } });
+        await mk().ctx.sincronizar('manual');
+        const st1 = dados['shc:status'];
+        ok(st1.erro === 'outra_conta' && st1.etapas.faturamento.estado === 'erro' && !Object.keys(dados).some(k => /^cob:/.test(k) && JSON.stringify(dados[k]).indexOf('"O-') >= 0),
+            '1ª sincronização: o Faturamento lido com a sessão da OUTRA sai com erro e nada dele fica em cob:A');
+        q.troca = false; q.dono = A;
+        await mk().ctx.sincronizar('manual');
+        const ids = ['2026-09', '2026-08'].map(m => ((dados['cob:' + A + ':' + m] || {}).linhas || []).map(c => String(c.id).split('|')[0])).flat();
+        ok(dados['shc:status'].estado === 'ok' && ids.length === 3 && ids.every(x => /^A-/.test(x)), '2ª sincronização com a A: só as cobranças dela (' + ids.join(', ') + ')');
+    }
+    {   // g4: na leitura de Anúncios, a página 2 vem de OUTRO dono → a leitura falha com "outra_conta" e o retrato da A fica como estava
+        const L = t => ({ lines: [].concat(t).map(label => ({ label })) });
+        const pagina = (itemId, dono, total) => html({ appProps: { pageProps: { u: { sellerId: +dono, nickname: 'LOJA' }, viewData: { grid: { pagination: { total } },
+            rows: [{ metadata: { itemId }, product: { title: 'Produto ' + itemId, status: 'Ativo', sku: 'SKU-' + itemId.slice(-2), stock: [{ label: '10 disponíveis' }] },
+                price: L('R$ 200,00'), earnings: L('R$ 150,00'), purchaseOptions: L(['Clássico', 'Você oferece frete grátis', 'A pagar R$ 20,00']) }] } } } });
+        const antes = { ts: 1, paginas: 2, total: 2, completo: true, itens: [{ itemId: 'MLB1000000001', sku: 'SKU-01' }, { itemId: 'MLB1000000003', sku: 'SKU-03' }] };
+        const dados = { 'ml:conta': A, ['ml:anuncios:' + A]: JSON.parse(JSON.stringify(antes)) };
+        let pag2 = false;
+        const F = montaFundo({ dados, hoje: '2026-10-07', rota: u => {
+            if (/\/anuncios\/lista\?page=2/.test(u)) { pag2 = true; return { html: pagina('MLB2000000002', OUTRA, 2) }; }
+            if (/\/anuncios\/lista/.test(u)) return { html: pagina(pag2 ? 'MLB2000000002' : 'MLB1000000001', pag2 ? OUTRA : A, 2) };
+            return null;
+        } });
+        await F.ctx.sincronizar('manual');
+        const st = dados['shc:status'] || {}, it = (dados['ml:anuncios:' + A].itens || []).map(i => i.itemId);
+        ok(JSON.stringify(it) === '["MLB1000000001","MLB1000000003"]' && !Object.keys(dados).some(k => JSON.stringify(dados[k]).indexOf('MLB2000000002') >= 0 && !/^shc:/.test(k)),
+            'retrato da A como antes: não perdeu o MLB1000000003 nem ganhou o anúncio da OUTRA (' + it.join(', ') + ')');
+        ok(st.etapas.anuncios.estado === 'erro' && /mudou de conta/.test(st.etapas.anuncios.erro || '') && st.erro === 'outra_conta', 'etapa Anúncios com erro "mudou de conta" (não "ok")');
+        const S0 = F.ctx.SHC, pg = (id, dono) => ({ dados: S0.mlPaginaAnuncios(S0.mlExtraiEstado(pagina(id, dono, 3))), via: 'fundo' });
+        const lc = await S0.mlLeituraCompleta({ ler: async n => (n === 1 ? pg('MLB1000000001', A) : n === 2 ? pg('MLB1000000003', A) : pg('MLB2000000002', OUTRA)), abrir: async () => null });
+        ok(lc.falha === 'outra_conta' && !lc.itens, 'SHC.mlLeituraCompleta: página 3 de outro dono → {falha:"outra_conta"}, sem juntar nada');
+    }
+    {   // g5: os pausados (OMNI_INACTIVE, sem conferência por página) vêm da OUTRA → a conferência forçada no fim dos Anúncios desfaz tudo
+        const dados = { 'ml:conta': A, ['ml:anuncios:' + A]: { ts: 1, paginas: 1, total: 1, completo: true, itens: [{ itemId: 'MLB1000000001' }] } };
+        let trocou = false;
+        const F = montaFundo({ dados, hoje: '2026-10-07', rota: u => {
+            if (/OMNI_INACTIVE/.test(u)) { trocou = true; return { html: paginaAnuncios([{ itemId: 'MLB2000000005', frete: 30 }], OUTRA) }; }
+            if (/\/anuncios\/lista/.test(u)) return { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], trocou ? OUTRA : A) };
+            return null;
+        } });
+        await F.ctx.sincronizar('manual');
+        const st = dados['shc:status'] || {};
+        ok(dados['ml:anuncios:' + A].ts === 1 && !Object.keys(dados).some(k => !/^shc:/.test(k) && (k.indexOf('MLB2000000005') >= 0 || JSON.stringify(dados[k]).indexOf('MLB2000000005') >= 0)),
+            'pausado da OUTRA (lido depois da troca) não entra no retrato da A: o que a etapa gravou foi desfeito');
+        ok(dados['ml:conta'] === A && st.etapas.anuncios.estado === 'erro' && st.erro === 'outra_conta', 'a conta aberta continua a A e a etapa Anúncios sai com erro');
+    }
+
+    console.log('h) bloqueio 5: histórico em segundo plano com a troca no último minuto');
+    {
+        let dono = A;
+        const dados = { 'ml:conta': A, 'ml:contas': { [A]: { visto: 1 } }, ['ml:cobrancas:' + A]: { mesesLidos: [], lidoEm: {}, releer: [], incompletos: [] } };
+        const F = montaFundo({ dados, rota: u => (/\/anuncios\/lista/.test(u) ? { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], dono) } : null) });
+        F.ctx.sincronizarCobrancas = async (conta, anda) => {
+            await anda({}, {});                 // conferência de verdade (guardado vazio): A
+            dono = OUTRA;                        // alguém entra na outra empresa
+            await anda({}, { meses: { '2026-05': 'ok' } });   // dentro do minuto guardado: a conferência não vê
+            const S = F.ctx.SHC, k = 'ml:cobrancas:' + conta, mc = await S.lerChave(k);
+            await S.gravarChave(k, Object.assign({}, mc, { mesesLidos: ['2026-05'], lidoEm: { '2026-05': S.hoje() } }));
+            await S.gravarChave('fech:' + conta + ':2026-05', { mes: '2026-05', total: 999, porDia: { '2026-05-10': 999 } });   // o mês fechado da OUTRA
+            return { meses: 1 };
+        };
+        F.ctx.sincronizarVendasAnuncio = async () => ({}); F.ctx.sincronizarNfe = async () => ({}); F.ctx.gravarRateio = async () => {};
+        const h = await F.ctx.lerHistorico();
+        const mc = dados['ml:cobrancas:' + A];
+        ok(h && h.lido && h.lido.erro === 'outra_conta', 'a conferência forçada no fim do histórico vê a troca (lido.erro = outra_conta)');
+        ok(mc.mesesLidos.indexOf('2026-05') < 0 && !dados['fech:' + A + ':2026-05'], 'o mês lido com a sessão da OUTRA volta para a fila: não conta como lido e o fechamento dele não fica na A');
+    }
+
+    console.log('i) bloqueio 5: retomada de um ciclo que caiu no MEIO dos Anúncios (conta do ciclo ainda vazia) com outra conta aberta');
+    {
+        const L = t => ({ lines: [].concat(t).map(label => ({ label })) });
+        const pagina = (itemId, dono, total) => html({ appProps: { pageProps: { u: { sellerId: +dono, nickname: 'LOJA' }, viewData: { grid: { pagination: { total } },
+            rows: [{ metadata: { itemId }, product: { title: 'P ' + itemId, status: 'Ativo', sku: '', stock: [{ label: '10 disponíveis' }] },
+                price: L('R$ 200,00'), earnings: L('R$ 150,00'), purchaseOptions: L(['Clássico', 'Você oferece frete grátis', 'A pagar R$ 20,00']) }] } } } });
+        const agora = Date.now(), cid = 'c1', F0 = montaFundo({ rota: () => null });
+        const pag1A = F0.ctx.SHC.mlPaginaAnuncios(F0.ctx.SHC.mlExtraiEstado(pagina('MLB1000000001', A, 2)));
+        const dados = { 'shc:status': { estado: 'interrompida', inicio: agora - 60e3, etapas: {} },
+            'shc:ciclo': { id: cid, conta: null, inicio: agora - 60e3, feitas: {}, retomadas: 0, chaves: ['shc:ret:' + cid + ':anuncios:p|1'] },
+            ['shc:ret:' + cid + ':anuncios:p|1']: { v: { dados: pag1A, via: 'fundo' } } };
+        const F = montaFundo({ dados, rota: u => (/\/anuncios\/lista/.test(u) ? { html: pagina('MLB2000000002', OUTRA, 1) } : null) });
+        const st = await F.ctx.sincronizar('retomada');
+        ok(!dados['ml:anuncios:' + A] && !Object.keys(dados).some(k => k !== 'ml:anuncios:' + OUTRA && JSON.stringify(dados[k]).indexOf('MLB2000000002') >= 0 && JSON.stringify(dados[k]).indexOf('MLB1000000001') >= 0),
+            'a página guardada da conta antiga não se mistura com as da conta aberta');
+        ok(st.erro !== 'outra_conta' && dados['ml:conta'] === OUTRA && JSON.stringify((dados['ml:anuncios:' + OUTRA].itens || []).map(i => i.itemId)) === '["MLB2000000002"]'
+            && !dados['shc:ret:' + cid + ':anuncios:p|1'], 'recomeça do zero com a conta aberta (ciclo novo, sem a página antiga)');
+    }
+
+    console.log('j) bloqueio 5: leitura avulsa (fiscal agora) confere de novo antes de gravar');
+    {
+        const mkF = (donoPag, depois) => {
+            const s = { dono: A };
+            const dados = { 'ml:conta': A };
+            const F = montaFundo({ dados, hoje: '2026-10-07', rota: u => {
+                if (/\/anuncios\/lista/.test(u)) return { html: paginaAnuncios([{ itemId: 'MLB1000000001', frete: 20 }], s.dono) };
+                if (/\/anuncios\/api\/tasks/.test(u)) { if (depois) s.dono = OUTRA; return { json: { tasks: [{ id: 'GROUPED_WITHOUT_FISCAL_DATA', cases: 1, title: 't', message: 'm', action: { type: 'filter', filters: 'WITHOUT_FISCAL_DATA' } }] } }; }
+                if (/WITHOUT_FISCAL_DATA/.test(u)) return { html: paginaAnuncios([{ itemId: 'MLB2000000002', frete: 20 }], donoPag(s)) };
+                return null;
+            } });
+            return { F, dados };
+        };
+        let x = mkF(s => s.dono, true);
+        let r = await x.F.envia({ acao: 'fiscal_agora' });
+        ok(r && r.ok === false && r.motivo === 'outra_conta' && !x.dados['fiscal:' + A], 'troca logo depois da 1ª conferência, página que diz o dono (OUTRA): nada em fiscal:A');
+        x = mkF(() => '', true);
+        r = await x.F.envia({ acao: 'fiscal_agora' });
+        ok(r && r.ok === false && r.motivo === 'outra_conta' && !x.dados['fiscal:' + A], 'página que não diz o dono: a conferência antes de gravar vê a troca; nada em fiscal:A');
+        x = mkF(s => s.dono, false);
+        r = await x.F.envia({ acao: 'fiscal_agora' });
+        ok(r && r.ok === true && x.dados['fiscal:' + A] && x.dados['fiscal:' + A].itens[0] === 'MLB2000000002', 'controle: mesma conta → grava (o teste enxerga a gravação)');
+    }
+
+    console.log('k) bloqueio 5: o número do ícone é o da conta aberta');
+    {
+        const anomA = { ts: 1, conta: A, total: 5, porTipo: { perguntas: 5 }, vermelho: false, itens: [] }, anomB = { ts: 2, conta: OUTRA, total: 2, porTipo: { perguntas: 2 }, vermelho: false, itens: [] };
+        // fundo com storage.onChanged (o fundo_falso não tem): o ouvinte registrado na carga fica em __mudou.
+        const bg = 'chrome.storage.onChanged = { addListener: f => { (globalThis.__mudou = globalThis.__mudou || []).push(f); } };\n' + require('fs').readFileSync(require('path').join(__dirname, '../../extension-copiloto/background.js'), 'utf8');
+        const F = montaFundo({ background: bg, dados: { 'ml:conta': OUTRA, cfg: {}, 'shc:anomalias': anomA, ['shc:anomalias:' + A]: anomA, ['shc:anomalias:' + OUTRA]: anomB } });
+        await F.tique(5);
+        await F.ctx.seloAgora(); await F.tique(10);
+        ok(F.selos[F.selos.length - 1] === '2', 'aberta a OUTRA e o shc:anomalias guardado ainda da A: o ícone mostra o número da OUTRA (2), não o 5 da A');
+        delete F.dados['shc:anomalias:' + OUTRA];
+        await F.ctx.seloAgora(); await F.tique(10);
+        ok(F.selos[F.selos.length - 1] === '', 'sem alertas lidos da conta aberta: ícone limpo');
+        F.dados['shc:anomalias:' + OUTRA] = anomB;
+        F.dados['perguntas:' + A] = { pendentes: 7 };
+        await F.ctx.atualizarAlertas(A); await F.tique(10);
+        ok(F.dados['shc:anomalias'].conta === A && F.dados['shc:anomalias'].ts === 1 && F.selos[F.selos.length - 1] === '2',
+            'alertas da A recalculados com a OUTRA aberta (rodada lenta atrasada): a chave geral e o ícone continuam da OUTRA');
+        ok(F.dados['shc:anomalias:' + A].ts > 1, 'e os da A ficam guardados só na chave dela (shc:anomalias:<A>)');
+        F.dados['ml:conta'] = A; F.dados['shc:anomalias'] = F.dados['shc:anomalias:' + A] = Object.assign({}, anomA, { ts: 3, total: 9, porTipo: { perguntas: 9 } });
+        (F.ctx.__mudou || []).forEach(f => f({ 'ml:conta': { oldValue: OUTRA, newValue: A } }, 'local'));
+        await F.tique(20);
+        ok(F.selos[F.selos.length - 1] === '9', 'trocou a conta aberta (ml:conta): o ícone refaz com o número da conta nova (9)');
+    }
 
     console.log('e) empresa separada: custos por SKU, números da empresa e ERP só da conta marcada');
     {

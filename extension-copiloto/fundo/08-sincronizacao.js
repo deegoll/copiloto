@@ -33,6 +33,45 @@ async function limpaCiclo(c, etapaId) {
     c.chaves = c.chaves.filter(k => k.indexOf(pre) !== 0);
     await chrome.storage.local.remove(fora);
 }
+// ── v3.3 multi-empresa (bloqueio 5, 07/10/2026): DIÁRIO das gravações desde a última conferência BOA da conta. O login do ML trocado no meio
+// de uma etapa gravava a outra empresa nas chaves desta (pós-venda, resumo, cobranças, alertas) e a troca só era vista depois. Toda gravação
+// do fundo passa por chrome.storage.local (o store.js também): com um diário aberto, a 1ª gravação de cada chave guarda o valor de ANTES.
+// Conferência acusou outra conta → desfazDiario (cada chave volta ao que era; a que não existia some); conferência boa → o diário recomeça.
+// Fora do diário: o status, o ciclo e as respostas guardadas nele, e o que não vem da sessão do ML (cfg, custos, ERP, vistos).
+const FORA_DO_DIARIO = /^(shc:status$|shc:ciclo$|shc:ret:|cfg$|c\||v\||erp[:@])/;
+const diarios = new Set();
+let armazem = null;   // get/set/remove de verdade do chrome.storage.local (o diário embrulha set e remove na 1ª abertura)
+const anotaDiario = ks => Promise.all([...diarios].map(d => {
+    const novas = ks.filter(k => typeof k === 'string' && !FORA_DO_DIARIO.test(k) && !d.antes.has(k));
+    if (novas.length) { const p = armazem.get(novas).catch(() => null); novas.forEach(k => d.antes.set(k, p.then(o => (!o ? { falhou: true } : k in o ? { v: o[k] } : null)))); }
+    return Promise.all(ks.map(k => d.antes.get(k)));
+}));
+const abreDiario = () => {
+    if (!armazem) {
+        const L = chrome.storage.local, set = L.set.bind(L), remove = L.remove.bind(L);
+        const setD = (o, ...x) => (diarios.size && o ? anotaDiario(Object.keys(o)).then(() => set(o, ...x)) : set(o, ...x));
+        const removeD = (ks, ...x) => (diarios.size ? anotaDiario([].concat(ks)).then(() => remove(ks, ...x)) : remove(ks, ...x));
+        armazem = { get: L.get.bind(L), set, remove, ok: false };
+        try { L.set = setD; L.remove = removeD; armazem.ok = L.set === setD && L.remove === removeD; } catch (e) { armazem.ok = false; }   // sem embrulho: vale a conferência + marcaReler
+    }
+    const d = { antes: new Map() };
+    if (armazem.ok) diarios.add(d);
+    return d;
+};
+const fechaDiario = d => { if (d) diarios.delete(d); };
+// Desfaz o que foi gravado desde a última conferência boa; o diário continua aberto (o que vier depois também é anotado). → quantas chaves.
+const desfazDiario = async d => {
+    if (!d || !d.antes.size) return 0;
+    const ks = [...d.antes.keys()], vs = await Promise.all(ks.map(k => d.antes.get(k)));
+    d.antes = new Map();
+    const volta = {}, some = [];
+    ks.forEach((k, i) => { const x = vs[i]; if (x && x.falhou) return; if (x) volta[k] = x.v; else some.push(k); });
+    if (some.length) await armazem.remove(some);
+    if (Object.keys(volta).length) await armazem.set(volta);
+    return ks.length;
+};
+// Conta da página 1 dos Anúncios guardada no ciclo (o ciclo caiu no meio dos Anúncios: cic.conta ainda vazio) → sellerId | ''.
+const contaDoCiclo = async c => { const k = 'shc:ret:' + c.id + ':anuncios:p|1', g = (await chrome.storage.local.get(k))[k], d = g && g.v && g.v.dados; return String((d && d.conta && d.conta.sellerId) || ''); };
 // Campos do shc:status que cada etapa atualiza quando dá certo (guardados no ciclo: a etapa pulada na retomada não perde os dela).
 const PATCH_ETAPA = {
     anuncios: an => (an && an.snap ? { conta: an.sellerId, via: an.via, anuncios: an.snap.itens.length, paginasAnuncios: an.paginas, totalAnunciosML: an.total,
@@ -164,29 +203,41 @@ async function sincronizar(origem) {
         if (aoBater) { aoBater(); aoBater = null; }   // D5a: 1ª batida gravada → o clique já recebe {ok, iniciou}
         // Continuar sem ler os anúncios de novo: 1 GET confere que a sessão do ML ainda é a mesma conta (nunca mistura contas).
         // Outra conta aberta → ciclo novo, tudo na fila de novo.
+        // v3.3 (bloqueio 5): o ciclo que caiu no MEIO dos Anúncios ainda não tem conta (cic.conta vazio), mas já guardou páginas: vale a conta
+        // da página 1 guardada — página da conta antiga + página da nova no mesmo retrato nunca. Troca vista → os meses lidos voltam à fila.
+        const recomeca = async () => { cic = null; ETAPAS.forEach(({ id }) => naFila(id)); st.progresso = progresso0(0); await gravar(true); };
         try {
-            if (cic && cic.conta && cic.conta !== 'atual' && (await confereSessao(cic.conta)) === 'outra_conta') {
-                cic = null;
-                ETAPAS.forEach(({ id }) => naFila(id));
-                st.progresso = progresso0(0);
-                await gravar(true);
+            const dono = cic ? cic.conta || await contaDoCiclo(cic) : '';
+            if (dono && dono !== 'atual' && (await confereSessao(dono)) === 'outra_conta') {
+                await marcaReler(dono, cic.inicio).catch(() => {});
+                await recomeca();
             }
             if (cic) { cic.chaves = cic.chaves || []; if (origem === 'retomada') cic.retomadas = (cic.retomadas || 0) + 1; }
             else cic = await cicloNovo(agora);
-        } catch (x) { cic = null; }
+        } catch (x) {   // sem a conferência: nada do ciclo antigo é aproveitado
+            if (cic) await recomeca().catch(() => {});
+            try { cic = await cicloNovo(agora); } catch (y) { cic = null; }
+        }
         ciclo = cic;
         if (cic) await salvaCiclo();
         const feita = id => !!(cic && cic.feitas[id]);
-        const codigo = falha => (falha === 'login' ? 'sem_sessao' : /^ads_/.test(falha) ? falha : 'ml_indisponivel');
+        const codigo = falha => (falha === 'login' ? 'sem_sessao' : /^ads_/.test(falha) || falha === 'outra_conta' ? falha : 'ml_indisponivel');
         // Cada etapa depois dos anúncios falha sozinha: o que ela tinha gravado antes fica, e o status ganha erro<Etapa>.
         // resumo(r) = texto curto do que foi lido; r.semPermissao = etapa pulada (não é erro).
         // v2.10: etapa já feita neste ciclo não roda de novo (os campos do status dela voltam do ciclo no fim).
-        // v3.3 (multi-empresa): antes e depois de cada etapa, a sessão do ML ainda é da conta desta sincronização (contaSegue, 1 GET por minuto
-        // no máximo). Trocou: esta e as próximas etapas param ('outra_conta') e os meses lidos nesta rodada voltam para a fila (marcaReler).
-        let contaSync = null, trocou = false;
-        const conferirConta = async () => {
-            if (trocou || !contaSync || await contaSegue(contaSync)) return !trocou;
+        // v3.3 (multi-empresa): antes de cada etapa, a sessão do ML ainda é da conta desta sincronização (contaSegue, guardado de 1 min).
+        // Bloqueio 5 (07/10/2026): DEPOIS de cada etapa a conferência é FORÇADA (1 GET leve por etapa): a troca no meio da etapa, ou dentro do
+        // minuto guardado, não passa. Trocou: o que foi gravado desde a última conferência boa é desfeito (diário), a etapa sai com erro e as
+        // próximas param ('outra_conta'), e os meses lidos nesta rodada voltam para a fila (marcaReler, também sem o diário).
+        let contaSync = null, trocou = false, diario = null;
+        const conferirConta = async forcar => {
+            if (trocou) return false;
+            if (!contaSync || await contaSegue(contaSync, forcar)) {
+                if (forcar && diario && contaConferida.r === '') diario.antes = new Map();   // prova de que a sessão é desta conta: o gravado fica
+                return true;
+            }
             trocou = true;
+            await desfazDiario(diario).catch(() => {});
             await marcaReler(contaSync, st.inicio || Date.now()).catch(() => {});
             return false;
         };
@@ -196,7 +247,12 @@ async function sincronizar(origem) {
             await comeca(id);
             let e;
             try { const r = await fn(); e = r && r.falha ? { erro: codigo(r.falha) } : { r }; } catch (x) { e = { erro: 'ml_indisponivel' }; }
-            if (!(await conferirConta())) e = { erro: 'outra_conta' };
+            // A própria etapa viu página de outro dono (prova) ou a conferência forçada acusou: as respostas guardadas no ciclo saem.
+            if (e.erro === 'outra_conta' || !(await conferirConta(true))) {
+                e = { erro: 'outra_conta' };
+                if (!trocou) { trocou = true; await desfazDiario(diario).catch(() => {}); await marcaReler(contaSync, st.inicio || Date.now()).catch(() => {}); }
+                if (cic) await limpaCiclo(cic, id).catch(() => {});
+            }
             if (e.erro) await termina(id, 'erro', null, erroDe && e.erro !== 'outra_conta' ? erroDe(e.erro) : e.erro);
             else await termina(id, e.r && (e.r.semPermissao || e.r.pulado) ? 'pulado' : 'ok', resumo(e.r || {}), null, e.r);
             return e;
@@ -205,10 +261,18 @@ async function sincronizar(origem) {
         let erro = null, erroPromos = null, erroCobrancas = null, erroFull = null, erroAds = null, erroFaturas = null, erroVendasBrutas = null, erroRepasse = null, erroAfiliados = null, erroSaude = null;
         let an = null, pr = null, co = null, fu = null, ad = null, rp = null, af = null, al = null, pv = null, erroPosVenda = null, fiscalCedo = null, erroVendasAnuncio = null;
         try {
+            diario = abreDiario();
             if (feita('anuncios')) an = { sellerId: cic.conta, retomada: true };   // v2.10: anúncios já lidos neste ciclo
             else {
                 await comeca('anuncios');
                 an = await sincronizarAnuncios(progresso);
+                // Bloqueio 5: as famílias abertas (JSON sem dono) e os pausados não dizem a conta → conferência forçada antes de valer.
+                // Outra conta (ou página de outro dono no meio da leitura): nada do que a etapa gravou fica (diário).
+                if (an.falha === 'outra_conta' || (!an.falha && an.sellerId && an.sellerId !== 'atual' && !(await contaSegue(an.sellerId, true)))) {
+                    await desfazDiario(diario).catch(() => {});
+                    if (cic) await limpaCiclo(cic, 'anuncios').catch(() => {});
+                    an = { falha: 'outra_conta' };
+                } else if (!an.falha && contaConferida.r === '') diario.antes = new Map();
             }
             if (an.falha) { erro = codigo(an.falha); await termina('anuncios', 'erro', null, erro); }   // 'sem_sessao' só quando o ML mandou para o login
             else {
@@ -280,10 +344,13 @@ async function sincronizar(origem) {
                     r => (r.anomalias && r.anomalias.total ? SHC.qtd(r.anomalias.total, 'ponto de atenção', 'pontos de atenção') : 'Nada pede sua atenção agora'));
                 al = e.r || null;
                 // v3.3 multi-empresa: no fim, 1 conferência SEM o guardado (a troca entre duas conferências não passa sem ser vista).
-                if (!trocou && !(await contaSegue(conta, true))) { trocou = true; await marcaReler(conta, st.inicio || Date.now()).catch(() => {}); }
+                await conferirConta(true);
                 if (trocou) erro = 'outra_conta';
             }
         } catch (e) { erro = String((e && e.message) || e); }
+        // Diário: com a troca, o que ainda foi gravado depois dela (entre etapas) também sai; o ícone volta ao número guardado.
+        if (trocou) { await desfazDiario(diario).catch(() => {}); seloAgora().catch(() => {}); }
+        fechaDiario(diario);
 
         // Fim: etapa que ficou lendo (exceção) vira erro; as da fila (anúncios não lidos) viram puladas.
         const fim = Date.now();
@@ -398,7 +465,7 @@ function lerHistorico() {
             ultima = Date.now();
             await gravaHistorico(Object.assign(await historicoConta(conta), { lendo: true, rodadas }), diag);
         };
-        const lido = {};
+        const lido = {}, diario = abreDiario();   // bloqueio 5: o que esta rodada grava, para desfazer se a sessão era de outra conta
         try {
             lido.cobrancas = await sincronizarCobrancas(conta, anda, 'historico');
             etapaHist = 'vendasAnuncio';
@@ -407,6 +474,11 @@ function lerHistorico() {
             if (!histParar) lido.nfe = await sincronizarNfe(conta, anda, 'historico');
             if (!histParar) await gravarRateio(conta).catch(() => {});   // meses novos no rateio das faturas
         } catch (e) { lido.erro = String((e && e.message) || e); /* o que foi gravado por mês fica; o resto na próxima vez */ }
+        // Bloqueio 5: no fim, 1 conferência SEM o guardado de 1 min (a troca no último minuto da rodada passava): mês lido com a sessão de
+        // outra conta não fica como lido nesta — o gravado na rodada é desfeito e os meses voltam para a fila.
+        if (!trocouHist && !(await contaSegue(conta, true))) { histParar = true; trocouHist = true; }
+        if (trocouHist) await desfazDiario(diario).catch(() => {});
+        fechaDiario(diario);
         if (trocouHist) { await marcaReler(conta, inicioHist).catch(() => {}); lido.erro = 'outra_conta'; }
         h = await historicoConta(conta);
         h.lido = lido;
