@@ -18,6 +18,7 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
+| nuvem 2 | **Conduz a 3.3.0 no lugar da local e da nuvem, que ficaram sem token (a dona avisou às 07/10 10:21)**: receber da dona a 3.3.0 real do computador (com o TikTok) num ramo novo, juntar o C2 (`nuvem/bloqueios-330`), suíte, ficha, textos da loja, zip e SHA. O envio, a política no site e o painel continuam com a dona | ramo `local/3.3.0-real` (a dona sobe) e o que sair dele; `COORDENACAO.md` | 07/10 10:21 |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
 ## Fila
@@ -81,6 +82,11 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local e nuvem (07/10 10:21): a dona avisou que as duas sessões ficaram sem token. A nuvem 2 assume a condução da 3.3.0.**
+  - A dona vai subir a 3.3.0 real do computador (com o TikTok) no ramo `local/3.3.0-real`, só com `extension-copiloto/` e os textos da loja, **nada de teste com dado real**.
+  - Com ela, a nuvem 2 faz o que dá na nuvem: juntar o C2, rodar a suíte daqui com o V1–V3, conferir a política contra o manifest, atualizar a ficha, fazer o zip e o SHA.
+  - Continua com a dona: o OK e a publicação da política no site, colar no painel e o envio, porque a credencial não está na nuvem.
+  - **Quem voltar com token:** leia este quadro antes de qualquer coisa e não refaça o que estiver em Feito ou em Em andamento da nuvem 2.
 - **nuvem → local (07/10 07:41): C2 PRONTO para juntar na 3.3.0.** Ramo `nuvem/bloqueios-330`, HEAD `a110667`, feito a partir deste ramo em `2824b39`, sem o r2 e sem nada dos centavos (PR #4, rascunho). Suíte `TUDO OK`. Cada commit tem um teste que falha no código antigo, e passou por 3 rodadas de revisão adversarial, mais a da nuvem 2 e a revisão final.
   - **C2-g, contestação** (`43480ac`…`77cd4a1`, mais `e469a2e`, `81c3b72` e `cddd490`):
     - exclusão só pela lista fechada dos casos legítimos; culpa do vendedor, da loja ou do anúncio nunca entra, nem depois de vírgula ou de "você/vc";
@@ -166,7 +172,8 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
   3. **Full:** o sino e o ícone não usam a previsão sazonal do painel; o índice sazonal não funciona do dia 1 ao ~15 do mês com dados reais; o mesmo cartão diz "Envie pelo menos N" e "Não enviar agora". A primeira parte está no C1; o resto entra depois.
   4. **Política:** nenhuma menção a experiência de compra (`exp:<conta>`) nem a "Outra empresa". O texto pronto está em `AUDITORIA-LOJA-3.3.0.md:121-131`. É do seu P2/P4.
   5. **Nota da versão:** promete armazenagem em R$ (só existe como frase), avisos de experiência no sino (os ids reais não passam no filtro) e "conferência no fim do histórico" (não existe). Ajuste a sua NOVIDADES; a nuvem ajusta a deste ramo junto com as correções.
-  - Backlog para vender mais (ordem por impacto): na Fila da nuvem. O que precisa de tela ao vivo foi para Ideias, para você.- **nuvem → local (07/10 05:06): N2a pronto e 39 divergências de centavo reais.** Ramo `nuvem/testes-centavos` (`643db14`): 6 arquivos `teste_centavos_*.js`, 460 conferências com dados inventados, `TUDO OK`. Achei 47 casos em que a tela e a conta não batem; 8 foram refutados na verificação e **39 são reais**. Corrijo todos no ramo `nuvem/correcoes-centavos`, cada um com teste. Aviso aqui quando terminar. **Vocês decidem:** juntar antes do P6 (zip) ou mandar como 3.3.1 no mesmo dia. Nenhum deles é bloqueador de segurança; os médios são:
+  - Backlog para vender mais (ordem por impacto): na Fila da nuvem. O que precisa de tela ao vivo foi para Ideias, para você.
+- **nuvem → local (07/10 05:06): N2a pronto e 39 divergências de centavo reais.** Ramo `nuvem/testes-centavos` (`643db14`): 6 arquivos `teste_centavos_*.js`, 460 conferências com dados inventados, `TUDO OK`. Achei 47 casos em que a tela e a conta não batem; 8 foram refutados na verificação e **39 são reais**. Corrijo todos no ramo `nuvem/correcoes-centavos`, cada um com teste. Aviso aqui quando terminar. **Vocês decidem:** juntar antes do P6 (zip) ou mandar como 3.3.1 no mesmo dia. Nenhum deles é bloqueador de segurança; os médios são:
   - Fechamento: o "Dá para recuperar" soma duas regras sobre a mesma cobrança (pede R$ 15 por uma cobrança de R$ 10) e conta a coleta inteira da remessa do Full como recuperável. Na sua 3.3.0 o frete não entra no "a recuperar": o corte em 200 pedidos (`pagoAMais.slice(0,200)`) não vale aí.
   - Lucro: o frete grátis sem valor (a partir de R$ 79 ou no Full) entra como R$ 0 e a sobra aparece como número firme.
   - Full: o total do mês das remessas não bate com as próprias linhas do cartão; o simulador conta remessa vencida ou cancelada; o ícone e o sino ignoram a previsão sazonal (o painel diz Crítico e o ícone não conta o produto).
