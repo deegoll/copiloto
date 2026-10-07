@@ -755,7 +755,12 @@
         const naoLido = l.semAnuncio ? '' : ` As vendas de ${nm} ainda não foram lidas.`;
         if (l.semAnuncio) out.push(`Não achei o anúncio deste produto na sua lista${p.sku ? ' (SKU ' + p.sku + ')' : ''}: sem lucro e sem vendas do ano passado.`);
         if (x.fonte === 'parado') out.push(`Você tem ${l.aptas} aptas e nenhuma venda nos últimos 30 dias${x.anoPassado ? ` (em ${nm} do ano passado foram ${x.anoPassado})` : ''}: não usei o ano passado. Com estoque e sem venda, o problema é o anúncio (exposição, experiência de compra ou preço), não a época.`);
-        else if (x.fonte === 'sazonal') out.push(`Nos últimos 30 dias você vendeu ${x.ult30}. No ano passado, ${nm} vendeu ${x.anoPassado} contra ${x.baseAno} em ${P.nomeMes(x.base)} (${String(x.indice).replace('.', ',')}×): usei ${x.ult30} × ${String(x.indice).replace('.', ',')} = ${x.qtd}.`);
+        else if (x.fonte === 'sazonal') {
+            // #21: a conta que fecha — "7 × 1,33 = 9,31 → 10 (arredondado para cima)"; conta inteira: "6 × 1,5 = 9".
+            const vg = v => String(v).replace('.', ','), c = typeof x.conta === 'number' ? x.conta : SHC.r2(x.ult30 * x.indice);
+            out.push(`Nos últimos 30 dias você vendeu ${x.ult30}. No ano passado, ${nm} vendeu ${x.anoPassado} contra ${x.baseAno} em ${P.nomeMes(x.base)} (${vg(x.indice)}×): usei ${x.ult30} × ${vg(x.indice)} = `
+                + (Number.isInteger(c) && c === x.qtd ? `${x.qtd}.` : `${vg(c)} → ${x.qtd} (arredondado para cima).`));
+        }
         else if (x.ult30 === null && x.anoPassado === null) out.push('O ML não mostrou as vendas dos últimos 30 dias deste produto.' + naoLido);
         else if (x.ult30 === null) out.push(`O ML não mostrou as vendas dos últimos 30 dias deste produto. Em ${nm} você vendeu ${x.anoPassado}: usei ${nm}, o mesmo mês do ano passado.`);
         else if (x.anoPassado === null) out.push(`Nos últimos 30 dias você vendeu ${x.ult30}.${naoLido} Usei os últimos 30 dias.`);

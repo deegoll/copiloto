@@ -29,7 +29,8 @@
 //   5) #20 CORRIGIDA: dias até acabar = ⌊aptas × 30 ÷ previsão⌋ no painel, no plano e no ícone (antes ⌊aptas ÷ (previsão ÷ 30)⌋ perdia 1 dia
 //      na conta exata: 23 aptas, 23 vendas → 29 dias, não 30) — seções K e L;
 //   6) simulador: "R$ 5,24 por unidade" × 100 un. = R$ 524,00, mas o custo estimado mostrado é R$ 523,81 (média sem arredondar × un.);
-//   7) P.explicaFull sazonal: "usei 7 × 1,33 = 10" (7 × 1,33 = 9,31; arredondou para cima sem dizer).
+//   7) #21 CORRIGIDA: P.explicaFull sazonal mostra a conta que fecha: "usei 7 × 1,33 = 9,31 → 10 (arredondado para cima)" (antes "= 10",
+//      com 7 × 1,33 = 9,31 arredondado sem dizer) — seção J.
 // Rodar: node tests/copiloto/teste_centavos_full.js
 'use strict';
 require('./relogio').fixar();
@@ -503,6 +504,25 @@ console.log('J. Previsão de 30 dias (P.previsaoFull) contra o oráculo em intei
     }
     okLote(l, `previsões geradas = oráculo (${saz} sazonais, ${par} paradas): o maior entre 30 dias, ano passado e 30 dias × índice (até 3×, arredondado para cima)`);
     okLote(inv, 'previsão: inteiro ≥ 0; ≥ 30 dias e ≥ ano passado; ≤ 3× os 30 dias (ou o ano passado); null só sem os dois números; parado = 0');
+    // #21: a explicação sazonal mostra a conta que fecha, com os números da conta (oráculo em centésimos): "U × I = C → Q (arredondado para cima)"
+    // e, quando U × I é inteiro, "U × I = Q". Antes: "usei 7 × 1,33 = 10" (7 × 1,33 = 9,31).
+    const virg = c => String(Math.floor(c / 100)) + (c % 100 ? ',' + (c % 10 ? String(c % 100).padStart(2, '0') : String(c % 100 / 10)) : '');
+    const rs = lcg(2121), ts = lote();
+    let inteiras = 0;
+    for (let k = 0; k < 3000; k++) {
+        const u = ent(rs, 1, 400), b = ent(rs, 3, 120), a = b + ent(rs, 1, 2 * b), vm = { '2025-09': b, '2025-10': a };
+        const x = P.previsaoFull(u, vm, HOJE, [], { aptas: ent(rs, 0, 50) });
+        if (x.fonte !== 'sazonal') continue;
+        const ic = cent(x.indice), c = u * ic, q = ceilDiv(c, 100), e = P.explicaFull({ prev: x, p: {}, semDado: ['as unidades aptas'], lucro: null }, 30).linhas[0];
+        if (c % 100 === 0) inteiras++;
+        const fim = `usei ${u} × ${virg(ic)} = ` + (c % 100 ? `${virg(c)} → ${q} (arredondado para cima).` : `${q}.`);
+        ts.conta(x.qtd === q && limpo(e) && e.endsWith(fim) && e.indexOf(`(${virg(ic)}×)`) >= 0, { u, vm, x, e, fim });
+    }
+    okLote(ts, `#21 explicação sazonal: "U × I = C → Q (arredondado para cima)" com a conta exata em centésimos (${inteiras} contas inteiras: "U × I = Q")`);
+    const ex21 = (u, b, a) => P.explicaFull({ prev: P.previsaoFull(u, { '2025-09': b, '2025-10': a }, HOJE, [], {}), p: {}, semDado: ['as unidades aptas'], lucro: null }, 30).linhas[0];
+    const e7 = ex21(7, 3, 4), e6 = ex21(6, 4, 6);
+    ok(e7 === 'Nos últimos 30 dias você vendeu 7. No ano passado, out/25 vendeu 4 contra 3 em set/25 (1,33×): usei 7 × 1,33 = 9,31 → 10 (arredondado para cima).'
+        && /usei 6 × 1,5 = 9\.$/.test(e6), 'à mão: "usei 7 × 1,33 = 9,31 → 10 (arredondado para cima)" (antes "= 10") e "usei 6 × 1,5 = 9." — ' + e7.replace(/^.*usei /, 'usei '));
 }
 
 console.log('K. Plano de envio (P.planoFull + P.explicaFull): quantidade = alvo − aptas − a caminho, nunca negativa');

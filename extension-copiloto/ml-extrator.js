@@ -2847,6 +2847,7 @@
     //    experiência, preço), não a época — mandar mais só empaca e gera armazenagem. fonte 'parado', qtd 0.
     //  · Sazonalidade: vendas de 30 dias × índice do ano passado (mês alvo ÷ mês destes 30 dias, os dois de um ano antes). Só entra com 3+ vendas
     //    no mês base e só para subir (até 3×): queda de época já aparece nas vendas de 30 dias. Vale o maior entre 30 dias, ano passado e índice.
+    //    conta = 30 dias × índice antes de arredondar para cima (#21: a explicação mostra as duas, "7 × 1,33 = 9,31 → 10"); null sem índice.
     SHC.SAZONAL_MAX = 3;
     // Mês que mais pesa nos próximos 30 dias (hoje + 15 dias), um ano antes: 24/09/2026 → '2025-10'.
     SHC.mesAnoPassado = hoje => mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') + 15 * 864e5).toISOString().slice(0, 7), 12);
@@ -2854,13 +2855,13 @@
         const u = unDe(vendas30), ult30 = u === null ? null : Math.max(0, u), mes = SHC.mesAnoPassado(hoje);
         const doMes = m => (vm && vm[m] !== undefined && vm[m] !== null ? unDe(vm[m]) : (vm && (lidos || []).indexOf(m) >= 0 ? 0 : null));
         const a = doMes(mes), ano = a === null ? null : Math.max(0, a);
-        if (ult30 === 0 && unDe(opc && opc.aptas) > 0) return { qtd: 0, fonte: 'parado', ult30, mes, anoPassado: ano, base: null, baseAno: null, indice: null };
+        if (ult30 === 0 && unDe(opc && opc.aptas) > 0) return { qtd: 0, fonte: 'parado', ult30, mes, anoPassado: ano, base: null, baseAno: null, indice: null, conta: null };
         const base = mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') - 15 * 864e5).toISOString().slice(0, 7), 12), b = base === mes ? null : doMes(base);
         const indice = ult30 > 0 && ano !== null && b >= 3 && ano > b ? Math.min(SHC.SAZONAL_MAX, SHC.r2(ano / b)) : null;
-        const saz = indice ? Math.ceil(ult30 * indice - 1e-9) : null;
+        const conta = indice ? SHC.r2(ult30 * indice) : null, saz = indice ? Math.ceil(ult30 * indice - 1e-9) : null;
         const qtd = ult30 === null && ano === null ? null : Math.max(ult30 || 0, ano || 0, saz || 0);
         const fonte = saz !== null && qtd === saz && saz > Math.max(ult30 || 0, ano || 0) ? 'sazonal' : ano !== null && (ult30 === null || ano > ult30) ? 'anoPassado' : 'ult30';
-        return { qtd, fonte, ult30, mes, anoPassado: ano, base: indice ? base : null, baseAno: indice ? b : null, indice };
+        return { qtd, fonte, ult30, mes, anoPassado: ano, base: indice ? base : null, baseAno: indice ? b : null, indice, conta };
     };
     // Variações do mesmo anúncio (mesmos MLB): o vm|ml é do anúncio inteiro → a variação fica com pct% de cada mês (arredondado), pct = a parte
     // dela nas vendas de 30 dias. pct null (nenhuma venda para dividir) → null: sem essa parte, o ano passado não entra. Painel e ícone.
