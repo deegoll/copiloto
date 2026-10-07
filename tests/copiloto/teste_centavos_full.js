@@ -24,7 +24,9 @@
 //      remessa vencida, cancelada ou aberta já cobrada (antes: R$ 120,50 no cartão × R$ 200,50 na sincronização) — seção O;
 //   2) #17 CORRIGIDA: SHC.simulaRemessa usa só remessas recebidas (closed_ok/closed_with_changes) no custo da coleta, o filtro do cartão
 //      (antes REM_FECHADA, com cancelada e vencida: R$ 1,60/un. na simulação × R$ 1,21/un. no cartão), e a tela diz essa base ("a média das
-//      suas últimas 5 remessas recebidas com cobrança"; antes "fechadas", e o cartão chama de fechada também a vencida) — seção G;
+//      suas últimas 5 remessas recebidas com cobrança"; antes "fechadas", e o cartão chama de fechada também a vencida) — seção G.
+//      Revisão 2: com 1 remessa, "o que o ML cobrou na sua última remessa recebida com cobrança" (antes "… recebida", e a recebida sem
+//      cobrança mais nova é outra); recebida cobrada sem unidades mais nova que a base → "… com cobrança e com unidades";
 //   3) #18 CORRIGIDA: custo por unidade do mês = cobrança ÷ unidades só das remessas recebidas COM unidades (antes R$ 2,00/un. em vez de
 //      R$ 1,00: somava o custo da remessa sem units_count e não as unidades dela) — seção D;
 //   4) #19 CORRIGIDA: SHC.alertasDe (número do ícone e sino) usa a MESMA previsão do painel (SHC.previsaoFull, com o índice sazonal e o parado
@@ -409,25 +411,52 @@ console.log('G. Próxima remessa: SHC.simulaRemessa (custo estimado da coleta) e
     const tela17 = ce17r ? `${SHC.moeda(ce17r.porUnidade)} por unidade, ${ce17r.baseTxt}.` : '', lin17 = P.linhasRemessas(s17r, null)[0];   // o texto de cardProxRemessa
     ok(ce17r && ce17r.base === 5 && tela17 === 'R$ 1,00 por unidade, a média das suas últimas 5 remessas recebidas com cobrança.'
         && /(^| · )6 fechadas nos últimos 30 dias · /.test(P.remessasResumoTxt(SHC.remessasResumo(s17r, null, '2026-09', HOJE))) && lin17.id === '9100009' && lin17.custo === 80
-        && SHC.simulaRemessa({ skus: [{ sku: 'S1', qtd: 100 }], remessasAnteriores: v17 }).custoEstimado.baseTxt === 'o que o ML cobrou na sua última remessa recebida',
-        '5 recebidas (R$ 1,00/un.) + vencida cobrada mais nova (o cartão: "6 fechadas", a 1ª linha "o ML cobrou R$ 80,00"): "' + tela17 + '" (base = recebidas; 1 só: "o que o ML cobrou na sua última remessa recebida")');
+        && SHC.simulaRemessa({ skus: [{ sku: 'S1', qtd: 100 }], remessasAnteriores: v17 }).custoEstimado.baseTxt === 'o que o ML cobrou na sua última remessa recebida com cobrança',
+        '5 recebidas (R$ 1,00/un.) + vencida cobrada mais nova (o cartão: "6 fechadas", a 1ª linha "o ML cobrou R$ 80,00"): "' + tela17 + '" (base = recebidas; 1 só: "o que o ML cobrou na sua última remessa recebida com cobrança")');
+    // #17, revisão 2 (o rótulo com 1 remessa): a base é a última recebida COM cobrança e COM unidades, não a última recebida. A recebida sem
+    // cobrança (levada ao CD, sem coleta) é caso real e aparece no topo do cartão sem "o ML cobrou". Antes, com #9200002 (20/09, sem cobrança)
+    // mais nova que a base #9200001 (10/08, R$ 100,00 por 100 un.): "R$ 1,00 por unidade, o que o ML cobrou na sua última remessa recebida."
+    const v17s = [{ id: '9200001', status: 'closed_ok', recebida: '2026-08-10', unidades: 100, custo: 100 }, { id: '9200002', status: 'closed_ok', recebida: '2026-09-20', unidades: 50, custo: null }];
+    const s17s = { total: 2, remessas: v17s, porMes: SHC.remessasPorMes(v17s) }, ce17s = SHC.simulaRemessa({ skus: [{ sku: 'S1', qtd: 100 }], remessasAnteriores: s17s }).custoEstimado;
+    const tela17s = ce17s ? `${SHC.moeda(ce17s.porUnidade)} por unidade, ${ce17s.baseTxt}.` : '', lin17s = P.linhasRemessas(s17s, null)[0];
+    ok(ce17s && ce17s.base === 1 && tela17s === 'R$ 1,00 por unidade, o que o ML cobrou na sua última remessa recebida com cobrança.' && lin17s.id === '9200002' && !lin17s.custo,
+        'recebida sem cobrança (#9200002, 20/09, a 1ª do cartão, sem "o ML cobrou") mais nova que a base (#9200001, R$ 100,00/100 un.): "' + tela17s + '"');
+    // Recebida COM cobrança e SEM unidades mais nova que a base: ela não entra no R$/un. (#18) e a tela diz "e com unidades"; mais velha que a
+    // base, "as últimas com cobrança" já são a base e o texto fica curto. Sem nenhuma recebida cobrada com unidades: sem custo e o motivo certo.
+    const un17 = (id, rec, u, c, st) => ({ id, status: st || 'closed_ok', recebida: rec, unidades: u, custo: c });
+    const cu = rs => SHC.simulaRemessa({ skus: [{ sku: 'S1', qtd: 100 }], remessasAnteriores: rs }), txt17 = c => c ? `${SHC.moeda(c.porUnidade)} por unidade, ${c.baseTxt}.` : '';
+    const t1 = txt17(cu([un17('9300001', '2026-08-10', 100, 100), un17('9300002', '2026-09-20', null, 30, 'closed_with_changes')]).custoEstimado);
+    const t2 = txt17(cu([un17('9300001', '2026-08-10', 100, 100), un17('9300002', '2026-09-20', null, 30), un17('9300003', '2026-08-05', 100, 300)]).custoEstimado);
+    const t3 = txt17(cu([un17('9300001', '2026-08-10', 100, 100), un17('9300002', '2026-07-20', 0, 30), un17('9300003', '2026-08-05', 100, 300)]).custoEstimado);
+    const m4 = cu([un17('9300002', '2026-09-20', null, 30), un17('9300004', '2026-09-21', 40, 50, 'expired')]);
+    ok(t1 === 'R$ 1,00 por unidade, o que o ML cobrou na sua última remessa recebida com cobrança e com unidades.'
+        && t2 === 'R$ 2,00 por unidade, a média das suas últimas 2 remessas recebidas com cobrança e com unidades.'
+        && t3 === 'R$ 2,00 por unidade, a média das suas últimas 2 remessas recebidas com cobrança.'
+        && m4.custoEstimado === null && /ainda não há remessa recebida com cobrança e com unidades nesta conta\.$/.test(m4.custoMotivo),
+        'recebida cobrada sem unidades mais nova que a base: "' + t1 + '" / "' + t2 + '"; mais velha: "' + t3 + '"; só ela (e uma vencida): "' + m4.custoMotivo.replace(/^.* — /, '… ') + '"');
     const fonte17 = require('fs').readFileSync(path.join(EXT, 'painel-lateral.js'), 'utf8');
     ok(/por unidade, \$\{esc\(s\.custoEstimado\.baseTxt\)\}\./.test(fonte17) && !/'remessas fechadas'/.test(fonte17),
         'cardProxRemessa (painel) monta "… por unidade, <baseTxt>." com a base do simulador (sem o "remessas fechadas" solto na tela)');
     const r17 = lcg(1717), g17 = lote();
-    let comPen = 0;
+    let comPen = 0, semUn17 = 0;
     for (let k = 0; k < 400; k++) {
         const rs = Array.from({ length: ent(r17, 0, 9) }, (_, j) => ({ id: String(j), status: pega(r17, STS.concat(['canceled'])), recebida: dia(ent(r17, 0, 200)),
             unidades: ent(r17, 0, 3) ? ent(r17, 0, 500) : null, custo: ent(r17, 0, 3) ? ent(r17, 0, 300000) / 100 : null }));
         const un = ent(r17, 1, 900), x = SHC.simulaRemessa({ skus: [{ sku: 'K', qtd: un }], remessasAnteriores: rs });
         const bs = rs.filter(q => /^closed_(ok|with_changes)$/.test(q.status) && q.custo > 0 && q.unidades > 0).sort((a, b) => b.recebida.localeCompare(a.recebida)).slice(0, 5);
         if (rs.some(q => /cancel|expired/.test(q.status) && q.custo > 0 && q.unidades > 0)) comPen++;
-        if (!bs.length) { g17.conta(x.custoEstimado === null, { k, rs, c: x.custoEstimado }); continue; }
+        // Texto (#17, revisão 2): "com cobrança" e, se alguma das N recebidas com cobrança mais novas não tem unidades, "e com unidades".
+        const cob = rs.filter(q => /^closed_(ok|with_changes)$/.test(q.status) && q.custo > 0).sort((a, b) => b.recebida.localeCompare(a.recebida));
+        const qual = 'com cobrança' + (cob.slice(0, bs.length).every(q => q.unidades > 0) ? '' : ' e com unidades');
+        if (!bs.length && cob.length) semUn17++;
+        if (!bs.length) { g17.conta(x.custoEstimado === null && x.custoMotivo.endsWith('ainda não há remessa recebida com cobrança' + (cob.length ? ' e com unidades' : '') + ' nesta conta.'), { k, rs, c: x.custoEstimado, m: x.custoMotivo }); continue; }
         const pu = bs.map(q => q.custo / q.unidades), med = pu.reduce((a, b) => a + b, 0) / pu.length, c = x.custoEstimado;
+        if (qual !== 'com cobrança') semUn17++;
         g17.conta(c && c.base === bs.length && Math.abs(c.valor - med * un) <= 0.005 + 1e-9 && Math.abs(c.min - Math.min(...pu) * un) <= 0.005 + 1e-9
-            && Math.abs(c.max - Math.max(...pu) * un) <= 0.005 + 1e-9, { k, rs, un, c });
+            && Math.abs(c.max - Math.max(...pu) * un) <= 0.005 + 1e-9
+            && c.baseTxt === (bs.length === 1 ? 'o que o ML cobrou na sua última remessa recebida ' : 'a média das suas últimas ' + bs.length + ' remessas recebidas ') + qual, { k, rs, un, c });
     }
-    okLote(g17, `#17 simulações com todos os status (${comPen} com vencida/cancelada cobrada): só as recebidas entram no custo da coleta`);
+    okLote(g17, `#17 simulações com todos os status (${comPen} com vencida/cancelada cobrada, ${semUn17} em que uma recebida cobrada sem unidades muda o texto): só as recebidas com unidades entram no custo da coleta e o texto diz essa base`);
 }
 
 console.log('H. Rateio do Full na etiqueta (SHC.fullRateioUn): armazenagem + coleta de 30 dias ÷ unidades vendidas');

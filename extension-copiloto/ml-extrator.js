@@ -5224,15 +5224,20 @@
         // Custo: média por unidade das remessas RECEBIDAS (closed_ok/closed_with_changes) com cobrança (total_charged ÷ units_count), faixa mín–máx
         // das últimas 5 — o mesmo filtro do custo por unidade do cartão (SHC.remessasResumo). Vencida/cancelada fica fora: a cobrança dela é
         // penalidade de remessa que nem foi coletada, não custo de coleta.
-        const base = rs.filter(r => r && /^closed_(ok|with_changes)$/.test(String(r.status || '')) && r.custo > 0 && r.unidades > 0)
-            .sort((a, b) => String(b.recebida || b.agendada || '').localeCompare(String(a.recebida || a.agendada || ''))).slice(0, 5);
+        const cobradas = rs.filter(r => r && /^closed_(ok|with_changes)$/.test(String(r.status || '')) && r.custo > 0)
+            .sort((a, b) => String(b.recebida || b.agendada || '').localeCompare(String(a.recebida || a.agendada || '')));
+        const base = cobradas.filter(r => r.unidades > 0).slice(0, 5);
+        // Texto da base (#17, revisão 2): "recebida" (o cartão chama de "fechada" também a vencida e a cancelada) "com cobrança" (a recebida
+        // sem cobrança, levada ao CD sem coleta, não entra) e, quando uma recebida cobrada SEM unidades é mais nova que alguma da base,
+        // "e com unidades" (senão "a última com cobrança" seria ela, que ficou fora da conta).
+        const qual = 'com cobrança' + (cobradas.slice(0, base.length).some((r, i) => r !== base[i]) ? ' e com unidades' : '');
         let custo = null, custoMotivo = '';
         if (base.length && un > 0) {
             const pu = base.map(r => r.custo / r.unidades), med = pu.reduce((s, x) => s + x, 0) / pu.length;
-            // baseTxt: a base que a conta usou, com a palavra do filtro ("recebida"; o cartão chama de "fechada" também a vencida e a cancelada).
             custo = { valor: SHC.r2(med * un), min: SHC.r2(Math.min(...pu) * un), max: SHC.r2(Math.max(...pu) * un), porUnidade: SHC.r2(med), base: base.length, fonte: 'suas remessas anteriores',
-                baseTxt: base.length === 1 ? 'o que o ML cobrou na sua última remessa recebida' : 'a média das suas últimas ' + base.length + ' remessas recebidas com cobrança' };
-        } else custoMotivo = 'O Mercado Livre cobra a coleta por distância, mas não publica a tabela; o Copiloto aprende com as suas remessas' + (un > 0 ? ' — ainda não há remessa recebida com cobrança nesta conta.' : '.');   // recebida: vencida/cancelada não conta (#17)
+                baseTxt: base.length === 1 ? 'o que o ML cobrou na sua última remessa recebida ' + qual : 'a média das suas últimas ' + base.length + ' remessas recebidas ' + qual };
+        } else custoMotivo = 'O Mercado Livre cobra a coleta por distância, mas não publica a tabela; o Copiloto aprende com as suas remessas'   // recebida: vencida/cancelada não conta (#17)
+            + (un > 0 ? ' — ainda não há remessa recebida com cobrança' + (cobradas.length ? ' e com unidades' : '') + ' nesta conta.' : '.');
         return { itens, unidades: un, volumeM3: vol, pesoKg: peso, semMedida, semPeso, volumesEstimados: volumes, veiculo,
             veiculoMotivo: veiculo ? '' : (!un ? 'Informe as quantidades.' : 'Falta a medida de ' + SHC.qtd(semMedida.length, 'SKU', 'SKUs') + ' (o Copiloto lê as medidas do ML na rodada lenta, ou use a planilha do ERP).'),
             custoEstimado: custo, custoMotivo };
