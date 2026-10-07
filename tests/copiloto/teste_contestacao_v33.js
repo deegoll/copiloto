@@ -86,6 +86,14 @@ console.log('Devolução, medidas, Full');
         produtos: [{ itemId: 'MLB8000000004', sku: 'HA-14253', declaradas: 50, processadas: 50, diferencas: 0, aptas: 47, naoAptas: 3, resultado: 'sem etiqueta' }] });
     ok(/^Assunto: Pedido de revisão de unidades não aptas na remessa do Full/.test(na) && /3 unidades foram consideradas não aptas/.test(na) && !/recontagem/.test(na)
         && /se a inaptidão não decorreu do nosso preparo/.test(na), 'Full só com unidades não aptas: pede o motivo de cada uma, sem afirmar erro de contagem');
+    // Revisão final (07/10): o ML marcou diferença, mas os produtos estão completos e iguais (sem diferença nem não apta lida): nada de "não aptas".
+    const igual = SHC.chamadoRemessa({ id: '61234569', quando: '2026-09-28', custo: 27, declaradas: 10, aptas: 10, motivos: ['com diferenças'],
+        produtos: [{ itemId: 'MLB8000000004', sku: 'HA-14253', declaradas: 10, processadas: 10, diferencas: 0, aptas: 10, naoAptas: 0 }] });
+    ok(/^Assunto: Pedido de conferência da remessa do Full/.test(igual) && !/não aptas para venda|recebida com diferença|estorno/.test(igual) && /coleta e\/ou penalidade/.test(igual) && !/multa/.test(igual),
+        'remessa marcada com diferença, mas sem diferença nem não apta lida por produto: só o pedido de conferência, sem "não aptas" e sem estorno');
+    // Diferença só entre declaradas e aptas (sem diferença de contagem por produto): o texto diz "as disponíveis para venda", não "as que o CD processou".
+    const soAptas = SHC.chamadoRemessa({ id: '61234570', quando: '2026-09-28', custo: 27, declaradas: 10, aptas: 8, produtos: [{ itemId: 'MLB8000000004', sku: 'HA-14253', declaradas: 10, aptas: 8 }] });
+    ok(!soAptas || (/disponíveis para venda/.test(soAptas) && !/que o centro de distribuição processou/.test(soAptas)), 'diferença só nas aptas: "as disponíveis para venda", sem dizer que o CD processou menos');
 }
 
 console.log('Medidas (revisão 3): o Copiloto não sabe quem mudou — nunca "o ML mudou" nem "não foi feita por nós"; diz o que mudou e pede a revisão');
@@ -233,8 +241,18 @@ console.log('Exclusão de reclamação e experiência de compra: só o que as re
         'Atraso na entrega', 'Demorou para chegar', 'O produto foi enviado no prazo mas chegou atrasado', 'Chegou com 10 dias de atraso', 'Estou esperando há 20 dias, entrega atrasada',
         'Desisti, chegou atrasado', 'Não quero mais, demorou para chegar'];   // antes da decisão de 07/10 eram da regra do transporte
     const atrasoPassou = atraso.filter(m => SHC.motivoExcluivel(m));
+    // Revisão final (07/10): a vírgula e o ponto separam orações ("Comprei o produto, está errado" não é o erro do comprador), e "você/vc" é o
+    // vendedor ("foi engano de vc" não é reclamação aberta por engano).
+    const oracoes = ['Comprei o produto, está errado', 'Pedi a peça. Está errada', 'Pedi 3, quantidade errada', 'pedi o item, esta errado', 'Selecionei a voltagem, está errada',
+        'Comprei. Produto errado', 'comprei, peças erradas', 'pedi 40, está errado', 'foi engano de vc', 'foi engano de você', 'foi engano tb de você', 'foi engano de voce, desculpe o transtorno',
+        'atrasou a entrega pela logistica de vc'];
+    const oracoesPassou = oracoes.filter(m => SHC.motivoExcluivel(m));
+    ok(!oracoesPassou.length, 'culpa do vendedor depois de vírgula ou ponto, e "você/vc": sem pedido de exclusão' + (oracoesPassou.length ? ': ' + oracoesPassou.join(' | ') : ''));
+    const legitPont = ['Me arrependi da compra.', 'Desisti, comprei em outro lugar', 'Reclamação aberta por engano.', 'Comprei por engano', 'Escolhi o tamanho errado.'];
+    const legitPontTravou = legitPont.filter(m => !SHC.motivoExcluivel(m));
+    ok(!legitPontTravou.length, 'com pontuação, o arrependimento e o erro do comprador continuam excluíveis' + (legitPontTravou.length ? ': ' + legitPontTravou.join(' | ') : ''));
     ok(!atrasoPassou.length, 'atraso sem Correios, transportadora ou Mercado Envios no motivo: sem pedido de exclusão' + (atrasoPassou.length ? ': ' + atrasoPassou.join(' | ') : ''));
-    const comQuem = ['Os Correios demoraram demais', 'A transportadora demorou demais', 'Demorou demais pelo Mercado Envios', 'Demorou demais, os Correios atrasaram a entrega',
+    const comQuem = ['Os Correios demoraram demais', 'A transportadora demorou demais', 'Demorou demais pelo Mercado Envios',
         'Os Correios atrasaram a entrega', 'Entrega atrasada pela transportadora', 'Demora dos Correios'];
     ok(comQuem.every(m => /demora do transporte/.test(SHC.motivoExcluivel(m))), 'demora com Correios, transportadora ou Mercado Envios no motivo continua na regra da demora do transporte');
     // 2ª revisão (07/10): despacho demorado e mensagem sem resposta são do vendedor; o engano e o "não foi usado" do comprador voltam a valer.
@@ -252,7 +270,7 @@ console.log('Exclusão de reclamação e experiência de compra: só o que as re
     const comprador = ['Me arrependi, o produto não foi usado', 'Me arrependi, nunca usado', 'Escolhi o tamanho errado', 'Engano na compra', 'Foi engano'];
     const travou = comprador.filter(m => !SHC.motivoExcluivel(m));
     ok(!travou.length, 'erro ou arrependimento do comprador ("não foi usado", "escolhi errado", "foi engano"): excluível' + (travou.length ? ': ' + travou.join(' | ') : ''));
-    ok(SHC.confereExclusao('Atraso dos Correios') === 'você despachou dentro do prazo' && SHC.confereExclusao('Me arrependi da compra') === 'o produto voltou sem uso e em perfeitas condições'
+    ok(SHC.confereExclusao('Atraso dos Correios') === 'você despachou dentro do prazo e a entrega não foi feita por você (Flex)' && SHC.confereExclusao('Me arrependi da compra') === 'o produto voltou sem uso e em perfeitas condições'
         && SHC.confereExclusao('Produto com defeito') === '', 'cada regra diz o que o seller confere antes de enviar (nada quando não é excluível)');
     ok(!/respondidas|resolvidas/.test(ex), 'o pedido de exclusão não afirma o que o Copiloto não sabe ("já respondidas/resolvidas")');
 }
@@ -421,12 +439,12 @@ console.log('Pedido de exclusão (rastreio 07/10, R10): os pedidos certos, o SKU
             { titulo: 'Bomba d’água 12V', motivo: mot, afetouReputacao: true, situacao: 'Em mediação com o Mercado Livre', valor: 89.9 },
             { titulo: 'Bomba d’água 12V', motivo: 'Produto com defeito', afetouReputacao: true, situacao: 'Aguardando sua resposta', valor: 89.9 }],
         porPedido: {   // revisão do grupo g: o porPedido guarda o título do produto (SHC.posvendaJuntaPorPedido)
-            '2000000101': { motivo: mot, afetouReputacao: true, situacao: 'Mediação em andamento', titulo: 'Bomba d’água 12V' },
-            '2000000102': { motivo: mot, afetouReputacao: null, situacao: 'Aguardando sua resposta', titulo: 'Bomba d’água 12V' },
-            '2000000103': { motivo: mot, afetouReputacao: true, situacao: 'Aguardando sua resposta', titulo: 'Bomba d’água 12V' },
-            '2000000104': { motivo: mot, afetouReputacao: true, situacao: 'Em mediação com o Mercado Livre', titulo: 'Bomba d’água 12V' },
-            '2000000105': { motivo: 'Produto com defeito', afetouReputacao: true, situacao: 'Aguardando sua resposta', titulo: 'Bomba d’água 12V' },
-            '2000000106': { motivo: mot, afetouReputacao: false, situacao: 'Aguardando sua resposta', titulo: 'Bomba d’água 12V' } } };
+            '2000000101': { atual: true, motivo: mot, afetouReputacao: true, situacao: 'Mediação em andamento', titulo: 'Bomba d’água 12V' },
+            '2000000102': { atual: true, motivo: mot, afetouReputacao: null, situacao: 'Aguardando sua resposta', titulo: 'Bomba d’água 12V' },
+            '2000000103': { atual: true, motivo: mot, afetouReputacao: true, situacao: 'Aguardando sua resposta', titulo: 'Bomba d’água 12V' },
+            '2000000104': { atual: true, motivo: mot, afetouReputacao: true, situacao: 'Em mediação com o Mercado Livre', titulo: 'Bomba d’água 12V' },
+            '2000000105': { atual: true, motivo: 'Produto com defeito', afetouReputacao: true, situacao: 'Aguardando sua resposta', titulo: 'Bomba d’água 12V' },
+            '2000000106': { atual: true, motivo: mot, afetouReputacao: false, situacao: 'Aguardando sua resposta', titulo: 'Bomba d’água 12V' } } };
     const itens = [{ itemId: 'MLB9100000001', sku: 'BOMBA-12V', titulo: 'Bomba d’água 12V' }, { itemId: 'MLB9100000002', sku: 'FILTRO-01', titulo: 'Filtro de ar esportivo' }];
     ok(['Mediação em andamento', 'Em mediação com o Mercado Livre', 'O comprador pediu ajuda ao Mercado Livre', 'O Mercado Livre está analisando o caso'].every(m => emMed(m) === true)
         && ['Aguardando sua resposta', 'Aguardando a devolução', ''].every(m => emMed(m) === false), 'situação com mediação aberta (ou o ML decidindo) é reconhecida');
@@ -463,14 +481,20 @@ console.log('Pedido de exclusão (rastreio 07/10, R10): os pedidos certos, o SKU
         console.log('Pedido de exclusão (revisão do grupo g): SKU do produto certo e mediação reconhecida pelo que o ML escreve');
         const pad = 'Não quero mais o produto', aguarda = 'Aguardando sua resposta';
         // Ontem o 2000000201 (Filtro), hoje o 2000000202 (Bomba), o mesmo motivo padrão do ML: o porPedido guarda o título de cada um.
-        const pp = SHC.posvendaJuntaPorPedido(SHC.posvendaJuntaPorPedido(null, [{ pedido: '2000000201', motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Filtro de ar esportivo' }]),
-            [{ pedido: '2000000202', motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' }]);
+        const pp = SHC.posvendaJuntaPorPedido(null, [{ pedido: '2000000201', motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Filtro de ar esportivo' },
+            { pedido: '2000000202', motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' }]);
+        // Revisão final (07/10): o pedido visto numa leitura anterior (ontem) fica guardado, mas fora do pedido de exclusão (pode ter ido para a mediação).
+        const ppOntem = SHC.posvendaJuntaPorPedido(SHC.posvendaJuntaPorPedido(null, [{ pedido: '2000000211', motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Filtro de ar esportivo' }]),
+            [{ pedido: '2000000212', motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' }]);
+        const gOntem = grupo({ casos: [{ titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: aguarda }], porPedido: ppOntem }, pad, itens);
+        ok(ppOntem['2000000211'].atual === false && ppOntem['2000000212'].atual === true && gOntem && JSON.stringify(gOntem.pedidos) === '["2000000212"]',
+            'pedido de uma leitura anterior fica guardado (atual: false), mas fora do pedido de exclusão; só o da leitura atual entra');
         ok(pp && pp['2000000201'].titulo === 'Filtro de ar esportivo' && pp['2000000202'].titulo === 'Bomba d’água 12V', 'o porPedido guarda o título do produto de cada pedido');
         const r1 = await clique({ casos: [{ titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: aguarda }], porPedido: pp }, pad), x1 = r1.copiado || '';
         ok(/^Assunto: Pedido de análise de reclamações para exclusão da reputação\n/.test(x1) && /- Produtos: SKU FILTRO-01 \(Filtro de ar esportivo\); SKU BOMBA-12V \(Bomba d’água 12V\)\./.test(x1)
             && /- Pedidos: #2000000201, #2000000202\./.test(x1), 'botão: pedidos de 2 produtos → os 2 produtos e nenhum SKU no assunto (antes: "SKU: BOMBA-12V" também para o pedido do filtro)');
         // porPedido de versão anterior (sem o título) + o caso de hoje sem o nº: o produto do pedido antigo é desconhecido.
-        const velho = { casos: [{ titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: aguarda }], porPedido: { '2000000301': { motivo: pad, afetouReputacao: true, situacao: aguarda } } };
+        const velho = { casos: [{ titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: aguarda }], porPedido: { '2000000301': { atual: true, motivo: pad, afetouReputacao: true, situacao: aguarda } } };
         const r2b = await clique(velho, pad), x2 = r2b.copiado || '';
         ok(/^Assunto: Pedido de análise de reclamações para exclusão da reputação – Pedido: #2000000301\n/.test(x2) && !/SKU|Produtos:/.test(x2),
             'botão: pedido antigo sem o título lido → nem produto nem SKU (antes: "SKU: BOMBA-12V – Pedido: #2000000301", e o 301 era do filtro)');
@@ -478,8 +502,8 @@ console.log('Pedido de exclusão (rastreio 07/10, R10): os pedidos certos, o SKU
         ok(['O comprador pediu nossa ajuda', 'Pediram nossa ajuda', 'Vamos decidir até 10 de outubro', 'Decidiremos até 12 de outubro', 'Estamos analisando o caso', 'Aguardando nossa decisão',
             'Intervimos no caso', 'Em revisão'].every(m => emMed(m) === true), 'mediação escrita pelo ML em 1ª pessoa ("pediram nossa ajuda", "vamos decidir", "intervimos") é reconhecida');
         const vazia = { casos: [{ titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: aguarda }, { titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: '' }],
-            porPedido: { '2000000401': { motivo: pad, afetouReputacao: true, titulo: 'Bomba d’água 12V' }, '2000000402': { motivo: pad, afetouReputacao: true, situacao: 'Pediram nossa ajuda', titulo: 'Bomba d’água 12V' },
-                '2000000403': { motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' } } };
+            porPedido: { '2000000401': { atual: true, motivo: pad, afetouReputacao: true, titulo: 'Bomba d’água 12V' }, '2000000402': { atual: true, motivo: pad, afetouReputacao: true, situacao: 'Pediram nossa ajuda', titulo: 'Bomba d’água 12V' },
+                '2000000403': { atual: true, motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' } } };
         const g4 = grupo(vazia, pad, itens), r4 = await clique(vazia, pad), x4 = r4.copiado || '';
         ok(g4 && g4.contaAgora === 1 && /^Assunto: .* – SKU: BOMBA-12V – Pedido: #2000000403\n/.test(x4) && !/2000000401|2000000402/.test(x4),
             'botão: pedido sem a situação lida (401) e o da mediação em 1ª pessoa (402) ficam fora; o caso sem situação não conta');
@@ -492,10 +516,10 @@ console.log('Pedido de exclusão (rastreio 07/10, R10): os pedidos certos, o SKU
             'O comprador acionou o Mercado Livre', 'Aguardando a análise', 'Analisando o caso', 'Revisando o caso', 'Mediação em andamento', 'Aguardando sua resposta. Pediram nossa ajuda', 'Reclamação encerrada com mediação', '', 'Situação desconhecida'];
         ok(naoSeguras.every(m => segura(m) === false), 'qualquer outra situação fica fora (as 17 do revisor, mediação, mistura com mediação, vazia, desconhecida)');
         const rev = { casos: [{ titulo: 'Bomba d’água 12V', motivo: pad, afetouReputacao: true, situacao: aguarda }],
-            porPedido: { '2000000901': { motivo: pad, afetouReputacao: true, situacao: 'O Mercado Livre está revisando o caso', titulo: 'Bomba d’água 12V' },
-                '2000000902': { motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' },
-                '2000000903': { motivo: pad, afetouReputacao: true, situacao: 'Em avaliação', titulo: 'Bomba d’água 12V' },
-                '2000000904': { motivo: pad, afetouReputacao: true, situacao: 'Devolução em andamento', titulo: 'Bomba d’água 12V' } } };
+            porPedido: { '2000000901': { atual: true, motivo: pad, afetouReputacao: true, situacao: 'O Mercado Livre está revisando o caso', titulo: 'Bomba d’água 12V' },
+                '2000000902': { atual: true, motivo: pad, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' },
+                '2000000903': { atual: true, motivo: pad, afetouReputacao: true, situacao: 'Em avaliação', titulo: 'Bomba d’água 12V' },
+                '2000000904': { atual: true, motivo: pad, afetouReputacao: true, situacao: 'Devolução em andamento', titulo: 'Bomba d’água 12V' } } };
         const g9 = grupo(rev, pad, itens), r9 = await clique(rev, pad), x9 = r9.copiado || '';
         ok(g9 && JSON.stringify(g9.pedidos) === '["2000000902","2000000904"]' && /- Pedidos: #2000000902, #2000000904\./.test(x9) && !/2000000901|2000000903/.test(x9),
             'botão: "O Mercado Livre está revisando o caso" (901) e "Em avaliação" (903) ficam fora; só as situações seguras entram (antes: o 901 entrava)');
@@ -503,7 +527,7 @@ console.log('Pedido de exclusão (rastreio 07/10, R10): os pedidos certos, o SKU
         ok(!grupo(todasFora, pad, itens) && !((await clique(todasFora, pad)).copiado), 'caso só com situação fora da lista: nenhum grupo, nada copiado');
         // Revisão 3: "Comprei, o vendedor separou errado" mostrava o botão e copiava "o comprador se arrependeu… perfeitas condições" com o SKU.
         const sep = 'Comprei, o vendedor separou errado';
-        const vend = { casos: [{ titulo: 'Bomba d’água 12V', motivo: sep, afetouReputacao: true, situacao: aguarda }], porPedido: { '2000000951': { motivo: sep, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' } } };
+        const vend = { casos: [{ titulo: 'Bomba d’água 12V', motivo: sep, afetouReputacao: true, situacao: aguarda }], porPedido: { '2000000951': { atual: true, motivo: sep, afetouReputacao: true, situacao: aguarda, titulo: 'Bomba d’água 12V' } } };
         const rv = await clique(vend, sep);
         ok(!SHC.motivoExcluivel(sep) && !SHC.confereExclusao(sep) && !grupo(vend, sep, itens) && !rv.copiado, 'botão: "Comprei, o vendedor separou errado" não tem regra, não mostra o botão nem copia nada');
     })();

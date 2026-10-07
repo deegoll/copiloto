@@ -1692,7 +1692,9 @@
         const fora = s => SHC.situacaoSegura(s);
         const cs = (pv.casos || []).filter(c => c && c.motivo === mot && fora(c.situacao));
         const pp = SHC.posvendaPorPedido(pv) || {};
-        const pedidos = Object.keys(pp).filter(n => pp[n] && pp[n].motivo === mot && pp[n].afetouReputacao !== false && fora(pp[n].situacao));
+        // Revisão final (07/10): só pedido da leitura atual (atual === true, SHC.posvendaJuntaPorPedido). O porPedido guarda até 300 com a
+        // situação da leitura em que foram vistos; o que saiu da 1ª página pode ter ido para a mediação depois. Sem a marca (versão anterior) = fora.
+        const pedidos = Object.keys(pp).filter(n => pp[n] && pp[n].atual === true && pp[n].motivo === mot && pp[n].afetouReputacao !== false && fora(pp[n].situacao));
         if (!cs.length && !pedidos.length) return null;
         const base = !pedidos.length ? cs.filter(c => c.afetouReputacao !== false) : pedidos.every(n => pp[n].titulo) ? pedidos.map(n => ({ titulo: pp[n].titulo, motivo: mot })) : [];
         const produtos = SHC.posvendaAnalise(base, itens || []).produtos.map(p => ({ sku: p.sku || '', titulo: p.titulo || '' }));
