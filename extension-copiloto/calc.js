@@ -47,7 +47,9 @@
         : SHC.MODULOS_OPCIONAIS.indexOf(id) >= 0 ? !!(cfg && cfg.modulos && cfg.modulos[id] === true)
         : !cfg || !cfg.modulos || cfg.modulos[id] !== false);
 
-    const r2 = v => Math.round((v + (v >= 0 ? Number.EPSILON : -Number.EPSILON)) * 100) / 100;
+    // Centavos: meio centavo sempre para longe do zero e igual nos dois sinais (2,135 → 2,14; −1,285 → −1,29; 1,005 → 1,01), nunca −0.
+    // O toPrecision(15) tira o ruído do binário antes do Math.round (2,175 é guardado como 2,17499…; o + EPSILON só resolvia perto de 1).
+    const r2 = v => { const c = Math.round(+(Math.abs(v) * 100).toPrecision(15)); return c === 0 ? 0 : (v < 0 ? -c : c) / 100; };
     SHC.r2 = r2;
     /** Campos de apelido {sellerId: texto} (Ajustes) → objeto NOVO para cfg.apelidos: só ids válidos, texto até 40 letras; vazio tira o apelido. */
     SHC.apelidosLimpos = function (txt) {
@@ -122,8 +124,9 @@
         }
     };
 
-    SHC.moeda = v => (v === null || v === undefined || !isFinite(v)) ? '—'
-        : (v < 0 ? '−' : '') + 'R$ ' + Math.abs(Number(v)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // Mostra o r2 do valor: a tela e a conta arredondam do mesmo jeito (e −0,004 não vira "−R$ 0,00").
+    SHC.moeda = v => { if (v === null || v === undefined || !isFinite(v)) return '—'; const x = r2(Number(v));
+        return (x < 0 ? '−' : '') + 'R$ ' + Math.abs(x).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
 
     // Taxa fixa do ML por faixa de preço (fallback oficial 2026 do MLCustoVenda).
     function taxaFixaML(preco) {
@@ -167,13 +170,13 @@
         };
     }
 
-    // Frete que o SELLER paga. ML: abaixo de R$ 79 (fora do Full) quem paga é o comprador.
+    // Frete que o SELLER paga. ML: abaixo de R$ 79 (fora do Full) quem paga é o comprador. Em centavos (#11: "12,345" entra 12,35, como a tela mostra).
     function freteSeller(canal, preco, item, cfg) {
-        const informado = num(item.frete);
+        const informado = num(item.frete) === null ? null : r2(num(item.frete));
         if (canal === 'ml') {
             if (!item.full && preco < LIMITE_FRETE_GRATIS_ML) return { rs: 0, regra: 'Comprador paga o frete (abaixo de R$ 79)', desconhecido: false };
             if (informado !== null) return { rs: informado, regra: item.full ? 'Full: frete que você informou' : 'Frete grátis: valor que você informou', desconhecido: false };
-            const padrao = num(cfg.ml_frete_padrao) || 0;
+            const padrao = r2(num(cfg.ml_frete_padrao) || 0);
             if (padrao > 0) return { rs: padrao, regra: 'Frete grátis: seu frete médio (configurações)', desconhecido: false };
             return { rs: 0, regra: 'Frete grátis: informe quanto você paga', desconhecido: true };
         }
@@ -184,6 +187,8 @@
     /**
      * Quanto sobra vendendo a `preco`.
      * canal: 'ml' | 'sp' · item: {custo, outros, frete, tipo:'classico'|'premium', full, comissao_pct}
+     * frete_desconhecido (frete grátis do ML sem valor informado): o frete entra 0 e a sobra é um TETO ("até R$ X", antes do frete) →
+     * classe 'semfrete' (como o SHC.telaChipVenda com freteFalta); prejuízo continua 'prejuizo' (o frete só aumenta a perda).
      */
     SHC.calcular = function (canal, preco, item, cfg) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
@@ -191,9 +196,10 @@
         preco = num(preco);
         if (!(preco > 0)) return null;
 
-        const custo = num(item.custo);
-        const outros = num(item.outros) || 0;
-        const temCusto = custo !== null && custo > 0;
+        // #11: custo e outros em centavos antes da conta: as linhas da tela (cada uma com 2 casas) somam exatamente a sobra.
+        const custo = r2(num(item.custo));
+        const outros = r2(num(item.outros) || 0);
+        const temCusto = custo > 0;
         const impPct = num(cfg.imposto_pct) || 0;
         const tab = canal === 'sp' ? tarifaSpTabela(preco, item, cfg) : null;
         const usaTab = !!(tab && tab.comRs !== undefined);
@@ -203,13 +209,14 @@
 
         const comissaoRs = usaTab ? tab.comRs : r2(preco * comPct / 100);
         const impostoRs = r2(preco * impPct / 100);
-        const recebeRs = r2(preco - comissaoRs - taxaFixa - fr.rs);          // o que o canal repassa
+        const recebeRs = r2(preco - comissaoRs - taxaFixa - fr.rs);          // o que o canal repassa (fr.rs já em centavos)
         const sobraRs = temCusto ? r2(recebeRs - custo - outros - impostoRs) : null;
-        const sobraPct = sobraRs !== null ? Math.round(sobraRs / preco * 1000) / 10 : null;
+        const sobraPct = sobraRs !== null ? (Math.round(sobraRs / preco * 1000) / 10 || 0) : null;   // só a tela (1 casa, nunca −0)
         const alvo = num(cfg.margem_alvo_pct) || 0;
 
+        // #9: a classe sai da sobra e da margem SEM arredondar (como SHC.sobraAnuncio/sobraProposta): −R$ 0,07 é prejuízo e 9,98% não bate 10%.
         let classe = 'sem_custo';
-        if (sobraPct !== null) classe = sobraPct < 0 ? 'prejuizo' : (sobraPct < alvo ? 'apertado' : 'lucrativo');
+        if (sobraRs !== null) classe = sobraRs < 0 ? 'prejuizo' : fr.desconhecido ? 'semfrete' : (sobraRs / preco * 100 < alvo ? 'apertado' : 'lucrativo');
 
         return {
             canal, preco: r2(preco),
@@ -227,51 +234,54 @@
      * Menor preço que ainda deixa `alvoPct`% de sobra (0 = empatar). A conta é linear dentro de cada
      * faixa de tarifa do ML (a taxa fixa e o frete mudam de degrau), então resolve faixa a faixa e
      * confere o resultado no centavo com o próprio calcular().
+     * null = sem custo, meta impossível ou (#14) o preço cai onde o frete grátis é do seller e ele não foi informado (não é número firme).
      */
     SHC.precoMinimo = function (canal, item, cfg, alvoPct) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
         item = item || {};
-        const custo = num(item.custo);
+        const custo = r2(num(item.custo)), outros = r2(num(item.outros) || 0);   // #11: em centavos, como no calcular()
         if (!(custo > 0)) return null;
         // Shopee pela tabela: o núcleo resolve faixa a faixa (o fixo muda de degrau) com a MESMA conta do calcular().
         if (canal === 'sp') {
             const tab = tarifaSpTabela(100, item, cfg);
             if (tab && tab.comRs !== undefined) {
                 const pc = num(item.comissao_pct);
-                return root.CopilotoNucleo.tarifas.precoMinimo('shopee', { custo, outros: num(item.outros) || 0, frete: num(item.frete),
+                return root.CopilotoNucleo.tarifas.precoMinimo('shopee', { custo, outros, frete: num(item.frete) === null ? null : r2(num(item.frete)),
                     imposto_pct: num(cfg.imposto_pct) || 0, comissao_pct: pc !== null && pc >= 0 ? pc : undefined }, alvoPct);
             }
         }
-        const outros = num(item.outros) || 0;
         const alvo = (num(alvoPct) || 0) / 100;
         const imp = (num(cfg.imposto_pct) || 0) / 100;
         const com = comissaoPct(canal, item, cfg) / 100;
 
-        // Faixas: [inicio, fim, fatorVariavelExtra, fixoReais]
+        // Faixas: [inicio, fim, fatorVariavelExtra, fixoReais, freteDesconhecido]
         const faixas = [];
         if (canal === 'ml') {
-            const freteAcima = (() => { const f = freteSeller(canal, 100, item, cfg); return f.rs; })();
-            const freteAbaixo = item.full ? freteAcima : 0;
-            faixas.push([0.01, 12.5, 0.5, freteAbaixo]);
-            faixas.push([12.5, 19, 0, 6.0 + freteAbaixo]);
-            faixas.push([19, 49, 0, 7.5 + freteAbaixo]);
-            faixas.push([49, 79, 0, 9.5 + freteAbaixo]);
-            faixas.push([79, 1e7, 0, freteAcima]);
+            const fa = freteSeller(canal, 100, item, cfg), freteAcima = fa.rs;
+            const freteAbaixo = item.full ? freteAcima : 0, semAbaixo = !!item.full && fa.desconhecido;
+            faixas.push([0.01, 12.5, 0.5, freteAbaixo, semAbaixo]);
+            faixas.push([12.5, 19, 0, 6.0 + freteAbaixo, semAbaixo]);
+            faixas.push([19, 49, 0, 7.5 + freteAbaixo, semAbaixo]);
+            faixas.push([49, 79, 0, 9.5 + freteAbaixo, semAbaixo]);
+            faixas.push([79, 1e7, 0, freteAcima, fa.desconhecido]);
         } else {
             const f = freteSeller(canal, 100, item, cfg).rs;
             faixas.push([0.01, 1e7, 0, (num(cfg.sp_taxa_fixa) || 0) + f]);
         }
 
+        // #10: busca centavo a centavo com o próprio calcular(), sempre em preços já em centavos (r2), entre um piso e um teto honestos:
+        // cada r2 (comissão, taxa, imposto, meta) erra no máximo meio centavo → abaixo de (base − 0,03) ÷ den nenhum preço bate a meta e de
+        // (base + 0,03) ÷ den para cima todos batem. Antes o 1º preço não passava por r2 (163,2999… batia e voltava 163,30, que não bate)
+        // e a busca começava só 2 centavos antes (podia pular o menor).
         const ok = p => { const c = SHC.calcular(canal, p, item, cfg); return c && c.sobra_rs !== null && c.sobra_rs >= r2(alvo * p) - 0.0001; };
-        for (const [ini, fim, extra, fixo] of faixas) {
+        for (const [ini, fim, extra, fixo, semFrete] of faixas) {
             const den = 1 - com - imp - alvo - extra;
             if (den <= 0) continue;
-            let p = Math.max(ini, (custo + outros + fixo) / den);
-            if (p >= fim) continue;
-            p = Math.max(ini, Math.ceil(p * 100 - 1e-6) / 100 - 0.02);   // 2 centavos antes: o arredondamento das tarifas pode empatar antes
-            for (let i = 0; i < 300 && p < fim; i++, p = r2(p + 0.01)) {
-                if (ok(p)) return r2(p);
-            }
+            const base = custo + outros + fixo, teto = Math.max(ini, (base + 0.03) / den + 0.01);   // faixa que já começa acima do teto: o início dela
+            let p = r2(Math.max(ini, Math.floor((base - 0.03) / den * 100) / 100));
+            // #14: nenhum preço abaixo desta faixa bateu e nela o frete grátis é do seller sem valor: o mínimo depende do frete → sem número.
+            if (semFrete && p < fim) return null;
+            for (let i = 0; i < 20000 && p < fim && p <= teto; i++, p = r2(p + 0.01)) if (ok(p)) return p;
         }
         return null;
     };

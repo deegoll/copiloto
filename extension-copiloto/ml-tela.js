@@ -524,24 +524,36 @@
         const unidades = (produtos || []).reduce((t, p) => t + (+(p && p.vendas30) || 0), 0);
         return custo > 0 && unidades > 0 ? { un: r2(custo / unidades), custo, unidades } : null;
     };
-    /** ACOS para a venda que veio de publicidade: o do anúncio (ads:<conta>.anuncios) ou, sem ele, o da conta → { pct, base } | null. */
+    /**
+     * ACOS para a venda que veio de publicidade: o do anúncio (ads:<conta>.anuncios, as campanhas dele somadas) ou, sem ele, o da conta
+     * → { pct, base } | null. #25: o mesmo de ads.html (A.metricas) e do painel (P.adsDoItem, P.adsConta): Ads ÷ receita da base, cru (o texto
+     * arredonda uma vez só); o acos gravado (o do ML, 2 casas) só quando falta o Ads. Conta: o resumo do ML; sem ele, a soma das campanhas.
+     */
     SHC.adsAcosDe = function (ads, itemId) {
         if (!ads) return null;
-        const a = (ads.anuncios || []).find(x => x && x.itemId && x.itemId === itemId && x.acos > 0);
-        if (a) return { pct: a.acos, base: 'ACOS do anúncio (' + pct(a.acos) + ')' };
-        const t = ads.resumo && ads.resumo.total;
-        return t && t.acos > 0 ? { pct: t.acos, base: 'ACOS da conta (' + pct(t.acos) + ')' } : null;
+        const v = (o, ks) => { for (const k of ks) { const x = SHC.num(o && o[k]); if (x !== null) return x; } return null; };
+        const soma = (ls, ks) => (ls.some(o => v(o, ks) !== null) ? r2(ls.reduce((t, o) => t + (v(o, ks) || 0), 0)) : null);
+        const acosDe = ls => {
+            const g = soma(ls, ['custo', 'cost']), rec = soma(ls, ['receita', 'totalAmount', 'amountTotal']);
+            return rec > 0 ? (g !== null ? g / rec * 100 : (ls.map(o => SHC.num(o.acos)).find(x => x > 0) || null)) : null;
+        };
+        const doAd = (ads.anuncios || []).filter(x => x && x.itemId && x.itemId === itemId), a = doAd.length ? acosDe(doAd) : null;
+        if (a > 0) return { pct: a, base: 'ACOS do anúncio (' + pct(a) + ')' };
+        const t = ads.resumo && (ads.resumo.total || ads.resumo), cm = (ads.campanhas || []).map(c => c && (c.metricas || c.metrics)).filter(Boolean);
+        const c = acosDe(t && v(t, ['custo', 'cost']) !== null ? [t] : cm.length ? cm : (ads.anuncios || []).filter(Boolean));
+        return c > 0 ? { pct: c, base: 'ACOS da conta (' + pct(c) + ')' } : null;
     };
     /**
      * Dados guardados da conta → (v, det) → o x de SHC.telaVendaConta. A etiqueta da tela e o aviso do fundo (SHC.vendasPrejuizo) usam
-     * ESTE mesmo montador: tarifa real (cob), afiliado e Full iguais nos dois. g = { cobs:[cob:<conta>:<mês>], ads, afil (afil:<conta>), full (ml:full:<conta>), hoje }.
+     * ESTE mesmo montador: tarifa real (cob), afiliado e Full iguais nos dois. g = { cobs:[cob:<conta>:<mês>], ads, afil (afil:<conta>), full (ml:full:<conta>), hoje,
+     * itens (ml:anuncios: liga o Ads de catálogo ao anúncio pelo título, SHC.adsLigaCatalogo, como o painel e o ícone) }.
      */
     SHC.vendaExtras = function (g) {
         g = g || {};
         const cobL = [].concat(...(g.cobs || []).map(c => (c && c.linhas) || [])), cob = SHC.cobPorPedido(cobL);
         const afil = (g.afil && g.afil.pedidos && g.afil.pedidos.porPedido) || {};
         const full = g.full && g.full.temFull ? SHC.fullRateioUn(cobL, g.full.produtos, g.hoje, g.full.totalProdutos) : null;
-        const acos = id => SHC.adsAcosDe(g.ads, id);
+        const ads = g.itens && SHC.adsLigaCatalogo ? SHC.adsLigaCatalogo(g.ads, g.itens) : g.ads, acos = id => SHC.adsAcosDe(ads, id);
         // Afiliados: não se sabe ainda se saleDetail.orderId é o pedido ou o pacote (A CONFIRMAR ao vivo): procura pelos dois, como o frete.
         return (v, det) => ({ det: det || null, cob: cob[v.pedido] || null, acos, afil: afil[v.pedido] || (v.pack && afil[v.pack]) || null, full });
     };
@@ -898,7 +910,7 @@
     async function salvaCusto() {
         if (!popItem || !vivo()) return fechaPop();
         const inp = SR.querySelector('.pop input'), err = SR.querySelector('.err'), bt = SR.querySelector('[data-a="salvar"]');
-        const v = SHC.num(inp.value);
+        const v = SHC.r2(SHC.num(inp.value));   // #11: grava em centavos ("12,345" → 12,35), o mesmo número que a etiqueta mostra
         if (!(v > 0)) { err.textContent = 'Digite um valor maior que zero. Ex.: 250,00'; return; }
         bt.disabled = true;
         try {
@@ -1668,7 +1680,7 @@
                 SHC.lerChave('cob:' + conta + ':' + mes), SHC.lerChave('cob:' + conta + ':' + mesAnt), SHC.lerChave('ads:' + conta), SHC.lerChave('afil:' + conta), SHC.lerChave('ml:full:' + conta)]);
             const porId = new Map();
             ((snap && snap.itens) || []).forEach(i => { if (i && i.itemId && !porId.has(i.itemId)) porId.set(i.itemId, i); });
-            vendasC = { porId, pedidos: (fp && fp.pedidos) || {}, extras: SHC.vendaExtras({ cobs: [cob0, cob1], ads, afil, full, hoje }) };
+            vendasC = { porId, pedidos: (fp && fp.pedidos) || {}, extras: SHC.vendaExtras({ cobs: [cob0, cob1], ads, afil, full, hoje, itens: snap && snap.itens }) };
             custosC = null;
         }
         const chaveP = p => p.itemId + '|' + p.sku;

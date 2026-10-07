@@ -41,7 +41,8 @@
 
     /**
      * Métricas de campanha, anúncio ou resumo → números + ROAS/ACOS/TACOS/CTR/CPC.
-     * Usa o valor que o ML mandou quando existe; senão calcula. Sem venda, ACOS fica null (o ML manda 0, que engana).
+     * ACOS, ROAS, CTR e CPC: calculados da base, crus (o texto arredonda uma vez só, a mesma conta do painel); o valor do ML só quando falta a
+     * base (o ML e o fundo trazem 2 casas: arredondar de novo dava "43,2%" aqui e "43,1%" no painel). Sem venda, ACOS fica null (o ML manda 0, que engana).
      */
     A.metricas = function (o) {
         // resumo do fundo (SHC.adsResumo) = {total, diario}: as métricas ficam em total
@@ -52,18 +53,24 @@
         if (Object.keys(BASE).every(k => out[k] === null)) return null;
         out.ctr = imp > 0 && cli !== null ? cli / imp * 100 : n(m, 'ctr');
         out.cpc = cli > 0 && inv !== null ? inv / cli : (cli === 0 ? null : n(m, 'cpc'));
-        out.roas = inv > 0 ? (n(m, 'roas') ?? (rec !== null ? rec / inv : null)) : null;
-        out.acos = rec > 0 ? (n(m, 'acos') ?? (inv !== null ? inv / rec * 100 : null)) : null;
-        const total = (rec || 0) + (out.organicasValor || 0);
-        out.tacos = total > 0 ? (n(m, 'tacos') ?? (inv !== null ? inv / total * 100 : null)) : null;
+        out.roas = inv > 0 ? (rec !== null ? rec / inv : n(m, 'roas')) : null;
+        out.acos = rec > 0 ? (inv !== null ? inv / rec * 100 : n(m, 'acos')) : null;
+        // TACOS = Ads ÷ TODAS as vendas: o do ML; senão só com as orgânicas lidas. Sem elas fica null ("—"), nunca o próprio ACOS.
+        const org = out.organicasValor, total = org === null ? null : (rec || 0) + org;
+        out.tacos = ((rec || 0) + (org || 0) > 0 ? n(m, 'tacos') : null) ?? (total > 0 && inv !== null ? inv / total * 100 : null);
         return out;
     };
-    // Soma métricas-base (para SKU e para o total sem resumo) e recalcula as razões.
+    // Soma métricas-base (para SKU e para o total sem resumo) e recalcula as razões. Campo que nenhum trouxe fica null (não 0);
+    // orgânicas só com todas lidas (a soma de uma parte seria menos venda inventada e um TACOS inflado).
+    const ORGANICAS = ['organicasUn', 'organicasValor'];
     A.soma = function (lst) {
-        const s = {}; let algum = false;
-        Object.keys(BASE).forEach(k => { s[k] = 0; });
-        lst.filter(Boolean).forEach(m => { algum = true; Object.keys(BASE).forEach(k => { s[k] = SHC.r2(s[k] + (m[k] || 0)); }); });
-        return algum ? A.metricas(s) : null;
+        const ms = lst.filter(Boolean), s = {};
+        if (!ms.length) return null;
+        Object.keys(BASE).forEach(k => {
+            const tem = ms.filter(m => m[k] !== null && m[k] !== undefined);
+            s[k] = !tem.length || (ORGANICAS.indexOf(k) >= 0 && tem.length < ms.length) ? null : tem.reduce((t, m) => SHC.r2(t + m[k]), 0);
+        });
+        return A.metricas(s);
     };
 
     /** "Desempenho ao competir por impressões" → {ganhas, orcamento, classificacao, topo} em %. Aceita fração (0,03) ou % (3). */
@@ -143,7 +150,9 @@
      * O índice de títulos é montado UMA vez (1.000 × 1.000 em milissegundos). Anúncio de catálogo também tenta o título:
      * o id dele é o do produto de catálogo e nunca casa pelo MLB.
      * custoDe(itemDoRetrato) → dados do custo ou null. Margem antes do Ads = SHC.sobraAnuncio (preço de hoje, números do ML);
-     * no SKU com mais de um anúncio vale a PIOR margem (conservador). ACOS de equilíbrio = essa margem.
+     * no SKU com mais de um anúncio vale a PIOR margem (conservador) no equilíbrio mostrado e nas sugestões. ACOS de equilíbrio = essa margem.
+     * O lucro (A.montante) e a leitura da campanha usam a margem do anúncio de cada linha (margens): o Ads do anúncio premium com a sobra
+     * do premium, como o painel (P.adsEquilibrio). Com a pior margem em todas, o lucro do SKU e o da conta saíam diferentes dos do painel.
      */
     A.porSku = function (ads, itens, custoDe, cfg, camps) {
         itens = (itens || []).filter(i => i && i.itemId);
@@ -159,8 +168,8 @@
             if (!it) { const id = porTitulo.get(norm(ad.titulo)); if (id) { it = porId.get(id); via = 'titulo'; } }
             const chave = it ? (it.sku ? 'sku:' + it.sku : 'mlb:' + it.itemId) : 'ad:' + ad.id;
             let g = grupos.get(chave);
-            if (!g) grupos.set(chave, g = { chave, sku: (it && it.sku) || '', titulo: it ? it.titulo : ad.titulo, itens: [], ads: [], via: new Set() });
-            g.ads.push(ad);
+            if (!g) grupos.set(chave, g = { chave, sku: (it && it.sku) || '', titulo: it ? it.titulo : ad.titulo, itens: [], ads: [], adIt: [], via: new Set() });
+            g.ads.push(ad); g.adIt.push(it || null);
             if (it && g.itens.indexOf(it) < 0) g.itens.push(it);
             if (via) g.via.add(via);
         });
@@ -169,6 +178,8 @@
             const ss = g.itens.map(it => SHC.sobraAnuncio(it, custoDe ? custoDe(it) : null, cfg)).filter(Boolean);
             const comMargem = ss.filter(s => s.sobra !== null);
             const margem = g.itens.length && comMargem.length === ss.length && ss.length ? Math.min(...comMargem.map(s => s.pct)) : null;
+            const pctDe = new Map(g.itens.map(it => { const s = SHC.sobraAnuncio(it, custoDe ? custoDe(it) : null, cfg); return [it, s && s.sobra !== null ? s.pct : margem]; }));
+            const margens = margem === null ? null : g.adIt.map(it => (pctDe.has(it) ? pctDe.get(it) : margem));   // margem do anúncio de cada linha
             const campIds = [...new Set(g.ads.map(a => a.campanhaId).filter(Boolean))];
             const campanhas = campIds.map(id => (campPorId.get(id) || {}).nome || g.ads.find(a => a.campanhaId === id).campanhaNome || 'Campanha ' + id);
             const perdeOrc = campIds.some(id => { const c = campPorId.get(id); return c && c.share && c.share.orcamento >= A.PERDE_MIN; });
@@ -176,11 +187,15 @@
             if (!g.itens.length) selos.push('semAnuncio');
             else if (margem === null) selos.push('semCusto');
             if (m.investimento > 0 && !(m.vendas > 0)) selos.push('semVenda');
-            if (margem !== null && m.investimento > 0 && (margem <= 0 || (m.acos !== null && m.acos > margem))) selos.push('acima');
+            // Acima = lucro depois do Ads < 0 em centavos (A.montante), não ACOS > margem em ponto flutuante: Ads = sobra no centavo (lucro R$ 0,00)
+            // não passa; gasto sem venda passa (como o painel, P.adsEquilibrio, e a contagem da manchete, A.resultado).
+            if (margem !== null && m.investimento > 0 && A.montante({ m, margem, margens, ads: g.ads }).lucroRs < 0) selos.push('acima');
             const folga = margem === null ? null : margem - meta;   // o que o Ads pode levar sem furar a meta
-            if (folga > 0 && m.acos > 0 && m.acos <= folga * A.ESCALA && perdeOrc) selos.push('escalar');
+            // Escalar olha só o que foi pago (#26): a venda atribuída a uma campanha em que o anúncio gastou R$ 0 não diz que vale investir mais.
+            const pago = A.soma(g.ads.filter(a => a.m && a.m.investimento > 0).map(a => a.m));
+            if (folga > 0 && pago && pago.acos > 0 && pago.acos <= folga * A.ESCALA && perdeOrc) selos.push('escalar');
             return { chave: g.chave, sku: g.sku, titulo: g.titulo, itens: g.itens, ads: g.ads, porTitulo: g.via.has('titulo') && !g.via.has('id'),
-                m, margem, equilibrio: margem, campIds, campanhas, perdeOrc, selos };
+                m, margem, margens, equilibrio: margem, campIds, campanhas, perdeOrc, selos };
         }).sort((a, b) => (b.m.investimento || 0) - (a.m.investimento || 0) || (b.m.impressoes || 0) - (a.m.impressoes || 0) || String(a.titulo).localeCompare(String(b.titulo)));
     };
 
@@ -213,24 +228,38 @@
     };
     A.NOME_GRUPO = { rentabilidade: 'Rentabilidade', crescimento: 'Crescimento', fora: 'Fora do Ads', semCusto: 'Falta o custo', semAnuncio: 'Sem ligação com seus anúncios' };
 
-    /** Leitura de cada campanha: impressões perdidas + ACOS × equilíbrio dos produtos dela + orçamento sugerido (só texto). */
+    /**
+     * Leitura de cada campanha: impressões perdidas + ACOS × equilíbrio dos produtos dela + orçamento sugerido (só texto).
+     * #23: "acima" pelo lucro no centavo (Σ sobra antes do Ads − Σ Ads, SHC.adsLucro) das linhas da campanha dos produtos COM custo, a mesma
+     * base e a mesma regra do veredito da campanha no painel (P.adsVereditoDe): lucro R$ 0,00 é "no equilíbrio", nunca "acima". Produto sem
+     * custo fica fora (não há sobra para comparar; antes o ACOS da campanha inteira ia contra o equilíbrio só dos com custo).
+     */
     A.leituraCampanha = function (c, grupos, cfg) {
         const meta = SHC.num((cfg || {}).margem_alvo_pct) || 0;
-        // Equilíbrio da campanha = margem dos SKUs dela, pesada pela receita de Ads de cada um.
-        let peso = 0, soma = 0;
+        // Equilíbrio da campanha = margem dos anúncios dela, pesada pela receita de Ads de cada um.
+        let peso = 0, soma = 0, antes = 0, gasto = 0, fora = false;
         grupos.forEach(g => {
-            if (g.margem === null) return;
-            const rec = g.ads.filter(a => a.campanhaId === c.id).reduce((s, a) => s + ((a.m && a.m.receita) || 0), 0);
-            if (rec > 0) { peso += rec; soma += rec * g.margem; }
+            const ix = g.ads.map((a, i) => i).filter(i => g.ads[i].campanhaId === c.id);
+            if (!ix.length) return;
+            if (g.margem === null) { fora = fora || ix.some(i => (g.ads[i].m || {}).investimento > 0 || (g.ads[i].m || {}).receita > 0); return; }
+            ix.forEach(i => {   // margem do anúncio de cada linha (A.porSku: margens), como o painel
+                const m = g.ads[i].m || {}, mg = g.margens && g.margens[i] != null ? g.margens[i] : g.margem, l = SHC.adsLucro(mg, m.receita, m.investimento);
+                if (m.receita > 0) { peso += m.receita; soma += m.receita * mg; }
+                antes += l.antes; gasto += l.gasto;
+            });
         });
-        const eq = peso > 0 ? soma / peso : null, acos = c.m && c.m.acos;
-        const out = A.leituraShare(c.share, eq !== null && acos !== null && acos > eq);
-        if (eq !== null && acos !== null) {
-            if (acos > eq) out.push(`ACOS de ${SHC.pctTxt(acos)} acima do equilíbrio dos produtos (${SHC.pctTxt(eq)}): o Ads come mais que a sobra. Suba o ROAS objetivo ou tire os produtos marcados.`);
-            else if (acos > eq - meta) out.push(`ACOS de ${SHC.pctTxt(acos)} abaixo do equilíbrio (${SHC.pctTxt(eq)}): dá lucro, mas fica abaixo da sua meta de ${SHC.pctTxt(meta)}. Não aumente o orçamento; suba um pouco o ROAS objetivo.`);
+        antes = SHC.r2(antes); gasto = SHC.r2(gasto);
+        const eq = peso > 0 ? soma / peso : null, acos = peso > 0 ? gasto / peso * 100 : null, lucro = SHC.r2(antes - gasto), acima = gasto > 0 && lucro < 0;
+        const so = fora ? ' Só os produtos com custo entram nesta conta.' : '';
+        const out = A.leituraShare(c.share, acima);
+        if (gasto > 0 && eq !== null) {
+            if (acima) out.push(`ACOS de ${SHC.pctTxt(acos)} acima do equilíbrio dos produtos (${SHC.pctTxt(eq)}): o Ads come mais que a sobra. Suba o ROAS objetivo ou tire os produtos marcados.` + so);
+            else if (lucro === 0) out.push(`ACOS de ${SHC.pctTxt(acos)} no equilíbrio dos produtos (${SHC.pctTxt(eq)}): o Ads levou tudo o que sobrou, sem lucro. Não aumente o orçamento; suba um pouco o ROAS objetivo.` + so);
+            else if (acos > eq - meta) out.push(`ACOS de ${SHC.pctTxt(acos)} abaixo do equilíbrio (${SHC.pctTxt(eq)}): dá lucro, mas fica abaixo da sua meta de ${SHC.pctTxt(meta)}. Não aumente o orçamento; suba um pouco o ROAS objetivo.` + so);
             else if (acos <= (eq - meta) * A.ESCALA && c.share && c.share.orcamento >= A.PERDE_MIN && c.orcamentoDia > 0)
-                out.push(`ACOS de ${SHC.pctTxt(acos)} bem abaixo do equilíbrio (${SHC.pctTxt(eq)}) mesmo com a sua meta, e perdendo por orçamento: dá para testar orçamento de ${SHC.moeda(c.orcamentoDia)} para ${SHC.moeda(SHC.r2(c.orcamentoDia * 1.25))} por dia e conferir em 7 dias.`);
-        } else if (c.m && c.m.investimento > 0 && !(c.m.vendas > 0)) out.push('Gastou sem nenhuma venda no período.');
+                out.push(`ACOS de ${SHC.pctTxt(acos)} bem abaixo do equilíbrio (${SHC.pctTxt(eq)}) mesmo com a sua meta, e perdendo por orçamento: dá para testar orçamento de ${SHC.moeda(c.orcamentoDia)} para ${SHC.moeda(SHC.r2(c.orcamentoDia * 1.25))} por dia e conferir em 7 dias.` + so);
+        } else if (gasto > 0) out.push(c.m && c.m.vendas > 0 ? `Gastou ${SHC.moeda(gasto)} nos produtos com custo sem nenhuma venda deles pelo Ads.` : 'Gastou sem nenhuma venda no período.');
+        else if (c.m && c.m.investimento > 0 && !(c.m.vendas > 0)) out.push('Gastou sem nenhuma venda no período.');
         return { linhas: out, equilibrio: eq };
     };
 
@@ -239,17 +268,19 @@
         const out = [];
         const porEstr = {};
         camps.forEach(c => { porEstr[c.estrategiaTxt] = (porEstr[c.estrategiaTxt] || 0) + 1; });
-        const fat = k => (fechs || []).filter(f => f && f.porTipo && Math.abs(SHC.num(f.porTipo[k]) || 0) > 0).map(f => ({ mes: f.mes, valor: Math.abs(SHC.num(f.porTipo[k])) }));
+        // porTipo é LÍQUIDO (cobrado − estornado): negativo = os estornos passaram das cobranças no mês → mostra com o sinal −, nunca como gasto.
+        const fat = k => (fechs || []).filter(f => f && f.porTipo && Math.abs(SHC.num(f.porTipo[k]) || 0) > 0).map(f => ({ mes: f.mes, valor: SHC.r2(SHC.num(f.porTipo[k])) }));
+        const noFat = x => `No Faturamento de ${x.mes}: ${SHC.moeda(x.valor)}${x.valor < 0 ? ' (estornos maiores que as cobranças no mês)' : ''}.`;
         const pa = fat('ads'), seg = fat('ads_seguidores');
         if (camps.length || pa.length) out.push({
             nome: 'Product Ads (Aumentar suas vendas)',
             detalhe: (camps.length ? SHC.qtd(camps.length, 'campanha', 'campanhas') + ': ' + Object.keys(porEstr).map(k => porEstr[k] + ' em ' + k).join(', ') + '.' : 'Nenhuma campanha lida no Mercado Ads.')
-                + pa.map(x => ` No Faturamento de ${x.mes}: ${SHC.moeda(x.valor)}.`).join(''),
+                + pa.map(x => ' ' + noFat(x)).join(''),
             acompanha: 'Investimento, receita, ROAS, ACOS, TACOS, impressões perdidas, resultado por SKU e ponto de equilíbrio.',
         });
         if (seg.length) out.push({
             nome: 'Publicidade de Seguidores (Aumentar os seguidores)',
-            detalhe: seg.map(x => `No Faturamento de ${x.mes}: ${SHC.moeda(x.valor)}.`).join(' '),
+            detalhe: seg.map(noFat).join(' '),
             acompanha: 'Só o gasto, que vem do Faturamento. O resultado (seguidores) fica no Mercado Ads.',
         });
         return out;
@@ -265,12 +296,15 @@
 
     /**
      * Montante em R$ do SKU no período: sobra antes do Ads = margem (%) × receita pelo Ads; lucro depois do Ads = sobra − investimento.
+     * A conta é a de cada linha (anúncio × campanha, também a sem gasto que trouxe venda) somada no centavo, SHC.adsLucro: a mesma do painel
+     * (P.adsEquilibrio) e do ícone (SHC.alertasDe), o mesmo lucro nas três telas.
      * Sem custo → null (não inventa). lucroRs < 0 ⇔ ACOS acima do equilíbrio (ou gasto sem venda).
      */
     A.montante = function (g) {
         const ads = SHC.r2(g.m.investimento || 0);
         if (g.margem === null) return { adsRs: ads, sobraRs: null, lucroRs: null };
-        const sobra = SHC.r2((g.m.receita || 0) * g.margem / 100);
+        const ms = g.ads && g.ads.length ? g.ads.map(a => a.m || {}) : [g.m], mg = i => (g.margens && g.margens[i] != null ? g.margens[i] : g.margem);
+        const sobra = SHC.r2(ms.reduce((t, m, i) => t + SHC.adsLucro(mg(i), m.receita, m.investimento).antes, 0));   // margem do anúncio de cada linha
         return { adsRs: ads, sobraRs: sobra, lucroRs: SHC.r2(sobra - ads) };
     };
 
@@ -299,7 +333,7 @@
         const sobra = soma('sobraRs'), ads = soma('adsRs'), receita = soma('receita');
         return { comCusto: comCusto.length, semCusto: comGasto.filter(g => g.selos.indexOf('semCusto') >= 0).length,
             sobra, ads, lucro: comCusto.length ? SHC.r2(sobra - ads) : null, equilibrio: receita > 0 ? sobra / receita * 100 : null,
-            acima: comCusto.filter(g => g.lucroRs < 0).length };
+            acos: receita > 0 ? ads / receita * 100 : null, acima: comCusto.filter(g => g.lucroRs < 0).length };
     };
 
     /** Manchete (1 frase): {cls: pr|at|ok, fato, acao}. */
@@ -312,6 +346,9 @@
         const pp = SHC.qtd(r.acima, 'produto passa', 'produtos passam');
         if (!r.comCusto) return { cls: r.semCusto ? 'at' : 'ok', fato: r.semCusto ? 'Falta o custo dos produtos com Ads.' : 'Nenhum produto gastou com Ads no período.', acao: r.semCusto ? 'Informe o custo para ver se o Ads dá lucro.' : '' };
         if (r.lucro < 0) return { cls: 'pr', fato: `O Ads dá prejuízo de ${rs0(-r.lucro)} no período.`, acao: r.acima ? `${pp} do equilíbrio: tire ou ajuste em "Precisa de você".` : '' };
+        // #23: lucro R$ 0,00 no centavo = empate, como o veredito da conta no painel ("No equilíbrio"): nem "dá lucro" nem "prejuízo".
+        if (r.lucro === 0) return { cls: 'at', fato: 'O Ads empata no período: levou tudo o que sobrou das vendas dos produtos com custo.',
+            acao: r.acima ? `${pp} do equilíbrio: tire ou ajuste em "Precisa de você".` : 'Nenhum produto passa do equilíbrio.' };
         if (r.acima) return { cls: 'at', fato: `O Ads dá lucro, mas ${pp} do equilíbrio.`, acao: 'Veja o que fazer em "Precisa de você".' };
         return { cls: 'ok', fato: `O Ads dá lucro de ${rs0(r.lucro)} nos produtos com custo.`, acao: orc || 'Nenhum produto passa do equilíbrio.' };
     };
@@ -331,11 +368,14 @@
     // ── Texto e HTML (strings; todo texto externo passa por esc) ──
     const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     A.esc = esc;
-    A.xTxt = v => v === null || v === undefined || !isFinite(v) ? '—' : (Math.round(v * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'x';
+    // ROAS: 2 casas com SHC.r2 (201 ÷ 200 = 1,005 → "1,01x", como o painel, que guarda r2(receita ÷ gasto)); Math.round dava "1x".
+    A.xTxt = v => v === null || v === undefined || !isFinite(v) ? '—' : SHC.r2(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'x';
     const int = v => v === null || v === undefined ? '—' : Math.round(v).toLocaleString('pt-BR');
     const pct = v => v === null || v === undefined || !isFinite(v) ? '—' : SHC.pctTxt(v);
     const rs = v => v === null || v === undefined ? '—' : SHC.moeda(v);
-    const rs0 = v => v === null || v === undefined || !isFinite(v) ? '—' : (Math.round(v) < 0 ? '−' : '') + 'R$ ' + Math.abs(Math.round(v)).toLocaleString('pt-BR');   // KPI: "R$ 1.433"
+    // KPI: "R$ 1.433". Centavo (SHC.r2) e depois o real, meio real para LONGE do zero nos dois sinais: −2,50 → "−R$ 3" como 2,50 → "R$ 3"
+    // (Math.round dava −2: a manchete dizia "prejuízo de R$ 3" e o KPI "−R$ 2").
+    const rs0 = v => { if (v === null || v === undefined || !isFinite(v)) return '—'; const r = Math.round(SHC.r2(Math.abs(v))); return (v < 0 && r ? '−' : '') + 'R$ ' + r.toLocaleString('pt-BR'); };
     A.rs0 = rs0;
     const dataBR = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')); return m ? m[3] + '/' + m[2] : ''; };
 
@@ -386,13 +426,16 @@
         const a = an.kpis.atual, b = an.kpis.anterior || {}, r = an.res;
         if (!a) return '<p class="sub">Sem totais do período.</p>';
         const cel = (cls, rot, tit, valor, sub) => `<div class="kpi ${cls}" title="${esc(tit)}"><div class="l">${esc(rot)}</div><div class="v">${valor}</div><div class="s">${esc(sub)}</div></div>`;
-        const corLucro = r.lucro === null ? '' : (r.lucro < 0 ? 'pr' : 'ok');
+        // #23: a cor segue o lucro no centavo (R$ 0,00 = âmbar, como "No equilíbrio" no painel); o ACOS, a mesma base (só produtos com custo).
+        const corLucro = r.lucro === null ? '' : (r.lucro < 0 ? 'pr' : r.lucro === 0 ? 'at' : 'ok');
+        const corAc = r.lucro === null ? '' : r.lucro <= 0 ? corLucro : (A.corAcos(r.acos, r.equilibrio, an.meta) === 'ok' ? 'ok' : 'at');
+        // A conta do rodapé em centavos (fecha: sobra − Ads = lucro); o número grande é esse lucro em R$ inteiro (o mesmo da manchete).
         const subLucro = r.lucro === null ? 'informe o custo dos produtos'
-            : `sobra ${rs0(r.sobra)} − Ads ${rs0(r.ads)}` + (r.semCusto ? ` · ${SHC.qtd(r.semCusto, 'sem custo fica', 'sem custo ficam')} fora` : '');
+            : `sobra ${rs(r.sobra)} − Ads ${rs(r.ads)} = ${rs(r.lucro)}` + (r.semCusto ? ` · ${SHC.qtd(r.semCusto, 'sem custo fica', 'sem custo ficam')} fora` : '');
         return '<div class="kpis k4">'
             + cel('', 'Investimento', A.SIGLAS.investimento, rs0(a.investimento), A.variacao(a.investimento, b.investimento))
             + cel('', 'Receita pelo Ads', A.SIGLAS.receita, rs0(a.receita), A.variacao(a.receita, b.receita))
-            + cel(A.corAcos(a.acos, r.equilibrio, an.meta), 'ROAS · ACOS ⓘ', A.SIGLAS.roas + ' ' + A.SIGLAS.acos, `${A.xTxt(a.roas)} <small>· ${pct(a.acos)}</small>`,
+            + cel(corAc, 'ROAS · ACOS ⓘ', A.SIGLAS.roas + ' ' + A.SIGLAS.acos, `${A.xTxt(a.roas)} <small>· ${pct(a.acos)}</small>`,
                 r.equilibrio !== null ? 'equilíbrio ' + pct(r.equilibrio) + (b.acos != null ? ' · antes ' + pct(b.acos) : '') : (b.acos != null ? 'antes ' + pct(b.acos) : ''))
             + cel(corLucro, 'Lucro depois do Ads ⓘ', 'Sobra das vendas pelo Ads (preço de hoje, tarifa, frete, seu custo e imposto) menos o que o Ads custou. Só produtos com custo.', rs0(r.lucro), subLucro)
             + '</div>';

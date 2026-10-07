@@ -13,11 +13,14 @@ function selo(a) {
 async function atualizarAlertas(conta) {
     const c = conta || await SHC.contaAtual();
     const [full, ads, an, cfg, lidos] = await Promise.all([SHC.lerFull(c), SHC.lerAds(c), SHC.lerAnuncios(c), SHC.lerCfg(), SHC.lerMesesVendasLidos(c)]);
-    const comAds = new Set(((ads && ads.anuncios) || []).filter(a => a.custo > 0).map(a => a.itemId));
+    // Catálogo ligado pelo título (SHC.adsLigaCatalogo, a ligação do painel): o custo do anúncio ligado também é lido para o aviso do Ads.
+    const comAds = new Set((((ads && SHC.adsLigaCatalogo(ads, an && an.itens)) || {}).anuncios || []).filter(a => a && a.custo > 0).map(a => a.itemId));
     const itens = ((an && an.itens) || []).filter(i => comAds.has(i.itemId)), chaves = new Set(), ids = new Set();
     // F2: o custo de TODAS as variações (antes só o 1º SKU: o alerta lia o lucro inflado).
     itens.forEach(i => { SHC.skusDoAnuncio(i).forEach(s => chaves.add(SHC.chaveSku(s))); chaves.add(SHC.chave('ml', i.itemId)); if (i.familia) chaves.add(SHC.chave('ml', i.familia)); });
-    ((full && full.produtos) || []).forEach(p => { if (p.sku) chaves.add(SHC.chaveSku(p.sku)); (p.itemIds && p.itemIds.length ? p.itemIds : [p.itemId]).forEach(id => { if (id) ids.add(id); }); });
+    // vm|ml dos anúncios de cada produto do Full: os MLB do Full + os do mesmo SKU no retrato (SHC.idsDoProdutoFull, a regra do painel).
+    const todos = (an && an.itens) || [];
+    ((full && full.produtos) || []).forEach(p => { if (!p) return; if (p.sku) chaves.add(SHC.chaveSku(p.sku)); SHC.idsDoProdutoFull(p, todos).forEach(id => ids.add(id)); });
     chaves.delete('');
     const [custos, vm] = await Promise.all([SHC.lerCustos([...chaves]), ids.size ? SHC.lerVendasMes([...ids]) : {}]);
     // Restrição fiscal / penalidade do Full: campos fiscal (fiscal_restriction_name) e penalidade (active_penalty_by_uwsd) que a leitura
@@ -31,7 +34,8 @@ async function atualizarAlertas(conta) {
     const perdendo = [...new Set(((an && an.itens) || []).filter(i => i && SHC.anuncioAtivo(i) && pv[i.itemId]).map(i => i.itemId))]
         .filter(id => SHC.radarVisitas(pv[id].dias, hoje, cfg.radar_queda_pct).classe === 'caindo').length;
     const saude = { semFiscal: fiscal && typeof fiscal.total === 'number' ? fiscal.total : 0, perdendo };
-    const r = SHC.alertasDe({ full, ads, itens, custos, cfg, vm, mesesLidos: lidos, hoje, conta: naConta, saude, sellerId: c });   // sellerId: mínimo do Full por conta (F23)
+    // itens: todos os anúncios (o Full liga os do mesmo SKU; o Ads só olha os que gastaram, cujo custo foi lido acima).
+    const r = SHC.alertasDe({ full, ads, itens: todos, custos, cfg, vm, mesesLidos: lidos, hoje, conta: naConta, saude, sellerId: c });   // sellerId: mínimo do Full por conta (F23)
     await SHC.salvarAlertas({ ts: Date.now(), conta: c, criticos: r.criticos, full: r.full, ads: r.ads, contaFull: r.contaFull, saude: r.saude, lista: r.lista.slice(0, 200) });
     // v2.5.3: TODAS as anomalias (Full, estoque, frete, pagamento excedente, pós-venda, Ads, fiscal/certificado, visitas, medidas) → shc:anomalias e o ícone.
     // Certificado vencido numa remessa do Full (FF_SHIPPING_EXPIRED_CERTIFICATE) vira cert:<conta> quando o Faturador não disse nada mais novo.

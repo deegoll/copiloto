@@ -188,8 +188,9 @@
      */
     SHC.sobraProposta = function (prop, custoFam, cfg) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
-        const custo = custoFam ? SHC.num(custoFam.custo) : null;
-        const outros = custoFam ? (SHC.num(custoFam.outros) || 0) : 0;
+        // #11: custo e outros em centavos (como a tela mostra): "você recebe − custo − outros − imposto" fecha com a sobra.
+        const custo = custoFam ? SHC.r2(SHC.num(custoFam.custo)) : null;
+        const outros = custoFam ? SHC.r2(SHC.num(custoFam.outros) || 0) : 0;
         const impPct = SHC.num(cfg.imposto_pct) || 0;
         const imposto = SHC.r2(prop.preco * impPct / 100);
         if (!(custo > 0)) return { imposto, sobra: null, pct: null, classe: 'sem_custo' };
@@ -207,7 +208,7 @@
      * 'ideal'      = entre as que batem a meta, a de MENOR preço (maior desconto → mais venda sem perder a meta);
      * 'aproximada' = nenhuma bate a meta: a de maior % que ainda dá lucro;
      * 'nenhuma'    = todas dão prejuízo.
-     * precoMeta = menor preço que ainda entrega a meta, com a mesma tarifa (%) e o mesmo frete da proposta.
+     * precoMeta = menor preço que ainda entrega a meta, com a mesma tarifa (%) e o mesmo frete da proposta. null = sem custo ou sem a tarifa.
      */
     SHC.recomendaPromo = function (linhas, cfg, custoFam) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
@@ -219,12 +220,24 @@
         if (atingem.length) { escolha = atingem.reduce((a, b) => (b.p.preco < a.p.preco ? b : a)); tipo = 'ideal'; }
         else { escolha = com.reduce((a, b) => (b.pct > a.pct ? b : a)); tipo = escolha.sobra >= 0 ? 'aproximada' : 'nenhuma'; }
         const p = escolha.p;
-        const custo = custoFam ? SHC.num(custoFam.custo) : null;
-        const outros = custoFam ? (SHC.num(custoFam.outros) || 0) : 0;
-        const r = p.preco ? p.tarifa / p.preco : 0;
+        const custo = custoFam ? SHC.r2(SHC.num(custoFam.custo)) : null;
+        const outros = custoFam ? SHC.r2(SHC.num(custoFam.outros) || 0) : 0;
+        const envio = SHC.r2(SHC.num(p.envio) || 0);
+        // #12: sem a tarifa lida (sale_fee) ela NÃO é 0%: sai da conta do próprio ML (preço − frete − você recebe); sem esses números, sem preço.
+        const tarifa = SHC.num(p.tarifa) !== null ? SHC.num(p.tarifa)
+            : (SHC.num(p.envio) !== null && SHC.num(p.recebe) !== null ? SHC.r2(p.preco - SHC.num(p.envio) - SHC.num(p.recebe)) : null);
+        const r = p.preco > 0 && tarifa !== null && tarifa >= 0 ? tarifa / p.preco : null;
         const imp = (SHC.num(cfg.imposto_pct) || 0) / 100;
-        const den = 1 - r - imp - meta / 100;
-        const precoMeta = (custo > 0 && den > 0) ? Math.ceil(((p.envio || 0) + custo + outros) / den * 100) / 100 : null;
+        const den = r === null ? 0 : 1 - r - imp - meta / 100;
+        // #12: o MENOR preço em centavos que bate a meta com a MESMA conta da proposta (tarifa = r2(preço × %), SHC.sobraProposta e a margem
+        // sem arredondar, como o selo), buscado centavo a centavo entre um piso e um teto honestos (cada r2 erra ≤ meio centavo). Antes a
+        // fórmula fechada ficava 1 centavo abaixo da meta em ~12% dos casos (R$ 184,64 com margem de 4,9989% para a meta de 5%).
+        let precoMeta = null;
+        if (custo > 0 && den > 0) {
+            const bate = q => { const s = SHC.sobraProposta({ preco: q, recebe: SHC.r2(q - SHC.r2(q * r) - envio) }, { custo, outros }, cfg); return s.sobra !== null && s.sobra / q * 100 >= meta; };
+            const base = envio + custo + outros, teto = (base + 0.03) / den + 0.01;
+            for (let q = SHC.r2(Math.max(0.01, Math.floor((base - 0.03) / den * 100) / 100)), i = 0; i < 20000 && q <= teto; i++, q = SHC.r2(q + 0.01)) if (bate(q)) { precoMeta = q; break; }
+        }
         return { tipo, escolha, precoMeta, atingem: atingem.length };
     };
 
@@ -792,8 +805,8 @@
     SHC.sobraAnuncio = function (item, custoDados, cfg) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
         if (!(item.preco > 0) || item.recebe == null) return null;   // null ou undefined: sem "Você recebe" único
-        const custo = custoDados ? SHC.num(custoDados.custo) : null;
-        const outros = custoDados ? (SHC.num(custoDados.outros) || 0) : 0;
+        const custo = custoDados ? SHC.r2(SHC.num(custoDados.custo)) : null;          // #11: em centavos, como a etiqueta mostra
+        const outros = custoDados ? SHC.r2(SHC.num(custoDados.outros) || 0) : 0;
         const imposto = SHC.r2(item.preco * (SHC.num(cfg.imposto_pct) || 0) / 100);
         if (!(custo > 0)) return { imposto, sobra: null, pct: null, classe: 'sem_custo' };
         const sobra = SHC.r2(item.recebe - custo - outros - imposto);
@@ -822,9 +835,9 @@
      *  (visto ao vivo 25/09: R$ 8,75 num anúncio a R$ 68,44). */
     SHC.sobraAtacado = function (item, degrau, custoDados, cfg, itens) {
         cfg = Object.assign({}, SHC.PADRAO, cfg || {});
-        const custo = custoDados ? SHC.num(custoDados.custo) : null;
+        const custo = custoDados ? SHC.r2(SHC.num(custoDados.custo)) : null;          // #11: custo e outros em centavos, como a tabela mostra
         if (!(custo > 0) || !(item.preco > 0) || item.tarifa == null) return null;
-        const outros = SHC.num(custoDados.outros) || 0;
+        const outros = SHC.r2(SHC.num(custoDados.outros) || 0);
         const tt = SHC.taxaTarifaFora(item, itens), taxa = tt.taxa;
         const tarifa = SHC.r2(degrau.preco * taxa), frete = item.freteComprador ? 0 : (item.frete || 0);
         const taxaOp = item.freteComprador && SHC.num(item.taxaOperacional) > 0 ? SHC.r2(SHC.num(item.taxaOperacional)) : 0;
@@ -1925,6 +1938,7 @@
     const n0 = v => SHC.num(v) || 0;
     const dia10 = v => { const s = String(v || ''); return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : ''; };
     // Métricas no nome do ML → nomes do Copiloto. ctr, acos, tacos, cvr, sov já vêm em % (0,32 = 0,32%); roas em "x".
+    // ACOS e ROAS calculados aqui ficam crus: o texto arredonda uma vez só (gravar r2 e arredondar de novo na tela dava "43,2%" × "43,1%").
     function metricasAds(m) {
         m = m || {};
         const alt = (a, b) => (m[a] !== undefined ? m[a] : m[b]);
@@ -1938,12 +1952,26 @@
             vendas: n0(alt('unitsQuantity', 'soldQuantityTotal')), vendasDiretas: n0(alt('directUnitsQuantity', 'soldQuantityDirect')),
             vendasIndiretas: n0(alt('indirectUnitsQuantity', 'soldQuantityIndirect')),
             vendasOrganicas: numOuNull(m.organicUnitsQuantity), receitaOrganica: numOuNull(m.organicUnitsAmount),
-            acos: ou(m.acos, receita > 0 ? SHC.r2(custo / receita * 100) : null),
-            tacos: numOuNull(m.tacos), roas: ou(m.roas, custo > 0 ? SHC.r2(receita / custo) : null),
+            acos: ou(m.acos, receita > 0 ? custo / receita * 100 : null),
+            tacos: numOuNull(m.tacos), roas: ou(m.roas, custo > 0 ? receita / custo : null),
             cvr: numOuNull(m.cvr), sov: numOuNull(m.sov),
         };
     }
     SHC.adsMetricas = metricasAds;
+    /**
+     * Lucro depois do Ads de UM anúncio (a mesma conta em ads.html e no painel): sobra antes do Ads = margem antes do Ads (% do preço de hoje,
+     * SHC.sobraAnuncio) × receita do Ads; depois = antes − gasto, em centavos; acima = gastou e o lucro ficou negativo (= ACOS acima da margem,
+     * decidido no centavo: Ads = sobra não passa; gasto sem venda passa). Sem margem (sem custo) → null.
+     * #26: receita pode ser a lista das linhas do anúncio (o fundo grava uma por anúncio e campanha): [{receita, gasto}]. A sobra de cada
+     * linha no centavo, somada; o gasto é a soma das campanhas. A venda que o ML atribui a uma campanha em que o anúncio gastou R$ 0 entra.
+     */
+    SHC.adsLucro = function (margem, receita, gasto) {
+        if (margem === null || margem === undefined || !isFinite(margem)) return null;
+        const ls = Array.isArray(receita) ? receita : [{ receita, gasto }];
+        const antes = SHC.r2(ls.reduce((t, l) => t + SHC.r2((SHC.num(l && l.receita) || 0) * margem / 100), 0));
+        const g = SHC.r2(ls.reduce((t, l) => t + SHC.r2(SHC.num(l && l.gasto) || 0), 0)), depois = SHC.r2(antes - g);
+        return { antes, gasto: g, depois, acima: g > 0 && depois < 0 };
+    };
     const listaResultados = j => (j && Array.isArray(j.results)) ? j.results : [];
     // F21: sem paging.total → null (quem lê segue até vir uma página menor que o limite). Antes devolvia o nº lido: 50 de 120 virava "completo".
     const totalPaging = j => { const t = j && j.paging && j.paging.total; return typeof t === 'number' ? t : null; };
@@ -1980,6 +2008,28 @@
             }, metricasAds(a));
         });
         return { total: totalPaging(j), anuncios };
+    };
+
+    /**
+     * F8: o patrocinado de CATÁLOGO vem com o id do produto de catálogo. Liga ao anúncio da seller pelo título quando só UM anúncio tem esse
+     * título (a mesma regra de ads.js A.porSku). Uma ligação só para o painel (P.adsLigaCatalogo), o ícone e o sino (SHC.alertasDe) e a
+     * etiqueta da venda (SHC.vendaExtras): o mesmo anúncio com as mesmas linhas nas telas. → cópia do snapshot com o itemId do anúncio
+     * ligado, catalogoLigados e catalogoSemLigacao (Ads do catálogo sem ligação, R$).
+     */
+    SHC.adsLigaCatalogo = function (snap, itens) {
+        if (!snap || !Array.isArray(snap.anuncios)) return snap;
+        const porTitulo = new Map(), gasto = o => { for (const k of ['cost', 'custo', 'investimento', 'gasto']) { const v = SHC.num(o[k]); if (v !== null) return v; } return 0; };
+        (itens || []).forEach(i => { const t = i && SHC.normalizaTitulo(i.titulo); if (t) porTitulo.set(t, porTitulo.has(t) && porTitulo.get(t) !== i.itemId ? '' : i.itemId); });
+        let semLig = 0, ligados = 0;
+        const anuncios = snap.anuncios.map(a => {
+            const o = Object.assign({}, (a && a.metrics) || {}, (a && a.metricas) || {}, a || {});
+            if (!(o.catalogoProduto || o.type === 'catalog')) return a;
+            const id = porTitulo.get(SHC.normalizaTitulo(o.titulo || o.title));
+            if (id) { ligados++; return Object.assign({}, a, { itemId: id, catalogoProduto: false, type: 'catalogo_ligado', catalogoLigado: true }); }
+            semLig += gasto(o);
+            return a;
+        });
+        return Object.assign({}, snap, { anuncios, catalogoLigados: ligados, catalogoSemLigacao: SHC.r2(semLig) });
     };
 
     /** campaigns/<id>/metrics → "Desempenho ao competir por impressões" em % (0,03 → 3%). */
@@ -2580,38 +2630,85 @@
     // Mesma regra do cartão "Alertas" do painel lateral (P.saudeFull / P.adsEquilibrio), para o número do ícone bater com a lista.
     const unDe = v => (typeof v === 'number' ? (isFinite(v) ? v : null) : inteiro(v));
     const mesMenos = (m, k) => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 - k, 1)).toISOString().slice(0, 7);
+    // ── Previsão de 30 dias do Full: UMA conta para o painel (P.previsaoFull → plano, saúde e cartão Alertas) e para o ícone e o sino
+    // (SHC.alertasDe, que roda também no service worker). vm = {'AAAA-MM': vendas} do produto (vm|ml somado dos anúncios dele).
+    // Previsão = o maior entre as vendas dos últimos 30 dias (ML) e as do mesmo mês do ano passado (vm|ml).
+    // Campo que o ML não mostrou fica null (não vira 0): sem os dois números → qtd null (sem sugestão).
+    // lidos = meses lidos inteiros no Faturamento (ml:cobrancas mesesLidos): lá, mês sem a chave no vm = 0 vendas.
+    // v3.3 (pedido da dona 07/10/2026: "sugerir pelo estoque, pelo giro e pela sazonalidade"):
+    //  · PARADO (opc.aptas > 0 e nenhuma venda em 30 dias) não usa o ano passado: com estoque e sem venda o problema é o anúncio (exposição,
+    //    experiência, preço), não a época — mandar mais só empaca e gera armazenagem. fonte 'parado', qtd 0.
+    //  · Sazonalidade: vendas de 30 dias × índice do ano passado (mês alvo ÷ mês destes 30 dias, os dois de um ano antes). Só entra com 3+ vendas
+    //    no mês base e só para subir (até 3×): queda de época já aparece nas vendas de 30 dias. Vale o maior entre 30 dias, ano passado e índice.
+    //    conta = 30 dias × índice antes de arredondar para cima (#21: a explicação mostra as duas, "7 × 1,33 = 9,31 → 10"); null sem índice.
+    SHC.SAZONAL_MAX = 3;
+    // Mês que mais pesa nos próximos 30 dias (hoje + 15 dias), um ano antes: 24/09/2026 → '2025-10'.
+    SHC.mesAnoPassado = hoje => mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') + 15 * 864e5).toISOString().slice(0, 7), 12);
+    SHC.previsaoFull = function (vendas30, vm, hoje, lidos, opc) {
+        const u = unDe(vendas30), ult30 = u === null ? null : Math.max(0, u), mes = SHC.mesAnoPassado(hoje);
+        const doMes = m => (vm && vm[m] !== undefined && vm[m] !== null ? unDe(vm[m]) : (vm && (lidos || []).indexOf(m) >= 0 ? 0 : null));
+        const a = doMes(mes), ano = a === null ? null : Math.max(0, a);
+        if (ult30 === 0 && unDe(opc && opc.aptas) > 0) return { qtd: 0, fonte: 'parado', ult30, mes, anoPassado: ano, base: null, baseAno: null, indice: null, conta: null };
+        const base = mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') - 15 * 864e5).toISOString().slice(0, 7), 12), b = base === mes ? null : doMes(base);
+        const indice = ult30 > 0 && ano !== null && b >= 3 && ano > b ? Math.min(SHC.SAZONAL_MAX, SHC.r2(ano / b)) : null;
+        const conta = indice ? SHC.r2(ult30 * indice) : null, saz = indice ? Math.ceil(ult30 * indice - 1e-9) : null;
+        const qtd = ult30 === null && ano === null ? null : Math.max(ult30 || 0, ano || 0, saz || 0);
+        const fonte = saz !== null && qtd === saz && saz > Math.max(ult30 || 0, ano || 0) ? 'sazonal' : ano !== null && (ult30 === null || ano > ult30) ? 'anoPassado' : 'ult30';
+        return { qtd, fonte, ult30, mes, anoPassado: ano, base: indice ? base : null, baseAno: indice ? b : null, indice, conta };
+    };
+    // Variações do mesmo anúncio (mesmos MLB): o vm|ml é do anúncio inteiro → a variação fica com pct% de cada mês (arredondado), pct = a parte
+    // dela nas vendas de 30 dias. pct null (nenhuma venda para dividir) → null: sem essa parte, o ano passado não entra. Painel e ícone.
+    SHC.vmDaParte = (vm, pct) => (pct === null || pct === undefined ? null
+        : Object.keys(vm || {}).reduce((o, m) => { const v = unDe(vm[m]); if (v !== null) o[m] = Math.round(v * pct / 100); return o; }, {}));
+    // Anúncios do retrato que são este produto do Full: pelos MLB (quando o ML traz) ou pelo SKU; sem os dois, pelo título. UMA regra para o
+    // painel (P.anunciosDoFull: plano, saúde, lucro) e o ícone (SHC.alertasDe, no service worker) — antes o ícone só via os MLB do Full.
+    SHC.idsDoFull = p => [...new Set([].concat((p && p.itemIds) || [], p && p.itemId ? [p.itemId] : []).filter(Boolean))];
+    const skuNorm = new Map(), skuN = s => {   // nSku com memória: a mesma conta para cada anúncio × produto (milhares no fundo)
+        const k = String(s || ''); let v = skuNorm.get(k);
+        if (v === undefined) { if (skuNorm.size > 20000) skuNorm.clear(); v = nSku(k); skuNorm.set(k, v); }
+        return v;
+    };
+    SHC.anunciosDoFull = function (p, itens) {
+        const l = Array.isArray(itens) ? itens.filter(Boolean) : [], sku = skuN(p && p.sku), tn = SHC.normalizaTitulo(p && p.titulo), ids = SHC.idsDoFull(p);
+        const r = l.filter(it => ids.indexOf(it.itemId) >= 0 || (sku && skuN(it.sku) === sku));
+        return r.length || !tn || sku || ids.length ? r : l.filter(it => SHC.normalizaTitulo(it.titulo) === tn);
+    };
+    // MLB cujas vendas por mês (vm|ml) são deste produto: os do Full + os anúncios ligados pelo SKU (ou título). Painel e ícone leem e somam estes.
+    SHC.idsDoProdutoFull = (p, itens) => [...new Set(SHC.anunciosDoFull(p, itens).map(it => it.itemId).concat(SHC.idsDoFull(p)).filter(Boolean))];
     /**
-     * dados = { full: ml:full, ads: ads:<conta>, itens: anúncios do retrato, custos: {chave: dados} (c|sku|…, c|ml|…), cfg,
-     *           vm?: {MLB: {'AAAA-MM': vendas}} (vm|ml), mesesLidos?: ['AAAA-MM'], hoje: 'AAAA-MM-DD',
+     * dados = { full: ml:full, ads: ads:<conta>, itens: TODOS os anúncios do retrato (o Full liga os do mesmo SKU), custos: {chave: dados} (c|sku|…, c|ml|…), cfg,
+     *           vm?: {MLB: {'AAAA-MM': vendas}} (vm|ml dos MLB de SHC.idsDoProdutoFull), mesesLidos?: ['AAAA-MM'], hoje: 'AAAA-MM-DD',
      *           saude?: { semFiscal: n (fiscal:<conta>.total), perdendo: n (anúncios ativos com radar 'caindo') } }
      * → { criticos, full, ads, lista:[{tipo:'full'|'ads', nivel:'critico', chave, itemId, sku, titulo, texto, …}] }
-     * Full (produto com alerta): previsão de 30 dias = maior entre vendas30 e o mesmo mês do ano passado (vm). Alerta = acaba em
-     *   ≤ 7 dias (ML ou aptas ÷ previsão; sem estoque e com previsão = acabou) ou aptas + a caminho abaixo do mínimo em unidades
-     *   do SKU (SHC.fullMinimo; sem mínimo definido não há "abaixo do mínimo").
-     * Ads (acima do equilíbrio): gasto > sobra por unidade antes do Ads × vendas do Ads. Sem custo do produto não alerta.
+     * Full (produto com alerta): previsão de 30 dias = SHC.previsaoFull, a MESMA do painel (30 dias, ano passado, índice sazonal, parado).
+     *   Alerta = acaba em ≤ 7 dias (ML ou ⌊aptas × 30 ÷ previsão⌋; sem estoque e com previsão = acabou) ou aptas + a caminho abaixo do
+     *   mínimo em unidades do SKU (SHC.fullMinimo; sem mínimo definido não há "abaixo do mínimo").
+     * Ads (acima do equilíbrio): lucro do anúncio depois do Ads < 0 no centavo (SHC.adsLucro: margem × receita do Ads, as campanhas do anúncio
+     *   somadas, como o cartão Alertas do painel, P.adsEquilibrio, e ads.html). Sem custo do produto não alerta.
      */
     SHC.alertasDe = function (dados) {
         dados = dados || {};
         const cfg = Object.assign({}, SHC.PADRAO, dados.cfg || {}), custos = dados.custos || {}, lista = [];
         const hoje = dados.hoje || SHC.hoje(), vm = dados.vm || {}, lidos = dados.mesesLidos || [];
-        const mesAno = mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') + 15 * 864e5).toISOString().slice(0, 7), 12);
         // Variações do mesmo anúncio (mesmos MLB): o vm|ml é do anúncio inteiro → cada uma fica com a parte dela nas vendas de 30 dias
-        // (mesma conta de P.planoFull); sem essa parte, o ano passado não entra.
-        const prods = ((dados.full && dados.full.produtos) || []).filter(Boolean);
-        const idsDe = p => [...new Set((p.itemIds && p.itemIds.length ? p.itemIds : [p.itemId]).filter(Boolean))];
+        // (SHC.vmDaParte, a mesma conta de P.planoFull); sem essa parte, o ano passado não entra.
+        const prods = ((dados.full && dados.full.produtos) || []).filter(Boolean), its = Array.isArray(dados.itens) ? dados.itens : [];
+        // Anúncios do produto = os do painel (SHC.idsDoProdutoFull: MLB do Full + os do mesmo SKU no retrato); dados.itens = TODOS os anúncios.
+        const idsDoP = new Map(), idsDe = p => { let v = idsDoP.get(p); if (!v) idsDoP.set(p, v = SHC.idsDoProdutoFull(p, its)); return v.slice(); };
+        // vm do produto = soma dos anúncios dele, mês a mês (como o vmDe do painel, P.somaMeses); sem anúncio → null (ano passado desconhecido).
+        const vmDe = ids => (ids.length ? ids.reduce((o, id) => { Object.keys(vm[id] || {}).forEach(m => { o[m] = (o[m] || 0) + (unDe(vm[id][m]) || 0); }); return o; }, {}) : null);
         const irmaos = {};
         prods.forEach(p => { const k = idsDe(p).sort().join(','); if (k) { const g = irmaos[k] || (irmaos[k] = { n: 0, v: 0 }); g.n++; g.v += Math.max(0, unDe(p.vendas30) || 0); } });
         prods.forEach(p => {
             const aptas = unDe(p.aptas), v30 = unDe(p.vendas30), cam = Math.max(0, unDe(p.aCaminho) || 0);
             if (aptas === null) return;
             const ids = idsDe(p), g = irmaos[ids.slice().sort().join(',')];
-            const comMes = ids.filter(id => vm[id] && vm[id][mesAno] !== undefined && vm[id][mesAno] !== null);
-            let ano = comMes.length ? Math.max(0, comMes.reduce((n, id) => n + (unDe(vm[id][mesAno]) || 0), 0)) : (ids.length && lidos.indexOf(mesAno) >= 0 ? 0 : null);
-            if (g && g.n > 1) ano = g.v > 0 && v30 !== null && ano !== null ? Math.round(ano * Math.max(0, v30) / g.v) : null;
-            const ult30 = v30 === null ? null : Math.max(0, v30), prev = ult30 === null && ano === null ? null : Math.max(ult30 || 0, ano || 0);
+            const vmP = g && g.n > 1 ? SHC.vmDaParte(vmDe(ids), g.v > 0 && v30 !== null ? Math.max(0, v30) / g.v * 100 : null) : vmDe(ids);
+            // #19: a MESMA previsão do painel (P.previsaoFull = SHC.previsaoFull), com o índice sazonal e o parado da v3.3.
+            const prev = SHC.previsaoFull(p.vendas30, vmP, hoje, lidos, { aptas: p.aptas }).qtd;
             const cad = p.sku && SHC.chaveSku ? custos[SHC.chaveSku(p.sku)] : null;
             const tem = Math.max(0, aptas), fm = SHC.fullMinimo(p, cad, prev, dados.sellerId);   // F23: mínimo da conta
-            const cobertura = prev > 0 ? Math.floor(tem / (prev / 30)) : null;
+            const cobertura = prev > 0 ? Math.floor(tem * 30 / prev) : null;   // multiplica antes: 23 × 30 ÷ 23 = 30 (23 ÷ (23 ÷ 30) dava 29,999…)
             const ml = typeof p.diasAteEsgotar === 'number' && isFinite(p.diasAteEsgotar) ? p.diasAteEsgotar : null;
             const ds = [ml, cobertura].filter(x => x !== null), dias = ds.length ? Math.min(...ds) : null;
             // Acaba em ≤ 7 dias (vendendo) OU abaixo do mínimo em unidades que o seller definiu. Sem mínimo nunca é "abaixo do mínimo".
@@ -2625,19 +2722,26 @@
                 titulo: p.titulo || '', texto, dias, aptas: tem, aCaminho: cam, vendas30: v30, minUn: fm.minUn, abaixoMin: fm.abaixo, faltam: fm.faltam, sugerido: fm.sugerido });
         });
         const porId = new Map((dados.itens || []).filter(i => i && i.itemId).map(i => [String(i.itemId), i]));
-        ((dados.ads && dados.ads.anuncios) || []).forEach(a => {
-            if (!a || !(a.custo > 0)) return;
-            const it = porId.get(a.itemId);
-            if (!it) return;
+        // #26: o anúncio em várias campanhas (uma linha por anúncio e campanha) é UM aviso, com as campanhas somadas (como o painel), também a
+        // linha de catálogo ligada a ele pelo título (SHC.adsLigaCatalogo, a ligação do painel).
+        const doAnuncio = new Map(), adsL = SHC.adsLigaCatalogo(dados.ads, dados.itens);
+        ((adsL && adsL.anuncios) || []).forEach(a => { if (a && a.itemId && porId.has(a.itemId)) (doAnuncio.get(a.itemId) || doAnuncio.set(a.itemId, []).get(a.itemId)).push(a); });
+        doAnuncio.forEach((ls, id) => {
+            const gasto = SHC.r2(ls.reduce((t, a) => t + (SHC.num(a.custo) || 0), 0));
+            if (!(gasto > 0)) return;
+            const it = porId.get(id);
             const c = SHC.custoDeAnuncio ? SHC.custoDeAnuncio(custos, { sku: it.sku, skus: it.skus, skuFonte: it.skuFonte, itemId: it.itemId, familia: it.familia }) : null;
             const eq = SHC.adsEquilibrio(it, c && c.dados, cfg);
             if (!eq) return;
-            const antes = SHC.r2(eq.sobraAntes * (a.vendas || 0));
-            if (!(a.custo > antes + 0.004)) return;
-            lista.push({ tipo: 'ads', nivel: 'critico', chave: 'ads|' + a.itemId, itemId: a.itemId, sku: it.sku || '', titulo: a.titulo || it.titulo || '',
-                texto: eq.equilibrio <= 0 ? 'Este anúncio já dá prejuízo antes do Ads e ainda gastou ' + SHC.moeda(a.custo) + ' em Ads.'
-                    : 'O Ads gastou ' + SHC.moeda(a.custo) + ' e a sobra dessas vendas antes do Ads era ' + SHC.moeda(antes) + ' (margem de ' + SHC.pctTxt(eq.equilibrio) + ').',
-                gasto: a.custo, receita: a.receita, vendas: a.vendas, acos: a.acos, equilibrio: eq.equilibrio, excesso: SHC.r2(a.custo - antes), campanhaId: a.campanhaId });
+            // SHC.adsLucro (margem × receita do Ads, no centavo), a mesma conta do cartão Alertas (P.adsEquilibrio) e de ads.html.
+            const l = SHC.adsLucro(eq.equilibrio, ls.map(a => ({ receita: a.receita, gasto: a.custo }))), antes = l.antes;
+            if (!l.acima) return;
+            const receita = SHC.r2(ls.reduce((t, a) => t + (SHC.num(a.receita) || 0), 0)), maior = ls.reduce((m, a) => ((SHC.num(a.custo) || 0) > (SHC.num(m.custo) || 0) ? a : m), ls[0]);
+            lista.push({ tipo: 'ads', nivel: 'critico', chave: 'ads|' + id, itemId: id, sku: it.sku || '', titulo: ls[0].titulo || it.titulo || '',
+                texto: eq.equilibrio <= 0 ? 'Este anúncio já dá prejuízo antes do Ads e ainda gastou ' + SHC.moeda(gasto) + ' em Ads.'
+                    : 'O Ads gastou ' + SHC.moeda(gasto) + ' e a sobra dessas vendas antes do Ads era ' + SHC.moeda(antes) + ' (margem de ' + SHC.pctTxt(eq.equilibrio) + ').',
+                gasto, receita, vendas: ls.reduce((t, a) => t + (SHC.num(a.vendas) || 0), 0), acos: receita > 0 ? gasto / receita * 100 : null,
+                equilibrio: eq.equilibrio, excesso: SHC.r2(gasto - antes), campanhaId: maior.campanhaId });
         });
         const dd = x => (typeof x.dias === 'number' ? x.dias : 99), ordem = { conta: 0, full: 1, ads: 2 };
         const daConta = SHC.alertasConta(dados.conta);   // restrição fiscal / penalidade do Full: travam a conta inteira → primeiro
@@ -4722,11 +4826,15 @@
      */
     SHC.recomendaSku = function (s, est, dias) {
         const L = SHC.REC_SKU, un = numF(s && s.unidades), v = numF(s && s.variacaoPct), d = numF(dias) >= 1 ? dias : null;
-        const vendaDia = un !== null && d ? un / d : null, out = { vendaDia: vendaDia === null ? null : Math.round(vendaDia * 10) / 10, cobertura: null };
+        // Contas em inteiros pelos DÉCIMOS de dia (#20): diasCobertos tem 1 casa, e 8,7 não é exato no ponto flutuante.
+        // 50 em estoque, 29 vendas em 8,7 dias: 50 × 87 ÷ 290 = 15 dias (50 × 8,7 ÷ 29 dava 14,999… → 14, "Repor");
+        // 33 vendas em 8,8 dias: 3.300 ÷ 88 = 37,5 → "3,8 por dia" (33 ÷ 8,8 × 10 dava 37,499… → "3,7").
+        const D = d ? Math.round(d * 10) : null;
+        const vendaDia = un !== null && D ? un * 10 / D : null, out = { vendaDia: vendaDia === null ? null : Math.round(un * 100 / D) / 10, cobertura: null };
         if (!est || !est.lido) return Object.assign(out, { acao: 'sem_dado', cor: 'cinza', rotulo: 'Sem estoque lido', motivo: 'O estoque deste SKU ainda não foi lido (lista de Anúncios ou Full).' });
-        const cob = vendaDia > 0 ? Math.floor(est.total / vendaDia) : null;
+        const cob = vendaDia > 0 ? Math.floor(est.total * D / (un * 10)) : null;   // multiplica antes: 33 × 200 ÷ 440 = 15 (33 ÷ (44 ÷ 20) dava 14,999…)
         out.cobertura = cob;
-        const ritmo = vendaDia > 0 ? 'vende ' + decTxt(vendaDia) + ' por dia' : 'sem venda neste mês', tend = v === null ? '' : 'vendas ' + (v >= 0 ? '▲ ' : '▼ ') + pctTxt(v) + ', ';
+        const ritmo = vendaDia > 0 ? 'vende ' + decTxt(out.vendaDia) + ' por dia' : 'sem venda neste mês', tend = v === null ? '' : 'vendas ' + (v >= 0 ? '▲ ' : '▼ ') + pctTxt(v) + ', ';
         const dura = cob === null ? '' : ' dá para ' + SHC.qtd(cob, 'dia', 'dias');
         // Vendendo e o estoque acaba em menos de 15 dias (ou já acabou) → repor, com vendas subindo ou caindo (sem estoque, a venda cai de qualquer jeito).
         if (vendaDia > 0 && cob < L.coberturaBaixa)
@@ -4734,8 +4842,8 @@
         if (v !== null && v >= L.subindo && est.proprio > 0 && !(est.full > 0))
             return Object.assign(out, { acao: 'full', cor: 'azul', rotulo: 'Enviar ao Full', motivo: capF(tend) + unTxt(est.proprio) + ' no seu estoque, fora do Full.' });
         if ((v !== null && v <= L.caindo && (cob === null || cob > L.coberturaAlta) && est.total > 0) || (!(vendaDia > 0) && est.total > 0 && un !== null))
-            return Object.assign(out, { acao: 'baixar', cor: 'amarelo', rotulo: 'Baixar preço ou promoção', motivo: capF(tend) + 'estoque de ' + unTxt(est.total) + (cob === null ? ' parado' : dura) + '.' });
-        return Object.assign(out, { acao: 'manter', cor: 'verde', rotulo: 'Manter', motivo: capF(tend) + (est.total > 0 ? 'estoque de ' + unTxt(est.total) + dura : 'sem estoque e sem venda') + '.' });
+            return Object.assign(out, { acao: 'baixar', cor: 'amarelo', rotulo: 'Baixar preço ou promoção', motivo: capF(tend + 'estoque de ' + unTxt(est.total) + (cob === null ? ' parado' : dura) + '.') });
+        return Object.assign(out, { acao: 'manter', cor: 'verde', rotulo: 'Manter', motivo: capF(tend + (est.total > 0 ? 'estoque de ' + unTxt(est.total) + dura : 'sem estoque e sem venda') + '.') });   // maiúscula também sem a tendência (mês anterior não lido)
     };
     /** Anúncio parado (SHC.familias(...)[i].parados: estoque e nenhuma venda nos 3 últimos meses) → a mesma forma de SHC.recomendaSku. */
     SHC.recomendaParado = p => ({ acao: 'liquidar', cor: 'vermelho', rotulo: 'Liquidar ou descartar', vendaDia: 0, cobertura: null,
@@ -5033,14 +5141,18 @@
      *   custoMes (null = o ML ainda não cobrou nada no mês), unidadesMes, custoPorUnidade (null sem cobrança), custoMotivo, multasMes,
      *   semDetalhe (remessas ainda sem o detalhe lido), total, lidas }
      * Inconformidades, multas e unidades faltando: só das remessas abertas ou fechadas nos últimos 90 dias (a mesma janela do detalhe).
-     * custoMes/unidadesMes: só remessas RECEBIDAS (closed_ok/closed_with_changes) com cobrança > 0 — o mesmo filtro de SHC.simulaRemessa;
-     * remessa aberta ou ainda sem cobrança não vira "R$ 0,00". O total_charged já inclui a coleta e as multas; as multas saem à parte em multasMes.
+     * custoMes = o que o ML cobrou (total_charged) nas remessas do mês, de qualquer status (vencida, cancelada ou aberta também): a MESMA conta de
+     * SHC.remessasPorMes (linha da sincronização) e = Σ do "o ML cobrou" das linhas do cartão (P.linhasRemessas). Nada cobrado no mês = null (não "R$ 0,00").
+     * custoPorUnidade = cobrança ÷ unidades das remessas RECEBIDAS (closed_ok/closed_with_changes) com cobrança > 0 e units_count > 0 (unidadesMes
+     * = as unidades delas) — o mesmo filtro de SHC.simulaRemessa; remessa sem unidades não entra no custo (antes inflava o R$/un.).
+     * O total_charged já inclui a coleta e as multas; as multas saem à parte em multasMes.
      */
     SHC.remessasResumo = function (lista, detalhes, mes, hoje) {
         const rs = Array.isArray(lista) ? lista : ((lista && lista.remessas) || []), porId = (detalhes && detalhes.porId) || {}, h = hoje || SHC.hoje();
         const lim30 = diaMenosX(h, 30), lim90 = diaMenosX(h, 90), quando = r => r.recebida || r.agendada || r.atualizada || '';
         const out = { abertas: 0, fechadas30d: 0, comInconformidade: [], comMulta: [], unidadesFaltando: 0, custoMes: null, multasMes: 0, unidadesMes: 0, custoPorUnidade: null,
             custoMotivo: '', semDetalhe: 0, total: lista && typeof lista.total === 'number' ? lista.total : rs.length, lidas: rs.length };
+        let custoRec = 0;   // cobrança das recebidas do mês com unidades: base do custo por unidade
         rs.forEach(r => {
             if (!r || !r.id) return;
             const d = porId[r.id] || null, st = String(r.status || ''), fechada = REM_FECHADA.test(st), recente = !fechada || quando(r) >= lim90;
@@ -5057,11 +5169,14 @@
             }
             if (mes && quando(r).slice(0, 7) === mes) {
                 out.multasMes = SHC.r2(out.multasMes + (valor || 0));
-                if (/^closed_(ok|with_changes)$/.test(st) && r.custo > 0) { out.custoMes = SHC.r2((out.custoMes || 0) + r.custo); out.unidadesMes += r.unidades || 0; }
+                if (/^closed_(ok|with_changes)$/.test(st) && r.custo > 0 && r.unidades > 0) { custoRec = SHC.r2(custoRec + r.custo); out.unidadesMes += r.unidades; }
             }
         });
-        out.custoPorUnidade = out.custoMes !== null && out.unidadesMes > 0 ? SHC.r2(out.custoMes / out.unidadesMes) : null;
-        if (mes && out.custoMes === null) out.custoMotivo = 'o Mercado Livre ainda não cobrou a coleta de nenhuma remessa recebida neste mês';
+        // Gasto do mês: uma definição só (SHC.remessasPorMes), para o cabeçalho do cartão, as linhas e a sincronização baterem.
+        const pm = mes ? SHC.remessasPorMes(rs.filter(r => r && r.id))[mes] : null;
+        out.custoMes = pm && pm.custo > 0 ? pm.custo : null;
+        out.custoPorUnidade = custoRec > 0 && out.unidadesMes > 0 ? SHC.r2(custoRec / out.unidadesMes) : null;
+        if (mes && out.custoMes === null) out.custoMotivo = 'o Mercado Livre ainda não cobrou nenhuma remessa deste mês';
         out.inconformes = SHC.remessasInconformes(rs, detalhes, h);
         return out;
     };
@@ -5117,7 +5232,7 @@
     /**
      * { skus:[{sku, qtd, medidas:{ordenadas:[cm], pesoKg}|null}], remessasAnteriores: ml:full:remessas:<conta> (ou o array) }
      * → { itens, unidades, volumeM3, pesoKg, semMedida:[sku], semPeso:[sku], volumesEstimados:{caixas, pallets, texto}, veiculo,
-     *     custoEstimado:{valor, min, max, porUnidade, base (remessas usadas), fonte:'suas remessas anteriores'} | null, custoMotivo }
+     *     custoEstimado:{valor, min, max, porUnidade, base (remessas usadas), fonte:'suas remessas anteriores', baseTxt (a base, para a tela)} | null, custoMotivo }
      * Volume = soma das caixas dos produtos (sem folga de empilhamento: é o mínimo). Caixas de até 25 kg / 0,1 m³; pallet quando passa de 1 m³.
      */
     SHC.simulaRemessa = function (o) {
@@ -5139,14 +5254,23 @@
         const volumes = { caixas, pallets, texto: pallets ? SHC.qtd(pallets, 'pallet', 'pallets') + ' (cerca de ' + String(vol).replace('.', ',') + ' m³)' : caixas ? 'cerca de ' + SHC.qtd(caixas, 'caixa', 'caixas') : '' };
         const completo = un > 0 && !semMedida.length, cabe = VEICULOS.find(v => vol <= v.m3 && peso <= v.kg);
         const veiculo = !completo ? null : (cabe ? cabe.nome : 'mais de um truck (acima de 40 m³/12 t)');
-        // Custo: média por unidade das remessas FECHADAS com cobrança (total_charged ÷ units_count), faixa mín–máx das últimas 5.
-        const base = rs.filter(r => r && REM_FECHADA.test(String(r.status || '')) && r.custo > 0 && r.unidades > 0)
-            .sort((a, b) => String(b.recebida || b.agendada || '').localeCompare(String(a.recebida || a.agendada || ''))).slice(0, 5);
+        // Custo: média por unidade das remessas RECEBIDAS (closed_ok/closed_with_changes) com cobrança (total_charged ÷ units_count), faixa mín–máx
+        // das últimas 5 — o mesmo filtro do custo por unidade do cartão (SHC.remessasResumo). Vencida/cancelada fica fora: a cobrança dela é
+        // penalidade de remessa que nem foi coletada, não custo de coleta.
+        const cobradas = rs.filter(r => r && /^closed_(ok|with_changes)$/.test(String(r.status || '')) && r.custo > 0)
+            .sort((a, b) => String(b.recebida || b.agendada || '').localeCompare(String(a.recebida || a.agendada || '')));
+        const base = cobradas.filter(r => r.unidades > 0).slice(0, 5);
+        // Texto da base (#17, revisão 2): "recebida" (o cartão chama de "fechada" também a vencida e a cancelada) "com cobrança" (a recebida
+        // sem cobrança, levada ao CD sem coleta, não entra) e, quando uma recebida cobrada SEM unidades é mais nova que alguma da base,
+        // "e com unidades" (senão "a última com cobrança" seria ela, que ficou fora da conta).
+        const qual = 'com cobrança' + (cobradas.slice(0, base.length).some((r, i) => r !== base[i]) ? ' e com unidades' : '');
         let custo = null, custoMotivo = '';
         if (base.length && un > 0) {
             const pu = base.map(r => r.custo / r.unidades), med = pu.reduce((s, x) => s + x, 0) / pu.length;
-            custo = { valor: SHC.r2(med * un), min: SHC.r2(Math.min(...pu) * un), max: SHC.r2(Math.max(...pu) * un), porUnidade: SHC.r2(med), base: base.length, fonte: 'suas remessas anteriores' };
-        } else custoMotivo = 'O Mercado Livre cobra a coleta por distância, mas não publica a tabela; o Copiloto aprende com as suas remessas' + (un > 0 ? ' — ainda não há remessa fechada com cobrança nesta conta.' : '.');
+            custo = { valor: SHC.r2(med * un), min: SHC.r2(Math.min(...pu) * un), max: SHC.r2(Math.max(...pu) * un), porUnidade: SHC.r2(med), base: base.length, fonte: 'suas remessas anteriores',
+                baseTxt: base.length === 1 ? 'o que o ML cobrou na sua última remessa recebida ' + qual : 'a média das suas últimas ' + base.length + ' remessas recebidas ' + qual };
+        } else custoMotivo = 'O Mercado Livre cobra a coleta por distância, mas não publica a tabela; o Copiloto aprende com as suas remessas'   // recebida: vencida/cancelada não conta (#17)
+            + (un > 0 ? ' — ainda não há remessa recebida com cobrança' + (cobradas.length ? ' e com unidades' : '') + ' nesta conta.' : '.');
         return { itens, unidades: un, volumeM3: vol, pesoKg: peso, semMedida, semPeso, volumesEstimados: volumes, veiculo,
             veiculoMotivo: veiculo ? '' : (!un ? 'Informe as quantidades.' : 'Falta a medida de ' + SHC.qtd(semMedida.length, 'SKU', 'SKUs') + ' (o Copiloto lê as medidas do ML na rodada lenta, ou use a planilha do ERP).'),
             custoEstimado: custo, custoMotivo };
