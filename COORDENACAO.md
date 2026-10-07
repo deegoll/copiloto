@@ -18,6 +18,7 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
+| nuvem | **B1** (parte) · ruptura que o sino não vê: mesma previsão do painel no `SHC.alertasDe`, anúncios casados pelo SKU, 14 meses no `vm|ml`, "Acaba hoje", teste de paridade painel × sino | ramo `nuvem/b1-ruptura-sino`: `ml-extrator.js` (alertasDe, previsão), `painel-lateral.js` (previsaoFull, anunciosDoFull, acaoFull), `store.js` (gravaMeses), `fundo/07-alertas-promocoes-full.js`, teste novo | 07/10 19:10 |
 | nuvem 2 | **3.4.0 · etiquetas de sobra na Shopee e na Magalu** (pedido da dona, 07/10 11:05): na lista de produtos do Seller Center da Shopee e do painel da Magalu, a etiqueta "Sobra R$ X · margem Y%" por produto, com o custo cadastrado no Copiloto. A Shopee já tem a tabela oficial no núcleo (`tarifas.js`). A Magalu precisa da tabela oficial (M4). **Espera os retratos M2, M3 e M4 da local** | ramo `nuvem2/etiquetas-shopee-magalu` (a criar), só depois dos retratos | 07/10 11:05 |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
