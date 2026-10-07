@@ -176,7 +176,8 @@
             if (!g.itens.length) selos.push('semAnuncio');
             else if (margem === null) selos.push('semCusto');
             if (m.investimento > 0 && !(m.vendas > 0)) selos.push('semVenda');
-            if (margem !== null && m.investimento > 0 && (margem <= 0 || (m.acos !== null && m.acos > margem))) selos.push('acima');
+            // Acima = lucro depois do Ads < 0 em centavos (A.montante), não ACOS > margem em ponto flutuante: Ads = sobra no centavo (lucro R$ 0,00) não passa.
+            if (margem !== null && m.investimento > 0 && (margem <= 0 || (m.acos !== null && A.montante({ m, margem }).lucroRs < 0))) selos.push('acima');
             const folga = margem === null ? null : margem - meta;   // o que o Ads pode levar sem furar a meta
             if (folga > 0 && m.acos > 0 && m.acos <= folga * A.ESCALA && perdeOrc) selos.push('escalar');
             return { chave: g.chave, sku: g.sku, titulo: g.titulo, itens: g.itens, ads: g.ads, porTitulo: g.via.has('titulo') && !g.via.has('id'),

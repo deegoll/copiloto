@@ -18,8 +18,8 @@
 //   1) [corrigida, #22] ads.js A.rs0 arredondava o negativo para cima (Math.round(−2,5) = −2): lucro de −R$ 2,50 → KPI "−R$ 2", manchete
 //      "prejuízo de R$ 3". Agora o meio real vai para longe do zero nos dois sinais e o rodapé mostra a conta em centavos, fechando
 //      ("sobra R$ 30,00 − Ads R$ 32,50 = −R$ 2,50").
-//   2) ads.js: SKU com lucro depois do Ads de R$ 0,00 (Ads = sobra, no centavo) ganha o selo "Acima do equilíbrio" e a ação "Ajustar" por
-//      ruído de ponto flutuante (ACOS 23,791193949216638 > margem 23,791193949216634); a manchete diz "Nenhum produto passa do equilíbrio".
+//   2) [corrigida, #23] ads.js: SKU com lucro depois do Ads de R$ 0,00 (Ads = sobra, no centavo) ganhava o selo "Acima do equilíbrio" e a ação
+//      "Ajustar" por ruído de ponto flutuante (ACOS 23,791193949216638 > margem 23,791193949216634). Agora o selo segue o lucro em centavos.
 //   3) ads.js: SKU com gasto e sem venda entra na contagem da manchete ("1 produto passa do equilíbrio", A.resultado.acima) mas não no
 //      filtro "Acima do equilíbrio (0)" (selo só 'semVenda').
 //   4) ads.js A.metricas: TACOS sem as vendas orgânicas lidas (o ML não mandou tacos nem organicUnitsAmount) vira o próprio ACOS; o painel
@@ -332,7 +332,7 @@ console.log('E. Montante por SKU e resultado da conta (A.montante, A.resultado)'
             && (rec ? Math.abs(r.equilibrio - s / rec * 100) < 1e-9 : r.equilibrio === null) && r.acima === cc.filter(g => g.lucroRs < 0).length
             && r.semCusto === c.an.grupos.filter(g => g.m.investimento > 0 && g.selos.includes('semCusto')).length) || `conta ${c.k}: ${JSON.stringify(r)}`;
     });
-    prop('selo "Acima do equilíbrio" ⇔ lucro depois do Ads < 0 (SKU com custo, gasto e venda; lucro ≠ R$ 0,00 — divergência 2)', grupos.filter(x => x.g.margem !== null && x.g.m.investimento > 0 && x.g.m.receita > 0 && x.g.lucroRs !== 0),
+    prop('selo "Acima do equilíbrio" ⇔ lucro depois do Ads < 0 (SKU com custo, gasto e venda; lucro R$ 0,00 incluso, #23)', grupos.filter(x => x.g.margem !== null && x.g.m.investimento > 0 && x.g.m.receita > 0),
         ({ c, g }) => (g.selos.includes('acima') === (g.lucroRs < 0)) || `conta ${c.k} ${g.chave}: lucro ${g.lucroRs}, selos ${g.selos}`);
     prop('texto do montante (A.textoMontante) = os números: "Ads R$ X · Lucro R$ Y" | "Prejuízo R$ Y" (positivo) | "sem custo"', grupos, ({ c, g }) => {
         const m = /^Ads (.+?) · (?:(Lucro|Prejuízo) (.+)|sem custo)$/.exec(A.textoMontante(g));
@@ -600,6 +600,26 @@ const kpiLucro = an => { const v = /Lucro depois do Ads ⓘ<\/div><div class="v"
     const [v2, s2] = kpiLucro(an2);
     ok(an2.res.lucro === 9.8 && an2.manchete.fato === 'O Ads dá lucro de R$ 10 nos produtos com custo.' && v2 === 'R$ 10' && s2 === 'sobra R$ 10,40 − Ads R$ 0,60 = R$ 9,80',
         `#22 sobra 10,40 − Ads 0,60: o rodapé fecha em centavos (= R$ 9,80) e o KPI/manchete mostram R$ 10 (obtido: ${an2.manchete.fato} | ${v2} | ${s2})`);
+}
+{   // #23: Ads = sobra antes do Ads no centavo → lucro R$ 0,00, sem selo "acima" e sem ação (como a manchete e o painel)
+    const cfg = { imposto_pct: 0, margem_alvo_pct: 10 }, it = [{ itemId: 'MLB9000000031', sku: 'TST-E', titulo: 'Produto E', preco: 148.08, recebe: 85.23 }];
+    const sku = (cost, totalAmount) => A.analisa(contaFixa([{ id: 'MLB9000000031', title: 'Produto E', campaignId: 3, cost, totalAmount, prints: 3000, clicks: 60, unitsQuantity: 6 }]), it, () => ({ custo: 50 }), cfg, []);
+    const an = sku(211.38, 888.48), g = an.grupos[0];
+    ok(A.textoMontante(g) === 'Ads R$ 211,38 · Lucro R$ 0,00' && !g.selos.includes('acima') && g.acao === null && an.res.acima === 0 && /Nenhum produto passa do equilíbrio/.test(an.manchete.acao)
+        && A.htmlSkus(an.grupos, 'todos').indexOf('Acima do equilíbrio (0)') > 0, `#23 lucro R$ 0,00: sem selo "acima", sem ação e o filtro "Acima do equilíbrio (0)" (obtido: ${A.textoMontante(g)} · selos ${g.selos} · ${g.acao && g.acao.tx})`);
+    const quase = sku(211.38, 888.47).grupos[0], perde = sku(211.39, 888.48).grupos[0], ganha = sku(211.37, 888.48).grupos[0];
+    ok(quase.lucroRs === 0 && !quase.selos.includes('acima') && perde.lucroRs === -0.01 && perde.selos.includes('acima') && perde.acao.tipo === 'ajustar'
+        && ganha.lucroRs === 0.01 && !ganha.selos.includes('acima') && ganha.acao === null,
+        `#23 o selo segue o lucro em centavos: R$ 0,00 (ACOS um fio acima) sem selo · −R$ 0,01 "acima" e "Ajustar" · +R$ 0,01 sem selo (obtido: ${[quase, perde, ganha].map(A.textoMontante).join(' | ')})`);
+    const rnd = semente(723);
+    prop('#23 Ads = sobra × vendas no centavo (lucro R$ 0,00): nunca "acima"; 1 centavo a mais de Ads: sempre "acima" e "Ajustar"', vezes(400), () => {
+        const precoC = I(rnd, 3000, 40000), recebeC = Math.round(precoC * 0.8) - I(rnd, 0, 900), custoC = I(rnd, 100, recebeC - 100), v = I(rnd, 1, 12);
+        const its = [{ itemId: 'MLB9000000032', sku: 'TST-G', titulo: 'Produto G', preco: precoC / 100, recebe: recebeC / 100 }], adsC = (recebeC - custoC) * v;
+        const g0 = A.analisa(contaFixa([{ id: 'MLB9000000032', title: 'Produto G', campaignId: 4, cost: adsC / 100, totalAmount: precoC * v / 100, prints: 900, clicks: 9, unitsQuantity: v }]), its, () => ({ custo: custoC / 100 }), cfg, []).grupos[0];
+        const g1 = A.analisa(contaFixa([{ id: 'MLB9000000032', title: 'Produto G', campaignId: 4, cost: (adsC + 1) / 100, totalAmount: precoC * v / 100, prints: 900, clicks: 9, unitsQuantity: v }]), its, () => ({ custo: custoC / 100 }), cfg, []).grupos[0];
+        return (g0.lucroRs === 0 && !g0.selos.includes('acima') && g0.acao === null && g1.lucroRs === -0.01 && g1.selos.includes('acima') && g1.acao.tipo === 'ajustar')
+            || `preço ${precoC} recebe ${recebeC} custo ${custoC} × ${v}: ${A.textoMontante(g0)} ${g0.selos} | ${A.textoMontante(g1)} ${g1.selos}`;
+    });
 }
 
 console.log(`\n${nChecks} verificações.`);
