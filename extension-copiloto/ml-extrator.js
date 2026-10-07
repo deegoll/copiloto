@@ -1434,15 +1434,23 @@
     const qualquer = (l, f) => new RegExp('\\b(?:' + [].concat(l).join('|') + ')\\b', f || 'i');   // [padrões] → regex de qualquer um, palavra inteira
     const QTD = '(?:\\d+|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|quinze|vinte|trinta)';
     const TROCA = 'troc(?:ar|a|o|amos)(?: (?:de|o|a|por (?:um |uma )?outr[oa]|pel[oa]))? ';
+    // Revisão 3 (07/10/2026): o erro do PRÓPRIO comprador ("comprei o tamanho errado", "pedi 2 por engano") — entre o verbo e "errado/por
+    // engano" só uma LISTA FECHADA de palavras: artigo, número, tamanho/cor/modelo/número/voltagem/peça/produto/item/quantidade, "duas vezes",
+    // "duplicado". Qualquer outra ("o vendedor separou", "pela tabela", "com a descrição", "certo, separaram") deixa o motivo sem regra.
+    const ERRO_ENTRE = '(?:(?:duas|\\d+) vezes|em dobro|duplicad[oa]s?|o|a|os|as|um|uma|isso|isto|este|esse|esta|essa|\\d+|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|tamanho|cor|modelo|n[uú]mero|voltagem|pe[cç]as?|produtos?|itens|item|quantidade)';
+    const ERRO_VERBO = '(?:compr(?:ei|ou|a|amos)|escolh(?:i|eu)|selecion(?:ei|ou)|pedi(?:u)?)';
     const EXCLUIVEL = [
         [qualquer(['arrepend\\w*', 'desist\\w*', NAO + ' (?:quero|quer|queria|desejo|vou querer) mais', 'mud(?:ou|ei|amos)(?: de)? ideia', 'engano (?:na|da) compra',
             'compr(?:ei|ou) (?:isso |isto |o produto |este produto |esse produto )?sem querer',
-            // o erro do próprio comprador: o verbo e o erro com até 3 palavras entre eles, nenhuma de recebimento ("comprei mas chegou errado" é do vendedor)
-            '(?:compr(?:ei|ou|a|amos)|escolh(?:i|eu)|selecion(?:ei|ou)|pedi(?:u)?)(?: (?!(?:chegou|chegaram|veio|vieram|recebi|recebeu|mand\\w*|envi\\w*|entreg\\w*|mas|porem|so|e|outr[oa]s?)\\b)\\S+){0,3}? (?:errad[oa]s?|por engano)']),
+            // o erro do próprio comprador: o verbo e o erro com até 3 palavras da lista fechada entre eles (revisão 3)
+            ERRO_VERBO + '(?: ' + ERRO_ENTRE + '){0,3} (?:errad[oa]s?|por engano)']),
             'o comprador se arrependeu da compra e o produto está em perfeitas condições', 'o produto voltou sem uso e em perfeitas condições',
             ['ter (?:comprado|pedido|feito (?:a|essa|esta) compra)', NAO + ' (?:preciso|precisa|precisamos|precisava|vou precisar|vai precisar)(?: mais)?(?: (?:dele|dela|disso))?',
                 '(?:achei|encontrei|vi)(?: (?:um|uma|o|a))?(?: (?:outr[oa]|igual|parecid[oa]|o mesmo|a mesma))?',
                 'compr(?:ei|ou|amos)(?: (?:um|uma))? (?:outr[oa]|o mesmo|a mesma|igual|parecid[oa])(?: (?:modelo|marca|cor|produto|igual))?',
+                // revisão 3: "desisti, comprei em outro lugar", "comprei na loja física", "vou comprar outro"
+                'compr(?:ei|o|ar|amos)(?: (?:em|n[ao]|de|d[ao]|num|numa))? (?:um |uma )?(?:outr[oa] (?:lugar|loja|site|anuncio|vendedor)|loja fisica)',
+                '(?:vou |ja |prefiro )?comprar(?: (?:um|uma))? outr[oa](?: (?:modelo|marca|cor|produto))?',
                 '(?:em|n[ao]|de|d[ao]|num|numa) (?:um |uma )?(?:outr[oa] (?:anuncio|loja|site|lugar|vendedor|plataforma)|loja fisica|mercado|supermercado|shopping)',
                 'mais barat[oa]|por menos|mais em conta|(?:com )?(?:preco|valor) (?:melhor|menor)|(?:com )?(?:melhor|menor) (?:preco|valor)', '(?:comprei |foi )?por impulso', '(?:fiquei )?sem (?:dinheiro|grana)',
                 '(?:(?:o produto|a caixa|a embalagem|ele|ela) )?(?:(?:esta|ta|continua|segue|vai|volta|voltou|vai voltar|sera devolvid[oa]) )?(?:com (?:o )?lacre(?: intacto)?|lacrad[oa]|intact[oa]|na caixa(?: original)?|sem uso|sem abrir|em perfeitas condicoes|em perfeito estado)',
@@ -1453,7 +1461,7 @@
                 NAO + ' combin(?:ou|a) com (?:o |a )?(?:meu |minha )?(?:sofa|decoracao|ambiente|casa|quarto|sala|cozinha|banheiro|estilo|roupa|look|moveis|movel|parede)',
                 PEDE + 'troc(?:ar|a)(?: (?:de|o|a|por (?:um |uma )?outr[oa]))?(?: (?:tamanho|numero|numeracao|modelo|cor))?', '(?:ja )?receb(?:i|eu|emos)(?: (?:o produto|a encomenda|o pedido))?', NOMES]],
         // A reclamação aberta por engano é do COMPRADOR ("foi engano", "engano meu", "abri por engano"); "engano da loja", "engano deles" não entram.
-        [qualquer(['foi (?:um |so )?engano', 'engano meu', 'meu engano',
+        [qualquer(['foi (?:um |so )?engano', 'engano meu', 'meu engano', '(?:reclamacao|chamado) (?:foi )?(?:abert[oa]|iniciad[oa]|feit[oa]) (?:por engano|sem querer)',
             '(?:abri|abriu|iniciei|iniciou|cliquei|apertei|fiz|abrimos|criei|registrei)(?: (?:a|o|esta|essa|uma|um))?(?: (?:reclamacao|chamado|disputa|solicitacao))? (?:por engano|sem querer|errad[oa])']),
             'o comprador iniciou a reclamação por engano', 'a conversa mostra que a reclamação foi aberta por engano',
             ['(?:pode|podem|favor|por favor) (?:cancelar|encerrar|fechar|desconsiderar)(?: (?:a|esta|essa))?(?: reclamacao)?', '(?:a |esta |essa )?reclamacao',
@@ -1548,23 +1556,30 @@
         '(atras|demor)\\w*( \\w+){0,3} (despach|post|envi|mand|separ|fatur|emit|colet|sair)', NAO + ' foi (despach|post|envi|mand|separ|colet|fatur)',
         'ainda ' + NAO + ' (saiu|foi|despach|post|envi)', '(so|somente|apenas) (despach|post|envi|mand)', 'sem (rastr|codigo)',
         'despach', 'postag', 'postad', 'prepar', '\\bsepar', '\\bsaiu\\b', '\\bsair\\b', '\\bloja\\b', 'segur(ou|aram|ando|ei)\\b'].join('|'), 'i');
+    // Revisão 3: agente (vendedor, loja, "vcs"), preparo/envio/cobrança e anúncio (tabela, descrição, foto, título) vetam ANTES de tirar o
+    // trecho do comprador ("Comprei, o vendedor separou errado" não é arrependimento). Roda no texto sem os complementos neutros da regra
+    // ("outra loja", "loja física", "outro anúncio" não vetam).
+    const EXCL_AGENTE = /vendedor|lojista|\bloja\b|\bvcs\b|\bvoces\b|\bsepar|despach|fatur|embal|\bcobr|tabela|descri|\bfotos?\b|titulo|anunci/i;
+    // Ambíguo (na dúvida, sem regra): "foi engano no/do pedido" costuma ser o pedido que veio errado; o engano no produto, item, envio também.
+    const EXCL_DUVIDA = /\bengano (?:n|d|de)?[oa]?s? ?(?:pedidos?|produtos?|itens|item|pe[cç]as?|mercadorias?|encomendas?|pacotes?|envio|entrega)\b/i;
     const BOM_ESTADO = /(n[ãa]o (foi |era |est[áa] |esta )?|nunca (foi )?|nem )usad[oa]s?|sem uso/gi;
     // O erro do PRÓPRIO comprador sai do texto antes de procurar culpa do vendedor (antes ele anulava o veto inteiro: "comprei errado e veio
     // com defeito" pedia exclusão). Trecho curto: o verbo e o erro com até 3 palavras entre eles — nenhuma delas de recebimento ("comprei mas
     // chegou errado" é culpa do vendedor, não do comprador).
-    const TRECHO_COMPRADOR = /\b(compr(ei|ou|a)|escolh(i|eu)|selecion(ei|ou)|pedi(u)?)\b(\s+(?!(chegou|chegaram|veio|vieram|recebi|recebeu|mand\w*|envi\w*|entreg\w*|mas|porem|so|e)\b)\S+){0,3}?\s+(errad[oa]s?|por engano)/gi;
+    // Revisão 3: o trecho só com a lista fechada (ERRO_ENTRE); com "vendedor", "loja", "separou", "tabela"… nada é tirado e os vetos veem tudo.
+    const TRECHO_COMPRADOR = new RegExp('\\b' + ERRO_VERBO + '(?:\\s+' + ERRO_ENTRE + '){0,3}\\s+(?:errad[oa]s?|por engano)\\b', 'gi');
     const semComprador = t => String(t || '').replace(BOM_ESTADO, ' ').replace(TRECHO_COMPRADOR, ' ');
     // Sem acento, sem pontuação e minúsculo: "Não", "nao" e "ñ" caem nas mesmas regras.
     const semAcento = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
     const excluivel = t => {
         const s = semAcento(t);
-        if (!s || new RegExp(NAO + ' (chegou|recebi|recebeu|foi entregue)', 'i').test(s) && !EXCLUIVEL[3][0].test(s)) return null;
+        if (!s || new RegExp(NAO + ' (chegou|recebi|recebeu|foi entregue)', 'i').test(s) && !EXCLUIVEL[3][0].test(s) || EXCL_DUVIDA.test(s)) return null;
         for (const x of EXCLUIVEL) {
             if (!x[0].test(s)) continue;
             const sobra = s.replace(x[4], ' ').replace(x[3], ' ').split(' ').filter(p => p && !LIGACAO.has(p));
             if (sobra.length) continue;   // sobrou oração que não é desta regra: na dúvida, não marca
             const semC = s.replace(x[3], ' '), sc = semComprador(semC);   // os vetos olham o núcleo e o que não é complemento neutro
-            return DEV_CULPA.test(sc) || EXCL_CULPA.test(sc) || EXCL_VETO.test(semC) ? null : x;
+            return EXCL_AGENTE.test(semC) || DEV_CULPA.test(sc) || EXCL_CULPA.test(sc) || EXCL_VETO.test(semC) ? null : x;
         }
         return null;
     };
