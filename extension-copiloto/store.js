@@ -414,7 +414,9 @@
         ids.forEach((id, i) => {
             const h = Object.assign({}, atuais[chaves[i]] || {}, mapa[id]);
             const meses = Object.keys(h).sort();
-            while (meses.length > 13) delete h[meses.shift()];
+            // B1 (3.3.1): 14 meses. A sazonalidade do Full (SHC.previsaoFull) usa o mês de hoje − 15 dias um ano antes; com 13, no começo
+            // do mês esse mês já tinha saído (07/10/2026: precisa de 2025-09, e 13 meses guardavam só de 2025-10 em diante).
+            while (meses.length > 14) delete h[meses.shift()];
             lote[chaves[i]] = h;
         });
         await area().set(lote);
