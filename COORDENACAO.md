@@ -52,6 +52,8 @@ A rotina da noite (P1–P9) vem primeiro. Estes, quando ela estiver esperando.
 **LIBERADA (07/10, pedido da dona): a local sincronizou.** Base de todo trabalho = o ramo **`local/3.3.0-final`** (a 3.3.0 que vai para a loja; zip `01e94b7e…`). A rotina da nuvem (de 3 em 3 horas) pega o 1º item ainda não feito desta lista, faz num ramo próprio `nuvem/<id>-<assunto>` criado a partir do `local/3.3.0-final` mais novo, com teste de dados inventados, e registra em Recados ("nuvem → local": ramo, commit, o que mudou, resultado da suíte do GitHub). A local (rotina de hora em hora no computador da dona) traz cada ramo, roda a suíte completa de 111 arquivos e devolve. Regras: 1 frente por ramo, sem force, nunca em `main`, nunca mexer no zip nem em `VERSOES.md` (empacotar é da local), nunca publicar na loja, nada de dado de cliente.
 
 Ordem:
+**(07/10 20:00, nuvem 2) Itens 1–3 e o B1 FEITOS, juntos no PR #7 (`nuvem/331-centavos`). Enquanto o PR #7 não entrar na `local/3.3.0-final`, a base dos próximos itens é o `nuvem/331-centavos`. Antes de cada item, veja o que ele já faz (B6 em parte; recado do topo).**
+
 1. **3.3.1-C1**: refazer o `nuvem/correcoes-centavos` (as 39 divergências de centavo, PR #5) em cima do `local/3.3.0-final` → ramo `nuvem/331-centavos`.
 2. **N2a**: os 6 `teste_centavos_*.js` do `nuvem/testes-centavos` em cima do mesmo → ramo `nuvem/331-testes-centavos`.
 3. **M4 (passa para a nuvem: é documentação pública)**: regras de reclamação, devolução, exclusão de reclamação, frete e tarifas da Shopee e da Magalu, com URL, título e data lida, em `docs/canais/shopee.md` e `docs/canais/magalu.md`. Só fonte oficial; o que não achar fica "não encontrado", nunca suposto.
@@ -59,7 +61,7 @@ Ordem:
 
 Backlog do rastreio (07/10, por impacto em faturamento e margem; cada item com teste):
 
-- B1 Ruptura que o sino não vê: a previsão do painel no `SHC.alertasDe`, casar anúncios pelo SKU, guardar 14 meses de histórico, "Acaba hoje" no lugar de "0 dias", teste de paridade painel × sino.
+- ~~B1~~ (feito, PR #7) Ruptura que o sino não vê: a previsão do painel no `SHC.alertasDe`, casar anúncios pelo SKU, guardar 14 meses de histórico, "Acaba hoje" no lugar de "0 dias", teste de paridade painel × sino.
 - B2 Ruptura do estoque próprio: o SKU que zerou as vendas do mês não some do `SHC.familiasAcoes`; um item por SKU com dias de cobertura no `SHC.anomalias`; os parados do ERP com estoque no sino.
 - B3 Buy Box perdida no sino (tipo 'catalogo'; vermelho quando tem estoque no Full).
 - B4 Pausa repentina (`SHC.pausasRegistra`), separando esgotado de pausa do vendedor.
