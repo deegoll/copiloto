@@ -322,8 +322,11 @@ console.log('Pedido de exclusão (rastreio 07/10, R10): os pedidos certos, o SKU
         const soMed = { casos: [posvenda.casos[1]], porPedido: { '2000000104': posvenda.porPedido['2000000104'] } };
         const r2 = await clique(soMed, mot);
         ok(grupo(soMed, mot, itens) === null && r2.copiado === null && r2.pc === '', 'tudo em mediação: o botão não aparece e o clique não copia nada');
-        ok((grupo(posvenda, mot, itens) || {}).naReputacao > 0 && /\(P\.grupoExclusao\(posvenda, x\.motivo, itens\) \|\| \{\}\)\.naReputacao > 0/.test(src),
-            'o botão só aparece com caso fora da mediação que conta na reputação (a mesma conta do texto)');
+        // O botão: só com caso da leitura atual, fora da mediação, que conta na reputação (o da mediação não vale).
+        const soMedConta = { casos: [posvenda.casos[1], Object.assign({}, posvenda.casos[0], { afetouReputacao: false })], porPedido: posvenda.porPedido };
+        ok((grupo(posvenda, mot, itens) || {}).contaAgora === 1 && (grupo(soMedConta, mot, itens) || {}).contaAgora === 0
+            && /\(P\.grupoExclusao\(posvenda, x\.motivo, itens\) \|\| \{\}\)\.contaAgora > 0/.test(src),
+            'o botão só aparece com caso da leitura atual, fora da mediação, que conta na reputação');
         const semNum = { casos: posvenda.casos.slice(0, 2) }, g3 = grupo(semNum, mot, itens), t3 = SHC.chamadoExclusao(g3);
         ok(g3 && g3.casos === 1 && !g3.pedidos.length && /\(1 caso, 1 contando na reputação\)/.test(t3) && /SKU BOMBA-12V/.test(t3) && /a análise de cada caso/.test(t3),
             'pós-venda lido sem o nº do pedido: conta só o caso fora da mediação e leva o SKU');
