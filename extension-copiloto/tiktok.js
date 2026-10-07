@@ -498,7 +498,9 @@
             dia: data, canal_venda: pedido.canal_venda || null,
             estimado: !!((f && f.estimado) || (j && j.repasses.some(x => x.estimado)) || estimar || r.tarifas_estimadas || cob.parcial),
             exato: !!j, lido_em: ped.lido_em || null, tela: j || (cob.ilegivel && !lista) ? maisNova(ped.trans, TT.TELA.transacao).tela : (f ? maisNova(ped.linhas, TT.TELA.pedidos_fin).tela : 'Pedidos'),
-            extratos: f ? f.extratos : [], data_prevista: (f && f.data_prevista) || null, status_repasse: f ? (f.estimado ? 'a_liberar' : 'disponivel') : null,
+            // Situação e data prevista do repasse: da lista do Financeiro; sem ela, do detalhe do extrato (o "Est." lido só lá entra no "Previsto").
+            extratos: f ? f.extratos : [], data_prevista: (f && f.data_prevista) || (j && j.repasses.map(x => x.data_prevista).filter(Boolean).sort().pop()) || null,
+            status_repasse: f ? (f.estimado ? 'a_liberar' : 'disponivel') : (j && j.repasses.length ? (j.repasses.some(x => x.estimado) ? 'a_liberar' : 'disponivel') : null),
             itens: itens.map((x, i) => ({ sku: x.it.sku, sku_vendedor: x.s.sku || null, sku_id: x.it.anuncio_id || null, titulo: x.it.titulo, qtd: x.it.qtd, canal_venda: base[i].canal_venda || pedido.canal_venda || null })),
             skus_lista: f && f.skus.length ? f.skus : null,   // os 3 grupos de cada SKU da linha da lista (TT.porGrupo)
             _modelo: { pedido, tarifas: Array.isArray(tarifas) ? tarifas : [], repasses: j ? j.repasses : (f ? f.repasses : []), devolucoes },
