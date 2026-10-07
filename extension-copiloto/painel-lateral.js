@@ -7867,7 +7867,10 @@
     let tinyToken = '', tinyRodando = false, tinyRecusado = false, blingLigado = false;
     const tinyMsg = (t, erro) => { const m = $('#tinyMsg'); m.textContent = t || ''; m.style.color = erro ? 'var(--verm)' : ''; };
     // pedido = chrome.permissions.request(...) feito DENTRO do clique, antes de qualquer await (senão o Chrome recusa).
-    async function puxarTiny(pedido, token) {
+    // v3.3 multi-empresa (bloqueio 5): empresa = SHC.empresaSeparada() pedida NO CLIQUE (antes do pedido de permissão, que espera a seller);
+    // token = o colado agora, ou null = o Tiny DESSA empresa (o token na memória do painel pode ser da conta aberta antes — gravaria o Tiny
+    // de uma empresa e o token dela na outra).
+    async function puxarTiny(pedido, token, empresa) {
         let deu = false;
         try { deu = await pedido; } catch (e) { deu = false; }
         if (!deu) return tinyMsg('Sem a permissão do Chrome o Copiloto não consegue ler o Tiny. Clique de novo e escolha “Permitir”.', true);
@@ -7878,11 +7881,16 @@
         $('#tinyProg').hidden = false; $('#tinyBarra').style.width = '0%'; $('#tinyPct').textContent = '';
         // v3.3 multi-empresa (revisão 07/10/2026): tudo vai para a empresa da conta aberta NO CLIQUE, mesmo se o ML trocar de conta durante a leitura.
         try {
-            const e0 = await SHC.empresaSeparada(), A = SHC.areaEmpresa(e0);
+            const e0 = await (empresa || SHC.empresaSeparada()), A = SHC.areaEmpresa(e0);
+            const antes = (await A.get(SHC.TINY_CHAVE))[SHC.TINY_CHAVE] || null;
+            if (!token) token = (antes && antes.token) || '';
+            if (!token) {   // a empresa do clique não tem o Tiny: pede o token DELA (nunca usa o de outra empresa)
+                tinyToken = ''; $('#abrirTiny').textContent = 'Tiny · Conectar em 1 minuto'; $('#tinyBox').hidden = false;
+                return tinyMsg('Esta empresa ainda não tem o Tiny conectado. Cole o token do Tiny dela no passo 2.', true);
+            }
             const produtos = await SHC.tinyPuxar(token, { fetch: (u, i) => fetch(u, i), espera: ms => new Promise(r => setTimeout(r, ms)),
                 progresso: (pg, n) => { const pc = n ? Math.round(pg / n * 100) : 0; $('#tinyBarra').style.width = pc + '%'; $('#tinyPct').textContent = pc + '% · ' + pg + ' de ' + n + (n === 1 ? ' página' : ' páginas'); } });
             const r = await SHC.tinyGravar(produtos, 'tiny', { empresa: e0 });
-            const antes = (await A.get(SHC.TINY_CHAVE))[SHC.TINY_CHAVE] || null;
             await A.set({ [SHC.TINY_CHAVE]: { token, ultima: Object.assign({ ts: Date.now() }, r) } });
             if (SHC.erpRetratoDaTela) await SHC.erpRetratoDaTela('tiny', produtos, !(antes && antes.ultima), e0);   // v3.2: cruzamento ERP × ML
             tinyToken = token; tinyRecusado = false; $('#tinyToken').value = ''; $('#tinyBox').hidden = true;
@@ -7902,14 +7910,14 @@
     }
     const TINY = () => ({ origins: [SHC.TINY_ORIGEM] });
     function abrirTiny() {
-        if (tinyToken) return puxarTiny(chrome.permissions.request(TINY()), tinyToken);
+        if (tinyToken) return puxarTiny(chrome.permissions.request(TINY()), null, SHC.empresaSeparada());   // o token é relido da empresa do clique
         $('#tinyBox').hidden = false; $('#tinyToken').focus();
     }
     $('#abrirTiny').addEventListener('click', abrirTiny);
     $('#tinyConectar').addEventListener('click', () => {
         const token = $('#tinyToken').value.trim();
         if (token.length < 10 || /\s/.test(token)) return tinyMsg('Cole o token inteiro do Tiny (passo 2 acima).', true);
-        puxarTiny(chrome.permissions.request(TINY()), token);
+        puxarTiny(chrome.permissions.request(TINY()), token, SHC.empresaSeparada());
     });
     $('#tinyToken').addEventListener('keydown', e => { if (e.key === 'Enter') $('#tinyConectar').click(); });
     $('#abrirBling').addEventListener('click', () => abrePagina('painel.html#erp'));
