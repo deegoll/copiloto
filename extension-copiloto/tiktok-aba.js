@@ -85,7 +85,7 @@
     const menos = v => (n(v) === null ? '—' : v < 0 ? '+' + moeda(-v) : '−' + moeda(v));
 
     function contaHtml(r) {
-        let h = r.bruto !== undefined ? cl('Preço', moeda(r.bruto)) : '';
+        let h = r.bruto !== undefined ? cl('Preço', (r.faltando || []).indexOf('preco') >= 0 ? '—' : moeda(r.bruto)) : '';   // preço não lido: "—", nunca R$ 0,00
         if (r.desconto_vendedor) h += cl('Seu desconto', menos(r.desconto_vendedor));
         if (r.reembolso) h += cl('Reembolso ao cliente', menos(r.reembolso), 'mais');
         const pt = r.tarifas_por_tipo || {}, est = !!r.tarifas_estimadas || !!r.estimado;
