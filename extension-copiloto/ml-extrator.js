@@ -5269,7 +5269,9 @@
             const naoAptas = ps.reduce((s, p) => s + (p.naoAptas || 0), 0), motivos = [];
             if (dif > 0) motivos.push('unidades diferentes das declaradas');
             if (naoAptas > 0) motivos.push('unidades não aptas para o Full');
-            if (!motivos.length && (r.status === 'closed_with_changes' || /differen/i.test(r.subStatus || '') || (declaradas !== null && aptas !== null && aptas < declaradas))) motivos.push('unidades com diferenças');
+            // Revisão 3: a comparação dos totais só com TODOS os produtos do detalhe com declaradas e aptas (a soma parcial não é número lido).
+            const completo = !ps.length || ps.every(p => p && typeof p.declaradas === 'number' && typeof p.aptas === 'number');
+            if (!motivos.length && (r.status === 'closed_with_changes' || /differen/i.test(r.subStatus || '') || (completo && declaradas !== null && aptas !== null && aptas < declaradas))) motivos.push('unidades com diferenças');
             if (!motivos.length) return null;
             return { id: String(r.id), quando: r.recebida || r.atualizada || '', statusTexto: r.statusTexto || '', declaradas, aptas, custo: r.custo > 0 ? r.custo : null, motivos,
                 produtos: ps.map(p => ({ itemId: p.itemId, sku: p.sku, declaradas: p.declaradas, processadas: p.processadas, diferencas: p.diferencas, aptas: p.aptas, naoAptas: p.naoAptas, resultado: p.resultado || '' })),

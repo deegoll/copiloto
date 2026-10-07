@@ -161,6 +161,11 @@ console.log('Remessa do Full sem o detalhe por produto (rastreio 07/10, bloqueio
     ok(!firme(c3) && /SKU HA-1 \(MLB8000000041\): declaradas 10, processadas 8/.test(c3) && !/HA-2/.test(c3), 'produto com diferença + outro incompleto: só o produto completo, sem total e sem reclamação firme');
     const c4 = r3txt([{ itemId: 'MLB8000000041', sku: 'HA-1', declaredQuantity: 10, processedQuantity: 8, differencesQuantity: -2, readyToFullQuantity: 8 }, { itemId: 'MLB8000000042', sku: 'HA-2', declaredQuantity: 5, processedQuantity: 5, readyToFullQuantity: 5 }]);
     ok(/^Assunto: Reclamação por diferenças na remessa do Full/.test(c4) && /SKU HA-1 \(MLB8000000041\): declaradas 10, processadas 8/.test(c4), 'todos os produtos completos: a reclamação por diferenças continua saindo');
+    // O sino (SHC.remessasInconformes): com status "closed_ok", a soma parcial (15 declaradas × 10 aptas) não vira "unidades com diferenças".
+    const okSt = { remessas: [{ id: '61239601', status: 'closed_ok', recebida: '2026-09-20', unidades: 2, aptas: 2, custo: 27 }] };
+    const dOk = SHC.mlRemessaDetalheDoEstado({ inboundId: 61239601, status: 'closed_ok', unitsDetail: {}, units: [{ itemId: 'MLB8000000041', sku: 'HA-1', declaredQuantity: 10, processedQuantity: 10, readyToFullQuantity: 10 },
+        { itemId: 'MLB8000000042', sku: 'HA-2', declaredQuantity: 5 }], claims: {} });
+    ok(SHC.remessasInconformes(okSt, { porId: { '61239601': dOk } }, '2026-09-25').length === 0, 'remessa "closed_ok" com um produto sem as aptas: a soma parcial não marca "unidades com diferenças"');
     // O botão e o clique do painel, como estão no arquivo.
     const fs = require('fs'), src = fs.readFileSync(path.join(EXT, 'painel-lateral.js'), 'utf8');
     ok(/const cop = pend && SHC\.chamadoRemessa\(r\) \?/.test(src), 'painel: o botão "Copiar texto da reclamação" só aparece quando há texto');
