@@ -8,9 +8,11 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         return true;
     }
     // v2.5.3 (D5a): responde logo depois da 1ª batida ({ok, iniciou} — o andamento vem por shc:status). esperar:true = responde o status final.
+    // N-A: soErros:true ("Tentar de novo" depois de etapa com erro) refaz só as etapas com erro do ciclo aberto; sem ele, lê tudo.
     if (msg.acao === 'sincronizar') {
         if (!daExtensao(sender)) return false;   // 3.2.1: só as telas da extensão pedem a leitura
-        (msg.esperar ? sincronizar('manual') : iniciarSync('manual')).then(responder, () => responder({ ok: false, motivo: 'erro' }));
+        const origem = msg.soErros ? 'erros' : 'manual';
+        (msg.esperar ? sincronizar(origem) : iniciarSync(origem)).then(responder, () => responder({ ok: false, motivo: 'erro' }));
         return true;
     }
     // v2.5.3 (D6): {acao:'fiscal_agora'} → só a parte fiscal, agora (fiscalAgora).
