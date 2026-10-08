@@ -10,7 +10,25 @@
     if (!w || !w.document || w.__copilotoEtq) return;
     const d = w.document, ATTR = 'data-copiloto-etq', CAIXA = 'copiloto-etq-caixa';
     const COR = { lucrativo: ['#e6f4ea', '#137333'], apertado: ['#fef7e0', '#a05a00'], prejuizo: ['#fce8e6', '#c5221f'] }, NEUTRO = ['#f1f3f4', '#5f6368'];
-    const cor = c => COR[c] || NEUTRO;
+    // N-M (pedido da dona; tokens medidos pela local em docs/canais/design-*.md, 08/10): a etiqueta fala a língua visual de cada lista.
+    // A fonte é sempre a da página (Roboto, TikTokFont, Magalu). Cores de sinal só onde o canal não usa a mesma cor para outra coisa.
+    const F = (peso, tam, alt) => 'font-family:inherit;font-weight:' + peso + ';font-size:' + tam + 'px;line-height:' + alt + 'px;';
+    const TEMA = {
+        // Shopee: tag eds-tag (12/18/500, raio 2, padding 0 4px, sem borda nem sombra); vermelho e âmbar da própria Shopee; o verde é do
+        // Copiloto (a Shopee não tem token verde e o laranja é marca/ação).
+        shopee: { etq: F(500, 12, 18) + 'padding:0 4px;border-radius:2px;border:0', cor: { lucrativo: ['#E6F4EA', '#137333'], apertado: ['#FFF7E0', '#EDA500'], prejuizo: ['#FFE9E8', '#FF4742'] },
+            neutro: ['#F5F5F5', '#666666'], selo: F(400, 12, 18) + 'padding:0 4px;border-radius:2px', botao: F(500, 12, 18) + 'padding:0 6px;border-radius:4px;border:1px solid #E5E5E5;background:#FFFFFF;color:#333333' },
+        // TikTok: o molde da tag nativa (fundo #ECECED, texto #171718, 12/20/400, raio 12, padding 0 6px) com uma bolinha de sinal, como o
+        // status "Ativo" (#2D9F4B); o teal #009995 é link/ação e fica de fora.
+        tiktok: { etq: F(400, 12, 20) + 'padding:0 6px;border-radius:12px;border:0', ponto: { lucrativo: '#2D9F4B', apertado: '#D98E04', prejuizo: '#E0302B' },
+            cor: {}, neutro: ['#ECECED', '#171718'], selo: F(400, 12, 20) + 'padding:0 6px;border-radius:12px', botao: F(500, 12, 18) + 'padding:0 8px;border-radius:4px;border:1px solid #D3D4D5;background:#FFFFFF;color:#171718' },
+        // Magalu: cápsula de 32px com texto 12px/700 branco (o raio das tags nativas), nas cores do Copiloto (o azul, o verde e o amarelo nativos
+        // já querem dizer "link", "Publicado" e "Despachado"); neutro = chip cinza #E0E0E0, raio 9.
+        magalu: { etq: F(700, 12, 20) + 'padding:0 10px;border-radius:32px;border:0', cor: { lucrativo: ['#137333', '#FFFFFF'], apertado: ['#A05A00', '#FFFFFF'], prejuizo: ['#C5221F', '#FFFFFF'] },
+            neutro: ['#E0E0E0', '#424A52'], neutroRaio: 9, selo: F(500, 12, 18) + 'padding:0 8px;border-radius:9px', botao: F(500, 12, 18) + 'padding:0 8px;border-radius:6px;border:1px solid rgba(0,134,255,.5);background:#FFFFFF;color:#0086FF' },
+    };
+    const tema = () => TEMA[canal] || null;
+    const cor = c => { const t = tema(); return (t && (t.cor[c] || t.neutro)) || COR[c] || NEUTRO; };
     const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
     const PULA = /^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA|INPUT|SELECT|OPTION|SVG|CANVAS|IFRAME)$/;
     let canal = '', itens = [], fechada = false, agendado = null, obs = null, nomesRepetidos = new Set();
@@ -27,10 +45,10 @@
     // Extras (visitas e frete, como no ML): [{texto, classe}] em selos menores depois da etiqueta.
     const COR_EXTRA = { cai: ['#fce8e6', '#c5221f'], sobe: ['#e6f4ea', '#137333'], alerta: ['#fef7e0', '#a05a00'] };
     function selo(x) {
-        const [fundo, letra] = COR_EXTRA[x.classe] || NEUTRO, s = d.createElement('span');
+        const t = tema(), [fundo, letra] = COR_EXTRA[x.classe] || (t ? t.neutro : NEUTRO), s = d.createElement('span');
         s.textContent = x.texto;
         if (x.titulo) s.title = x.titulo;
-        s.style.cssText = 'display:inline-block;margin-left:4px;padding:0 5px;border-radius:9px;font:500 10px/15px system-ui,sans-serif;background:' + fundo + ';color:' + letra;
+        s.style.cssText = 'display:inline-block;margin-left:4px;' + (t ? t.selo : 'padding:0 5px;border-radius:9px;font:500 10px/15px system-ui,sans-serif') + ';background:' + fundo + ';color:' + letra;
         return s;
     }
     // Janelinha "+ Informar custo" (da sessão local, como a do ML): digita o custo do SKU, salva em SHC.salvarCustoSku (vale para todos os
@@ -79,11 +97,25 @@
         (it.extras || []).forEach(x => s.appendChild(selo(x)));
         if (umSku(it)) {   // "+ Informar custo": a janelinha aqui mesmo
             const b = d.createElement('button'); b.type = 'button'; b.textContent = '+ Informar custo';
-            b.style.cssText = 'margin-left:6px;border:1px dashed #1a73e8;background:#fff;color:#1a73e8;border-radius:9px;font:600 10px/15px system-ui,sans-serif;padding:0 6px;cursor:pointer';
+            // N-M: a pílula azul tracejada destoava (print da dona no TikTok); cada canal usa o botão neutro da própria lista.
+            b.style.cssText = 'margin-left:6px;cursor:pointer;' + (tema() ? tema().botao : 'border:1px dashed #1a73e8;background:#fff;color:#1a73e8;border-radius:9px;font:600 10px/15px system-ui,sans-serif;padding:0 6px');
             b.addEventListener('click', e => { try { e.preventDefault(); e.stopPropagation(); } catch (x) { /* ok */ } abreCusto(s, it); });
             s.appendChild(b);
         }
         s.title = 'Copiloto · ' + it.texto + (it.detalhe && it.detalhe !== it.texto ? '\n' + it.detalhe : '') + (it.classe === 'sem_custo' ? '\nCadastre o custo pelo SKU no painel do Copiloto.' : '');
+        const t = tema();
+        if (t) {
+            const neutro = !t.cor[it.classe] && !(t.ponto && t.ponto[it.classe]);
+            s.style.cssText = 'display:inline-block;margin:2px 0 2px 6px;white-space:nowrap;vertical-align:middle;cursor:help;' + t.etq
+                + ';background:' + fundo + ';color:' + letra + (neutro && t.neutroRaio ? ';border-radius:' + t.neutroRaio + 'px' : '');
+            if (t.ponto && t.ponto[it.classe]) {   // TikTok: a bolinha de sinal antes do texto, como o "Ativo" da própria lista
+                const p = d.createElement('span');
+                p.setAttribute('aria-hidden', 'true');
+                p.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:6px;vertical-align:0;background:' + t.ponto[it.classe];
+                s.insertBefore(p, s.firstChild);
+            }
+            return s;
+        }
         s.style.cssText = 'display:inline-block;margin:2px 0 2px 6px;padding:1px 6px;border-radius:10px;font:600 11px/16px system-ui,sans-serif;white-space:nowrap;'
             + 'background:' + fundo + ';color:' + letra + ';border:1px solid ' + letra + '33;vertical-align:middle;cursor:help';
         return s;
@@ -213,6 +245,6 @@
         },
         /** Tira tudo (o canal foi desligado em Ajustes). */
         limpa() { itens = []; if (obs) obs.disconnect(); obs = null; d.querySelectorAll('[' + ATTR + ']').forEach(e => e.remove()); const cx = d.getElementById(CAIXA); if (cx) cx.remove(); },
-        _casa: casa, _canal: () => canal,
+        _casa: casa, _canal: () => canal, _tema: c => TEMA[c] || null,
     };
 })(typeof window !== 'undefined' ? window : null);

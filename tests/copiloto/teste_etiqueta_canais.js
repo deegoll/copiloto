@@ -174,5 +174,20 @@ console.log('i) Magalu: a tarifa fixa por item de Ajustes entra na conta (tela d
     ok(com.texto === 'Sobra R$ 34,00 · margem 34%' && !/tarifa fixa por item não informada/.test(com.detalhe) && /tarifas R\$ 16,00/.test(com.detalhe), 'com R$ 5 por item: R$ 100 − 11 − 5 − 50 = R$ 34,00 (' + com.texto + ')');
 }
 
+console.log('j) N-M: o visual de cada lista (tokens dos design-*.md da local, 08/10)');
+{
+    const w = { document: {} }; require('vm').runInNewContext(fs.readFileSync(path.join(EXT, 'etiqueta-tela.js'), 'utf8'), { window: w, URL, Symbol, JSON, Object, Array, String, Math });
+    const T = w.__copilotoEtq._tema, tudo = c => JSON.stringify(T(c));
+    ok(['shopee', 'tiktok', 'magalu'].every(c => T(c) && /font-family:inherit/.test(T(c).etq) && /font-family:inherit/.test(T(c).botao) && !/system-ui|dashed/.test(tudo(c))),
+        'Shopee, TikTok e Magalu herdam a fonte da página (Roboto, TikTokFont, Magalu); nada da pílula azul tracejada');
+    ok(/border-radius:2px/.test(T('shopee').etq) && /12px;line-height:18px/.test(T('shopee').etq) && !/#EE4D2D/i.test(tudo('shopee')) && T('shopee').cor.prejuizo.join() === '#FFE9E8,#FF4742',
+        'Shopee: tag eds-tag (12/18, raio 2), vermelho da própria Shopee, sem o laranja da marca');
+    ok(/border-radius:12px/.test(T('tiktok').etq) && T('tiktok').neutro.join() === '#ECECED,#171718' && T('tiktok').ponto.lucrativo === '#2D9F4B' && !/#009995/i.test(tudo('tiktok')),
+        'TikTok: molde da tag nativa (#ECECED, raio 12) com a bolinha verde do "Ativo"; o teal de link fica de fora');
+    ok(/border-radius:32px/.test(T('magalu').etq) && !/#0086FF',|#008F2D|#FFC700/i.test(JSON.stringify(T('magalu').cor)) && T('magalu').neutro.join() === '#E0E0E0,#424A52',
+        'Magalu: cápsula de 32px nas cores do Copiloto (azul, verde e amarelo nativos ficam com o significado deles); neutro = chip cinza');
+    ok(T('ml') === null && T('') === null, 'canal sem tema (ML e outros): o visual de antes');
+}
+
 console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK');
 process.exit(f ? 1 : 0);
