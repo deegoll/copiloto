@@ -22,6 +22,11 @@ const SKU = /sku|seller_?code|codigo|item_?code|model_?sku|ean|gtin|barcode/i;
 // Blocos sigilosos inteiros (banco, empresa, e-mail financeiro) e rótulos de pares nome/valor que são dado pessoal (M3, 08/10).
 const SIGILO = /^(bank_?account|bank|banco|conta_?bancaria|org|organization|empresa|company|financial_?email|billing|payout|pix_?key|chave_?pix)$/i;
 const PAR = /(^|_)(customer|buyer|cliente|comprador|recipient|destinatario)?_?(name|nome|email|phone|telefone|celular|cpf|cnpj|document|documento|doc_?number|address|endereco|zip|cep|street|rua|nickname|apelido)$/i;
+// O que a local achou escapando nos retratos de pedidos (08/10): @ e nome do criador/afiliado, nome do depósito, dados do banco fora de um
+// bloco "bank", e valores já formatados ("format_price": "R$ 1.234,56"), que não passavam pelo fator.
+const TERCEIRO = /(creator|affiliate|afiliado|influencer|author|autor|warehouse|deposito|armazem|filial|branch|pickup|store|shop|seller|vendedor|buyer|customer|cliente|comprador|receiver|recipient|holder|titular)_?(info_?)?(name|nome|handle|username|user_?name|nick_?name|display_?name|unique_?id)$/i;
+const BANCO = /bank|banco|agencia|agency|account_?(number|no|num|holder|digit|type)|conta_?(corrente|numero|digito)|iban|swift|card_?(number|last_?4?|holder|brand)|cartao|pix_?key|chave_?pix/i;
+const FORMATADO = /(^|_)(format|formatted|display|text|label)(_|$)|_str$|_text$/i;
 const ID_CHAVE = /(^|_)(id|ids|sn|order_?sn|uuid|code|token|hash|number|numero)$|Id$|^id/i;
 const VALOR = /price|preco|preço|amount|valor|total|fee|taxa|tarifa|cost|custo|stock|estoque|qtd|quantity|quantidade|sold|vendid|income|renda|repasse|commission|comissao|discount|desconto|shipping_?fee|frete|balance|saldo|revenue|gmv/i;
 const ESTADO = /^[A-Z][A-Z0-9_]{1,40}$|^[a-z][a-z0-9_]{1,30}$/;   // "READY_TO_SHIP", "normal", "unpaid"
@@ -43,6 +48,17 @@ function criaAnonimo(semente) {
         .replace(/\(?\b\d{2}\)?\s?9?\d{4}[-\s]?\d{4}\b/g, '(00) 00000-0000')
         .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b|\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g, '***')
         .replace(/\d{6,}/g, d => novoId(d));
+    // Valores no formato da tela ("189,90", "1.234,56", "189.90", "42") × fator; sequência de 6+ dígitos sem centavos é id (fica para o limpaTexto).
+    function escala(t) {
+        return t.replace(/\d[\d.,]*\d|\d/g, tok => {
+            if (tok.replace(/\D/g, '').length >= 6 && !/[.,]\d{2}$/.test(tok)) return tok;
+            const br = /,\d{1,2}$/.test(tok), n = br ? +tok.replace(/\./g, '').replace(',', '.') : +tok.replace(/,/g, '');
+            if (!isFinite(n)) return tok;
+            const r = num(n), casas = (tok.match(/[.,](\d{1,2})$/) || [])[1];
+            const f = casas ? r.toFixed(casas.length) : String(Math.round(r));
+            return br ? f.replace('.', ',') : f;
+        });
+    }
     // Tudo que está dentro vira de mentira, mantendo os tipos (string "***", número 0, booleano e null como estão).
     const apaga = x => (Array.isArray(x) ? x.map(apaga) : x && typeof x === 'object' ? Object.keys(x).reduce((o, k) => { o[k] = apaga(x[k]); return o; }, {})
         : typeof x === 'number' ? 0 : typeof x === 'string' ? (x === '' ? '' : '***') : x);
@@ -53,13 +69,17 @@ function criaAnonimo(semente) {
             if (SIGILO.test(String(chave || ''))) return apaga(v);
             const o = {};
             // Par nome/valor ({key: "customer_name", value: "Fulana"}, {name: "cpf", value: …}): a chave pessoal está no TEXTO, não no nome do campo.
-            const rotulo = ['key', 'name', 'field', 'label', 'type'].map(c => v[c]).find(x => typeof x === 'string' && PAR.test(x.replace(/[-\s]/g, '_')));
-            Object.keys(v).forEach(k => { o[k] = rotulo && /^(value|valor|val|text|content)$/i.test(k) ? apaga(v[k]) : anda(v[k], k, caminho + '.' + k); });
+            // Com rótulo pessoal, TODO o resto do par some (value, values, display_value, text…); só os campos do rótulo ficam.
+            const ROT = ['key', 'name', 'field', 'label', 'type', 'id', 'code'];
+            const rotulo = ROT.map(c => v[c]).find(x => typeof x === 'string' && (PAR.test(x.replace(/[-\s]/g, '_')) || TERCEIRO.test(x.replace(/[-\s]/g, '_'))));
+            Object.keys(v).forEach(k => { o[k] = rotulo && ROT.indexOf(k) < 0 ? apaga(v[k]) : anda(v[k], k, caminho + '.' + k); });
             return o;
         }
         const k = String(chave || ''), kk = k.replace(/[-\s]/g, '_');
         if (v === null || typeof v === 'boolean') return v;
         if (/^(org_?id|cnpj|company_?id|seller_?document|razao_?social|nome_?fantasia|trade_?name|legal_?name)$/i.test(kk)) return typeof v === 'number' ? 0 : (v === '' ? '' : '***');   // empresa do vendedor (M3)
+        if (/creator|affiliate|afiliado|influencer/i.test(caminho) && /name|nome|handle|unique_?id|nick/i.test(kk)) return typeof v === 'number' ? 0 : (v === '' ? '' : '***');
+        if (TERCEIRO.test(kk) || BANCO.test(kk)) return typeof v === 'number' ? 0 : (v === '' ? '' : '***');   // criador, depósito, banco
         if (PESSOAL.test(kk) && (DONO.test(caminho) || /cpf|cnpj|email|phone|telefone|celular|mobile|cep|zip|postal|doc_?number|street|address/i.test(kk))) return typeof v === 'number' ? 0 : (v === '' ? '' : '***');   // endereço do comprador E do vendedor (seller_address.state: retrato M2)
         if (typeof v === 'number') {
             if (/time|date|data|_at$|ts$/i.test(k) && v > 1e9) return v;   // timestamp: fica (não é dado pessoal e o código lê datas)
@@ -73,6 +93,9 @@ function criaAnonimo(semente) {
             const n = +v.replace(',', '.'), r = String(num(n));
             return v.indexOf(',') >= 0 ? r.replace('.', ',') : r;
         }
+        if (/^@[\w.]{2,}/.test(v)) return '@***';   // @ de criador/afiliado/loja
+        // Valor já formatado ("R$ 1.234,56", "12,5%", "format_price": "189.90"): os números × fator, o resto do texto fica.
+        if (/R\$\s?-?\d|\d%/.test(v) || (FORMATADO.test(kk) || VALOR.test(k)) && /\d/.test(v) && v.length <= 40) return limpaTexto(escala(v));
         if (/^https?:\/\//.test(v)) {
             // Imagem e página de produto do vendedor (cdn, fotos, anúncio): o endereço inteiro sai (diz qual é a loja); a API do canal fica, sem a query.
             if (/\.(jpe?g|png|webp|gif|avif|svg)(\?|$)|\/(img|image|images|imagem|foto|photo|media|cdn|file|produto|product|p)\//i.test(v) || /cdn|static|img|image|media/i.test(v.split('/')[2] || ''))
@@ -89,15 +112,7 @@ function criaAnonimo(semente) {
         const tt = t.trim();
         if (!tt) return m;
         if (tt.length > 24) return '>' + textoLivre(tt) + '<';
-        // Valores no formato da tela ("189,90", "1.234,56", "42") × fator; sequência de 6+ dígitos sem centavos é id (fica para o limpaTexto).
-        const valores = t.replace(/\d[\d.,]*\d|\d/g, tok => {
-            if (tok.replace(/\D/g, '').length >= 6 && !/,\d{2}$/.test(tok)) return tok;
-            const n = +tok.replace(/\./g, '').replace(',', '.');
-            if (!isFinite(n)) return tok;
-            const r = num(n);
-            return /,\d{2}$/.test(tok) ? r.toFixed(2).replace('.', ',') : String(r);
-        });
-        return '>' + limpaTexto(valores) + '<';
+        return '>' + limpaTexto(escala(t)) + '<';
     }).replace(/(data-[\w-]*id[\w-]*)="([^"]*)"/gi, (m, a, val) => a + '="' + val.replace(/\d{6,}/g, d => novoId(d)) + '"')
         .replace(/(href|src)="([^"]*)"/gi, (m, a, val) => a + '="' + limpaTexto(val.split('?')[0]) + '"');
     return { json: v => anda(v, '', '$'), html, limpaTexto, fator };

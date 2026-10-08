@@ -63,5 +63,24 @@ console.log('e) o que escapou no retrato M3 da Magalu (08/10)');
         'imagem e página do produto do vendedor viram exemplo.invalid; a URL da API do canal fica (sem a query)');
 }
 
+console.log('f) o que escapou nos retratos de pedidos (Shopee/TikTok/Magalu, 08/10)');
+{
+    const an3 = criaAnonimo(2), o = an3.json({
+        identifiers: [{ name: 'customer_name', values: ['Fulana de Tal'] }, { key: 'customer_document', display_value: '529.982.247-25' }, { name: 'delivery_type', values: ['conventional'] }],
+        creator_info_name: 'Influencer Real', creator: { handle: '@influ.real', unique_id: 'influ.real' }, warehouse_name: 'Depósito Loja Real Maringá',
+        payout: undefined, bank_name: 'Banco Real', account_number: '56789-0', agency: '1234', card_last4: '4321',
+        price_module: { format_price: 'R$ 1.234,56', format_total: 'R$ 99,90', sale_price: '189.90', discount_text: '-12,5%' },
+        pix_discount: 4.07, field_name: 'PIX_DISCOUNT', display_name: 'Taxa de comissão líquida' });
+    const t = JSON.stringify(o);
+    ok(o.identifiers[0].values[0] === '***' && o.identifiers[1].display_value === '***' && o.identifiers[2].values[0] === 'conventional', 'par {name, values} e {key, display_value}: o valor pessoal some; o par comum fica');
+    ok(o.creator_info_name === '***' && o.creator.handle === '***' && o.creator.unique_id === '***' && o.warehouse_name === '***', 'criador/afiliado (@ e nome) e depósito: "***"');
+    ok(o.bank_name === '***' && o.account_number === '***' && o.agency === '***' && o.card_last4 === '***', 'banco, conta, agência e cartão fora de um bloco "bank": "***"');
+    ok(o.price_module.format_price === 'R$ 2469,12' && o.price_module.format_total === 'R$ 199,80' && o.price_module.sale_price === '379.8' && o.price_module.discount_text === '-25,0%',
+        'valores já formatados passam pelo fator (2 aqui): ' + JSON.stringify(o.price_module));
+    ok(!/Influencer|influ\.real|Loja Real|Banco Real|56789|1234,56|4321|Fulana|529\.982/.test(t), 'nenhum texto real sobra');
+    ok(o.pix_discount === 8.14 && o.field_name === 'PIX_DISCOUNT' && o.display_name === 'Taxa de comissão líquida', 'linhas da renda (Pix, rótulos) ficam: o código precisa delas');
+    ok(an3.json({ seller: { nota: '@loja.real' } }).seller.nota === '@***', '@ solto em qualquer campo vira "@***"');
+}
+
 console.log(falhas ? '\n' + falhas + ' FALHA(S)' : '\nTUDO OK');
 process.exit(falhas ? 1 : 0);
