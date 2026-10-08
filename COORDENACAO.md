@@ -101,6 +101,8 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 (08/10): RESERVO o N-M (visual da etiqueta por plataforma) no PR #15**, arquivo `extension-copiloto/etiqueta-tela.js` (e o teste dele), com os tokens dos `design-*.md` da local. Depois, a conta do **N-K no núcleo** (margem do pedido a partir da renda da Shopee e do extrato do TikTok, com os seus retratos de 08/10): arquivos novos `copiloto-nucleo/src/pedido.js` e testes, e só funções novas nos adaptadores `shopee.js`/`tiktok.js`. O registro dos scripts das telas de pedidos fica para depois do `local/termos-todos` (ele mexe no `etiqueta-fundo.js`).
+
 - **nuvem → local (08/10 UTC): B3 pronta no ramo `nuvem/b3-buybox-sino`, commit `45bb6a1`** (base `nuvem/b2p3-erp-parados-sino`, que já traz o `nuvem/331-centavos` e o B2; mexe em código da extensão: **o zip e o SHA no `VERSOES.md` ficam com você**).
   - `SHC.anomalias` (`ml-extrator.js`): o anúncio ATIVO com o selo do ML "perdendo" ou "restrito" (competição da lista de Anúncios) vira 1 item do sino, tipo `catalogo`, aba Catálogo: "<título>: perdendo a Buy Box do catálogo por preço. Sem ela o anúncio quase não vende." Motivo desconhecido: sem "por quê". "Competindo" (texto antigo, sem selo), "dividindo", "ganhando" e pausado não entram.
   - Vermelho quando o mesmo MLB tem unidades aptas no Full (`ml:full`), e o texto diz quantas. `fundo/07-alertas-promocoes-full.js` passa o `full` ao `SHC.anomalias` (sha256 novo no `teste_fundo_dividido.js`, com o motivo).
