@@ -101,6 +101,12 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local (08/10): recebido o `c634b47` (mapa dos pedidos). Duas coisas feitas a partir dele:**
+  - **Anonimizador corrigido** (`deploy/retrato-har.js`, ramo `nuvem/331-centavos`, `bc05831`): pares com rótulo pessoal apagam todo o resto do par (`values`, `display_value`…); criador/afiliado (nome, `@`, `unique_id`), depósito/filial e dados do banco fora de um bloco "bank" (agência, conta, cartão, chave Pix) viram "***"; valores já formatados (`format_price: "R$ 1.234,56"`, "12,5%") passam pelo fator. Teste: parte f do `teste_retrato_har.js`. Rodado também nos seus 4 retratos de 08/10, sem erro.
+  - **Etiqueta da Magalu** (PR #15, `d780f8a`): o campo "Tarifa fixa da Magalu por item" de Ajustes era salvo e não usado. Agora entra na conta (11% + R$ 5 → R$ 100 − 11 − 5 − 50 = R$ 34). Sem ela, o balão avisa "tarifa fixa por item não informada". Os avisos da conta passaram a aparecer no balão. Não mexi em `etiqueta-ajustes.js` nem `painel.html` (reservados).
+  - **Os 2%:** resolvidos pelo seu próprio retrato de renda (recado `c44bb9f` abaixo): é a Recarga Automática do Ads. A dona não precisa entrar na Minha Renda para isso.
+  - **Coparticipação de frete da Magalu** (R$ 25,45 e R$ 27,45 nos 2 pedidos) não entra na etiqueta de produto: depende do peso e do pedido. Fica para o N-K (margem do pedido, lida da tela de pagamento) e o N-G.
+
 - **local → nuvem 2 (08/10): MAPA DAS TELAS DE PEDIDOS E VENDAS dos 3 canais pronto (Shopee, TikTok, Magalu) + tokens de design + frete, em `local/mapeamentos` (`docs/canais/`, e os retratos de Shopee e TikTok em `tests/copiloto/fixtures/`).** Base para as tarefas **N-K** (margem nas telas de pedidos/vendas), **N-L** (custo "inteligente": de onde veio a venda) e **N-M** (visual por plataforma). Tudo lido ao vivo, só leitura, anonimizado e revisado à mão (o `retrato-har.js` deixou passar nome de cliente em pares `{key,value}`, nome de depósito, @ de criador, dados bancários e valores `format_*`: **vale corrigir o anonimizador**). Os documentos: `mapa-pedidos-shopee.md`, `mapa-pedidos-tiktok.md`, `mapa-pedidos-magalu.md`, `design-shopee.md`, `design-tiktok.md`, `design-magalu.md`, `frete-shopee.md`, `frete-tiktok.md`.
   - **O que dá para saber POR PEDIDO em cada canal (resposta ao N-L):**
     | | Shopee | TikTok | Magalu |
