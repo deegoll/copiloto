@@ -1,6 +1,6 @@
 # Segurança do Copiloto: o que foi conferido e o que dizer às clientes
 
-Auditoria do código em 01/10/2026, com revisões em 02/10/2026. Este documento trata só do **Copiloto** (a extensão do Chrome), não do SellerHub.
+Revisão automatizada por IA do código em 01/10/2026, com revisões em 02/10/2026. Este documento trata só do **Copiloto** (a extensão do Chrome), não do SellerHub.
 
 Situação das versões hoje (02/10/2026):
 
@@ -15,9 +15,9 @@ Atualização de 02/10/2026: com a 3.2.1 publicada, os trechos abaixo que tratam
 
 ## Parte A: para você
 
-### Quem fez e o que é esta auditoria
+### Quem fez e o que é esta revisão
 
-Foi uma **auditoria interna**, feita com ajuda de IA (Claude), lendo o código da extensão linha a linha e testando cada correção.
+Foi uma **revisão técnica básica**, feita por IA (Claude), a mesma que ajudou a escrever o código. Não é uma auditoria independente, lendo o código da extensão linha a linha e testando cada correção.
 **Não é uma certificação nem um teste de invasão (pentest) feito por uma empresa de fora.** Se um dia quiser um selo, é preciso contratar uma empresa de segurança.
 
 ### O que foi conferido

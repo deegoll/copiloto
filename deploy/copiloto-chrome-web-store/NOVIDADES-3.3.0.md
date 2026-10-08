@@ -54,9 +54,9 @@ Uma segunda revisão independente confirmou as 9 correções sem regressão para
 - **Permissão do ERP:** sobra de conta desmarcada não segura mais a permissão.
 - **Fechamento (bug antigo):** o texto copiado em "Como pedir de volta" dizia "Valor cobrado" com o valor da diferença. Agora usa o valor cobrado (`F.itemDoChamado`).
 
-### Auditoria de prontidão para a loja (07/10/2026)
+### Revisão de prontidão para a loja (feita por IA) (07/10/2026)
 
-Uma auditoria de 49 agentes (pacote, permissões, privacidade, ficha e conformidade, cada achado conferido por céticos) deu **"enviar depois de corrigir"**. Nada no pacote viola política da loja. O que foi corrigido:
+Uma revisão automatizada por 49 agentes de IA (pacote, permissões, privacidade, ficha e conformidade, cada achado conferido por céticos) deu **"enviar depois de corrigir"**. Nada no pacote viola política da loja. O que foi corrigido:
 
 - **Frete casado pela data (alto).** O ML costuma lançar o frete com outro número que o da venda; o Copiloto casa pelo anúncio e pela data. Com 2 ou mais vendas ou fretes do anúncio no período, o par pode trocar, e um frete certo virava "cobrança indevida". Agora o par ambíguo vai para "para conferir" (`parAmbiguo`); só o par único é contestável, e o texto cita o número do frete.
 - **Pedido de exclusão.** O erro do comprador não anula mais a culpa do vendedor ("comprei errado e veio com defeito" veta). Também vetam: não funcionou, sem a caixa ou peça, postagem atrasada, falsificado, manchado, pacote violado ou aberto, não entregue. Erro na compra ("comprei por engano") usa a regra de arrependimento; a do transporte exige demora ou atraso. O texto pede a **análise** de cada pedido, com o número, e a exclusão só dos que se enquadrarem; o botão só aparece quando algum caso conta na reputação.

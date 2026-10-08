@@ -1,4 +1,4 @@
-# Auditoria de prontidão para a Chrome Web Store (07/10/2026)
+# Revisão automatizada (IA) de prontidão para a Chrome Web Store (07/10/2026)
 
 > **Escopo:** o pacote do ramo `copiloto-v3.3.0` deste repositório, gerado pela nuvem (SHA-256 `a037454e…6e68`, **sem o TikTok Shop**). A 3.3.0 que vai para a loja é a do projeto local, com o TikTok Shop ligado; a política no ar descreve essa versão. Use este relatório assim:
 > - **Achados de código (seção 4):** corrigidos neste ramo (ver NOVIDADES-3.3.0.md, "Auditoria de prontidão para a loja"). Na 3.3.0 local, o frete não tem texto de contestação (regra da dona); o resto vale.
