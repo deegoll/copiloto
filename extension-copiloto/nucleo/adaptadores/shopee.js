@@ -213,6 +213,42 @@
      *   { escrows: [{data, resposta get_escrow_detail}…], pedidos: [order_list[i] do get_order_detail…] }
      * Ads, saúde, carteira e promoções: mapear ao vivo (MAPEAMENTO-SHOPEE.md §5) → "este canal não informa" até lá.
      */
+    /**
+     * N-K · renda de UM pedido como a tela "Minha Renda" recebe (POST …/seller_income/income_detail/get_order_income_components; retrato
+     * da local tests/copiloto/fixtures/shopee_renda_pedido_2026-10-08.json, mapa em docs/canais/mapa-pedidos-shopee.md). Valores × 100000.
+     * → { pedido_id, itens: [{ sku, sku_pai, anuncio_id, modelo_id, qtd, devolvidos, preco_unit }], preco_produtos, liquido, linhas: [{ campo,
+     *     nome, valor }], recarga_ads, afiliado, reembolso, ajuste, avisos } | naoLido. Nada do comprador é lido (a resposta não traz).
+     * liquido = "Renda do pedido" (ESCROW_AMOUNT) com os ajustes da carteira (adjustment_info.amount_after_adjustment) quando houver.
+     * A "Taxa da Recarga Automática (Pedido)" (ADS_ESCROW_TOP_UP_FEE, 2% do preço) é dinheiro que vai para o saldo do Shopee Ads: sai do
+     * líquido, mas não é tarifa desta venda; fica em recarga_ads para a conta decidir (COORDENACAO 08/10, c44bb9f).
+     */
+    const R5 = v => { const n = U.num(v); return n === null ? null : U.r2(n / 100000); };
+    function rendaDoPedido(j) {
+        const d = j && j.data, b = d && d.seller_income_breakdown && d.seller_income_breakdown.breakdown;
+        if (!d || !Array.isArray(b)) return M.naoLido('renda do pedido da Shopee não reconhecida');
+        const linhas = [], campo = {};
+        const anda = (xs, pai) => (xs || []).forEach(x => {
+            if (!x || typeof x.field_name !== 'string') return;
+            const v = R5(x.amount);
+            if (v !== null) { linhas.push({ campo: x.field_name, nome: String(x.display_name || x.field_name).slice(0, 80), valor: v, pai: pai || null }); campo[x.field_name] = (campo[x.field_name] || 0) + v; }
+            anda(x.sub_breakdown, x.field_name);
+        });
+        anda(b, null);
+        if (campo.ESCROW_AMOUNT === undefined) return M.naoLido('renda do pedido sem "Renda do pedido" (ESCROW_AMOUNT)');
+        const oi = d.order_info || {}, adj = d.adjustment_info || {}, avisos = [];
+        const ajuste = R5(adj.total_adjustment_amount) || 0, depois = R5(adj.amount_after_adjustment);
+        const liquido = ajuste && depois !== null ? depois : U.r2(campo.ESCROW_AMOUNT);
+        if (ajuste) avisos.push('ajuste na carteira de ' + (ajuste < 0 ? '−' : '+') + 'R$ ' + Math.abs(ajuste).toFixed(2).replace('.', ','));
+        const its = (d.order_item_list && Array.isArray(d.order_item_list.order_items) ? d.order_item_list.order_items : []).filter(i => i && typeof i === 'object').map(i => ({
+            sku: typeof i.model_sku === 'string' && i.model_sku.trim() ? i.model_sku.trim() : (typeof i.product_sku === 'string' ? i.product_sku.trim() : ''),
+            sku_pai: typeof i.product_sku === 'string' ? i.product_sku.trim() : '', anuncio_id: String(i.item_id || ''), modelo_id: String(i.model_id || ''),
+            qtd: U.num(i.amount) || 0, devolvidos: (U.num(i.returned_qty) || 0) + (U.num(i.cancelled_qty) || 0), preco_unit: R5(i.price) }));
+        if (!its.length) avisos.push('renda sem a lista de itens');
+        const v = k => U.r2(-(campo[k] || 0));
+        return { pedido_id: String(oi.order_sn || ''), itens: its, preco_produtos: U.r2(campo.PRODUCT_PRICE || 0), liquido, linhas,
+            recarga_ads: v('ADS_ESCROW_TOP_UP_FEE'), afiliado: v('AMS_COMMISSION_FEE'), reembolso: v('REFUND_AMOUNT'), ajuste, avisos };
+    }
+
     function criarAdaptadorShopee(o) {
         o = o || {};
         const f = o.fontes || {}, conta = o.conta, fonte = o.fonte || 'api';
@@ -235,5 +271,5 @@
         return A.criarAdaptador(def);
     }
 
-    return { dinheiro, CAMPOS_TARIFA, STATUS, produtosDaLista, transacaoDoEscrow, confereTabela, tarifaEstimada, pedidoDoDetalhe, filtroPedidoSemComprador, criarAdaptadorShopee };
+    return { dinheiro, CAMPOS_TARIFA, STATUS, produtosDaLista, rendaDoPedido, transacaoDoEscrow, confereTabela, tarifaEstimada, pedidoDoDetalhe, filtroPedidoSemComprador, criarAdaptadorShopee };
 });

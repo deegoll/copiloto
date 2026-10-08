@@ -81,5 +81,38 @@
         return { produto_id: produto.produto_id, classe, texto, sobra_min: min.sobra, sobra_max: max.sobra, variacoes: vars };
     }
 
-    return { daVariacao, doProduto, moeda, pct };
+    /**
+     * N-K · a etiqueta de UM pedido, com o que o canal REALMENTE repassou (Shopee: rendaDoPedido). Nada de tabela: o líquido é fato lido.
+     * pedido = { pedido_id, itens: [{ sku, qtd, devolvidos, … }], preco_produtos, liquido, recarga_ads?, afiliado?, reembolso? }.
+     * custoDe(sku, item) → { custo, outros?, imposto_pct? } | null. cfg = { imposto_pct, margem_alvo_pct }.
+     * sobra = líquido + recarga do Ads (não é custo desta venda) − custo × unidades vendidas − outros × unidades − imposto sobre o preço.
+     * → { pedido_id, classe, texto, sobra, margem_pct, custo, imposto, linhas, avisos }. Sem custo de algum item → "Informe o custo".
+     * Reembolso total → 'reembolsado' (sem conta). Ads não está aqui: a margem diz "antes de Ads" (N-L).
+     */
+    function doPedido(canal, pedido, custoDe, cfg) {
+        if (!pedido || M.ehNaoLido(pedido)) return { classe: 'nao_lido', texto: 'Renda do pedido não lida', motivo: pedido && pedido.motivo };
+        const c = cfg || {}, avisos = (pedido.avisos || []).slice(), preco = U.num(pedido.preco_produtos) || 0, reemb = U.num(pedido.reembolso) || 0;
+        const base = { pedido_id: pedido.pedido_id, liquido: pedido.liquido, recarga_ads: U.num(pedido.recarga_ads) || 0, afiliado: U.num(pedido.afiliado) || 0, avisos };
+        if (preco > 0 && reemb >= preco - 0.01) return Object.assign(base, { classe: 'reembolsado', texto: 'Reembolsado', sobra: null, margem_pct: null });
+        let custo = 0, outros = 0, falta = 0, imp = null;
+        (pedido.itens || []).forEach(i => {
+            const un = Math.max(0, (U.num(i.qtd) || 0) - (U.num(i.devolvidos) || 0));
+            if (!un) return;
+            const cad = custoDe ? custoDe(i.sku || null, i) : null, cu = cad ? U.num(cad.custo) : null;
+            if (!(cu > 0)) { falta++; return; }
+            custo += cu * un; outros += (U.num(cad.outros) || 0) * un;
+            if (imp === null && U.num(cad.imposto_pct) !== null) imp = U.num(cad.imposto_pct);
+        });
+        if (!(pedido.itens || []).length) return Object.assign(base, { classe: 'nao_lido', texto: 'Itens do pedido não lidos', sobra: null, margem_pct: null });
+        if (falta) return Object.assign(base, { classe: 'sem_custo', texto: 'Informe o custo', sobra: null, margem_pct: null, faltam: falta });
+        const receita = U.r2(preco - reemb), impPct = imp !== null ? imp : (U.num(c.imposto_pct) || 0), imposto = U.r2(receita * impPct / 100);
+        const sobra = U.r2((U.num(pedido.liquido) || 0) + base.recarga_ads - custo - outros - imposto);
+        const margem = receita > 0 ? U.r2(sobra / receita * 100) : null, alvo = U.num(c.margem_alvo_pct) || 0;
+        const classe = margem === null ? 'nao_lido' : (sobra < 0 ? 'prejuizo' : (margem < alvo ? 'apertado' : 'lucrativo'));
+        if (base.recarga_ads) avisos.push('recarga do Ads de ' + moeda(base.recarga_ads) + ' devolvida à conta (vai para o saldo de anúncios, não é tarifa desta venda)');
+        return Object.assign(base, { classe, sobra, margem_pct: margem, custo: U.r2(custo), outros: U.r2(outros), imposto,
+            texto: (sobra < 0 ? 'Prejuízo ' : 'Sobra ') + moeda(sobra) + (margem === null ? '' : ' · margem ' + pct(margem)) + ' · antes de Ads' });
+    }
+
+    return { daVariacao, doProduto, doPedido, moeda, pct };
 });
