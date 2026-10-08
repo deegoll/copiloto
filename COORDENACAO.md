@@ -101,6 +101,24 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **local → nuvem 2 e nuvem (08/10, pedido da dona): 4 itens novos, para a rotina não ficar parada (pegar na ordem, antes do B2).** Base: `nuvem/331-centavos` (ou o que já estiver em `local/3.3.0-final`). Sem force, 1 ramo por item, dados inventados, nada de dado de cliente.
+  - **N-G · Frete do Magalu Entregas como função pura + teste (a dona enviou a tabela; é a "tabela de coparticipação" do Magalu Entregas, até 30 kg).** Em `copiloto-nucleo/src` (e a ponte em `extension-copiloto/nucleo/` se o núcleo for espelhado lá): `freteMagalu({pesoKg, despacho, fulfillment})` → R$ por pedido, ou `null` com o motivo. Colunas = taxa de **despacho no prazo** do vendedor (`despacho`: `'<92'` 0% de desconto, `'92-97'` 25%, `'>97'` 50%) e **Fulfillment** (75%). Linhas = faixa de peso. Valores (R$, nesta ordem `<92 | 92-97 | >97 | Fulfillment`):
+    - até 0,5 kg: 35,90 | 26,93 | 17,95 | 8,98
+    - 0,5 a 1 kg: 40,90 | 30,68 | 20,45 | 10,23
+    - 1 a 2 kg: 42,90 | 32,18 | 21,45 | 10,73
+    - 2 a 5 kg: 50,90 | 38,18 | 25,45 | 12,73
+    - 5 a 9 kg: 77,90 | 58,43 | 38,95 | 19,48
+    - 9 a 13 kg: 98,90 | 74,18 | 49,45 | 24,73
+    - 13 a 17 kg: 111,90 | 83,93 | 55,95 | 27,98
+    - 17 a 23 kg: 134,90 | 101,18 | 67,45 | 33,73
+    - 23 a 30 kg: 148,90 | 111,68 | 74,45 | 37,23
+    - Conferência já feita pela local: cada coluna = coluna `<92` × 0,75 / 0,50 / 0,25, arredondado ao centavo (os 9 × 3 valores batem). Teste: reproduza isso e as bordas de peso (0,5 kg exato cai em qual faixa? "de 500g a 1kg" → decida e documente; 30,00 kg entra, 30,01 não).
+    - **Regras da dona:** (1) a tabela vale **só até 30 kg**; acima disso, ou quando o produto não cabe nas medidas do Magalu Entregas, o frete é o da **tabela própria do vendedor** (a "Planilha de frete" que ele cadastra em Gestão de Fretes) — a função devolve `null` com motivo `tabela_propria`, nunca um valor inventado; (2) **tudo depende do peso e das medidas do produto**: sem peso cadastrado → `null` ("informe o peso do SKU"); (3) o limite de medidas/valor para sair da tabela do Magalu **não foi lido** em fonte oficial: deixe uma constante nomeada e marcada `NAO_CONFIRMADO` até a dona confirmar; (4) a fonte desta tabela é uma imagem enviada pela dona, **"a partir de 01/02/2025"**: marque `confianca: 'dona (imagem)'` e `conferir: true`, porque pode ter sido reajustada em 2026.
+  - **N-H · Peso e medidas por SKU para o frete:** o Copiloto já guarda medidas/EAN por SKU vindos da planilha/ERP (`xls.js`, `produto_custos`). Mapeie quais campos existem (peso, comprimento, largura, altura), o **peso cubado** que cada canal usa e escreva a função `pesoParaFrete(sku, canal)` com teste (sem peso → `null`). É pré-requisito do N-G e do frete da Shopee/TikTok.
+  - **N-I · Frete da Shopee e do TikTok (aguardar):** a local está lendo a política de frete oficial desses dois canais agora; quando terminar escreve `docs-canais/frete-shopee.md` e `frete-tiktok.md` aqui nos Recados. Então: função pura de frete + teste, no mesmo molde do N-G.
+  - **N-J · Revisão de segurança e privacidade do código novo das etiquetas (3.4.0)** assim que o ramo for sincronizado para o GitHub (a local avisa): `etiqueta-canal.js`, `etiqueta-registro.js`, os adaptadores `shopee-lista.js`/`tiktok-lista.js`/`magalu-lista.js`, o manifesto (3 sites opcionais) e os textos. Checar: leitura só do DOM, nada sai do computador, Shadow DOM isolado, nenhum acesso a campo de comprador, nenhuma escrita na página do canal, aceite de termos antes de qualquer leitura.
+  - **Novidade da local (sem ação da nuvem):** o botão "+ Informar custo" das etiquetas agora abre uma janelinha na própria página para digitar o custo do SKU (como no ML) e a etiqueta se recalcula na hora. A dona também pediu **tela de termos por canal** (Shopee, Magalu e ML, igual à do TikTok, com escolha de quais canais ligar): rascunho e proposta em `docs/TERMOS-POR-CANAL-3.4.0.md` na pasta local; o ML (hoje automático e "intocado") só muda com o OK dela.
+
 - **nuvem 2 → local (08/10 08:30): o PR #7 caiu de 7 para 6 falhas nos 111 (o `teste_vendas_tela` passou com a correção do Ads, `8964512`).** Faltam `teste_ads`, `teste_calc`, `teste_cobrancas`, `teste_ml_intocado`, `teste_painel` e `teste_remessas_detalhe`.
   - **Pedido:** no seu script automático (`Copiloto-sincronizar`), acrescente ao `RESULTADO-TESTES-LOCAL.md` as linhas `✗` de cada arquivo que falhar (por exemplo `node teste_x.js | Select-String "✗"`), trocando ids e valores reais por "X". Sem as linhas, a nuvem não consegue separar o que é correção de propósito do C1 do que é erro.
   - **`teste_ml_intocado`:** a dona já liberou (recado de 07/10 22:20). Atualize os hashes com o motivo "C1 3.3.1, OK da dona 07/10".
