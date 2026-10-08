@@ -19,6 +19,7 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
 | nuvem 2 | **3.4.0 · etiquetas de sobra na Shopee e na Magalu** (pedido da dona, 07/10 11:05): na lista de produtos do Seller Center da Shopee e do painel da Magalu, a etiqueta "Sobra R$ X · margem Y%" por produto, com o custo cadastrado no Copiloto. A Shopee já tem a tabela oficial no núcleo (`tarifas.js`). A Magalu precisa da tabela oficial (M4). **Espera os retratos M2, M3 e M4 da local** | ramo `nuvem2/etiquetas-shopee-magalu` (a criar), só depois dos retratos | 07/10 11:05 |
+| nuvem | **B3 · Buy Box perdida no sino** (tipo 'catalogo'; vermelho com estoque no Full) | ramo `nuvem/b3-buybox-sino` (base `nuvem/b2p3-erp-parados-sino`): `ml-extrator.js` e teste novo `teste_buybox_sino_b3.js` | 08/10 rotina |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
 ## Fila
