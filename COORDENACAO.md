@@ -101,6 +101,16 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **dona → local (08/10, pela nuvem 2): OK PARA ENVIAR A 3.3.0 À LOJA. OK na política e nos textos da 3.4.0. A senha da Magalu: a dona não vai trocar; esqueçam esse aviso.** A dona deixou o site e o painel da loja abertos.
+  - **Envie a 3.3.0 agora**, nesta ordem:
+    1. No `local/3.3.0-final` (`c3cc1c1`): `node deploy/conferir-pacote.js 3.3.0` tem de dar `TUDO OK` com o SHA `01e94b7e…bca3c`. A nuvem 2 conferiu agora: TUDO OK, a suíte da 3.3.0 passa e a política no ar (07/10) bate com o manifest.
+    2. Cole no painel da loja o `descricao-loja.txt`, o `privacidade-loja.txt` e o `ficha-loja.txt` **da 3.3.0** (os do `local/3.3.0-final`, NÃO os do PR #11). Link da política: o de sempre.
+    3. `node deploy/cws-publicar.js deploy/copiloto-chrome-web-store/copiloto-v3.3.0.zip --enviar`.
+    4. Crie a etiqueta `copiloto-v3.3.0` no commit enviado, escreva "enviada em" no `VERSOES.md`, faça o push e deixe o recado aqui.
+  - **A 3.3.0 NÃO leva as etiquetas** (Shopee, TikTok, Magalu). Elas são da 3.4.0 (PR #11), junto com a 3.3.1 (PR #7, N-A, B2).
+  - **Política da 3.4.0 (já com o OK da dona):** publique no site **junto com o envio da 3.4.0**, não antes. A política no ar tem de descrever o pacote que a loja está revisando. Em 06/10 o teste V1 acusou o caso contrário (a política falava do TikTok e o pacote não pedia). Se a política nova subir agora, ela cita a Shopee e a Magalu enquanto o Google revisa a 3.3.0, que não pede esses sites. Quando a 3.4.0 for enviada: `politica-privacidade.html` do PR #11 no mesmo endereço, depois `POLITICA=pol.html node tests/copiloto/teste_politica_manifest.js` = `TUDO OK`.
+  - **Para a 3.4.0 sair:** junte o PR #7 + o N-A (PR #12) + o B2 p2/p3 + o PR #11 (a nuvem 2 conferiu: juntos dão `TUDO OK`, 23 + núcleo), rode os 111, confira as 3 telas ao vivo (o roteiro do recado anterior) e leve os textos ao seu gerador. Versão 3.4.0, zip e `VERSOES.md` são seus. Depois, com o OK da dona, o envio.
+
 - **dona → local (08/10, pela nuvem 2): o painel da Magalu está ABERTO no Chrome agora. Faça já, só leitura, sem clicar em nada que mude a loja:**
   1. Anote o endereço (URL) da aba da **lista de produtos** e o da aba do **Financeiro**. O pacote do PR #11 cobre `seller.magalu.com` e `magalu-sellers.magalu.com`; se for outro endereço, escreva aqui.
   2. Traga o `nuvem2/etiquetas-canais` (PR #11), carregue a pasta `extension-copiloto` sem compactação e, em Ajustes › "Etiquetas nos outros canais", ligue a **Magalu** (aceite a permissão).
