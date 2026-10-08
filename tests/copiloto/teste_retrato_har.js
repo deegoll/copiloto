@@ -47,5 +47,21 @@ const h = criaAnonimo(2).html('<tr data-item-id="22334455667"><td class="t">Kit 
 ok(h.indexOf('Marca Real') < 0 && h.indexOf('22334455667') < 0 && h.indexOf('maria@') < 0 && /class="p"/.test(h) && /R\$ 379,80/.test(h) && /data-item-id="9\d+"/.test(h) && /Estoque 84/.test(h),
     'título, id e e-mail somem; classes e rótulos ficam; números × fator: ' + h);
 
+console.log('e) o que escapou no retrato M3 da Magalu (08/10)');
+{
+    const an2 = criaAnonimo(1), o = an2.json({
+        custom_fields: [{ key: 'customer_name', value: 'Fulana de Tal' }, { name: 'cpf', value: '529.982.247-25' }, { key: 'canal', value: 'site' }],
+        bank_account: { bank_code: '341', bank_agency: '1234', account: '56789-0', holder: 'Loja Real Ltda' },
+        org: { name: 'Loja Real', cnpj: '11.222.333/0001-81' }, org_id: 'loja-real-123', financial_email: 'financeiro@lojareal.com.br',
+        images: [{ url: 'https://a-static.mlcdn.com.br/280x210/kit-panela/lojareal/123/abc.jpg' }], link: 'https://www.magazineluiza.com.br/kit-panela/p/abc123/',
+        api: 'https://api-product.magalu.com/api/v1/product-metrics?sku=X' });
+    const t = JSON.stringify(o);
+    ok(o.custom_fields[0].value === '***' && o.custom_fields[1].value === '***' && o.custom_fields[2].value === 'site', 'pares {key, value}: nome e CPF do cliente viram "***"; o par que não é pessoal fica');
+    ok(o.bank_account.bank_code === '***' && o.bank_account.holder === '***' && o.org.name === '***' && o.org_id === '***' && !/Loja Real|56789|lojareal/.test(t.replace(/exemplo\.invalid/g, '')),
+        'banco, empresa, org_id e e-mail financeiro: só a estrutura');
+    ok(o.images[0].url === 'https://exemplo.invalid/imagem.jpg' && o.link === 'https://exemplo.invalid/pagina' && o.api === 'https://api-product.magalu.com/api/v1/product-metrics',
+        'imagem e página do produto do vendedor viram exemplo.invalid; a URL da API do canal fica (sem a query)');
+}
+
 console.log(falhas ? '\n' + falhas + ' FALHA(S)' : '\nTUDO OK');
 process.exit(falhas ? 1 : 0);
