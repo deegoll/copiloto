@@ -19,7 +19,6 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
 | nuvem 2 | **3.4.0 · etiquetas de sobra na Shopee e na Magalu** (pedido da dona, 07/10 11:05): na lista de produtos do Seller Center da Shopee e do painel da Magalu, a etiqueta "Sobra R$ X · margem Y%" por produto, com o custo cadastrado no Copiloto. A Shopee já tem a tabela oficial no núcleo (`tarifas.js`). A Magalu precisa da tabela oficial (M4). **Espera os retratos M2, M3 e M4 da local** | ramo `nuvem2/etiquetas-shopee-magalu` (a criar), só depois dos retratos | 07/10 11:05 |
-| nuvem | **B2 parte 2**: um item por SKU com os dias de cobertura no `SHC.anomalias` (base `nuvem/331-centavos`) | ramo `nuvem/b2p2-ruptura-sku` | 08/10 |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
 ## Fila
@@ -72,7 +71,7 @@ Ordem:
 Backlog do rastreio (07/10, por impacto em faturamento e margem; cada item com teste):
 
 - ~~B1~~ (feito, PR #7) Ruptura que o sino não vê: a previsão do painel no `SHC.alertasDe`, casar anúncios pelo SKU, guardar 14 meses de histórico, "Acaba hoje" no lugar de "0 dias", teste de paridade painel × sino.
-- B2 (parte 1 feita: `nuvem/b2-ruptura-estoque-proprio`, `c3291da`; faltam o item por SKU no `SHC.anomalias` e os parados do ERP no sino) Ruptura do estoque próprio: o SKU que zerou as vendas do mês não some do `SHC.familiasAcoes`; um item por SKU com dias de cobertura no `SHC.anomalias`; os parados do ERP com estoque no sino.
+- B2 (parte 1 feita: `nuvem/b2-ruptura-estoque-proprio`, `c3291da`; parte 2 feita: `nuvem/b2p2-ruptura-sku`, `531aa72`; falta só os parados do ERP no sino) Ruptura do estoque próprio: o SKU que zerou as vendas do mês não some do `SHC.familiasAcoes`; um item por SKU com dias de cobertura no `SHC.anomalias`; os parados do ERP com estoque no sino.
 - B3 Buy Box perdida no sino (tipo 'catalogo'; vermelho quando tem estoque no Full).
 - B4 Pausa repentina (`SHC.pausasRegistra`), separando esgotado de pausa do vendedor.
 - B5 Conversão caindo (unidades ÷ visitas do vbAnuncio) no `porQueCaiu` e no sino.
@@ -101,6 +100,13 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 - **Para a local (do rastreio da nuvem, 07/10):** retratos que dão confiança ao que já existe, todos anonimizados: resposta de `/anuncios/api/tasks`; pós-venda (o product-id é o número do pedido?); tabela do Full com produto sem vendas ("0" ou "—"); promoção ativa preenchida; paginação `?page=N` das Vendas; se o Faturador traz o id da conta; bloco "Custos por estoque antigo" e cobranças de remessa; código da restrição "em revisão"; `/anuncios/lista/precos?task=PRICE_SUGGESTION`; opiniões do produto (só nota média e contagem de 1 e 2 estrelas); se "Alterar anúncio" traz a descrição.
 
 ## Recados
+
+- **nuvem → local (08/10 UTC): B2 parte 2 pronta no ramo `nuvem/b2p2-ruptura-sku`, commit `531aa72`** (base `nuvem/331-centavos`; mexe em código da extensão: **o zip e o SHA no `VERSOES.md` ficam com você**).
+  - `SHC.anomalias` (`ml-extrator.js`): cada SKU para repor do faturamento por família vira 1 item do sino, "Repor <título> (SKU X): <motivo>", com os dias de cobertura do `SHC.recomendaSku` (campo `dias`; sem venda no mês, `null`, nunca inventado). Antes era 1 item só ("3 SKUs para repor").
+  - O SKU que o aviso do Full (`SHC.alertasDe`) já mostra, pelo mesmo SKU ou anúncio, não entra de novo. O resumo "Faturamento por família" fica só com o resto (Full, baixar preço, parados, sazonal) e conta só o resto.
+  - `SHC.familiasAcoes` ganhou `itemIds`, `cobertura` por SKU e `textoSemRepor`; o `texto` do painel não mudou.
+  - Teste novo `teste_ruptura_sku_b2p2.js` (família inventada; 8 falhas no código antigo). Suíte do GitHub: `TUDO OK` (20 arquivos + núcleo). **Rode a de 111** (o `teste_ml_intocado` pode pedir o hash novo do `ml-extrator.js`).
+  - **Falta do B2:** os parados do ERP com estoque no sino (próxima rotina, se ninguém pegar antes).
 
 - **nuvem → local (08/10 UTC): N-A (retomada só do que falhou) pronto no ramo `nuvem/na-retomada-erros`, commit `df8c721`, PR #12 (rascunho, base `nuvem/331-centavos`).** Mexe em código da extensão: **o zip e o SHA no `VERSOES.md` ficam com você**.
   - `fundo/08-sincronizacao.js`: uma leitura que termina com etapa em erro (sem troca de conta e com os anúncios lidos) não fecha mais o ciclo, que guarda `comErro`. A próxima leitura que não seja o "Sincronizar agora" explícito refaz só essas etapas; as `ok` entram com `jaLida` e "continuando de onde parou". Refazem junto: os alertas sempre e o Faturamento quando as vendas brutas falharam. Ciclo com mais de 3 h não vale.
@@ -453,6 +459,7 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 | Lado | Tarefa | Commit |
 |---|---|---|
+| nuvem | B2 parte 2: 1 item por SKU para repor no sino, com os dias de cobertura (ramo `nuvem/b2p2-ruptura-sku`) | `531aa72` |
 | nuvem | N-A: retomada só do que falhou: etapa com erro deixa o ciclo aberto e `soErros:true` refaz só ela (ramo `nuvem/na-retomada-erros`, PR #12) | `df8c721` |
 | nuvem | B2 parte 1: o SKU que zerou as vendas sem estoque vira "Repor" e não some do `SHC.familiasAcoes` (ramo `nuvem/b2-ruptura-estoque-proprio`) | `c3291da` |
 | nuvem | B1: ruptura que o sino não via (mesma previsão do painel, anúncios pelo SKU, 14 meses no `vm|ml`, "Acaba hoje", teste de paridade) no ramo `nuvem/b1-ruptura-sino` | `cc276d9` |
