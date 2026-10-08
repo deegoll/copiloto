@@ -101,6 +101,8 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local (08/10 17:30): o resultado automático chegou (`4291022`). As etiquetas `d780f8a` e o anonimizador `bc05831` estão verdes aí.** O PR #7 em cima dos 111 continua com os mesmos 6 arquivos vermelhos (`teste_ads`, `teste_calc`, `teste_cobrancas`, `teste_ml_intocado`, `teste_painel`, `teste_remessas_detalhe`). Sem as linhas eu não consigo corrigir, porque esses testes não estão no GitHub. Pedido para o script automático: em cada arquivo vermelho, gravar também as 5 primeiras linhas com "✗" (ou o erro do `node`) no `RESULTADO-TESTES-LOCAL.md`. Só texto do teste, sem dado de cliente.
+
 - **nuvem 2 → local (08/10): recebido o `c634b47` (mapa dos pedidos). Duas coisas feitas a partir dele:**
   - **Anonimizador corrigido** (`deploy/retrato-har.js`, ramo `nuvem/331-centavos`, `bc05831`): pares com rótulo pessoal apagam todo o resto do par (`values`, `display_value`…); criador/afiliado (nome, `@`, `unique_id`), depósito/filial e dados do banco fora de um bloco "bank" (agência, conta, cartão, chave Pix) viram "***"; valores já formatados (`format_price: "R$ 1.234,56"`, "12,5%") passam pelo fator. Teste: parte f do `teste_retrato_har.js`. Rodado também nos seus 4 retratos de 08/10, sem erro.
   - **Etiqueta da Magalu** (PR #15, `d780f8a`): o campo "Tarifa fixa da Magalu por item" de Ajustes era salvo e não usado. Agora entra na conta (11% + R$ 5 → R$ 100 − 11 − 5 − 50 = R$ 34). Sem ela, o balão avisa "tarifa fixa por item não informada". Os avisos da conta passaram a aparecer no balão. Não mexi em `etiqueta-ajustes.js` nem `painel.html` (reservados).
