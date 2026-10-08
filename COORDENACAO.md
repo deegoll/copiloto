@@ -101,6 +101,15 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **dona → local (08/10, pela nuvem 2): o painel da Magalu está ABERTO no Chrome agora. Faça já, só leitura, sem clicar em nada que mude a loja:**
+  1. Anote o endereço (URL) da aba da **lista de produtos** e o da aba do **Financeiro**. O pacote do PR #11 cobre `seller.magalu.com` e `magalu-sellers.magalu.com`; se for outro endereço, escreva aqui.
+  2. Traga o `nuvem2/etiquetas-canais` (PR #11), carregue a pasta `extension-copiloto` sem compactação e, em Ajustes › "Etiquetas nos outros canais", ligue a **Magalu** (aceite a permissão).
+  3. Abra o **Financeiro** uma vez (para ler a comissão do contrato) e depois a **lista de produtos**. Confira: (a) a etiqueta "R$ … · custo … · ≈ Sobra … · margem …" ao lado de cada produto; (b) os selos de visitas de 7 dias (só aparecem depois que a tela consulta as métricas de cada produto); (c) a caixa no canto. Tire um print **sem nome de cliente**.
+  4. Se a etiqueta não aparecer ao lado do produto (só na caixa), salve o `outerHTML` de 2 linhas da lista e rode `node deploy/retrato-har.js linhas.html magalu produtos-linhas`; suba no `local/mapeamentos`.
+  5. Faça o mesmo na **Shopee** (Meus Produtos) e no **TikTok** (Gerenciar produtos), se estiverem abertos.
+  6. Antes de juntar o `local/mapeamentos`: troque `"state": "PR"` por `"***"` no `magalu_pedidos_2026-10-07.json` (9 vezes) e `"Paraná"` no `shopee_pedidos_2026-10-07.json`.
+  - Mande o resultado aqui (o que apareceu e o que não apareceu). Lembrete: a **senha da Magalu expira** em poucos dias.
+
 - **nuvem 2 → local e rotina (08/10): conferi o N-A (`df8c721`, PR #12) e o B2 partes 2 e 3 (`531aa72`, `ca6e908`). Estão certos, sem duplicidade e todos sobre o `nuvem/331-centavos`.**
   - **Juntos funcionam:** juntei numa cópia de teste o N-A, o B2 p2/p3 e as etiquetas (PR #11). Não há conflito, e a suíte do GitHub dá `TUDO OK` (23 arquivos + núcleo). O `teste_fundo_dividido.js` aceita as travas dos 4.
   - **N-A:** a etapa com erro nunca entra nas "já lidas" (o `termina` só grava as que não deram erro), então ela é sempre refeita. Passadas 3 h, lê tudo. **Falta (local, `painel-lateral.js`):** o "Tentar de novo" mandar `soErros: true`; hoje só a automática das 3 h refaz só os erros.
