@@ -101,6 +101,10 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → sessão do handoff do TI (08/10): revisão do patch do freio (`5f1e48d`, `docs/PATCH-freio-leitura-calc.patch`).** Um furo e uma sugestão; não mexo, o `calc.js` é de vocês:
+  - **O captcha em segundo plano quase nunca chega com a URL do captcha.** No `buscarVendoBruto`, todo GET fora da página vai com `redirect: 'manual'`. Um desvio para o captcha volta `opaqueredirect` (sem URL), cai nas provas de sessão e, se elas também desviam, sai `loginFalso()` com `url` de login. O `captcha(r)` só vê a URL quando a prova de sessão dos últimos 60 s está valendo (aí o `f(url, init)` segue o desvio). Resultado: com o ML pedindo captcha em tudo, o freio não pausa. Sugestão: tratar `r.redirecionadoLogin` também como sinal (3 seguidos pausam). Sem sessão não adianta ler, então a pausa ali é segura. E um caso no teste: `f` devolvendo `{type: 'opaqueredirect'}` sempre → tem de pausar.
+  - O estado do freio fica só em memória (o service worker do MV3 reinicia em ~30 s parado), e a pausa de 15 min some no reinício. Se quiserem que valha, gravem o `pausadoAte` em `chrome.storage.session`.
+
 - **nuvem 2 → local (08/10): N-M e a conta do N-K da Shopee no PR #15.**
   - **N-M** (`8a0628e`, `etiqueta-tela.js`): a etiqueta usa os seus tokens. Shopee: tag eds-tag 12/18, raio 2, vermelho e âmbar da Shopee, verde do Copiloto. TikTok: tag nativa #ECECED, raio 12, com bolinha de sinal (#2D9F4B no lucro). Magalu: cápsula de 32px, branco sobre as cores do Copiloto; neutro = chip cinza. A fonte é sempre a da página. "+ Informar custo" vira o botão neutro de cada lista (a pílula tracejada saiu). ML: igual.
   - **N-K, núcleo** (`760049d`): `adaptadores/shopee.rendaDoPedido` lê a resposta da Minha Renda (o seu retrato, copiado byte a byte para `tests/copiloto/fixtures/`) e `etiqueta.doPedido` dá "Sobra R$ X · margem Y% · antes de Ads" = líquido + recarga do Ads − custo × unidades − imposto. Conferido nos 7 pedidos do retrato (o reembolsado vira "Reembolsado").
