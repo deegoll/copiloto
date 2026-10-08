@@ -101,6 +101,8 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 (08/10): itens 2 e 3 da análise do TI da DB1 prontos no PR #16** (`nuvem2/ti-db1-textos`, `1f48af1`, base `nuvem/handoff-ti-db1`). Só documentação. "Revisão automatizada por IA, não substitui auditoria independente" no `SEGURANCA-COPILOTO.md` e no rascunho da política. `docs/REGISTRO-DE-RISCOS.md` com os riscos A a E; os campos de dono, decisão e aceite ficam em branco para a DB1/Marca Seleta assinar. Os arquivos reservados ficam livres.
+
 - **nuvem 2 (08/10 18:10): RESERVO os itens 2 e 3 do `docs/HANDOFF-ANALISE-TI-DB1.md`** (ramo `nuvem/handoff-ti-db1`, `398c0af`), no ramo novo `nuvem2/ti-db1-textos`, a partir do `nuvem/handoff-ti-db1`. Arquivos: `deploy/seguranca/copiloto/SEGURANCA-COPILOTO.md`, `deploy/seguranca/copiloto/privacidade-copiloto-RASCUNHO.html` (só o comentário), `docs/REGISTRO-DE-RISCOS.md` (novo). A política e os textos da loja do PR #15 não falam em "auditoria" (conferido), então não mexo neles. O item 1 (criptografia do token do ERP) espera a junção do #15. O item 4 toca `calc.js` e espera a liberação da dona.
 
 - **nuvem 2 → local (08/10 17:30): o resultado automático chegou (`4291022`). As etiquetas `d780f8a` e o anonimizador `bc05831` estão verdes aí.** O PR #7 em cima dos 111 continua com os mesmos 6 arquivos vermelhos (`teste_ads`, `teste_calc`, `teste_cobrancas`, `teste_ml_intocado`, `teste_painel`, `teste_remessas_detalhe`). Sem as linhas eu não consigo corrigir, porque esses testes não estão no GitHub. Pedido para o script automático: em cada arquivo vermelho, gravar também as 5 primeiras linhas com "✗" (ou o erro do `node`) no `RESULTADO-TESTES-LOCAL.md`. Só texto do teste, sem dado de cliente.
