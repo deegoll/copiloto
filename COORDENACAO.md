@@ -19,7 +19,6 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
 | nuvem 2 | **3.4.0 · etiquetas de sobra na Shopee e na Magalu** (pedido da dona, 07/10 11:05): na lista de produtos do Seller Center da Shopee e do painel da Magalu, a etiqueta "Sobra R$ X · margem Y%" por produto, com o custo cadastrado no Copiloto. A Shopee já tem a tabela oficial no núcleo (`tarifas.js`). A Magalu precisa da tabela oficial (M4). **Espera os retratos M2, M3 e M4 da local** | ramo `nuvem2/etiquetas-shopee-magalu` (a criar), só depois dos retratos | 07/10 11:05 |
-| nuvem | **N-A · retomada só do que falhou** (rotina de 3 h) | ramo `nuvem/na-retomada-erros` (base `nuvem/331-centavos`): `fundo/08-sincronizacao.js` e teste novo; não mexe em `painel-lateral.js` | 08/10 |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
 ## Fila
@@ -101,6 +100,12 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 - **Para a local (do rastreio da nuvem, 07/10):** retratos que dão confiança ao que já existe, todos anonimizados: resposta de `/anuncios/api/tasks`; pós-venda (o product-id é o número do pedido?); tabela do Full com produto sem vendas ("0" ou "—"); promoção ativa preenchida; paginação `?page=N` das Vendas; se o Faturador traz o id da conta; bloco "Custos por estoque antigo" e cobranças de remessa; código da restrição "em revisão"; `/anuncios/lista/precos?task=PRICE_SUGGESTION`; opiniões do produto (só nota média e contagem de 1 e 2 estrelas); se "Alterar anúncio" traz a descrição.
 
 ## Recados
+
+- **nuvem → local (08/10 UTC): N-A (retomada só do que falhou) pronto no ramo `nuvem/na-retomada-erros`, commit `df8c721`, PR #12 (rascunho, base `nuvem/331-centavos`).** Mexe em código da extensão: **o zip e o SHA no `VERSOES.md` ficam com você**.
+  - `fundo/08-sincronizacao.js`: uma leitura que termina com etapa em erro (sem troca de conta e com os anúncios lidos) não fecha mais o ciclo, que guarda `comErro`. A próxima leitura que não seja o "Sincronizar agora" explícito refaz só essas etapas; as `ok` entram com `jaLida` e "continuando de onde parou". Refazem junto: os alertas sempre e o Faturamento quando as vendas brutas falharam. Ciclo com mais de 3 h não vale.
+  - `fundo/14-mensagens.js`: `{acao:'sincronizar', soErros:true}` faz a leitura só do que falhou. Sem `soErros`, a leitura é a de hoje (tudo).
+  - Teste novo `teste_retomada_erros_na.js`: com 12 etapas ok e 1 em erro, a 2ª leitura pede só o Ads (mais os alertas, que são derivados), não as 13. O código antigo dá 6 falhas. `teste_fundo_dividido.js` tem os sha256 novos da 08 e da 14, com o motivo. Suíte do GitHub: `TUDO OK` (20 arquivos + núcleo). **Rode a de 111.**
+  - **Falta (é seu, `painel-lateral.js` reservado):** o botão "Tentar de novo" (e um "Ler só o que falhou" quando o estado é `ok` com etapa em erro, que é o caso do seu teste ao vivo) mandar `soErros: true`. O `primeiraCompleta` gravado com etapas em erro (a sua pergunta do guia) não foi mexido.
 
 - **nuvem 2 → local e dona (08/10): N-D (Magalu) pronto, e as etiquetas dos 3 canais agora mostram preço, custo, sobra, margem, visitas e frete (pedido da dona: "visitas e variação de frete igual ao ML"). PR #11, `65e7c89`.**
   - **Shopee:** visitas de 7 dias pelo total de visualizações de cada dia (guardado 15 dias no Chrome). A lista não traz frete.
@@ -447,6 +452,7 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 | Lado | Tarefa | Commit |
 |---|---|---|
+| nuvem | N-A: retomada só do que falhou: etapa com erro deixa o ciclo aberto e `soErros:true` refaz só ela (ramo `nuvem/na-retomada-erros`, PR #12) | `df8c721` |
 | nuvem | B2 parte 1: o SKU que zerou as vendas sem estoque vira "Repor" e não some do `SHC.familiasAcoes` (ramo `nuvem/b2-ruptura-estoque-proprio`) | `c3291da` |
 | nuvem | B1: ruptura que o sino não via (mesma previsão do painel, anúncios pelo SKU, 14 meses no `vm|ml`, "Acaba hoje", teste de paridade) no ramo `nuvem/b1-ruptura-sino` | `cc276d9` |
 | nuvem | M4: regras oficiais da Shopee e da Magalu em `docs/canais/` com o `teste_canais_m4.js` (ramo `nuvem/m4-regras-canais`) | `4f032db` |
