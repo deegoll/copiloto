@@ -3285,7 +3285,21 @@
         // v3.1: custo novo (ou que subiu muito) na fatura (fat:<conta>.categorias): 1 por tipo de tarifa, com o link da fatura.
         if (d.fatura) SHC.custosNovos(d.fatura).itens.forEach(x => add('custo', (x.novo ? 'Custo novo na fatura: ' : 'Custo que subiu na fatura: ') + SHC.custoNovoTxt(x), { chave: 'anom|' + x.chave, link: x.link }));
         // v3.1: faturamento por família — SKUs para repor, enviar ao Full, baixar preço ou parados (SHC.familiasAcoes): 1 item só, com o resumo.
-        if (d.familias && d.familias.total > 0) add('familia', 'Faturamento por família: ' + d.familias.texto + '.', { chave: 'anom|familia', qtd: d.familias.total });
+        // B2 parte 2 (3.3.1): cada SKU para repor é 1 item, com os dias de cobertura (o motivo do SHC.recomendaSku); o que o aviso do Full
+        // (SHC.alertasDe) já mostra pelo mesmo SKU ou anúncio não entra de novo. O resumo fica com o resto (Full, baixar preço, parados, sazonal).
+        const fa = d.familias;
+        if (fa && fa.total > 0 && Array.isArray(fa.repor) && typeof fa.textoSemRepor === 'string') {
+            const ks = x => (SHC.normalizaSku ? SHC.normalizaSku(x) : String(x || '').trim().toUpperCase());
+            const noFull = new Set(), skuFull = new Set();
+            lista.filter(a => a.tipo === 'full').forEach(a => { if (a.itemId) noFull.add(String(a.itemId)); if (a.sku) skuFull.add(ks(a.sku)); });
+            fa.repor.forEach(x => {
+                if ((x.sku && skuFull.has(ks(x.sku))) || (x.itemIds || [x.itemId]).some(id => id && noFull.has(String(id)))) return;
+                add('familia', 'Repor ' + (x.titulo ? x.titulo + ' (SKU ' + x.sku + ')' : 'o SKU ' + x.sku) + ': ' + x.motivo,
+                    { chave: 'anom|repor|' + ks(x.sku), itemId: x.itemId || '', sku: x.sku, dias: typeof x.cobertura === 'number' ? x.cobertura : null });
+            });
+            const resto = fa.total - fa.repor.length;
+            if (resto > 0 || fa.textoSemRepor) add('familia', 'Faturamento por família: ' + fa.textoSemRepor + '.', { chave: 'anom|familia', qtd: resto });
+        } else if (fa && fa.total > 0) add('familia', 'Faturamento por família: ' + fa.texto + '.', { chave: 'anom|familia', qtd: fa.total });
         // v3.2: venda nova no prejuízo (prejuizo:<conta>, SHC.vendasPrejuizo): 1 por venda, ou 1 só com todas quando passam de 3. Urgente.
         if (d.prejuizo && SHC.prejuizoAlertas) SHC.prejuizoAlertas(d.prejuizo, agora).forEach(a => add('prejuizo', a.texto, a));
         // v3.2.0: avisos de promoção já montados (SHC.promoAlertas): 1 por anúncio que saiu da promoção e 1 por promoção que está acabando.
@@ -5287,7 +5301,8 @@
             // B2: o SKU que zerou as vendas do mês (vendeu no anterior) não some: sem estoque ele é ruptura (repor); com estoque fica de fora como antes.
             (f.skus || []).filter(s => s.bruto > 0 || s.brutoAnt > 0).forEach(s => {
                 const r = SHC.recomendaSku(s, SHC.estoqueSku(s, itens, full), fams.diasCobertos);
-                if (out[r.acao] && (s.bruto > 0 || r.acao === 'repor')) out[r.acao].push({ familia: f.familia, sku: s.sku, titulo: s.titulo, itemId: (s.itemIds || [])[0] || '', motivo: r.motivo });
+                if (out[r.acao] && (s.bruto > 0 || r.acao === 'repor')) out[r.acao].push({ familia: f.familia, sku: s.sku, titulo: s.titulo, itemId: (s.itemIds || [])[0] || '', motivo: r.motivo,
+                    itemIds: (s.itemIds || []).filter(Boolean), cobertura: r.cobertura });   // B2 parte 2: o sino dá 1 item por SKU para repor, com os dias de cobertura
             });
             (f.parados || []).forEach(p => out.liquidar.push({ familia: f.familia, sku: p.sku, titulo: p.titulo, itemId: p.itemId, motivo: SHC.recomendaParado(p).motivo }));
             const sz = SHC.sazonalCompra(f, { hoje: o.hoje });
@@ -5298,6 +5313,7 @@
             out.baixar.length ? out.baixar.length + ' para baixar preço' : '', out.liquidar.length ? SHC.qtd(out.liquidar.length, 'anúncio parado (3 meses sem venda)', 'anúncios parados (3 meses sem venda)') : '',
             out.sazonal.length ? capF(nomeMesFam(out.sazonal[0].mes)) + ' forte para ' + out.sazonal[0].familia + (out.sazonal[0].ate ? ' (compre até ' + out.sazonal[0].ate.slice(8, 10) + '/' + out.sazonal[0].ate.slice(5, 7) + ')' : '') : ''].filter(Boolean);
         out.texto = partes.join(' · ');
+        out.textoSemRepor = (out.repor.length ? partes.slice(1) : partes).join(' · ');   // B2 parte 2: o resumo do sino sem os SKUs para repor (que viram 1 item cada)
         return out;
     };
 
