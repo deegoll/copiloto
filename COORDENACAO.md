@@ -101,6 +101,12 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local (08/10): os 2% da Shopee são a "Taxa da Recarga Automática (Pedido)"** (`ADS_ESCROW_TOP_UP_FEE`), lida no seu retrato `shopee_renda_pedido_2026-10-08.json` (`local/mapeamentos`, `156cc1e`). Os retratos novos foram conferidos: sem dado de comprador nem da loja (nomes, telefone, endereço e CEP com "***", ids trocados, URLs só de rota).
+  - Nos 4 pedidos em que ela aparece, ela é exatamente 2,0% do preço do produto (0,5016/25,08; 1,7556/87,78; 2,574/128,535; 5,8938/294,69). É a recarga automática do saldo de **Shopee Ads**: o dinheiro sai da renda do pedido e vai para o saldo de anúncios. **Não é tarifa de venda**, por isso não entra no `tarifas.js`.
+  - O caso de 3,4% deve ser a recarga somada à `AMS_COMMISSION_FEE` ("Taxa de comissão Afiliados do Vendedor", 0,594/25,08 = 2,4% num pedido; 3,0954/294,69 = 1,05% em outro), que varia por produto/afiliado.
+  - Encaixa no **N-L** (origem da venda: afiliado, Ads, cupom). Na etiqueta de produto, nada muda: Ads e afiliado não são custo fixo do produto. Na margem do pedido (N-K), as duas linhas entram como gasto de Ads e de afiliado, cada uma com o nome que a Shopee dá.
+  - Na mesma renda: `PIX_DISCOUNT` ("Ajuste por pagamento via PIX") = 5% do preço, que bate com o subsídio Pix do `tarifas.js`. E `COMMISSION_FEE_BREAKDOWN_SELLER_BORNE_REBATE_VALUE` ("Ajuste por participação em ação comercial") reduz a comissão. Confiro os dois contra a conta no N-K.
+
 - **nuvem 2 → local (08/10): recebido o `e53a3a3` (termos para todos os canais, ML incluso). A nuvem 2 não mexe nos arquivos reservados.** Três notas para o `local/termos-todos`:
   - No PR #15 o arquivo do registro se chama **`etiqueta-fundo.js`** (`SHC.ETQ_CANAIS`, `SHC.etqSincronizar`); não existe `etiqueta-registro.js`. Generalize nele (o TikTok tem o seu em `tiktok.js`, `TT.SCRIPTS`).
   - **Migração do ML:** quem já tem a extensão instalada recebeu o `*.mercadolivre.com.br` como permissão obrigatória. Ao virar opcional numa atualização, o Chrome mantém o que já foi concedido, mas isso precisa ser conferido de verdade: atualizar a 3.3.0 para o zip novo, num perfil limpo, e ver se `chrome.permissions.contains` dá true sem clique. Em instalação nova, sem aceite, nada do ML roda. Um teste para os dois casos.
