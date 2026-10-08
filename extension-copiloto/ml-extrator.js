@@ -3174,12 +3174,13 @@
 
     // ── v2.5.3: TODAS as anomalias da conta (número do ícone e "N coisas pedem sua atenção" do painel) ──
     // v2.7: + 'perguntas' (perguntas:<conta>) e 'reputacao' (reputacao:<conta>); remessas do Full com inconformidade/multa entram em 'full'.
-    const ANOM_TIPOS = ['full', 'estoque', 'frete', 'pagamento', 'custo', 'posvenda', 'ads', 'fiscal', 'visitas', 'medidas', 'perguntas', 'reputacao', 'familia', 'prejuizo', 'promo', 'experiencia'];
+    const ANOM_TIPOS = ['full', 'estoque', 'frete', 'pagamento', 'custo', 'posvenda', 'ads', 'fiscal', 'visitas', 'medidas', 'perguntas', 'reputacao', 'familia', 'prejuizo', 'promo', 'experiencia', 'catalogo'];
     const ANOM_ABA = { full: 'full', estoque: 'full', frete: 'frete', pagamento: 'conciliacao', custo: 'conciliacao', posvenda: 'posvenda',   // v2.9: aba Pós-venda; v3.1: custo novo na fatura
         ads: 'ads', fiscal: 'saude', visitas: 'saude', medidas: 'saude', perguntas: 'saude', reputacao: 'saude', familia: 'geral',
         prejuizo: 'conciliacao',   // v3.2: venda nova no prejuízo (módulo do Fechamento: desligado → não conta)   // v2.9: perguntas e reputação na aba Saúde; v3.1: família na Geral
         promo: 'promo',   // v3.2.0: saiu da promoção / promoção que termina em N dias (SHC.promoAlertas)
-        experiencia: 'saude' };   // v3.3: experiência de compra do anúncio (SHC.experienciaAlertas) e os avisos do ML sobre exposição
+        experiencia: 'saude',   // v3.3: experiência de compra do anúncio (SHC.experienciaAlertas) e os avisos do ML sobre exposição
+        catalogo: 'catalogo' };   // B3 (3.3.1): Buy Box perdida no catálogo
     /**
      * conta = sellerId; dados = { alertas (SHC.alertasDe), posvenda (posvenda:<conta>), frete (frete:<conta>:hist), conferir (conferir:<conta>),
      *   rateio (fech:<conta>:rateio), cert (cert:<conta>), medidas (medidas:<conta>), nfe? ([nfe:<conta>:<mês>…], v2.8), fatura? (fat:<conta>, custo novo, v3.1), titulos? ({MLB: título}, para o texto), promo? (SHC.promoAlertas, v3.2.0), agora? (ms) }.
@@ -3329,19 +3330,34 @@
             .forEach(a => add('experiencia', a.texto + ' ' + a.acao, { chave: 'anom|exp|' + a.id, itemId: a.itemId, vermelho: a.vermelho }));
         (d.tarefas || []).filter(t => t && t.qtd > 0 && /experi|exposi|moder|reputa|qualidad|PURCHASE_EXPERIENCE|EXPOSURE|MODERAT|QUALITY/i.test([t.id, t.titulo, t.texto].join(' ')))
             .forEach(t => add('experiencia', [t.titulo, t.texto].filter(Boolean).join(': ') + ' (' + SHC.qtd(t.qtd, 'anúncio', 'anúncios') + ')', { chave: 'anom|tarefa|' + t.id, qtd: t.qtd, link: t.link || '' }));
+        // B3 (3.3.1): Buy Box perdida (competição da lista de Anúncios: 'perdendo' ou 'restrito', o selo do ML): 1 por anúncio ATIVO, aba Catálogo.
+        // Vermelho quando o anúncio tem estoque apto no Full (ml:full): parado lá sem vender. 'competindo' (texto antigo, sem selo) e 'dividindo' não entram.
+        const aptasFull = {};
+        ((d.full && d.full.produtos) || []).forEach(p => { const a = SHC.num(p && p.aptas); if (a > 0) SHC.idsDoFull(p).forEach(id => { aptasFull[id] = (aptasFull[id] || 0) + a; }); });
+        const jaCat = new Set();
+        (d.itens || []).forEach(i => {
+            const e = String((i && i.competicao) || ''), id = String((i && i.itemId) || '');
+            if (!id || jaCat.has(id) || (e !== 'perdendo' && e !== 'restrito') || !SHC.anuncioAtivo(i)) return;
+            jaCat.add(id);
+            const m = String(i.competicaoMotivo || ''), ap = aptasFull[id] || 0;
+            add('catalogo', (i.titulo || id) + ': ' + (e === 'restrito' ? 'fora da disputa do catálogo' : 'perdendo a Buy Box do catálogo')
+                + (m === 'preco' ? ' por preço' : m === 'entrega' ? ' pela forma de entrega' : '') + '. Sem ela o anúncio quase não vende.'
+                + (ap > 0 ? ' Você tem ' + SHC.qtd(ap, 'unidade apta', 'unidades aptas') + ' no Full.' : ''),
+            { chave: 'anom|catalogo|' + id, itemId: id, aptasFull: ap, vermelho: ap > 0 });
+        });
         // v2.8: módulo desligado pelo seller (Ajustes) → a anomalia dele não conta nem aparece ("N coisas pedem sua atenção" e o ícone).
         const itensVis = itens.filter(i => SHC.moduloLigado(cfg, i.aba));
         const porTipo = {};
         ANOM_TIPOS.forEach(t => { porTipo[t] = 0; });
         itensVis.forEach(i => { porTipo[i.tipo] += i.tipo === 'posvenda' || i.tipo === 'prejuizo' ? i.qtd : 1; });   // v3.2: prejuízo conta cada venda
         const total = ANOM_TIPOS.reduce((s, t) => s + porTipo[t], 0);
-        return { conta: conta || '', total, porTipo, vermelho: porTipo.pagamento > 0 || itensVis.some(i => (i.tipo === 'posvenda' || i.tipo === 'perguntas' || i.tipo === 'reputacao' || i.tipo === 'prejuizo' || i.tipo === 'experiencia') && i.vermelho), itens: itensVis };
+        return { conta: conta || '', total, porTipo, vermelho: porTipo.pagamento > 0 || itensVis.some(i => (i.tipo === 'posvenda' || i.tipo === 'perguntas' || i.tipo === 'reputacao' || i.tipo === 'prejuizo' || i.tipo === 'experiencia' || i.tipo === 'catalogo') && i.vermelho), itens: itensVis };
     };
     const ANOM_NOMES = { full: ['no Full', 'no Full'], estoque: ['sem estoque no Full', 'sem estoque no Full'], frete: ['de frete', 'de frete'],
         pagamento: ['cobrança a conferir', 'cobranças a conferir'], custo: ['custo novo na fatura', 'custos novos na fatura'], posvenda: ['no pós-venda', 'no pós-venda'], ads: ['de Ads', 'de Ads'],
         fiscal: ['fiscal', 'fiscais'], visitas: ['de visitas', 'de visitas'], medidas: ['de medidas', 'de medidas'], perguntas: ['de perguntas', 'de perguntas'], reputacao: ['de reputação', 'de reputação'],
         familia: ['de estoque × venda', 'de estoque × venda'], prejuizo: ['venda no prejuízo', 'vendas no prejuízo'], promo: ['de promoção', 'de promoção'],
-        experiencia: ['de experiência de compra', 'de experiência de compra'] };
+        experiencia: ['de experiência de compra', 'de experiência de compra'], catalogo: ['de catálogo', 'de catálogo'] };
     /** Título do ícone: "Copiloto: 5 pontos de atenção — 2 no Full, 1 de frete, 2 no pós-venda" (sem nada: "Abrir o Copiloto"). */
     SHC.anomaliasTitulo = function (a) {
         if (!a || !(a.total > 0)) return 'Abrir o Copiloto';
