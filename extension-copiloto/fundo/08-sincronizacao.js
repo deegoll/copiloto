@@ -93,13 +93,18 @@ const PATCH_ETAPA = {
     posvenda: pv => ({ posvendaEm: pv.ts }),
 };
 // Ciclo da sincronização que começa agora: continua o que PAROU NO MEIO (worker morto → 'interrompida', ou 'sincronizando' gravado por
-// ele) — seja pela retomada automática, pelo "Tentar de novo" ou pela automática das 3 h. Sincronização que chegou ao fim (mesmo com
-// alguma etapa com erro) fecha o ciclo: o próximo "Sincronizar agora" lê tudo de novo.
-// Só o armazenamento (nada de pedido): o ciclo que pode continuar, ou null.
-async function cicloAberto(anterior, agora) {
+// ele) — seja pela retomada automática, pelo "Tentar de novo" ou pela automática das 3 h. Sincronização que chegou ao fim sem erro fecha o ciclo.
+// N-A (pedido da dona, 08/10/2026): chegou ao fim com etapa em erro → o ciclo fica aberto (c.comErro = as etapas com erro) e a próxima leitura
+// que não seja o "Sincronizar agora" explícito ('manual') refaz SÓ essas etapas (e as derivadas, DERIVADAS_DE); as 'ok' entram com jaLida.
+// Passou de CICLO_MS, tudo de novo. Só o armazenamento (nada de pedido): o ciclo que pode continuar, ou null.
+async function cicloAberto(anterior, agora, origem) {
     const c = await SHC.lerChave('shc:ciclo');
-    return c && c.id && !c.fechado && agora - (c.inicio || 0) < CICLO_MS && (anterior.estado === 'interrompida' || anterior.estado === 'sincronizando') ? c : null;
+    return c && c.id && !c.fechado && agora - (c.inicio || 0) < CICLO_MS && (anterior.estado === 'interrompida' || anterior.estado === 'sincronizando'
+        || (c.comErro && c.comErro.length && origem !== 'manual')) ? c : null;
 }
+// N-A: etapa que é conta feita com o que outras leram refaz junto quando uma delas teve erro (o Faturamento soma os dias das vendas brutas;
+// os alertas olham tudo).
+const DERIVADAS_DE = { faturamento: ['vendasBrutas'], alertas: null };   // null = depende de todas
 async function cicloNovo(agora) {
     await limpaCiclo(await SHC.lerChave('shc:ciclo'), null).catch(() => {});   // respostas guardadas de um ciclo que não vai continuar
     return { id: agora + '-' + Math.random().toString(36).slice(2, 8), conta: null, inicio: agora, feitas: {}, retomadas: 0, chaves: [] };
@@ -142,7 +147,7 @@ async function sincronizar(origem) {
         // v2.10: ciclo que parou no meio (só o armazenamento, nada de pedido) → as etapas já feitas nele entram como lidas (com a hora) e a
         // barra começa na 1ª que falta, já na 1ª gravação ("Continuando de onde parou: etapa 6 de 13").
         let cic = null;
-        try { cic = await cicloAberto(anterior, agora); } catch (x) { cic = null; }
+        try { cic = await cicloAberto(anterior, agora, origem); } catch (x) { cic = null; }
         const marcaFeitas = () => {
             const feitas = ETAPAS.filter(({ id }) => cic.feitas[id]);
             feitas.forEach(({ id }) => { const f = cic.feitas[id]; Object.assign(st.etapas[id], { estado: f.estado, resumo: f.resumo, inicio: f.inicio, fim: f.fim, feito: f.feito, de: f.de, unidade: f.unidade, jaLida: true }); });
@@ -398,8 +403,14 @@ async function sincronizar(origem) {
         if (cic) ETAPAS.forEach(({ id }) => { const f = cic.feitas[id]; if (f && f.patch) Object.assign(st, f.patch); });
         else [['anuncios', an], ['promos', pr], ['faturamento', co], ['full', fu], ['ads', ad], ['repasse', rp], ['afiliados', af], ['alertas', al], ['posvenda', pv]]
             .forEach(([id, r]) => { const x = r && !r.falha && !r.retomada && st.etapas[id].estado !== 'erro' ? PATCH_ETAPA[id](r) : null; if (x) Object.assign(st, x); });   // desfeita pela troca: fora
-        // Chegou ao fim (com ou sem erro em alguma etapa): o ciclo fecha e a próxima sincronização lê tudo de novo.
-        if (cic && ciclo === cic) {
+        // Chegou ao fim sem erro: o ciclo fecha e a próxima sincronização lê tudo de novo. N-A: com etapa em erro (e a conta sem troca), o
+        // ciclo fica aberto para refazer só elas; as derivadas saem das feitas (refazem junto). As respostas guardadas das que falharam ficam.
+        const comErro = cic && ciclo === cic && !erro && !trocou ? ETAPAS.map(({ id }) => id).filter(id => st.etapas[id].estado === 'erro') : [];
+        if (comErro.length) {
+            cic.comErro = comErro;
+            Object.keys(DERIVADAS_DE).forEach(id => { if (!DERIVADAS_DE[id] || DERIVADAS_DE[id].some(d => comErro.indexOf(d) >= 0)) delete cic.feitas[id]; });
+            await salvaCiclo();
+        } else if (cic && ciclo === cic) {
             cic.fechado = true;
             await limpaCiclo(cic, null).catch(() => {});
             await salvaCiclo();
