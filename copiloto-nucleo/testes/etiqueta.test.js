@@ -47,7 +47,7 @@ test('Magalu sem tabela lida: "não lido" (nunca zero); com a comissão informad
     const i = E.daVariacao('magalu', 100, { custo: 50, comissao_pct: 9.9 }, DIA);
     assert.equal(i.sobra, 40.1);
     assert.equal(i.confianca, 'manual');
-    assert.match(i.avisos.join(' '), /comissão informada por você/);
+    assert.match(i.avisos.join(' '), /comissão de Ajustes ou da tabela da sua conta/);
     assert.equal(E.daVariacao('shopee', 500, { custo: 300, comissao_pct: 99 }, DIA).sobra, 104 - (500 * 0.99 - 70), 'na Shopee a comissão manual substitui a da tabela (regra do tarifasDoItem)');
 });
 

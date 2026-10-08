@@ -35,15 +35,18 @@
         }
         if (!(p > 0)) return { classe: 'sem_preco', texto: 'Sem preço na lista', preco: null };
         // Canal sem tabela oficial lida (Magalu: a comissão por categoria só aparece logado) e a seller informou a comissão em Ajustes:
-        // a conta usa SÓ essa linha, marcada como "manual" (a etiqueta avisa). Sem ela, "não lido".
-        const cm = U.num((ctx || {}).comissao_pct), semTabela = !T.vigentes(canal, data).length;
+        // a conta usa SÓ essa linha, marcada como "manual" (a etiqueta avisa). Sem ela, "não lido". A tarifa fixa por item que a seller
+        // informou (ctx.taxa_fixa; Magalu: R$ 5,00 "DEFAULT" na tela de pagamento lida pela local em 08/10) entra como outra linha manual.
+        const cm = U.num((ctx || {}).comissao_pct), tf = U.num((ctx || {}).taxa_fixa), semTabela = !T.vigentes(canal, data).length;
+        const manual = (tipo, x, nota) => Object.assign({ canal, tipo, desde: '2000-01-01', ate: null, faixa: [0, null], fonte: { confianca: 'manual' }, nota }, x);
         const s = semTabela && cm !== null && cm >= 0
-            ? T.simular(canal, p, ctx || {}, data, [{ canal, tipo: 'comissao', desde: '2000-01-01', ate: null, faixa: [0, null], pct: cm, fonte: { confianca: 'manual' }, nota: 'comissão informada' }])
+            ? T.simular(canal, p, ctx || {}, data, [manual('comissao', { pct: cm }, 'comissão informada')].concat(tf > 0 ? [manual('taxa_fixa', { fixo: tf }, 'tarifa fixa informada')] : []))
             : T.simular(canal, p, ctx || {}, data);
         if (!s) return { classe: 'sem_preco', texto: 'Sem preço na lista', preco: null };
         if (M.ehNaoLido(s)) return { classe: 'nao_lido', texto: 'Tarifa da ' + (NOME[canal] || canal) + ' não lida', motivo: s.motivo, preco: U.r2(p) };
         const base = { preco: s.preco, custo: s.custo_rs, repasse: s.repasse, tarifas_rs: s.tarifas_rs, linhas: s.linhas, avisos: s.avisos.slice(), frete_regra: s.frete_regra, confianca: s.confianca };
-        if (semTabela) base.avisos.push('comissão informada por você (a tabela da ' + (NOME[canal] || canal) + ' não foi lida)');
+        if (semTabela) base.avisos.push('comissão de Ajustes ou da tabela da sua conta (a ' + (NOME[canal] || canal) + ' não publica tabela única)');
+        if (semTabela && !(tf > 0)) base.avisos.push('tarifa fixa por item não informada (Ajustes): a sobra pode estar maior');
         if (s.lucro === null) return Object.assign(base, { classe: 'sem_custo', texto: 'Informe o custo', sobra: null, margem_pct: null });
         return Object.assign(base, { classe: s.classe, sobra: s.lucro, margem_pct: s.margem_pct,
             texto: (s.lucro < 0 ? 'Prejuízo ' : 'Sobra ') + moeda(s.lucro) + ' · margem ' + pct(s.margem_pct) });
@@ -52,7 +55,7 @@
     /**
      * Um produto da lista com as variações → a etiqueta do produto + a de cada variação.
      * produto = { produto_id, nome?, sku?, preco?, variacoes: [{ modelo_id?, sku?, preco }] } (sem variações: o preço do produto vale).
-     * custoDe(sku, variação|null) → { custo, outros?, imposto_pct? } | null (o cadastro do Copiloto). cfg = { imposto_pct, margem_alvo_pct, frete_padrao, comissao_pct }.
+     * custoDe(sku, variação|null) → { custo, outros?, imposto_pct? } | null (o cadastro do Copiloto). cfg = { imposto_pct, margem_alvo_pct, frete_padrao, comissao_pct, taxa_fixa }.
      * → { produto_id, classe, texto, variacoes: [{ modelo_id, sku, …daVariacao }] }. Variação sem custo não entra na faixa; nenhuma com custo → "Informe o custo".
      */
     function doProduto(canal, produto, custoDe, cfg, data, opc) {
@@ -61,7 +64,7 @@
             // custoDe(sku, variação): o 2º argumento deixa o canal procurar também pelo id da variação (TikTok: c|tiktok|<sku_id>)
             const cad = (custoDe ? custoDe(v.sku || null, v) : null) || (produto.sku && custoDe && produto.sku !== v.sku ? custoDe(produto.sku, null) : null);
             const ctx = { imposto_pct: cad && U.num(cad.imposto_pct) !== null ? cad.imposto_pct : c.imposto_pct, margem_alvo_pct: c.margem_alvo_pct,
-                frete_padrao: c.frete_padrao, comissao_pct: c.comissao_pct, custo: cad ? cad.custo : null, outros: cad ? cad.outros : 0 };
+                frete_padrao: c.frete_padrao, comissao_pct: c.comissao_pct, taxa_fixa: c.taxa_fixa, custo: cad ? cad.custo : null, outros: cad ? cad.outros : 0 };
             return Object.assign({ modelo_id: v.modelo_id || null, sku: v.sku || produto.sku || null }, daVariacao(canal, v.preco, ctx, data, opc));
         });
         const comConta = vars.filter(v => typeof v.sobra === 'number');

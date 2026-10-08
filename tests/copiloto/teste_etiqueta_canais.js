@@ -165,5 +165,14 @@ console.log('h) frete assumido zero, dito no balão (leitura da local 08/10)');
     ok(/Frete assumido R\$ 0/.test(sp.detalhe) && /Programa de Frete/.test(tt.detalhe) && !/Frete assumido/.test(mg.detalhe), 'Shopee e TikTok dizem "frete assumido R$ 0" (com o motivo); a Magalu não (lá o frete depende do peso)');
 }
 
+console.log('i) Magalu: a tarifa fixa por item de Ajustes entra na conta (tela de pagamento lida pela local 08/10: 11% + R$ 5,00 por item)');
+{
+    const cs = { [SHC.chaveSku('M')]: { custo: 50 } }, P = [{ produto_id: '1', sku: 'M', preco: 100 }];
+    const [sem] = SHC.etqDosProdutos('magalu', P, cs, { magalu_comissao_pct: 11 }, HOJE);
+    const [com] = SHC.etqDosProdutos('magalu', P, cs, { magalu_comissao_pct: 11, magalu_taxa_fixa: 5 }, HOJE);
+    ok(sem.texto === 'Sobra R$ 39,00 · margem 39%' && /tarifa fixa por item não informada/.test(sem.detalhe) && /comissão de Ajustes ou da tabela da sua conta/.test(sem.detalhe), 'sem a tarifa fixa: R$ 100 − 11 − 50 = R$ 39,00, e o balão avisa (' + sem.texto + ')');
+    ok(com.texto === 'Sobra R$ 34,00 · margem 34%' && !/tarifa fixa por item não informada/.test(com.detalhe) && /tarifas R\$ 16,00/.test(com.detalhe), 'com R$ 5 por item: R$ 100 − 11 − 5 − 50 = R$ 34,00 (' + com.texto + ')');
+}
+
 console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK');
 process.exit(f ? 1 : 0);
