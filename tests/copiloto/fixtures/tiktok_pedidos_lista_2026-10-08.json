@@ -1,0 +1,2120 @@
+{
+  "canal": "tiktok",
+  "tela": "pedidos-lista",
+  "lido_em": "2026-10-08",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "POST",
+      "url": "https://seller-br.tiktok.com/api/fulfillment/order/list",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "offset": 13,
+          "count": 5,
+          "total_count": 50,
+          "main_orders": [
+            {
+              "main_order_id": "900000000000000002",
+              "trade_order_id_mapper": {
+                "main_order_id": "900000000000000002",
+                "order_line_ids": [
+                  "900000000000000003"
+                ]
+              },
+              "fulfill_unit_id_mapper": [
+                {
+                  "fulfill_unit_id": "9000000000000000004",
+                  "order_line_id": [
+                    "900000000000000003"
+                  ],
+                  "package_id": "9000000000000000005"
+                }
+              ],
+              "trade_order_module": {
+                "main_order_id": "900000000000000002",
+                "create_time": "9000000006",
+                "payment_time": "9000000007",
+                "update_time": "9000000000008",
+                "platform": 1,
+                "business_line": 1,
+                "sale_region": "BR",
+                "main_order_type": 0,
+                "fulfillment_type": 0,
+                "collection_cancellation_plan_time": "9000000009",
+                "latest_rts_time": "9000000010",
+                "latest_tts_time": "9000000011",
+                "need_invoice_flag": true,
+                "shipping_fee": {
+                  "price_val": "58.84",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "order_status_module": [
+                {
+                  "order_line_id": "900000000000000003",
+                  "main_order_status": 68,
+                  "main_sub_order_status": 206,
+                  "sku_display_status": 81
+                }
+              ],
+              "order_label_module": [
+                {
+                  "order_line_id": "900000000000000003",
+                  "isPreOrder": 0
+                }
+              ],
+              "fulfillment_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000004",
+                  "print_time": "9000000000012",
+                  "rts_time": "9000000000013",
+                  "create_time": "9000000000014",
+                  "update_time": "9000000000015",
+                  "fulfillment_status_v2": 11288,
+                  "ship_exception_code": 91,
+                  "total_order_count": 1,
+                  "total_item_count": 1,
+                  "shop_order_count": 1,
+                  "shop_item_count": 1
+                }
+              ],
+              "sku_module": [
+                {
+                  "sku_id": "9000000000000000016",
+                  "order_line_ids": [
+                    "900000000000000003"
+                  ],
+                  "product_name": "Produto 1",
+                  "sku_name": "SKU-1",
+                  "seller_sku_name": "SKU-2",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "361.57",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "361.57",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000017",
+                  "dangerous_good_level": 0
+                }
+              ],
+              "reminder_module": [
+                {
+                  "order_line_id": "900000000000000003"
+                }
+              ],
+              "print_label_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000004",
+                  "batch_id": "",
+                  "purchase_time": "9000000018",
+                  "label_status": 33,
+                  "picking_list_status": 0,
+                  "packing_list_status": 0
+                }
+              ],
+              "delivery_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000004",
+                  "pkg_attr": {
+                    "dimension": {
+                      "length": "60",
+                      "width": "37",
+                      "height": "15",
+                      "unit": 1
+                    },
+                    "weight": {
+                      "weight": "7968",
+                      "unit": 1
+                    }
+                  },
+                  "shipping_fee": {},
+                  "warehouse_region": "BR",
+                  "buyer_region": "BR",
+                  "logistics_service_info": {
+                    "logistics_service_id": "9000000000000000019",
+                    "logistics_service_type": 0,
+                    "logistics_service_name": "Entrega padrão",
+                    "logistics_service_level": "Envio padrão",
+                    "logistics_service_delivery_option": 1,
+                    "logistics_service_name_key": "Texto 1",
+                    "logistics_service_type_key": "Texto 2",
+                    "pickup_type": 1,
+                    "pickup_start_time": 0,
+                    "pickup_end_time": 0
+                  },
+                  "warehouse_sub_type": 1,
+                  "invoices": [
+                    {
+                      "invoice_id": "9000000000000000020",
+                      "invoice_status": 1,
+                      "order_ids": [
+                        "900000000000000002"
+                      ],
+                      "invoice_status_v2": 7
+                    }
+                  ],
+                  "payment_total": {
+                    "price_val": "361.57",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "pickup_type": 1
+                }
+              ],
+              "price_module": {
+                "main_order_id": "900000000000000002",
+                "sub_total": {
+                  "price_val": "302.73",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "grand_total": {
+                  "price_val": "361.57",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "note_module": {
+                "main_order_id": "900000000000000002",
+                "has_seller_note": false,
+                "has_seller_flag": false,
+                "has_buyer_note": false
+              },
+              "action_module": {
+                "main_order_id": "900000000000000002",
+                "action_list": [
+                  664,
+                  598,
+                  199,
+                  93
+                ]
+              },
+              "fulfill_line_module": [
+                {
+                  "sku_id": "9000000000000000016",
+                  "order_line_ids": [
+                    "900000000000000003"
+                  ],
+                  "product_name": "Produto 1",
+                  "sku_name": "SKU-1",
+                  "seller_sku_name": "SKU-2",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "302.73",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "361.57",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000017",
+                  "dangerous_good_level": 0
+                }
+              ]
+            },
+            {
+              "main_order_id": "900000000000000021",
+              "trade_order_id_mapper": {
+                "main_order_id": "900000000000000021",
+                "order_line_ids": [
+                  "900000000000000022"
+                ]
+              },
+              "fulfill_unit_id_mapper": [
+                {
+                  "fulfill_unit_id": "91",
+                  "order_line_id": [
+                    "900000000000000022"
+                  ],
+                  "package_id": "91"
+                }
+              ],
+              "trade_order_module": {
+                "main_order_id": "900000000000000021",
+                "create_time": "9000000023",
+                "update_time": "9000000000024",
+                "platform": 1,
+                "business_line": 1,
+                "sale_region": "BR",
+                "main_order_type": 0,
+                "fulfillment_type": 0,
+                "need_invoice_flag": true,
+                "shipping_fee": {
+                  "price_val": "24.36",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "order_status_module": [
+                {
+                  "order_line_id": "900000000000000022",
+                  "main_order_status": 69,
+                  "main_sub_order_status": 0,
+                  "sku_display_status": 93
+                }
+              ],
+              "order_label_module": [
+                {
+                  "order_line_id": "900000000000000022",
+                  "isPreOrder": 0
+                }
+              ],
+              "sku_module": [
+                {
+                  "sku_id": "9000000000000000025",
+                  "order_line_ids": [
+                    "900000000000000022"
+                  ],
+                  "product_name": "Produto 2",
+                  "sku_name": "LILAS",
+                  "seller_sku_name": "SKU-3",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "389.49",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "389.49",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000026",
+                  "creator_info_name": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Destinatário da comissão: ***"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Criador de afiliada"
+                      }
+                    ]
+                  },
+                  "dangerous_good_level": 0
+                }
+              ],
+              "delivery_module": [
+                {
+                  "fulfill_unit_id": "91",
+                  "pkg_attr": {
+                    "dimension": {},
+                    "weight": {}
+                  },
+                  "shipping_fee": {},
+                  "warehouse_region": "BR",
+                  "buyer_region": "BR",
+                  "logistics_service_info": {
+                    "logistics_service_type": 0,
+                    "logistics_service_type_key": "Texto 2"
+                  },
+                  "warehouse_sub_type": 1
+                }
+              ],
+              "reverse_module": [
+                {
+                  "reverse_order_id": "9000000000000000027",
+                  "order_line_ids": [
+                    "900000000000000022"
+                  ],
+                  "reverse_status": 66,
+                  "reverse_type": 1,
+                  "reverse_tab_status": 35,
+                  "reverse_reason": "Texto 4",
+                  "reverse_reminder": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Texto 5"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Cancelado por TikTok"
+                      }
+                    ]
+                  },
+                  "reverse_from": 3,
+                  "cancelled_time": "9000000028",
+                  "refund_time": "9000000028",
+                  "seller_auto_approve_time": "0",
+                  "canceled_during_status": "<UNSET>"
+                }
+              ],
+              "price_module": {
+                "main_order_id": "900000000000000021",
+                "sub_total": {
+                  "price_val": "365.13",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "grand_total": {
+                  "price_val": "389.49",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "note_module": {
+                "main_order_id": "900000000000000021",
+                "has_seller_note": false,
+                "has_seller_flag": false,
+                "has_buyer_note": false
+              },
+              "action_module": {
+                "main_order_id": "900000000000000021",
+                "action_list": [
+                  199,
+                  598
+                ]
+              },
+              "fulfill_line_module": [
+                {
+                  "sku_id": "9000000000000000025",
+                  "order_line_ids": [
+                    "900000000000000022"
+                  ],
+                  "product_name": "Produto 2",
+                  "sku_name": "LILAS",
+                  "seller_sku_name": "SKU-3",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "365.13",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "389.49",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000026",
+                  "creator_info_name": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Destinatário da comissão: ***"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Criador de afiliada"
+                      }
+                    ]
+                  },
+                  "dangerous_good_level": 0
+                }
+              ]
+            },
+            {
+              "main_order_id": "900000000000000029",
+              "trade_order_id_mapper": {
+                "main_order_id": "900000000000000029",
+                "order_line_ids": [
+                  "900000000000000030"
+                ]
+              },
+              "fulfill_unit_id_mapper": [
+                {
+                  "fulfill_unit_id": "9000000000000000031",
+                  "order_line_id": [
+                    "900000000000000030"
+                  ],
+                  "package_id": "9000000000000000032"
+                }
+              ],
+              "trade_order_module": {
+                "main_order_id": "900000000000000029",
+                "create_time": "9000000033",
+                "payment_time": "9000000034",
+                "update_time": "9000000000035",
+                "platform": 1,
+                "business_line": 1,
+                "sale_region": "BR",
+                "main_order_type": 0,
+                "fulfillment_type": 0,
+                "collection_cancellation_plan_time": "9000000036",
+                "latest_rts_time": "9000000037",
+                "latest_tts_time": "9000000010",
+                "need_invoice_flag": true,
+                "shipping_fee": {
+                  "price_val": "122.8",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "order_status_module": [
+                {
+                  "order_line_id": "900000000000000030",
+                  "main_order_status": 68,
+                  "main_sub_order_status": 203,
+                  "sku_display_status": 80
+                }
+              ],
+              "order_label_module": [
+                {
+                  "order_line_id": "900000000000000030",
+                  "isPreOrder": 0,
+                  "label_express_map": {
+                    "sales_source_live_tag": {
+                      "type": 2,
+                      "value": {
+                        "v_dynamic_express": {
+                          "message_level": 1,
+                          "items": [
+                            {
+                              "position": 2,
+                              "message_content": "LIVE: ***"
+                            },
+                            {
+                              "position": 1,
+                              "message_content": "LIVE: ***"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "fulfillment_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000031",
+                  "print_time": "9000000000038",
+                  "rts_time": "9000000000039",
+                  "create_time": "9000000000040",
+                  "update_time": "9000000000041",
+                  "fulfillment_status_v2": 9960,
+                  "ship_exception_code": 91,
+                  "total_order_count": 1,
+                  "total_item_count": 1,
+                  "shop_order_count": 1,
+                  "shop_item_count": 1
+                }
+              ],
+              "sku_module": [
+                {
+                  "sku_id": "9000000000000000042",
+                  "order_line_ids": [
+                    "900000000000000030"
+                  ],
+                  "product_name": "Produto 3",
+                  "sku_name": "LILAS",
+                  "seller_sku_name": "SKU-4",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "321.93",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "321.93",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000043",
+                  "creator_info_name": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Destinatário da comissão: ***"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Criador de afiliada"
+                      }
+                    ]
+                  },
+                  "dangerous_good_level": 0
+                }
+              ],
+              "reminder_module": [
+                {
+                  "order_line_id": "900000000000000030"
+                }
+              ],
+              "print_label_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000031",
+                  "batch_id": "",
+                  "purchase_time": "9000000044",
+                  "label_status": 33,
+                  "picking_list_status": 0,
+                  "packing_list_status": 0
+                }
+              ],
+              "delivery_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000031",
+                  "pkg_attr": {
+                    "dimension": {
+                      "length": "60",
+                      "width": "37",
+                      "height": "15",
+                      "unit": 1
+                    },
+                    "weight": {
+                      "weight": "8300",
+                      "unit": 1
+                    }
+                  },
+                  "shipping_fee": {},
+                  "warehouse_region": "BR",
+                  "buyer_region": "BR",
+                  "logistics_service_info": {
+                    "logistics_service_id": "9000000000000000019",
+                    "logistics_service_type": 0,
+                    "logistics_service_name": "Entrega padrão",
+                    "logistics_service_level": "Envio padrão",
+                    "logistics_service_delivery_option": 1,
+                    "logistics_service_name_key": "Texto 1",
+                    "logistics_service_type_key": "Texto 2",
+                    "pickup_type": 1,
+                    "pickup_start_time": 0,
+                    "pickup_end_time": 0
+                  },
+                  "warehouse_sub_type": 1,
+                  "invoices": [
+                    {
+                      "invoice_id": "9000000000000000045",
+                      "invoice_status": 1,
+                      "order_ids": [
+                        "900000000000000029"
+                      ],
+                      "invoice_status_v2": 7
+                    }
+                  ],
+                  "payment_total": {
+                    "price_val": "321.93",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "pickup_type": 1
+                }
+              ],
+              "price_module": {
+                "main_order_id": "900000000000000029",
+                "sub_total": {
+                  "price_val": "199.13",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "grand_total": {
+                  "price_val": "321.93",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "note_module": {
+                "main_order_id": "900000000000000029",
+                "has_seller_note": false,
+                "has_seller_flag": false,
+                "has_buyer_note": false
+              },
+              "action_module": {
+                "main_order_id": "900000000000000029",
+                "action_list": [
+                  664,
+                  598,
+                  199
+                ]
+              },
+              "fulfill_line_module": [
+                {
+                  "sku_id": "9000000000000000042",
+                  "order_line_ids": [
+                    "900000000000000030"
+                  ],
+                  "product_name": "Produto 3",
+                  "sku_name": "LILAS",
+                  "seller_sku_name": "SKU-4",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "199.13",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "321.93",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000043",
+                  "creator_info_name": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Destinatário da comissão: ***"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Criador de afiliada"
+                      }
+                    ]
+                  },
+                  "dangerous_good_level": 0
+                }
+              ],
+              "extra_data_map": {
+                "sales_source_live_tag": {
+                  "type": 2,
+                  "value": {
+                    "v_dynamic_express": {
+                      "message_level": 1,
+                      "items": [
+                        {
+                          "position": 2,
+                          "message_content": "LIVE: ***"
+                        },
+                        {
+                          "position": 1,
+                          "message_content": "LIVE"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "main_order_id": "900000000000000046",
+              "trade_order_id_mapper": {
+                "main_order_id": "900000000000000046",
+                "order_line_ids": [
+                  "900000000000000047"
+                ]
+              },
+              "fulfill_unit_id_mapper": [
+                {
+                  "fulfill_unit_id": "9000000000000000048",
+                  "order_line_id": [
+                    "900000000000000047"
+                  ],
+                  "package_id": "9000000000000000049"
+                }
+              ],
+              "trade_order_module": {
+                "main_order_id": "900000000000000046",
+                "create_time": "9000000050",
+                "payment_time": "9000000051",
+                "update_time": "9000000000052",
+                "platform": 1,
+                "business_line": 1,
+                "sale_region": "BR",
+                "main_order_type": 0,
+                "fulfillment_type": 0,
+                "collection_cancellation_plan_time": "9000000036",
+                "latest_rts_time": "9000000037",
+                "latest_tts_time": "9000000010",
+                "need_invoice_flag": true,
+                "shipping_fee": {
+                  "price_val": "0",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "order_status_module": [
+                {
+                  "order_line_id": "900000000000000047",
+                  "main_order_status": 68,
+                  "main_sub_order_status": 206,
+                  "sku_display_status": 81
+                }
+              ],
+              "order_label_module": [
+                {
+                  "order_line_id": "900000000000000047",
+                  "isPreOrder": 0,
+                  "is_refundable_sample": 11
+                }
+              ],
+              "fulfillment_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000048",
+                  "print_time": "9000000000053",
+                  "rts_time": "9000000000054",
+                  "create_time": "9000000000055",
+                  "update_time": "9000000000056",
+                  "fulfillment_status_v2": 11288,
+                  "ship_exception_code": 91,
+                  "total_order_count": 1,
+                  "total_item_count": 1,
+                  "shop_order_count": 1,
+                  "shop_item_count": 1
+                }
+              ],
+              "sku_module": [
+                {
+                  "sku_id": "9000000000000000025",
+                  "order_line_ids": [
+                    "900000000000000047"
+                  ],
+                  "product_name": "Produto 2",
+                  "sku_name": "LILAS",
+                  "seller_sku_name": "SKU-3",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "126.09",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "126.09",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000026",
+                  "creator_info_name": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Destinatário da comissão: ***"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Criador de afiliada"
+                      }
+                    ]
+                  },
+                  "dangerous_good_level": 0
+                }
+              ],
+              "reminder_module": [
+                {
+                  "order_line_id": "900000000000000047"
+                }
+              ],
+              "print_label_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000048",
+                  "batch_id": "",
+                  "purchase_time": "9000000044",
+                  "label_status": 33,
+                  "picking_list_status": 0,
+                  "packing_list_status": 0
+                }
+              ],
+              "delivery_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000048",
+                  "pkg_attr": {
+                    "dimension": {
+                      "length": "60",
+                      "width": "37",
+                      "height": "15",
+                      "unit": 1
+                    },
+                    "weight": {
+                      "weight": "9960",
+                      "unit": 1
+                    }
+                  },
+                  "shipping_fee": {},
+                  "warehouse_region": "BR",
+                  "buyer_region": "BR",
+                  "logistics_service_info": {
+                    "logistics_service_id": "9000000000000000019",
+                    "logistics_service_type": 0,
+                    "logistics_service_name": "Entrega padrão",
+                    "logistics_service_level": "Envio padrão",
+                    "logistics_service_delivery_option": 1,
+                    "logistics_service_name_key": "Texto 1",
+                    "logistics_service_type_key": "Texto 2",
+                    "pickup_type": 1,
+                    "pickup_start_time": 0,
+                    "pickup_end_time": 0
+                  },
+                  "warehouse_sub_type": 1,
+                  "invoices": [
+                    {
+                      "invoice_id": "9000000000000000057",
+                      "invoice_status": 1,
+                      "order_ids": [
+                        "900000000000000046"
+                      ],
+                      "invoice_status_v2": 7
+                    }
+                  ],
+                  "payment_total": {
+                    "price_val": "126.09",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "pickup_type": 1
+                }
+              ],
+              "price_module": {
+                "main_order_id": "900000000000000046",
+                "sub_total": {
+                  "price_val": "126.09",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "grand_total": {
+                  "price_val": "126.09",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "note_module": {
+                "main_order_id": "900000000000000046",
+                "has_seller_note": false,
+                "has_seller_flag": false,
+                "has_buyer_note": false
+              },
+              "action_module": {
+                "main_order_id": "900000000000000046",
+                "action_list": [
+                  664,
+                  598,
+                  199,
+                  93
+                ]
+              },
+              "fulfill_line_module": [
+                {
+                  "sku_id": "9000000000000000025",
+                  "order_line_ids": [
+                    "900000000000000047"
+                  ],
+                  "product_name": "Produto 2",
+                  "sku_name": "LILAS",
+                  "seller_sku_name": "SKU-3",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "126.09",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "126.09",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000026",
+                  "creator_info_name": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Destinatário da comissão: ***"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Criador de afiliada"
+                      }
+                    ]
+                  },
+                  "dangerous_good_level": 0
+                }
+              ],
+              "extra_data_map": {
+                "refundable_sample_tag": {
+                  "type": 2,
+                  "value": {
+                    "v_dynamic_express": {
+                      "message_level": 1,
+                      "items": [
+                        {
+                          "position": 1,
+                          "message_content": "Amostra reembolsável"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "main_order_id": "900000000000000058",
+              "trade_order_id_mapper": {
+                "main_order_id": "900000000000000058",
+                "order_line_ids": [
+                  "900000000000000059"
+                ]
+              },
+              "fulfill_unit_id_mapper": [
+                {
+                  "fulfill_unit_id": "9000000000000000060",
+                  "order_line_id": [
+                    "900000000000000059"
+                  ],
+                  "package_id": "9000000000000000061"
+                }
+              ],
+              "trade_order_module": {
+                "main_order_id": "900000000000000058",
+                "create_time": "9000000062",
+                "payment_time": "9000000063",
+                "update_time": "9000000000064",
+                "platform": 1,
+                "business_line": 1,
+                "sale_region": "BR",
+                "main_order_type": 0,
+                "fulfillment_type": 0,
+                "collection_cancellation_plan_time": "9000000036",
+                "latest_rts_time": "9000000037",
+                "latest_tts_time": "9000000010",
+                "need_invoice_flag": true,
+                "shipping_fee": {
+                  "price_val": "24.1",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "order_status_module": [
+                {
+                  "order_line_id": "900000000000000059",
+                  "main_order_status": 68,
+                  "main_sub_order_status": 206,
+                  "sku_display_status": 81
+                }
+              ],
+              "order_label_module": [
+                {
+                  "order_line_id": "900000000000000059",
+                  "isPreOrder": 0,
+                  "label_express_map": {
+                    "sales_source_live_tag": {
+                      "type": 2,
+                      "value": {
+                        "v_dynamic_express": {
+                          "message_level": 1,
+                          "items": [
+                            {
+                              "position": 2,
+                              "message_content": "LIVE: ***"
+                            },
+                            {
+                              "position": 1,
+                              "message_content": "LIVE: ***"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "fulfillment_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000060",
+                  "print_time": "9000000000065",
+                  "rts_time": "9000000000066",
+                  "create_time": "9000000000067",
+                  "update_time": "9000000000068",
+                  "fulfillment_status_v2": 11288,
+                  "ship_exception_code": 91,
+                  "total_order_count": 1,
+                  "total_item_count": 1,
+                  "shop_order_count": 1,
+                  "shop_item_count": 1
+                }
+              ],
+              "sku_module": [
+                {
+                  "sku_id": "9000000000000000069",
+                  "order_line_ids": [
+                    "900000000000000059"
+                  ],
+                  "product_name": "Produto 1",
+                  "sku_name": "SKU-5",
+                  "seller_sku_name": "SKU-6",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "201.34",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "201.34",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000017",
+                  "creator_info_name": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Destinatário da comissão: ***"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Criador de afiliada"
+                      }
+                    ]
+                  },
+                  "dangerous_good_level": 0
+                }
+              ],
+              "reminder_module": [
+                {
+                  "order_line_id": "900000000000000059"
+                }
+              ],
+              "print_label_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000060",
+                  "batch_id": "",
+                  "purchase_time": "9000000044",
+                  "label_status": 33,
+                  "picking_list_status": 0,
+                  "packing_list_status": 0
+                }
+              ],
+              "delivery_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000060",
+                  "pkg_attr": {
+                    "dimension": {
+                      "length": "60",
+                      "width": "37",
+                      "height": "15",
+                      "unit": 1
+                    },
+                    "weight": {
+                      "weight": "7968",
+                      "unit": 1
+                    }
+                  },
+                  "shipping_fee": {},
+                  "warehouse_region": "BR",
+                  "buyer_region": "BR",
+                  "logistics_service_info": {
+                    "logistics_service_id": "9000000000000000019",
+                    "logistics_service_type": 0,
+                    "logistics_service_name": "Entrega padrão",
+                    "logistics_service_level": "Envio padrão",
+                    "logistics_service_delivery_option": 1,
+                    "logistics_service_name_key": "Texto 1",
+                    "logistics_service_type_key": "Texto 2",
+                    "pickup_type": 1,
+                    "pickup_start_time": 0,
+                    "pickup_end_time": 0
+                  },
+                  "warehouse_sub_type": 1,
+                  "invoices": [
+                    {
+                      "invoice_id": "9000000000000000070",
+                      "invoice_status": 1,
+                      "order_ids": [
+                        "900000000000000058"
+                      ],
+                      "invoice_status_v2": 7
+                    }
+                  ],
+                  "payment_total": {
+                    "price_val": "201.34",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "pickup_type": 1
+                }
+              ],
+              "price_module": {
+                "main_order_id": "900000000000000058",
+                "sub_total": {
+                  "price_val": "177.25",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "grand_total": {
+                  "price_val": "201.34",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "note_module": {
+                "main_order_id": "900000000000000058",
+                "has_seller_note": false,
+                "has_seller_flag": false,
+                "has_buyer_note": false
+              },
+              "action_module": {
+                "main_order_id": "900000000000000058",
+                "action_list": [
+                  664,
+                  598,
+                  199,
+                  93
+                ]
+              },
+              "fulfill_line_module": [
+                {
+                  "sku_id": "9000000000000000069",
+                  "order_line_ids": [
+                    "900000000000000059"
+                  ],
+                  "product_name": "Produto 1",
+                  "sku_name": "SKU-5",
+                  "seller_sku_name": "SKU-6",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "177.25",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "201.34",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000017",
+                  "creator_info_name": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Destinatário da comissão: ***"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Criador de afiliada"
+                      }
+                    ]
+                  },
+                  "dangerous_good_level": 0
+                }
+              ],
+              "extra_data_map": {
+                "sales_source_live_tag": {
+                  "type": 2,
+                  "value": {
+                    "v_dynamic_express": {
+                      "message_level": 1,
+                      "items": [
+                        {
+                          "position": 2,
+                          "message_content": "LIVE: ***"
+                        },
+                        {
+                          "position": 1,
+                          "message_content": "LIVE"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "main_order_id": "900000000000000071",
+              "trade_order_id_mapper": {
+                "main_order_id": "900000000000000071",
+                "order_line_ids": [
+                  "900000000000000072"
+                ]
+              },
+              "fulfill_unit_id_mapper": [
+                {
+                  "fulfill_unit_id": "9000000000000000073",
+                  "order_line_id": [
+                    "900000000000000072"
+                  ],
+                  "package_id": "9000000000000000074"
+                }
+              ],
+              "trade_order_module": {
+                "main_order_id": "900000000000000071",
+                "create_time": "9000000075",
+                "payment_time": "9000000076",
+                "update_time": "9000000000077",
+                "platform": 1,
+                "business_line": 1,
+                "sale_region": "BR",
+                "main_order_type": 0,
+                "fulfillment_type": 0,
+                "collection_cancellation_plan_time": "9000000036",
+                "latest_rts_time": "9000000037",
+                "latest_tts_time": "9000000010",
+                "need_invoice_flag": true,
+                "shipping_fee": {
+                  "price_val": "26.49",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "order_status_module": [
+                {
+                  "order_line_id": "900000000000000072",
+                  "main_order_status": 68,
+                  "main_sub_order_status": 206,
+                  "sku_display_status": 81
+                }
+              ],
+              "order_label_module": [
+                {
+                  "order_line_id": "900000000000000072",
+                  "isPreOrder": 0
+                }
+              ],
+              "fulfillment_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000073",
+                  "print_time": "9000000000078",
+                  "rts_time": "9000000000079",
+                  "create_time": "9000000000080",
+                  "update_time": "9000000000081",
+                  "fulfillment_status_v2": 11288,
+                  "ship_exception_code": 91,
+                  "total_order_count": 1,
+                  "total_item_count": 1,
+                  "shop_order_count": 1,
+                  "shop_item_count": 1
+                }
+              ],
+              "sku_module": [
+                {
+                  "sku_id": "9000000000000000082",
+                  "order_line_ids": [
+                    "900000000000000072"
+                  ],
+                  "product_name": "Produto 1",
+                  "sku_name": "SKU-7",
+                  "seller_sku_name": "SKU-8",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "385.98",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "385.98",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000017",
+                  "dangerous_good_level": 0
+                }
+              ],
+              "reminder_module": [
+                {
+                  "order_line_id": "900000000000000072"
+                }
+              ],
+              "print_label_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000073",
+                  "batch_id": "",
+                  "purchase_time": "9000000083",
+                  "label_status": 33,
+                  "picking_list_status": 0,
+                  "packing_list_status": 0
+                }
+              ],
+              "delivery_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000073",
+                  "pkg_attr": {
+                    "dimension": {
+                      "length": "60",
+                      "width": "37",
+                      "height": "15",
+                      "unit": 1
+                    },
+                    "weight": {
+                      "weight": "7968",
+                      "unit": 1
+                    }
+                  },
+                  "shipping_fee": {},
+                  "warehouse_region": "BR",
+                  "buyer_region": "BR",
+                  "logistics_service_info": {
+                    "logistics_service_id": "9000000000000000019",
+                    "logistics_service_type": 0,
+                    "logistics_service_name": "Entrega padrão",
+                    "logistics_service_level": "Envio padrão",
+                    "logistics_service_delivery_option": 1,
+                    "logistics_service_name_key": "Texto 1",
+                    "logistics_service_type_key": "Texto 2",
+                    "pickup_type": 1,
+                    "pickup_start_time": 0,
+                    "pickup_end_time": 0
+                  },
+                  "warehouse_sub_type": 1,
+                  "invoices": [
+                    {
+                      "invoice_id": "9000000000000000084",
+                      "invoice_status": 1,
+                      "order_ids": [
+                        "900000000000000071"
+                      ],
+                      "invoice_status_v2": 7
+                    }
+                  ],
+                  "payment_total": {
+                    "price_val": "385.98",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "pickup_type": 1
+                }
+              ],
+              "price_module": {
+                "main_order_id": "900000000000000071",
+                "sub_total": {
+                  "price_val": "359.49",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "grand_total": {
+                  "price_val": "385.98",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "note_module": {
+                "main_order_id": "900000000000000071",
+                "has_seller_note": false,
+                "has_seller_flag": false,
+                "has_buyer_note": false
+              },
+              "action_module": {
+                "main_order_id": "900000000000000071",
+                "action_list": [
+                  664,
+                  598,
+                  199,
+                  93
+                ]
+              },
+              "fulfill_line_module": [
+                {
+                  "sku_id": "9000000000000000082",
+                  "order_line_ids": [
+                    "900000000000000072"
+                  ],
+                  "product_name": "Produto 1",
+                  "sku_name": "SKU-7",
+                  "seller_sku_name": "SKU-8",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "359.49",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "385.98",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000017",
+                  "dangerous_good_level": 0
+                }
+              ]
+            },
+            {
+              "main_order_id": "900000000000000085",
+              "trade_order_id_mapper": {
+                "main_order_id": "900000000000000085",
+                "order_line_ids": [
+                  "900000000000000086"
+                ]
+              },
+              "fulfill_unit_id_mapper": [
+                {
+                  "fulfill_unit_id": "91",
+                  "order_line_id": [
+                    "900000000000000086"
+                  ],
+                  "package_id": "91"
+                }
+              ],
+              "trade_order_module": {
+                "main_order_id": "900000000000000085",
+                "create_time": "9000000087",
+                "update_time": "9000000000088",
+                "platform": 1,
+                "business_line": 1,
+                "sale_region": "BR",
+                "main_order_type": 0,
+                "fulfillment_type": 0,
+                "need_invoice_flag": true,
+                "shipping_fee": {
+                  "price_val": "0",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "order_status_module": [
+                {
+                  "order_line_id": "900000000000000086",
+                  "main_order_status": 69,
+                  "main_sub_order_status": 0,
+                  "sku_display_status": 93
+                }
+              ],
+              "order_label_module": [
+                {
+                  "order_line_id": "900000000000000086",
+                  "isPreOrder": 0
+                }
+              ],
+              "sku_module": [
+                {
+                  "sku_id": "9000000000000000089",
+                  "order_line_ids": [
+                    "900000000000000086"
+                  ],
+                  "product_name": "Produto 4",
+                  "sku_name": "LARANJA",
+                  "seller_sku_name": "SKU-9",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "351",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "351",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000090",
+                  "dangerous_good_level": 0
+                }
+              ],
+              "delivery_module": [
+                {
+                  "fulfill_unit_id": "91",
+                  "pkg_attr": {
+                    "dimension": {},
+                    "weight": {}
+                  },
+                  "shipping_fee": {},
+                  "warehouse_region": "BR",
+                  "buyer_region": "BR",
+                  "logistics_service_info": {
+                    "logistics_service_type": 0,
+                    "logistics_service_type_key": "Texto 2"
+                  },
+                  "warehouse_sub_type": 1
+                }
+              ],
+              "reverse_module": [
+                {
+                  "reverse_order_id": "9000000000000000091",
+                  "order_line_ids": [
+                    "900000000000000086"
+                  ],
+                  "reverse_status": 66,
+                  "reverse_type": 1,
+                  "reverse_tab_status": 35,
+                  "reverse_reason": "Texto 4",
+                  "reverse_reminder": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Texto 5"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Cancelado por TikTok"
+                      }
+                    ]
+                  },
+                  "reverse_from": 3,
+                  "cancelled_time": "9000000092",
+                  "refund_time": "9000000093",
+                  "seller_auto_approve_time": "0",
+                  "canceled_during_status": "<UNSET>"
+                }
+              ],
+              "price_module": {
+                "main_order_id": "900000000000000085",
+                "sub_total": {
+                  "price_val": "351",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "grand_total": {
+                  "price_val": "351",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "note_module": {
+                "main_order_id": "900000000000000085",
+                "has_seller_note": false,
+                "has_seller_flag": false,
+                "has_buyer_note": false
+              },
+              "action_module": {
+                "main_order_id": "900000000000000085",
+                "action_list": [
+                  199,
+                  598
+                ]
+              },
+              "fulfill_line_module": [
+                {
+                  "sku_id": "9000000000000000089",
+                  "order_line_ids": [
+                    "900000000000000086"
+                  ],
+                  "product_name": "Produto 4",
+                  "sku_name": "LARANJA",
+                  "seller_sku_name": "SKU-9",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "351",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "351",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000090",
+                  "dangerous_good_level": 0
+                }
+              ]
+            },
+            {
+              "main_order_id": "900000000000000094",
+              "trade_order_id_mapper": {
+                "main_order_id": "900000000000000094",
+                "order_line_ids": [
+                  "900000000000000095"
+                ]
+              },
+              "fulfill_unit_id_mapper": [
+                {
+                  "fulfill_unit_id": "91",
+                  "order_line_id": [
+                    "900000000000000095"
+                  ],
+                  "package_id": "91"
+                }
+              ],
+              "trade_order_module": {
+                "main_order_id": "900000000000000094",
+                "create_time": "9000000096",
+                "update_time": "9000000000097",
+                "platform": 1,
+                "business_line": 1,
+                "sale_region": "BR",
+                "main_order_type": 0,
+                "fulfillment_type": 0,
+                "need_invoice_flag": true,
+                "shipping_fee": {
+                  "price_val": "58.84",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "order_status_module": [
+                {
+                  "order_line_id": "900000000000000095",
+                  "main_order_status": 69,
+                  "main_sub_order_status": 0,
+                  "sku_display_status": 93
+                }
+              ],
+              "order_label_module": [
+                {
+                  "order_line_id": "900000000000000095",
+                  "isPreOrder": 0
+                }
+              ],
+              "sku_module": [
+                {
+                  "sku_id": "9000000000000000098",
+                  "order_line_ids": [
+                    "900000000000000095"
+                  ],
+                  "product_name": "Produto 5",
+                  "sku_name": "ROSA",
+                  "seller_sku_name": "SKU-10",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "388.55",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "388.55",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000099",
+                  "creator_info_name": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Destinatário da comissão: ***"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Criador de afiliada"
+                      }
+                    ]
+                  },
+                  "dangerous_good_level": 0
+                }
+              ],
+              "delivery_module": [
+                {
+                  "fulfill_unit_id": "91",
+                  "pkg_attr": {
+                    "dimension": {},
+                    "weight": {}
+                  },
+                  "shipping_fee": {},
+                  "warehouse_region": "BR",
+                  "buyer_region": "BR",
+                  "logistics_service_info": {
+                    "logistics_service_type": 0,
+                    "logistics_service_type_key": "Texto 2"
+                  },
+                  "warehouse_sub_type": 1
+                }
+              ],
+              "reverse_module": [
+                {
+                  "reverse_order_id": "9000000000000000100",
+                  "order_line_ids": [
+                    "900000000000000095"
+                  ],
+                  "reverse_status": 66,
+                  "reverse_type": 1,
+                  "reverse_tab_status": 35,
+                  "reverse_reason": "Alta taxa de envio",
+                  "reverse_reminder": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Texto 7"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Cancelado por Cliente"
+                      }
+                    ]
+                  },
+                  "reverse_from": 1,
+                  "cancelled_time": "9000000101",
+                  "refund_time": "9000000101",
+                  "seller_auto_approve_time": "0",
+                  "canceled_during_status": "<UNSET>"
+                }
+              ],
+              "price_module": {
+                "main_order_id": "900000000000000094",
+                "sub_total": {
+                  "price_val": "329.71",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "grand_total": {
+                  "price_val": "388.55",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "note_module": {
+                "main_order_id": "900000000000000094",
+                "has_seller_note": false,
+                "has_seller_flag": false,
+                "has_buyer_note": false
+              },
+              "action_module": {
+                "main_order_id": "900000000000000094",
+                "action_list": [
+                  199,
+                  598
+                ]
+              },
+              "fulfill_line_module": [
+                {
+                  "sku_id": "9000000000000000098",
+                  "order_line_ids": [
+                    "900000000000000095"
+                  ],
+                  "product_name": "Produto 5",
+                  "sku_name": "ROSA",
+                  "seller_sku_name": "SKU-10",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "329.71",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "388.55",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000099",
+                  "creator_info_name": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Destinatário da comissão: ***"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Criador de afiliada"
+                      }
+                    ]
+                  },
+                  "dangerous_good_level": 0
+                }
+              ]
+            }
+          ],
+          "next_cursor_token": "9000000000000000000000000000000000000000000000000000000000000102",
+          "has_more": true,
+          "default_search_create_time": {
+            "time_start": "9000000000103",
+            "time_end": "9000000000104"
+          },
+          "search_next_cursor": "Texto 8",
+          "search_next_has_more": true,
+          "search_previous_cursor": "Texto 9",
+          "search_previous_has_more": true
+        },
+        "message": "success"
+      }
+    },
+    {
+      "metodo": "POST",
+      "url": "https://seller-br.tiktok.com/api/fulfillment/order/get",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "main_order": [
+            {
+              "main_order_id": "900000000000000105",
+              "trade_order_id_mapper": {
+                "main_order_id": "900000000000000105",
+                "order_line_ids": [
+                  "900000000000000106"
+                ]
+              },
+              "fulfill_unit_id_mapper": [
+                {
+                  "fulfill_unit_id": "9000000000000000107",
+                  "order_line_id": [
+                    "900000000000000106"
+                  ],
+                  "package_id": "9000000000000000108"
+                }
+              ],
+              "trade_order_module": {
+                "main_order_id": "900000000000000105",
+                "create_time": "9000000109",
+                "payment_time": "9000000110",
+                "update_time": "9000000000111",
+                "platform": 1,
+                "business_line": 1,
+                "sale_region": "BR",
+                "main_order_type": 0,
+                "fulfillment_type": 0,
+                "collection_cancellation_plan_time": "9000000009",
+                "latest_rts_time": "9000000010",
+                "latest_tts_time": "9000000011",
+                "need_invoice_flag": true,
+                "shipping_fee": {
+                  "price_val": "78.47",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "order_status_module": [
+                {
+                  "order_line_id": "900000000000000106",
+                  "main_order_status": 68,
+                  "main_sub_order_status": 206,
+                  "sku_display_status": 81
+                }
+              ],
+              "order_label_module": [
+                {
+                  "order_line_id": "900000000000000106",
+                  "isPreOrder": 0
+                }
+              ],
+              "fulfillment_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000107",
+                  "print_time": "9000000000112",
+                  "rts_time": "9000000000113",
+                  "create_time": "9000000000114",
+                  "update_time": "9000000000115",
+                  "fulfillment_status_v2": 11288,
+                  "ship_exception_code": 91,
+                  "total_order_count": 1,
+                  "total_item_count": 1,
+                  "shop_order_count": 1,
+                  "shop_item_count": 1
+                }
+              ],
+              "sku_module": [
+                {
+                  "sku_id": "9000000000000000116",
+                  "order_line_ids": [
+                    "900000000000000106"
+                  ],
+                  "product_name": "Produto 5",
+                  "sku_name": "LILAS",
+                  "seller_sku_name": "SKU-4",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "507.23",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "507.23",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000099",
+                  "creator_info_name": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Destinatário da comissão: ***"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Criador de afiliada"
+                      }
+                    ]
+                  },
+                  "dangerous_good_level": 0
+                }
+              ],
+              "reminder_module": [
+                {
+                  "order_line_id": "900000000000000106"
+                }
+              ],
+              "print_label_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000107",
+                  "batch_id": "",
+                  "purchase_time": "9000000117",
+                  "label_status": 33,
+                  "picking_list_status": 0,
+                  "packing_list_status": 0
+                }
+              ],
+              "delivery_module": [
+                {
+                  "fulfill_unit_id": "9000000000000000107",
+                  "pkg_attr": {
+                    "dimension": {
+                      "length": "60",
+                      "width": "37",
+                      "height": "15",
+                      "unit": 1
+                    },
+                    "weight": {
+                      "weight": "7968",
+                      "unit": 1
+                    }
+                  },
+                  "shipping_fee": {},
+                  "warehouse_region": "BR",
+                  "buyer_region": "BR",
+                  "logistics_service_info": {
+                    "logistics_service_id": "9000000000000000019",
+                    "logistics_service_type": 0,
+                    "logistics_service_name": "Entrega padrão",
+                    "logistics_service_level": "Envio padrão",
+                    "logistics_service_delivery_option": 1,
+                    "logistics_service_name_key": "Texto 1",
+                    "logistics_service_type_key": "Texto 2",
+                    "pickup_type": 1,
+                    "pickup_start_time": 0,
+                    "pickup_end_time": 0
+                  },
+                  "warehouse_sub_type": 1,
+                  "invoices": [
+                    {
+                      "invoice_id": "9000000000000000118",
+                      "invoice_status": 1,
+                      "order_ids": [
+                        "900000000000000105"
+                      ],
+                      "invoice_status_v2": 7
+                    }
+                  ],
+                  "payment_total": {
+                    "price_val": "507.23",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "pickup_type": 1
+                }
+              ],
+              "price_module": {
+                "main_order_id": "900000000000000105",
+                "sub_total": {
+                  "price_val": "428.76",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "grand_total": {
+                  "price_val": "507.23",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "taxes": {
+                  "price_val": "0",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "shipping_fee": {
+                  "price_val": "78.47",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "platform_discount_total": {
+                  "price_val": "2.78",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "seller_discount_total": {
+                  "price_val": "199",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "main_order_origin_sale_price": {
+                  "price_val": "630.73",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "shipping_origin_fee": {
+                  "price_val": "98.39",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "shipping_fee_discount_seller": {
+                  "price_val": "0",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "shipping_fee_discount_platform": {
+                  "price_val": "20",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                },
+                "promotion_infos": [
+                  {
+                    "promotion_name": "Texto 10",
+                    "promotion_cost": "199",
+                    "promotion_type": 1
+                  }
+                ],
+                "handling_fee": {
+                  "price_val": "0",
+                  "currency": "BRL",
+                  "symbol": "R$"
+                }
+              },
+              "note_module": {
+                "main_order_id": "900000000000000105",
+                "has_seller_note": false,
+                "has_seller_flag": false,
+                "has_buyer_note": false
+              },
+              "action_module": {
+                "main_order_id": "900000000000000105",
+                "action_list": [
+                  664,
+                  598,
+                  199,
+                  93
+                ]
+              },
+              "fulfill_line_module": [
+                {
+                  "sku_id": "9000000000000000116",
+                  "order_line_ids": [
+                    "900000000000000106"
+                  ],
+                  "product_name": "Produto 5",
+                  "sku_name": "LILAS",
+                  "seller_sku_name": "SKU-4",
+                  "product_type": 0,
+                  "quantity": 1,
+                  "sku_unit_price": {
+                    "price_val": "428.76",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "sku_total_price": {
+                    "price_val": "507.23",
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "product_id": "9000000000000000099",
+                  "creator_info_name": {
+                    "message_level": 1,
+                    "items": [
+                      {
+                        "position": 2,
+                        "message_content": "Destinatário da comissão: ***"
+                      },
+                      {
+                        "position": 1,
+                        "message_content": "Criador de afiliada"
+                      }
+                    ]
+                  },
+                  "dangerous_good_level": 0
+                }
+              ]
+            }
+          ]
+        },
+        "message": "success"
+      }
+    }
+  ]
+}

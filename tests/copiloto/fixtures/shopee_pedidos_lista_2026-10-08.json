@@ -1,0 +1,4505 @@
+{
+  "canal": "shopee",
+  "tela": "pedidos-lista",
+  "lido_em": "2026-10-08",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v3/order/get_order_list_card_list",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "card_list": [
+            {
+              "package_level_order_card": {
+                "card_header": {
+                  "order_sn": "90000000000002",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "package_list": [
+                  {
+                    "item_info_group": {
+                      "item_info_list": [
+                        {
+                          "item_list": [
+                            {
+                              "name": "Produto 1",
+                              "image": "Texto 1",
+                              "description": "Produto 2",
+                              "is_wholesale": false,
+                              "amount": 1,
+                              "inner_item_ext_info": {
+                                "item_id": 90000000003,
+                                "model_id": 900000000004,
+                                "is_prescription_item": false
+                              }
+                            }
+                          ],
+                          "item_ext_info": {
+                            "is_bundle": false
+                          }
+                        }
+                      ]
+                    },
+                    "payment_info": {
+                      "currency": 6,
+                      "total_price": 6584736,
+                      "payment_method": "Credit Card"
+                    },
+                    "status_info": {
+                      "status": "A Enviar",
+                      "status_description": {
+                        "description_value": "Texto 2",
+                        "description_timestamp_list": [
+                          {
+                            "timestamp": 1791514799,
+                            "placeholder": "{timestamp}",
+                            "is_count_down": false
+                          }
+                        ],
+                        "description_placeholder_list": [
+                          {
+                            "placeholder": "{timestamp}",
+                            "placeholder_types": [
+                              1
+                            ],
+                            "placeholder_style_id": 91,
+                            "timestamp": {
+                              "timestamp_value": 1791514799
+                            }
+                          }
+                        ]
+                      },
+                      "status_tag": [
+                        {
+                          "tag_id": 905,
+                          "tag_value": "Para enviar em 12 horas",
+                          "tag_timestamp": {
+                            "timestamp": 1791514799,
+                            "placeholder": "{timestamp}",
+                            "is_count_down": false
+                          }
+                        }
+                      ],
+                      "rts_info": {}
+                    },
+                    "fulfilment_info": {
+                      "fulfilment_channel_name": "Shopee Xpress"
+                    },
+                    "package_ext_info": {
+                      "package_number": "OFG000000000000000",
+                      "ofg_id": 900000000000006,
+                      "shipping_method": 61700,
+                      "fulfilment_channel_id": 90007,
+                      "fulfilment_status": 6,
+                      "allocating_status": 0,
+                      "acl1_arrange_ship_date": 1792033199,
+                      "acl2_3pl_ack_date": 1792033199,
+                      "shipping_name": "***",
+                      "shipping_phone": "***",
+                      "shipping_address": "***",
+                      "dropoff_b2c": false,
+                      "can_unsplit": false,
+                      "is_pickup_only": false,
+                      "is_manual_consignment": false,
+                      "is_auto_consignment": true,
+                      "is_arrange_consignment": true,
+                      "has_tracking": false
+                    }
+                  }
+                ],
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000008,
+                  "buyer_user_id": 900000009,
+                  "logistics_status": 6,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791514799,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 3",
+                  "can_partial_cancel": false
+                }
+              }
+            },
+            {
+              "package_level_order_card": {
+                "card_header": {
+                  "order_sn": "90000000000012",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "package_list": [
+                  {
+                    "item_info_group": {
+                      "item_info_list": [
+                        {
+                          "item_list": [
+                            {
+                              "name": "Produto 3",
+                              "image": "Texto 4",
+                              "description": "Produto 4",
+                              "is_wholesale": false,
+                              "amount": 1,
+                              "inner_item_ext_info": {
+                                "item_id": 90000000013,
+                                "model_id": 900000000014,
+                                "is_prescription_item": false
+                              }
+                            }
+                          ],
+                          "item_ext_info": {
+                            "is_bundle": false
+                          }
+                        }
+                      ]
+                    },
+                    "payment_info": {
+                      "currency": 6,
+                      "total_price": 8152950,
+                      "payment_method": "Pix"
+                    },
+                    "status_info": {
+                      "status": "A Enviar",
+                      "status_description": {
+                        "description_value": "Texto 5"
+                      },
+                      "rts_info": {}
+                    },
+                    "fulfilment_info": {
+                      "fulfilment_channel_name": "Shopee Xpress",
+                      "tracking_number_list": [
+                        "BR000000000000D"
+                      ]
+                    },
+                    "package_ext_info": {
+                      "package_number": "OFG000000000000000",
+                      "ofg_id": 900000000000015,
+                      "shipping_method": 61700,
+                      "fulfilment_channel_id": 90007,
+                      "fulfilment_status": 1,
+                      "allocating_status": 0,
+                      "acl1_arrange_ship_date": 1792033199,
+                      "acl2_3pl_ack_date": 1792033199,
+                      "shipping_name": "***",
+                      "shipping_phone": "***",
+                      "shipping_address": "***",
+                      "consignment_no": "BR000000000000D",
+                      "dropoff_b2c": false,
+                      "can_unsplit": false,
+                      "is_pickup_only": false,
+                      "is_manual_consignment": false,
+                      "is_auto_consignment": true,
+                      "is_arrange_consignment": false,
+                      "has_tracking": false
+                    }
+                  }
+                ],
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000016,
+                  "buyer_user_id": 900000017,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791514799,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 6",
+                  "can_partial_cancel": false
+                }
+              }
+            },
+            {
+              "package_level_order_card": {
+                "card_header": {
+                  "order_sn": "90000000000019",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "package_list": [
+                  {
+                    "item_info_group": {
+                      "item_info_list": [
+                        {
+                          "item_list": [
+                            {
+                              "name": "Produto 3",
+                              "image": "Texto 4",
+                              "description": "Produto 4",
+                              "is_wholesale": false,
+                              "amount": 1,
+                              "inner_item_ext_info": {
+                                "item_id": 90000000013,
+                                "model_id": 900000000014,
+                                "is_prescription_item": false
+                              }
+                            }
+                          ],
+                          "item_ext_info": {
+                            "is_bundle": false
+                          }
+                        }
+                      ]
+                    },
+                    "payment_info": {
+                      "currency": 6,
+                      "total_price": 6974586,
+                      "payment_method": "Pix"
+                    },
+                    "status_info": {
+                      "status": "A Enviar",
+                      "status_description": {
+                        "description_value": "Texto 5"
+                      },
+                      "rts_info": {}
+                    },
+                    "fulfilment_info": {
+                      "fulfilment_channel_name": "Shopee Xpress",
+                      "tracking_number_list": [
+                        "BR0000000000000"
+                      ]
+                    },
+                    "package_ext_info": {
+                      "package_number": "OFG000000000000000",
+                      "ofg_id": 900000000000020,
+                      "shipping_method": 61700,
+                      "fulfilment_channel_id": 90007,
+                      "fulfilment_status": 1,
+                      "allocating_status": 0,
+                      "acl1_arrange_ship_date": 1792033199,
+                      "acl2_3pl_ack_date": 1792033199,
+                      "shipping_name": "***",
+                      "shipping_phone": "***",
+                      "shipping_address": "***",
+                      "consignment_no": "BR0000000000000",
+                      "dropoff_b2c": false,
+                      "can_unsplit": false,
+                      "is_pickup_only": false,
+                      "is_manual_consignment": false,
+                      "is_auto_consignment": true,
+                      "is_arrange_consignment": false,
+                      "has_tracking": false
+                    }
+                  }
+                ],
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000021,
+                  "buyer_user_id": 900000022,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791514799,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 7",
+                  "can_partial_cancel": false
+                }
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000023",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 5",
+                          "image": "Texto 8",
+                          "description": "Produto 6",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000024,
+                            "model_id": 900000000025,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 24995826,
+                  "payment_method": "Pix"
+                },
+                "status_info": {
+                  "status": "Não pago",
+                  "status_description": {
+                    "description_value": "Texto 9",
+                    "description_timestamp_list": [
+                      {
+                        "timestamp": 1791514136,
+                        "placeholder": "{timestamp}",
+                        "is_count_down": false
+                      }
+                    ],
+                    "description_placeholder_list": [
+                      {
+                        "placeholder": "{timestamp}",
+                        "placeholder_types": [
+                          1
+                        ],
+                        "placeholder_style_id": 91,
+                        "timestamp": {
+                          "timestamp_value": 1791514136,
+                          "timestamp_tooltip_value": "Texto 10"
+                        }
+                      }
+                    ]
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress"
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000026,
+                  "buyer_user_id": 9000000027,
+                  "logistics_status": 0,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 11",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000028,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "allocating_status": 1,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": true,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "package_level_order_card": {
+                "card_header": {
+                  "order_sn": "90000000000029",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "package_list": [
+                  {
+                    "item_info_group": {
+                      "item_info_list": [
+                        {
+                          "item_list": [
+                            {
+                              "name": "Produto 1",
+                              "image": "Texto 1",
+                              "description": "Produto 7",
+                              "is_wholesale": false,
+                              "amount": 1,
+                              "inner_item_ext_info": {
+                                "item_id": 90000000003,
+                                "model_id": 900000000030,
+                                "is_prescription_item": false
+                              }
+                            }
+                          ],
+                          "item_ext_info": {
+                            "is_bundle": false
+                          }
+                        }
+                      ]
+                    },
+                    "payment_info": {
+                      "currency": 6,
+                      "total_price": 5507394,
+                      "payment_method": "Pix"
+                    },
+                    "status_info": {
+                      "status": "A Enviar",
+                      "status_description": {
+                        "description_value": "Texto 5"
+                      },
+                      "rts_info": {}
+                    },
+                    "fulfilment_info": {
+                      "fulfilment_channel_name": "Shopee Xpress",
+                      "tracking_number_list": [
+                        "BR000000000000A"
+                      ]
+                    },
+                    "package_ext_info": {
+                      "package_number": "OFG000000000000000",
+                      "ofg_id": 900000000000031,
+                      "shipping_method": 61700,
+                      "fulfilment_channel_id": 90007,
+                      "fulfilment_status": 1,
+                      "allocating_status": 0,
+                      "acl1_arrange_ship_date": 1792033199,
+                      "acl2_3pl_ack_date": 1792033199,
+                      "shipping_name": "***",
+                      "shipping_phone": "***",
+                      "shipping_address": "***",
+                      "consignment_no": "BR000000000000A",
+                      "dropoff_b2c": false,
+                      "can_unsplit": false,
+                      "is_pickup_only": false,
+                      "is_manual_consignment": false,
+                      "is_auto_consignment": true,
+                      "is_arrange_consignment": false,
+                      "has_tracking": false
+                    }
+                  }
+                ],
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000032,
+                  "buyer_user_id": 900000033,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791514799,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 12",
+                  "can_partial_cancel": false
+                }
+              }
+            }
+          ]
+        },
+        "message": "success",
+        "user_message": "success"
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v3/order/get_order_list_card_list",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "card_list": [
+            {
+              "package_level_order_card": {
+                "card_header": {
+                  "order_sn": "90000000000034",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "package_list": [
+                  {
+                    "item_info_group": {
+                      "item_info_list": [
+                        {
+                          "item_list": [
+                            {
+                              "name": "Produto 8",
+                              "image": "Texto 13",
+                              "description": "Produto 9",
+                              "is_wholesale": false,
+                              "amount": 1,
+                              "inner_item_ext_info": {
+                                "item_id": 90000000035,
+                                "model_id": 900000000036,
+                                "is_prescription_item": false
+                              }
+                            }
+                          ],
+                          "item_ext_info": {
+                            "is_bundle": false
+                          }
+                        }
+                      ]
+                    },
+                    "payment_info": {
+                      "currency": 6,
+                      "total_price": 6906786,
+                      "payment_method": "Pix"
+                    },
+                    "status_info": {
+                      "status": "A Enviar",
+                      "status_description": {
+                        "description_value": "Texto 5"
+                      },
+                      "rts_info": {}
+                    },
+                    "fulfilment_info": {
+                      "fulfilment_channel_name": "Shopee Xpress",
+                      "tracking_number_list": [
+                        "BR0000000000000"
+                      ]
+                    },
+                    "package_ext_info": {
+                      "package_number": "OFG000000000000000",
+                      "ofg_id": 900000000000037,
+                      "shipping_method": 61700,
+                      "fulfilment_channel_id": 90007,
+                      "fulfilment_status": 1,
+                      "allocating_status": 0,
+                      "acl1_arrange_ship_date": 1792033199,
+                      "acl2_3pl_ack_date": 1792033199,
+                      "shipping_name": "***",
+                      "shipping_phone": "***",
+                      "shipping_address": "***",
+                      "consignment_no": "BR0000000000000",
+                      "dropoff_b2c": false,
+                      "can_unsplit": false,
+                      "is_pickup_only": false,
+                      "is_manual_consignment": false,
+                      "is_auto_consignment": true,
+                      "is_arrange_consignment": false,
+                      "has_tracking": false
+                    }
+                  }
+                ],
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000038,
+                  "buyer_user_id": 9000000039,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791514799,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 14",
+                  "can_partial_cancel": false
+                }
+              }
+            },
+            {
+              "package_level_order_card": {
+                "card_header": {
+                  "order_sn": "90000000000040",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "package_list": [
+                  {
+                    "item_info_group": {
+                      "item_info_list": [
+                        {
+                          "item_list": [
+                            {
+                              "name": "Produto 1",
+                              "image": "Texto 1",
+                              "description": "Produto 7",
+                              "is_wholesale": false,
+                              "amount": 1,
+                              "inner_item_ext_info": {
+                                "item_id": 90000000003,
+                                "model_id": 900000000030,
+                                "is_prescription_item": false
+                              }
+                            }
+                          ],
+                          "item_ext_info": {
+                            "is_bundle": false
+                          }
+                        }
+                      ]
+                    },
+                    "payment_info": {
+                      "currency": 6,
+                      "total_price": 5507394,
+                      "payment_method": "Pix"
+                    },
+                    "status_info": {
+                      "status": "A Enviar",
+                      "status_description": {
+                        "description_value": "Texto 5"
+                      },
+                      "rts_info": {}
+                    },
+                    "fulfilment_info": {
+                      "fulfilment_channel_name": "Shopee Xpress",
+                      "tracking_number_list": [
+                        "BR0000000000000"
+                      ]
+                    },
+                    "package_ext_info": {
+                      "package_number": "OFG000000000000000",
+                      "ofg_id": 900000000000041,
+                      "shipping_method": 61700,
+                      "fulfilment_channel_id": 90007,
+                      "fulfilment_status": 1,
+                      "allocating_status": 0,
+                      "acl1_arrange_ship_date": 1792033199,
+                      "acl2_3pl_ack_date": 1792033199,
+                      "shipping_name": "***",
+                      "shipping_phone": "***",
+                      "shipping_address": "***",
+                      "consignment_no": "BR0000000000000",
+                      "dropoff_b2c": false,
+                      "can_unsplit": false,
+                      "is_pickup_only": false,
+                      "is_manual_consignment": false,
+                      "is_auto_consignment": true,
+                      "is_arrange_consignment": false,
+                      "has_tracking": false
+                    }
+                  }
+                ],
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000042,
+                  "buyer_user_id": 9000000043,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791514799,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 15",
+                  "can_partial_cancel": false
+                }
+              }
+            },
+            {
+              "package_level_order_card": {
+                "card_header": {
+                  "order_sn": "90000000000044",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "package_list": [
+                  {
+                    "item_info_group": {
+                      "item_info_list": [
+                        {
+                          "item_list": [
+                            {
+                              "name": "Produto 10",
+                              "image": "Texto 16",
+                              "description": "Produto 11",
+                              "is_wholesale": false,
+                              "amount": 1,
+                              "inner_item_ext_info": {
+                                "item_id": 90000000045,
+                                "model_id": 900000000046,
+                                "is_prescription_item": false
+                              }
+                            }
+                          ],
+                          "item_ext_info": {
+                            "is_bundle": false
+                          }
+                        }
+                      ]
+                    },
+                    "payment_info": {
+                      "currency": 6,
+                      "total_price": 7085100,
+                      "payment_method": "SParcelado"
+                    },
+                    "status_info": {
+                      "status": "A Enviar",
+                      "status_description": {
+                        "description_value": "Texto 5"
+                      },
+                      "rts_info": {}
+                    },
+                    "fulfilment_info": {
+                      "fulfilment_channel_name": "Shopee Xpress",
+                      "tracking_number_list": [
+                        "BR000000000000V"
+                      ]
+                    },
+                    "package_ext_info": {
+                      "package_number": "OFG000000000000000",
+                      "ofg_id": 900000000000047,
+                      "shipping_method": 61700,
+                      "fulfilment_channel_id": 90007,
+                      "fulfilment_status": 1,
+                      "allocating_status": 0,
+                      "acl1_arrange_ship_date": 1792033199,
+                      "acl2_3pl_ack_date": 1792033199,
+                      "shipping_name": "***",
+                      "shipping_phone": "***",
+                      "shipping_address": "***",
+                      "consignment_no": "BR000000000000V",
+                      "dropoff_b2c": false,
+                      "can_unsplit": false,
+                      "is_pickup_only": false,
+                      "is_manual_consignment": false,
+                      "is_auto_consignment": true,
+                      "is_arrange_consignment": false,
+                      "has_tracking": false
+                    }
+                  }
+                ],
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000048,
+                  "buyer_user_id": 900000049,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791514799,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 17",
+                  "can_partial_cancel": false
+                }
+              }
+            },
+            {
+              "package_level_order_card": {
+                "card_header": {
+                  "order_sn": "90000000000050",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "package_list": [
+                  {
+                    "item_info_group": {
+                      "item_info_list": [
+                        {
+                          "item_list": [
+                            {
+                              "name": "Produto 1",
+                              "image": "Texto 1",
+                              "description": "Produto 7",
+                              "is_wholesale": false,
+                              "amount": 1,
+                              "inner_item_ext_info": {
+                                "item_id": 90000000003,
+                                "model_id": 900000000030,
+                                "is_prescription_item": false
+                              }
+                            }
+                          ],
+                          "item_ext_info": {
+                            "is_bundle": false
+                          }
+                        }
+                      ]
+                    },
+                    "payment_info": {
+                      "currency": 6,
+                      "total_price": 5507394,
+                      "payment_method": "Pix"
+                    },
+                    "status_info": {
+                      "status": "A Enviar",
+                      "status_description": {
+                        "description_value": "Texto 5"
+                      },
+                      "rts_info": {}
+                    },
+                    "fulfilment_info": {
+                      "fulfilment_channel_name": "Shopee Xpress",
+                      "tracking_number_list": [
+                        "BR0000000000000"
+                      ]
+                    },
+                    "package_ext_info": {
+                      "package_number": "OFG000000000000000",
+                      "ofg_id": 900000000000051,
+                      "shipping_method": 61700,
+                      "fulfilment_channel_id": 90007,
+                      "fulfilment_status": 1,
+                      "allocating_status": 0,
+                      "acl1_arrange_ship_date": 1792033199,
+                      "acl2_3pl_ack_date": 1792033199,
+                      "shipping_name": "***",
+                      "shipping_phone": "***",
+                      "shipping_address": "***",
+                      "consignment_no": "BR0000000000000",
+                      "dropoff_b2c": false,
+                      "can_unsplit": false,
+                      "is_pickup_only": false,
+                      "is_manual_consignment": false,
+                      "is_auto_consignment": true,
+                      "is_arrange_consignment": false,
+                      "has_tracking": false
+                    }
+                  }
+                ],
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000052,
+                  "buyer_user_id": 900000053,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791514799,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 18",
+                  "can_partial_cancel": false
+                }
+              }
+            },
+            {
+              "package_level_order_card": {
+                "card_header": {
+                  "order_sn": "90000000000054",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "package_list": [
+                  {
+                    "item_info_group": {
+                      "item_info_list": [
+                        {
+                          "item_list": [
+                            {
+                              "name": "Produto 12",
+                              "image": "Texto 19",
+                              "description": "Produto 13",
+                              "is_wholesale": false,
+                              "amount": 1,
+                              "inner_item_ext_info": {
+                                "item_id": 90000000055,
+                                "model_id": 900000000056,
+                                "is_prescription_item": false
+                              }
+                            }
+                          ],
+                          "item_ext_info": {
+                            "is_bundle": false
+                          }
+                        }
+                      ]
+                    },
+                    "payment_info": {
+                      "currency": 6,
+                      "total_price": 9425556,
+                      "payment_method": "SParcelado"
+                    },
+                    "status_info": {
+                      "status": "A Enviar",
+                      "status_description": {
+                        "description_value": "Texto 5"
+                      },
+                      "rts_info": {}
+                    },
+                    "fulfilment_info": {
+                      "fulfilment_channel_name": "Shopee Xpress",
+                      "tracking_number_list": [
+                        "BR000000000000S"
+                      ]
+                    },
+                    "package_ext_info": {
+                      "package_number": "OFG000000000000000",
+                      "ofg_id": 900000000000057,
+                      "shipping_method": 61700,
+                      "fulfilment_channel_id": 90007,
+                      "fulfilment_status": 1,
+                      "allocating_status": 0,
+                      "acl1_arrange_ship_date": 1792033199,
+                      "acl2_3pl_ack_date": 1792033199,
+                      "shipping_name": "***",
+                      "shipping_phone": "***",
+                      "shipping_address": "***",
+                      "consignment_no": "BR000000000000S",
+                      "dropoff_b2c": false,
+                      "can_unsplit": false,
+                      "is_pickup_only": false,
+                      "is_manual_consignment": false,
+                      "is_auto_consignment": true,
+                      "is_arrange_consignment": false,
+                      "has_tracking": false
+                    }
+                  }
+                ],
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000058,
+                  "buyer_user_id": 900000059,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791514799,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 20",
+                  "can_partial_cancel": false
+                }
+              }
+            }
+          ]
+        },
+        "message": "success",
+        "user_message": "success"
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v3/order/get_order_list_card_list",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "card_list": [
+            {
+              "package_level_order_card": {
+                "card_header": {
+                  "order_sn": "90000000000060",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "package_list": [
+                  {
+                    "item_info_group": {
+                      "item_info_list": [
+                        {
+                          "item_list": [
+                            {
+                              "name": "Produto 1",
+                              "image": "Texto 21",
+                              "description": "Produto 14",
+                              "is_wholesale": false,
+                              "amount": 1,
+                              "inner_item_ext_info": {
+                                "item_id": 90000000003,
+                                "model_id": 900000000061,
+                                "is_prescription_item": false
+                              }
+                            }
+                          ],
+                          "item_ext_info": {
+                            "is_bundle": false
+                          }
+                        }
+                      ]
+                    },
+                    "payment_info": {
+                      "currency": 6,
+                      "total_price": 7950228,
+                      "payment_method": "Credit Card"
+                    },
+                    "status_info": {
+                      "status": "A Enviar",
+                      "status_description": {
+                        "description_value": "Texto 5"
+                      },
+                      "rts_info": {}
+                    },
+                    "fulfilment_info": {
+                      "fulfilment_channel_name": "Shopee Xpress",
+                      "tracking_number_list": [
+                        "BR000000000000B"
+                      ]
+                    },
+                    "package_ext_info": {
+                      "package_number": "OFG000000000000000",
+                      "ofg_id": 900000000000062,
+                      "shipping_method": 61700,
+                      "fulfilment_channel_id": 90007,
+                      "fulfilment_status": 1,
+                      "allocating_status": 0,
+                      "acl1_arrange_ship_date": 1792033199,
+                      "acl2_3pl_ack_date": 1792033199,
+                      "shipping_name": "***",
+                      "shipping_phone": "***",
+                      "shipping_address": "***",
+                      "consignment_no": "BR000000000000B",
+                      "dropoff_b2c": false,
+                      "can_unsplit": false,
+                      "is_pickup_only": false,
+                      "is_manual_consignment": false,
+                      "is_auto_consignment": true,
+                      "is_arrange_consignment": false,
+                      "has_tracking": false
+                    }
+                  }
+                ],
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000063,
+                  "buyer_user_id": 900000064,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791514799,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 22",
+                  "can_partial_cancel": false
+                }
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000065",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 12",
+                          "image": "Texto 19",
+                          "description": "Produto 13",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "item_tag_list": [
+                            {
+                              "tag_id": 966,
+                              "tag_value": "1 Cancelled",
+                              "tag_timestamp": {
+                                "timestamp": 0,
+                                "is_count_down": false
+                              }
+                            }
+                          ],
+                          "inner_item_ext_info": {
+                            "item_id": 90000000055,
+                            "model_id": 900000000056,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 9900834,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Cancelado",
+                  "status_tooltip": "Texto 23",
+                  "status_description": {
+                    "description_value": "Texto 24"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress"
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000067,
+                  "buyer_user_id": 900000068,
+                  "logistics_status": 0,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 25",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000069,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 7,
+                    "allocating_status": 0,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": true,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000070",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 15",
+                          "image": "Texto 26",
+                          "description": "Produto 16",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000071,
+                            "model_id": 900000000072,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 7954296,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR0000000000000"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000073,
+                  "buyer_user_id": 900000074,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791428399,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 28",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000075,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791946799,
+                    "acl2_3pl_ack_date": 1791946799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR0000000000000",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000076",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 17",
+                          "image": "Texto 29",
+                          "description": "Produto 18",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000077,
+                            "model_id": 90000000078,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 15113976,
+                  "payment_method": "Pix"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000H"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000079,
+                  "buyer_user_id": 900000080,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791428399,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 30",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000081,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791946799,
+                    "acl2_3pl_ack_date": 1791946799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000H",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000082",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 1",
+                          "image": "Texto 31",
+                          "description": "Produto 19",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000003,
+                            "model_id": 900000000083,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 12237222,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR0000000000000"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000084,
+                  "buyer_user_id": 900000085,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791428399,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 32",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000086,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791946799,
+                    "acl2_3pl_ack_date": 1791946799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR0000000000000",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "message": "success",
+        "user_message": "success"
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v3/order/get_order_list_card_list",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "card_list": [
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000087",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 20",
+                          "image": "Texto 33",
+                          "description": "Produto 21",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000088,
+                            "model_id": 900000000089,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 1916706,
+                  "payment_method": "Pix"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000S"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000090,
+                  "buyer_user_id": 900000091,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791428399,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 34",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000092,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791946799,
+                    "acl2_3pl_ack_date": 1791946799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000S",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000093",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 12",
+                          "image": "Texto 19",
+                          "description": "Produto 13",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000055,
+                            "model_id": 900000000056,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 10797150,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000B"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000094,
+                  "buyer_user_id": 90000000095,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791428399,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 35",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000096,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791946799,
+                    "acl2_3pl_ack_date": 1791946799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000B",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000097",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 22",
+                          "image": "Texto 36",
+                          "description": "Produto 23",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000098,
+                            "model_id": 900000000099,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 8369232,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000Z"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000100,
+                  "buyer_user_id": 900000101,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791428399,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 37",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000102,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791946799,
+                    "acl2_3pl_ack_date": 1791946799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000Z",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000103",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 5",
+                          "image": "Texto 8",
+                          "description": "Produto 6",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "item_tag_list": [
+                            {
+                              "tag_id": 966,
+                              "tag_value": "1 Cancelled",
+                              "tag_timestamp": {
+                                "timestamp": 0,
+                                "is_count_down": false
+                              }
+                            }
+                          ],
+                          "inner_item_ext_info": {
+                            "item_id": 90000000024,
+                            "model_id": 900000000025,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 24379524,
+                  "payment_method": "Pix"
+                },
+                "status_info": {
+                  "status": "Cancelado",
+                  "status_tooltip": "Texto 23",
+                  "status_description": {
+                    "description_value": "Texto 24"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress"
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000104,
+                  "buyer_user_id": 9000000027,
+                  "logistics_status": 0,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 38",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000105,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 7,
+                    "allocating_status": 0,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": true,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000106",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 12",
+                          "image": "Texto 19",
+                          "description": "Produto 13",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000055,
+                            "model_id": 900000000056,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 9017400,
+                  "payment_method": "SParcelado"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR0000000000000"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000107,
+                  "buyer_user_id": 900000108,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791428399,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 39",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000109,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791946799,
+                    "acl2_3pl_ack_date": 1791946799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR0000000000000",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "message": "success",
+        "user_message": "success"
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v3/order/get_order_list_card_list",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "card_list": [
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000110",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 24",
+                          "image": "Texto 40",
+                          "description": "Produto 25",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000111,
+                            "model_id": 900000000112,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 1749240,
+                  "payment_method": "Pix"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR0000000000000"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000113,
+                  "buyer_user_id": 900000114,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791428399,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 41",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000115,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791946799,
+                    "acl2_3pl_ack_date": 1791946799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR0000000000000",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000116",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 1",
+                          "image": "Texto 31",
+                          "description": "Produto 19",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000003,
+                            "model_id": 900000000083,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 12882000,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000E"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000117,
+                  "buyer_user_id": 900000118,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791341999,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 42",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000119,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791601199,
+                    "acl2_3pl_ack_date": 1791601199,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000E",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000120",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 24",
+                          "image": "Texto 40",
+                          "description": "Produto 25",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000111,
+                            "model_id": 900000000112,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 14838708,
+                  "payment_method": "Pix"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000G"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000121,
+                  "buyer_user_id": 900000122,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791341999,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 43",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000123,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791601199,
+                    "acl2_3pl_ack_date": 1791601199,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000G",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000124",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 20",
+                          "image": "Texto 33",
+                          "description": "Produto 21",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000088,
+                            "model_id": 900000000089,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 2787936,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000M"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000125,
+                  "buyer_user_id": 900000126,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791341999,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 44",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000127,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791601199,
+                    "acl2_3pl_ack_date": 1791601199,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000M",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000128",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 1",
+                          "image": "Texto 31",
+                          "description": "Produto 19",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "item_tag_list": [
+                            {
+                              "tag_id": 966,
+                              "tag_value": "1 Cancelled",
+                              "tag_timestamp": {
+                                "timestamp": 0,
+                                "is_count_down": false
+                              }
+                            }
+                          ],
+                          "inner_item_ext_info": {
+                            "item_id": 90000000003,
+                            "model_id": 900000000083,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 12237222,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Cancelado",
+                  "status_tooltip": "Texto 23",
+                  "status_description": {
+                    "description_value": "Texto 24"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress"
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000129,
+                  "buyer_user_id": 900000130,
+                  "logistics_status": 0,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 45",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000131,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 7,
+                    "allocating_status": 0,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": true,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "message": "success",
+        "user_message": "success"
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v3/order/get_order_list_card_list",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "card_list": [
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000132",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 15",
+                          "image": "Texto 46",
+                          "description": "Produto 26",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "item_tag_list": [
+                            {
+                              "tag_id": 966,
+                              "tag_value": "1 Cancelled",
+                              "tag_timestamp": {
+                                "timestamp": 0,
+                                "is_count_down": false
+                              }
+                            }
+                          ],
+                          "inner_item_ext_info": {
+                            "item_id": 90000000071,
+                            "model_id": 900000000133,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 6082338,
+                  "payment_method": "Pix"
+                },
+                "status_info": {
+                  "status": "Cancelado",
+                  "status_tooltip": "Texto 47",
+                  "status_description": {
+                    "description_value": "Cancelado pelo comprador"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress"
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000134,
+                  "buyer_user_id": 900000135,
+                  "logistics_status": 0,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 48",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000136,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 7,
+                    "allocating_status": 0,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": true,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000137",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 1",
+                          "image": "Texto 21",
+                          "description": "Produto 27",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000003,
+                            "model_id": 900000000138,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 7954296,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000A"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000139,
+                  "buyer_user_id": 900000140,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791341999,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 49",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000141,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791601199,
+                    "acl2_3pl_ack_date": 1791601199,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000A",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000142",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 1",
+                          "image": "Texto 1",
+                          "description": "Produto 7",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000003,
+                            "model_id": 900000000030,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 5507394,
+                  "payment_method": "Pix"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000I"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000143,
+                  "buyer_user_id": 9000000144,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791341999,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 50",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000145,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791601199,
+                    "acl2_3pl_ack_date": 1791601199,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000I",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000146",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 12",
+                          "image": "Texto 19",
+                          "description": "Produto 13",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000055,
+                            "model_id": 900000000056,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 8584836,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000V"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000147,
+                  "buyer_user_id": 900000148,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791341999,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 51",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000149,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791601199,
+                    "acl2_3pl_ack_date": 1791601199,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000V",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000150",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 1",
+                          "image": "Texto 21",
+                          "description": "Produto 27",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000003,
+                            "model_id": 900000000138,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 7954974,
+                  "payment_method": "Pix"
+                },
+                "status_info": {
+                  "status": "Pedido Recebido",
+                  "status_description": {
+                    "description_value": "Texto 52",
+                    "description_timestamp_list": [
+                      {
+                        "timestamp": 1792069534,
+                        "placeholder": "{timestamp}",
+                        "is_count_down": false
+                      }
+                    ],
+                    "description_placeholder_list": [
+                      {
+                        "placeholder": "{timestamp}",
+                        "placeholder_types": [
+                          1
+                        ],
+                        "placeholder_style_id": 91,
+                        "timestamp": {
+                          "timestamp_value": 1792069534
+                        }
+                      }
+                    ]
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000Y"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000151,
+                  "buyer_user_id": 900000152,
+                  "logistics_status": 3,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": true,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791341999,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 53",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000153,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 3,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791601199,
+                    "acl2_3pl_ack_date": 1791601199,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000Y",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "message": "success",
+        "user_message": "success"
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v3/order/get_order_list_card_list",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "card_list": [
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000154",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 1",
+                          "image": "Texto 21",
+                          "description": "Produto 27",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000003,
+                            "model_id": 900000000138,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 7954974,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000D"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000155,
+                  "buyer_user_id": 90000000156,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791341999,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 54",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000157,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791601199,
+                    "acl2_3pl_ack_date": 1791601199,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000D",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000158",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 24",
+                          "image": "Texto 40",
+                          "description": "Produto 25",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000111,
+                            "model_id": 900000000112,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 15297036,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR0000000000000"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000159,
+                  "buyer_user_id": 900000160,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791341999,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 55",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000161,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791601199,
+                    "acl2_3pl_ack_date": 1791601199,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR0000000000000",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000162",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 28",
+                          "image": "Texto 56",
+                          "description": "Produto 29",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000163,
+                            "model_id": 90000000164,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 12688770,
+                  "payment_method": "SParcelado"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR0000000000000"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000165,
+                  "buyer_user_id": 900000166,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791341999,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 57",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000167,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791601199,
+                    "acl2_3pl_ack_date": 1791601199,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR0000000000000",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000168",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 30",
+                          "image": "Texto 58",
+                          "description": "Produto 31",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000169,
+                            "model_id": 900000000170,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 7954296,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000W"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000171,
+                  "buyer_user_id": 900000172,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791255599,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 59",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000173,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791514799,
+                    "acl2_3pl_ack_date": 1791514799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000W",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000174",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 1",
+                          "image": "Texto 31",
+                          "description": "Produto 19",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000003,
+                            "model_id": 900000000083,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 12237222,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000G"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000175,
+                  "buyer_user_id": 900000176,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791255599,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 60",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000177,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791514799,
+                    "acl2_3pl_ack_date": 1791514799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000G",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "message": "success",
+        "user_message": "success"
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://seller.shopee.com.br/api/v3/order/get_order_list_card_list",
+      "parametros": [
+        "SPC_CDS",
+        "SPC_CDS_VER"
+      ],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "card_list": [
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000178",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 12",
+                          "image": "Texto 19",
+                          "description": "Produto 13",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000055,
+                            "model_id": 900000000056,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 9017400,
+                  "payment_method": "Pix"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000B"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000179,
+                  "buyer_user_id": 90000000180,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791255599,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 61",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000181,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791514799,
+                    "acl2_3pl_ack_date": 1791514799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000B",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000182",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 12",
+                          "image": "Texto 19",
+                          "description": "Produto 13",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "item_tag_list": [
+                            {
+                              "tag_id": 966,
+                              "tag_value": "1 Cancelled",
+                              "tag_timestamp": {
+                                "timestamp": 0,
+                                "is_count_down": false
+                              }
+                            }
+                          ],
+                          "inner_item_ext_info": {
+                            "item_id": 90000000055,
+                            "model_id": 900000000056,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 8566530,
+                  "payment_method": "Pix"
+                },
+                "status_info": {
+                  "status": "Cancelado",
+                  "status_tooltip": "Texto 23",
+                  "status_description": {
+                    "description_value": "Texto 24"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress"
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000183,
+                  "buyer_user_id": 90000000180,
+                  "logistics_status": 0,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 62",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000184,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 7,
+                    "allocating_status": 0,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": true,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000185",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 32",
+                          "image": "Texto 63",
+                          "description": "Produto 33",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000186,
+                            "model_id": 900000000187,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 29394690,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR0000000000000"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000188,
+                  "buyer_user_id": 900000189,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791255599,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 64",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000190,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791514799,
+                    "acl2_3pl_ack_date": 1791514799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR0000000000000",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000191",
+                  "buyer_info": {
+                    "username": "***",
+                    "portrait": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 34",
+                          "image": "Texto 65",
+                          "description": "Produto 35",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000192,
+                            "model_id": 900000000193,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 6445068,
+                  "payment_method": "SParcelado"
+                },
+                "status_info": {
+                  "status": "Entregue",
+                  "status_description": {
+                    "description_value": "Texto 66"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000B"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000194,
+                  "buyer_user_id": 900000195,
+                  "logistics_status": 3,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791255599,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 67",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000196,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 3,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791514799,
+                    "acl2_3pl_ack_date": 1791514799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000B",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            },
+            {
+              "order_card": {
+                "card_header": {
+                  "order_sn": "90000000000197",
+                  "buyer_info": {
+                    "username": "***"
+                  }
+                },
+                "item_info_group": {
+                  "item_info_list": [
+                    {
+                      "item_list": [
+                        {
+                          "name": "Produto 36",
+                          "image": "Texto 68",
+                          "description": "Produto 37",
+                          "is_wholesale": false,
+                          "amount": 1,
+                          "inner_item_ext_info": {
+                            "item_id": 90000000198,
+                            "model_id": 900000000199,
+                            "is_prescription_item": false
+                          }
+                        }
+                      ],
+                      "item_ext_info": {
+                        "is_bundle": false
+                      }
+                    }
+                  ]
+                },
+                "payment_info": {
+                  "currency": 6,
+                  "total_price": 17579184,
+                  "payment_method": "Credit Card"
+                },
+                "status_info": {
+                  "status": "Enviado",
+                  "status_description": {
+                    "description_value": "Texto 27"
+                  },
+                  "rts_info": {}
+                },
+                "fulfilment_info": {
+                  "fulfilment_channel_name": "Shopee Xpress",
+                  "tracking_number_list": [
+                    "BR000000000000B"
+                  ]
+                },
+                "action_info": {
+                  "btn_info_list": [],
+                  "hide_chat_button": false
+                },
+                "order_ext_info": {
+                  "order_id": 900000000000200,
+                  "buyer_user_id": 900000201,
+                  "logistics_status": 1,
+                  "logistics_id": 918,
+                  "order_unit_migration_toggle": 1,
+                  "fulfilled_by_shopee": false,
+                  "is_order_ratable": false,
+                  "is_split_up": false,
+                  "is_prescription_order": false,
+                  "ship_by_date": 1791255599,
+                  "pickup_attempts": 0,
+                  "seller_address": {
+                    "address_id": 900000010,
+                    "user_id": 900000011,
+                    "status": 1,
+                    "name": "***",
+                    "phone": "***",
+                    "country": "BR",
+                    "state": "Estado",
+                    "city": "***",
+                    "district": "***",
+                    "address": "***",
+                    "zip_code": "***"
+                  },
+                  "odp_url_path_query": "Texto 69",
+                  "can_partial_cancel": false
+                },
+                "package_ext_info_list": [
+                  {
+                    "package_number": "OFG000000000000000",
+                    "ofg_id": 900000000000202,
+                    "shipping_method": 61700,
+                    "fulfilment_channel_id": 90007,
+                    "fulfilment_status": 1,
+                    "allocating_status": 0,
+                    "acl1_arrange_ship_date": 1791514799,
+                    "acl2_3pl_ack_date": 1791514799,
+                    "shipping_name": "***",
+                    "shipping_phone": "***",
+                    "shipping_address": "***",
+                    "consignment_no": "BR000000000000B",
+                    "dropoff_b2c": false,
+                    "can_unsplit": false,
+                    "is_pickup_only": false,
+                    "is_manual_consignment": false,
+                    "is_auto_consignment": true,
+                    "is_arrange_consignment": false,
+                    "has_tracking": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "message": "success",
+        "user_message": "success"
+      }
+    }
+  ]
+}

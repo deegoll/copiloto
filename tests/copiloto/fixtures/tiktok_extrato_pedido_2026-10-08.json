@@ -1,0 +1,2970 @@
+{
+  "canal": "tiktok",
+  "tela": "extrato-pedido",
+  "lido_em": "2026-10-08",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "POST",
+      "url": "https://seller-br.tiktok.com/api/oec/pay/merchant/statement/view/settled_orders",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "order_records": [
+            {
+              "action_type": 1,
+              "expression_order_id": "900000000000000002",
+              "fund_order_id": "9000000000000000003",
+              "order_tag": 1,
+              "order_transaction_type": 1,
+              "payment_id": "9000000000000000004",
+              "payment_status": 3,
+              "placed_time": 1789644818632,
+              "settled_status": 1,
+              "settlement_date": 1791417599000,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "20",
+                    "amount_multiplied": 19770000,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 1",
+                      "starling_text": "Custo líquido de frete"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "95"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 1",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "20",
+                        "amount_multiplied": 19770000,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 1",
+                          "starling_text": "Custo líquido de frete"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "95"
+                    }
+                  ],
+                  "sku_id": "9000000000000000006",
+                  "sku_name": "ROSA",
+                  "sku_total_net_amount": {
+                    "amount": "20",
+                    "amount_multiplied": 19770000,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "statement_date": 1791417599000,
+              "statement_id": "9000000000000000007",
+              "total_net_amount": {
+                "amount": "20",
+                "amount_multiplied": 19770000,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "trade_order_id": "900000000000000002"
+            },
+            {
+              "action_type": 1,
+              "expression_order_id": "900000000000000008",
+              "fund_order_id": "9000000000000000009",
+              "order_tag": 1,
+              "order_transaction_type": 1,
+              "payment_id": "9000000000000000010",
+              "payment_status": 3,
+              "placed_time": 1790083838637,
+              "settled_status": 1,
+              "settlement_date": 1791244799000,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "428.28",
+                    "amount_multiplied": 428284100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 2",
+                      "starling_text": "Texto 3"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "911"
+                },
+                {
+                  "amount": {
+                    "amount": "0",
+                    "amount_multiplied": 0,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 1",
+                      "starling_text": "Custo líquido de frete"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "95"
+                },
+                {
+                  "amount": {
+                    "amount": "-55.34",
+                    "amount_multiplied": -55342820,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 4",
+                      "starling_text": "Taxas e impostos"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "912"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 1",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "428.28",
+                        "amount_multiplied": 428284100,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 2",
+                          "starling_text": "Texto 3"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "911"
+                    },
+                    {
+                      "amount": {
+                        "amount": "0",
+                        "amount_multiplied": 0,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 1",
+                          "starling_text": "Custo líquido de frete"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "95"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-55.34",
+                        "amount_multiplied": -55342820,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 4",
+                          "starling_text": "Taxas e impostos"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "912"
+                    }
+                  ],
+                  "sku_id": "9000000000000000006",
+                  "sku_name": "ROSA",
+                  "sku_total_net_amount": {
+                    "amount": "372.94",
+                    "amount_multiplied": 372941280,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "statement_date": 1791244799000,
+              "statement_id": "9000000000000000013",
+              "total_net_amount": {
+                "amount": "372.94",
+                "amount_multiplied": 372941280,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "trade_order_id": "900000000000000008"
+            },
+            {
+              "action_type": 1,
+              "expression_order_id": "900000000000000014",
+              "fund_order_id": "9000000000000000015",
+              "order_tag": 1,
+              "order_transaction_type": 1,
+              "payment_id": "9000000000000000016",
+              "payment_status": 3,
+              "placed_time": 1789566385752,
+              "settled_status": 1,
+              "settlement_date": 1790899199000,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "375.56",
+                    "amount_multiplied": 375564100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 2",
+                      "starling_text": "Texto 3"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "911"
+                },
+                {
+                  "amount": {
+                    "amount": "0",
+                    "amount_multiplied": 0,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 1",
+                      "starling_text": "Custo líquido de frete"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "95"
+                },
+                {
+                  "amount": {
+                    "amount": "-94.09",
+                    "amount_multiplied": -94085430,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 4",
+                      "starling_text": "Taxas e impostos"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "912"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 2",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "375.56",
+                        "amount_multiplied": 375564100,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 2",
+                          "starling_text": "Texto 3"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "911"
+                    },
+                    {
+                      "amount": {
+                        "amount": "0",
+                        "amount_multiplied": 0,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 1",
+                          "starling_text": "Custo líquido de frete"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "95"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-94.09",
+                        "amount_multiplied": -94085430,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 4",
+                          "starling_text": "Taxas e impostos"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "912"
+                    }
+                  ],
+                  "sku_id": "9000000000000000017",
+                  "sku_name": "SKU-1",
+                  "sku_total_net_amount": {
+                    "amount": "281.48",
+                    "amount_multiplied": 281478670,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "statement_date": 1790899199000,
+              "statement_id": "9000000000000000018",
+              "total_net_amount": {
+                "amount": "281.48",
+                "amount_multiplied": 281478670,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "trade_order_id": "900000000000000014"
+            },
+            {
+              "action_type": 1,
+              "expression_order_id": "900000000000000002",
+              "fund_order_id": "9000000000000000019",
+              "order_tag": 1,
+              "order_transaction_type": 1,
+              "payment_id": "9000000000000000020",
+              "payment_status": 3,
+              "placed_time": 1789644818632,
+              "settled_status": 1,
+              "settlement_date": 1790812799000,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "428.28",
+                    "amount_multiplied": 428284100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 2",
+                      "starling_text": "Texto 3"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "911"
+                },
+                {
+                  "amount": {
+                    "amount": "-20",
+                    "amount_multiplied": -19770000,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 1",
+                      "starling_text": "Custo líquido de frete"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "95"
+                },
+                {
+                  "amount": {
+                    "amount": "-55.34",
+                    "amount_multiplied": -55342820,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 4",
+                      "starling_text": "Taxas e impostos"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "912"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 1",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "428.28",
+                        "amount_multiplied": 428284100,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 2",
+                          "starling_text": "Texto 3"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "911"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-20",
+                        "amount_multiplied": -19770000,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 1",
+                          "starling_text": "Custo líquido de frete"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "95"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-55.34",
+                        "amount_multiplied": -55342820,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 4",
+                          "starling_text": "Taxas e impostos"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "912"
+                    }
+                  ],
+                  "sku_id": "9000000000000000006",
+                  "sku_name": "ROSA",
+                  "sku_total_net_amount": {
+                    "amount": "353.17",
+                    "amount_multiplied": 353171280,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "statement_date": 1790812799000,
+              "statement_id": "9000000000000000021",
+              "total_net_amount": {
+                "amount": "353.17",
+                "amount_multiplied": 353171280,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "trade_order_id": "900000000000000002"
+            },
+            {
+              "action_type": 1,
+              "expression_order_id": "900000000000000022",
+              "fund_order_id": "9000000000000000023",
+              "order_tag": 1,
+              "order_transaction_type": 1,
+              "payment_id": "9000000000000000024",
+              "payment_status": 3,
+              "placed_time": 1785520071030,
+              "settled_status": 1,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "362.38",
+                    "amount_multiplied": 362384100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 2",
+                      "starling_text": "Texto 3"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "911"
+                },
+                {
+                  "amount": {
+                    "amount": "0",
+                    "amount_multiplied": 0,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 1",
+                      "starling_text": "Custo líquido de frete"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "95"
+                },
+                {
+                  "amount": {
+                    "amount": "-58.31",
+                    "amount_multiplied": -58308320,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 4",
+                      "starling_text": "Taxas e impostos"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "912"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 2",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "362.38",
+                        "amount_multiplied": 362384100,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 2",
+                          "starling_text": "Texto 3"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "911"
+                    },
+                    {
+                      "amount": {
+                        "amount": "0",
+                        "amount_multiplied": 0,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 1",
+                          "starling_text": "Custo líquido de frete"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "95"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-58.31",
+                        "amount_multiplied": -58308320,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 4",
+                          "starling_text": "Taxas e impostos"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "912"
+                    }
+                  ],
+                  "sku_id": "9000000000000000017",
+                  "sku_name": "SKU-1",
+                  "sku_total_net_amount": {
+                    "amount": "304.08",
+                    "amount_multiplied": 304075780,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "statement_date": 1786665599000,
+              "statement_id": "9000000000000000025",
+              "total_net_amount": {
+                "amount": "304.08",
+                "amount_multiplied": 304075780,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "trade_order_id": "900000000000000022"
+            },
+            {
+              "action_type": 1,
+              "expression_order_id": "900000000000000026",
+              "fund_order_id": "9000000000000000027",
+              "order_tag": 1,
+              "order_transaction_type": 1,
+              "payment_id": "9000000000000000028",
+              "payment_status": 3,
+              "placed_time": 1784766790428,
+              "settled_status": 1,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "724.77",
+                    "amount_multiplied": 724768200,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 2",
+                      "starling_text": "Texto 3"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "911"
+                },
+                {
+                  "amount": {
+                    "amount": "0",
+                    "amount_multiplied": 0,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 1",
+                      "starling_text": "Custo líquido de frete"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "95"
+                },
+                {
+                  "amount": {
+                    "amount": "-160.11",
+                    "amount_multiplied": -160110640,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 4",
+                      "starling_text": "Taxas e impostos"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "912"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 2",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "724.77",
+                        "amount_multiplied": 724768200,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 2",
+                          "starling_text": "Texto 3"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "911"
+                    },
+                    {
+                      "amount": {
+                        "amount": "0",
+                        "amount_multiplied": 0,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 1",
+                          "starling_text": "Custo líquido de frete"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "95"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-160.11",
+                        "amount_multiplied": -160110640,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 4",
+                          "starling_text": "Taxas e impostos"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "912"
+                    }
+                  ],
+                  "sku_id": "9000000000000000017",
+                  "sku_name": "SKU-1",
+                  "sku_total_net_amount": {
+                    "amount": "564.66",
+                    "amount_multiplied": 564657560,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "statement_date": 1785628799000,
+              "statement_id": "9000000000000000029",
+              "total_net_amount": {
+                "amount": "564.66",
+                "amount_multiplied": 564657560,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "trade_order_id": "900000000000000026"
+            },
+            {
+              "action_type": 1,
+              "expression_order_id": "900000000000000030",
+              "fund_order_id": "9000000000000000031",
+              "order_tag": 1,
+              "order_transaction_type": 1,
+              "payment_id": "9000000000000000032",
+              "payment_status": 3,
+              "placed_time": 1784788549767,
+              "settled_status": 1,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "0",
+                    "amount_multiplied": 0,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 2",
+                      "starling_text": "Texto 3"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "911"
+                },
+                {
+                  "amount": {
+                    "amount": "0",
+                    "amount_multiplied": 0,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 1",
+                      "starling_text": "Custo líquido de frete"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "95"
+                },
+                {
+                  "amount": {
+                    "amount": "-21.74",
+                    "amount_multiplied": -21740410,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 4",
+                      "starling_text": "Taxas e impostos"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "912"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 2",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "0",
+                        "amount_multiplied": 0,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 2",
+                          "starling_text": "Texto 3"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "911"
+                    },
+                    {
+                      "amount": {
+                        "amount": "0",
+                        "amount_multiplied": 0,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 1",
+                          "starling_text": "Custo líquido de frete"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "95"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-21.74",
+                        "amount_multiplied": -21740410,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 4",
+                          "starling_text": "Taxas e impostos"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "912"
+                    }
+                  ],
+                  "sku_id": "9000000000000000033",
+                  "sku_name": "SKU-2",
+                  "sku_total_net_amount": {
+                    "amount": "-21.74",
+                    "amount_multiplied": -21740410,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "statement_date": 1785196799000,
+              "statement_id": "9000000000000000034",
+              "total_net_amount": {
+                "amount": "-21.74",
+                "amount_multiplied": -21740410,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "trade_order_id": "900000000000000030"
+            },
+            {
+              "action_type": 1,
+              "expression_order_id": "900000000000000035",
+              "fund_order_id": "9000000000000000036",
+              "order_tag": 1,
+              "order_transaction_type": 1,
+              "payment_id": "9000000000000000037",
+              "payment_status": 3,
+              "placed_time": 1782169274290,
+              "settled_status": 1,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "362.38",
+                    "amount_multiplied": 362384100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 2",
+                      "starling_text": "Texto 3"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "911"
+                },
+                {
+                  "amount": {
+                    "amount": "0",
+                    "amount_multiplied": 0,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 1",
+                      "starling_text": "Custo líquido de frete"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "95"
+                },
+                {
+                  "amount": {
+                    "amount": "-46.12",
+                    "amount_multiplied": -46116820,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 4",
+                      "starling_text": "Taxas e impostos"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "912"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 2",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "362.38",
+                        "amount_multiplied": 362384100,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 2",
+                          "starling_text": "Texto 3"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "911"
+                    },
+                    {
+                      "amount": {
+                        "amount": "0",
+                        "amount_multiplied": 0,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 1",
+                          "starling_text": "Custo líquido de frete"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "95"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-46.12",
+                        "amount_multiplied": -46116820,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 4",
+                          "starling_text": "Taxas e impostos"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "912"
+                    }
+                  ],
+                  "sku_id": "9000000000000000017",
+                  "sku_name": "SKU-1",
+                  "sku_total_net_amount": {
+                    "amount": "316.27",
+                    "amount_multiplied": 316267280,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "statement_date": 1785110399000,
+              "statement_id": "9000000000000000038",
+              "total_net_amount": {
+                "amount": "316.27",
+                "amount_multiplied": 316267280,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "trade_order_id": "900000000000000035"
+            }
+          ],
+          "total_amount_sum": {
+            "amount": "5977.28",
+            "amount_multiplied": 5977281570,
+            "currency": "BRL",
+            "symbol": "R$"
+          },
+          "total_count": 16
+        },
+        "message": ""
+      }
+    },
+    {
+      "metodo": "POST",
+      "url": "https://seller-br.tiktok.com/api/oec/pay/merchant/statement/view/onhold_orders",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "order_records": [
+            {
+              "action_type": 1,
+              "business_order_id": "9000000000000000039",
+              "estimate_settle_time": 1791932941741,
+              "expression_order_id": "900000000000000040",
+              "order_create_time": 1790900692018,
+              "order_tag": 1,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "375.56",
+                    "amount_multiplied": 375564100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_net_sales",
+                      "starling_text": "Texto 5"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "911"
+                },
+                {
+                  "amount": {
+                    "amount": "0",
+                    "amount_multiplied": 0,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_shipping",
+                      "starling_text": "Frete estimado"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "95"
+                },
+                {
+                  "amount": {
+                    "amount": "-49.02",
+                    "amount_multiplied": -49016420,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_fees",
+                      "starling_text": "Taxas estimadas"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "912"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 2",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "375.56",
+                        "amount_multiplied": 375564100,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_net_sales",
+                          "starling_text": "Texto 5"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "911"
+                    },
+                    {
+                      "amount": {
+                        "amount": "0",
+                        "amount_multiplied": 0,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_shipping",
+                          "starling_text": "Frete estimado"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "95"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-49.02",
+                        "amount_multiplied": -49016420,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_fees",
+                          "starling_text": "Taxas estimadas"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "912"
+                    }
+                  ],
+                  "sku_id": "9000000000000000033",
+                  "sku_name": "SKU-2",
+                  "sku_total_onhold_net_amount": {
+                    "amount": "326.55",
+                    "amount_multiplied": 326547680,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "to_settle_reason": 2,
+              "total_onhold_net_amount": {
+                "amount": "326.55",
+                "amount_multiplied": 326547680,
+                "currency": "BRL",
+                "symbol": "R$"
+              }
+            },
+            {
+              "action_type": 1,
+              "business_order_id": "9000000000000000041",
+              "estimate_settle_time": 1791825182196,
+              "expression_order_id": "900000000000000042",
+              "order_create_time": 1790876903282,
+              "order_tag": 1,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "428.28",
+                    "amount_multiplied": 428284100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_net_sales",
+                      "starling_text": "Texto 5"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "911"
+                },
+                {
+                  "amount": {
+                    "amount": "0",
+                    "amount_multiplied": 0,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_shipping",
+                      "starling_text": "Frete estimado"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "95"
+                },
+                {
+                  "amount": {
+                    "amount": "-106.74",
+                    "amount_multiplied": -106738230,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_fees",
+                      "starling_text": "Taxas estimadas"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "912"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 1",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "428.28",
+                        "amount_multiplied": 428284100,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_net_sales",
+                          "starling_text": "Texto 5"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "911"
+                    },
+                    {
+                      "amount": {
+                        "amount": "0",
+                        "amount_multiplied": 0,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_shipping",
+                          "starling_text": "Frete estimado"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "95"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-106.74",
+                        "amount_multiplied": -106738230,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_fees",
+                          "starling_text": "Taxas estimadas"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "912"
+                    }
+                  ],
+                  "sku_id": "9000000000000000043",
+                  "sku_name": "LILAS",
+                  "sku_total_onhold_net_amount": {
+                    "amount": "321.55",
+                    "amount_multiplied": 321545870,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "to_settle_reason": 2,
+              "total_onhold_net_amount": {
+                "amount": "321.55",
+                "amount_multiplied": 321545870,
+                "currency": "BRL",
+                "symbol": "R$"
+              }
+            },
+            {
+              "action_type": 1,
+              "business_order_id": "9000000000000000044",
+              "estimate_settle_time_with_period": {
+                "params": [
+                  {
+                    "value": "5"
+                  }
+                ],
+                "starling_key": "Texto 6",
+                "starling_text": "Entrega + 7 dias"
+              },
+              "expression_order_id": "900000000000000045",
+              "order_create_time": 1790807432153,
+              "order_tag": 1,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "197.63",
+                    "amount_multiplied": 197634100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_net_sales",
+                      "starling_text": "Texto 5"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "911"
+                },
+                {
+                  "amount": {
+                    "amount": "-51.38",
+                    "amount_multiplied": -51382230,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_fees",
+                      "starling_text": "Taxas estimadas"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "912"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 3",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "197.63",
+                        "amount_multiplied": 197634100,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_net_sales",
+                          "starling_text": "Texto 5"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "911"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-51.38",
+                        "amount_multiplied": -51382230,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_fees",
+                          "starling_text": "Taxas estimadas"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "912"
+                    }
+                  ],
+                  "sku_id": "9000000000000000046",
+                  "sku_name": "LILAS",
+                  "sku_total_onhold_net_amount": {
+                    "amount": "146.25",
+                    "amount_multiplied": 146251870,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "to_settle_reason": 1,
+              "total_onhold_net_amount": {
+                "amount": "146.25",
+                "amount_multiplied": 146251870,
+                "currency": "BRL",
+                "symbol": "R$"
+              }
+            },
+            {
+              "action_type": 1,
+              "business_order_id": "9000000000000000047",
+              "estimate_settle_time": 1791655084898,
+              "expression_order_id": "900000000000000048",
+              "order_create_time": 1790806957441,
+              "order_tag": 1,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "125.14",
+                    "amount_multiplied": 125144100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_net_sales",
+                      "starling_text": "Texto 5"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "911"
+                },
+                {
+                  "amount": {
+                    "amount": "0",
+                    "amount_multiplied": 0,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_shipping",
+                      "starling_text": "Frete estimado"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "95"
+                },
+                {
+                  "amount": {
+                    "amount": "-33.98",
+                    "amount_multiplied": -33984630,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_fees",
+                      "starling_text": "Taxas estimadas"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "912"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 4",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "125.14",
+                        "amount_multiplied": 125144100,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_net_sales",
+                          "starling_text": "Texto 5"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "911"
+                    },
+                    {
+                      "amount": {
+                        "amount": "0",
+                        "amount_multiplied": 0,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_shipping",
+                          "starling_text": "Frete estimado"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "95"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-33.98",
+                        "amount_multiplied": -33984630,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_fees",
+                          "starling_text": "Taxas estimadas"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "912"
+                    }
+                  ],
+                  "sku_id": "9000000000000000049",
+                  "sku_name": "LILAS",
+                  "sku_total_onhold_net_amount": {
+                    "amount": "91.16",
+                    "amount_multiplied": 91159470,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "to_settle_reason": 2,
+              "total_onhold_net_amount": {
+                "amount": "91.16",
+                "amount_multiplied": 91159470,
+                "currency": "BRL",
+                "symbol": "R$"
+              }
+            },
+            {
+              "action_type": 1,
+              "business_order_id": "9000000000000000050",
+              "estimate_settle_time": 1791829862559,
+              "expression_order_id": "900000000000000051",
+              "order_create_time": 1790806950200,
+              "order_tag": 1,
+              "simple_breakdown": [
+                {
+                  "amount": {
+                    "amount": "197.63",
+                    "amount_multiplied": 197634100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_net_sales",
+                      "starling_text": "Texto 5"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "911"
+                },
+                {
+                  "amount": {
+                    "amount": "0",
+                    "amount_multiplied": 0,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_shipping",
+                      "starling_text": "Frete estimado"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "95"
+                },
+                {
+                  "amount": {
+                    "amount": "-51.38",
+                    "amount_multiplied": -51382230,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "on_hold_table_est_fees",
+                      "starling_text": "Taxas estimadas"
+                    },
+                    "show_zero": true
+                  },
+                  "item_id": "912"
+                }
+              ],
+              "sku_records": [
+                {
+                  "product_name": "Produto 3",
+                  "quantity": 1,
+                  "simple_breakdown": [
+                    {
+                      "amount": {
+                        "amount": "197.63",
+                        "amount_multiplied": 197634100,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_net_sales",
+                          "starling_text": "Texto 5"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "911"
+                    },
+                    {
+                      "amount": {
+                        "amount": "0",
+                        "amount_multiplied": 0,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_shipping",
+                          "starling_text": "Frete estimado"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "95"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-51.38",
+                        "amount_multiplied": -51382230,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "on_hold_table_est_fees",
+                          "starling_text": "Taxas estimadas"
+                        },
+                        "show_zero": true
+                      },
+                      "item_id": "912"
+                    }
+                  ],
+                  "sku_id": "9000000000000000052",
+                  "sku_name": "ROSA",
+                  "sku_total_onhold_net_amount": {
+                    "amount": "146.25",
+                    "amount_multiplied": 146251870,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  }
+                }
+              ],
+              "to_settle_reason": 2,
+              "total_onhold_net_amount": {
+                "amount": "146.25",
+                "amount_multiplied": 146251870,
+                "currency": "BRL",
+                "symbol": "R$"
+              }
+            }
+          ],
+          "sum_total_amount": {
+            "amount": "3272.48",
+            "amount_multiplied": 3272475380,
+            "currency": "BRL",
+            "symbol": "R$"
+          },
+          "total_count": 9
+        },
+        "message": ""
+      }
+    },
+    {
+      "metodo": "POST",
+      "url": "https://seller-br.tiktok.com/api/oec/pay/merchant/statement/view/order_breakdown",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "breakdown_info": [
+            {
+              "amount": {
+                "amount": "375.56",
+                "amount_multiplied": 375564100,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "item_express": {
+                "is_display": true,
+                "name": {
+                  "starling_key": "Texto 2",
+                  "starling_text": "Texto 3"
+                },
+                "show_zero": true
+              },
+              "item_id": "911",
+              "sub_item_list": [
+                {
+                  "amount": {
+                    "amount": "560.08",
+                    "amount_multiplied": 560084100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "fee_source": 1,
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 7",
+                      "starling_text": "Texto 8"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 9",
+                      "starling_text": "Texto 10"
+                    }
+                  },
+                  "item_factor_map": {},
+                  "item_id": "953"
+                },
+                {
+                  "amount": {
+                    "amount": "-185",
+                    "amount_multiplied": -184520000,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "fee_source": 1,
+                  "item_express": {
+                    "extra_info_type": 1,
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 11",
+                      "starling_text": "Texto 12"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 13",
+                      "starling_text": "Texto 14"
+                    }
+                  },
+                  "item_factor_map": {},
+                  "item_id": "954"
+                }
+              ]
+            },
+            {
+              "amount": {
+                "amount": "0",
+                "amount_multiplied": 0,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "item_express": {
+                "is_display": true,
+                "name": {
+                  "starling_key": "Texto 1",
+                  "starling_text": "Custo líquido de frete"
+                },
+                "show_zero": true
+              },
+              "item_id": "95",
+              "sub_item_list": [
+                {
+                  "amount": {
+                    "amount": "-100.52",
+                    "amount_multiplied": -100523860,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 15",
+                      "starling_text": "Custo do frete"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 16",
+                      "starling_text": "Texto 17"
+                    }
+                  },
+                  "item_id": "955",
+                  "sub_item_list": []
+                },
+                {
+                  "amount": {
+                    "amount": "74.16",
+                    "amount_multiplied": 74163860,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 18",
+                      "starling_text": "Texto 19"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 20",
+                      "starling_text": "Texto 21"
+                    }
+                  },
+                  "item_id": "956",
+                  "sub_item_list": []
+                },
+                {
+                  "amount": {
+                    "amount": "26",
+                    "amount_multiplied": 26360000,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 22",
+                      "starling_text": "Texto 23"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 24",
+                      "starling_text": "Texto 25"
+                    }
+                  },
+                  "item_id": "957",
+                  "sub_item_list": []
+                }
+              ]
+            },
+            {
+              "amount": {
+                "amount": "-94.09",
+                "amount_multiplied": -94085430,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "item_express": {
+                "is_display": true,
+                "name": {
+                  "starling_key": "Texto 4",
+                  "starling_text": "Taxas e impostos"
+                },
+                "show_zero": true
+              },
+              "item_id": "912",
+              "sub_item_list": [
+                {
+                  "amount": {
+                    "amount": "-22.53",
+                    "amount_multiplied": -22531210,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 26",
+                      "starling_text": "Texto 27"
+                    },
+                    "tooltip": {
+                      "params": [
+                        {
+                          "starling_key": "Texto 28",
+                          "starling_text": "Exibir detalhes",
+                          "type": 1,
+                          "value": "Texto 29"
+                        },
+                        {
+                          "type": 4
+                        }
+                      ],
+                      "starling_key": "Texto 30",
+                      "starling_text": "Texto 31"
+                    }
+                  },
+                  "item_id": "9058",
+                  "sub_item_list": []
+                },
+                {
+                  "amount": {
+                    "amount": "-26.49",
+                    "amount_multiplied": -26485210,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 32",
+                      "starling_text": "Taxas de serviço"
+                    }
+                  },
+                  "item_id": "9059",
+                  "sub_item_list": [
+                    {
+                      "amount": {
+                        "amount": "-22.53",
+                        "amount_multiplied": -22531210,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 33",
+                          "starling_text": "Taxa de serviço do SFP"
+                        },
+                        "tooltip": {
+                          "params": [
+                            {
+                              "starling_key": "Texto 28",
+                              "starling_text": "Exibir detalhes",
+                              "type": 1,
+                              "value": "Texto 34"
+                            }
+                          ],
+                          "starling_key": "Texto 35",
+                          "starling_text": "Texto 36"
+                        }
+                      },
+                      "item_factor_map": {
+                        "exemption_activity_id": [
+                          "9000000000000000060"
+                        ]
+                      },
+                      "item_id": "961"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-4",
+                        "amount_multiplied": -3954000,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 37",
+                          "starling_text": "Taxa por item vendido"
+                        },
+                        "tooltip": {
+                          "starling_key": "Texto 38",
+                          "starling_text": "Texto 39"
+                        }
+                      },
+                      "item_factor_map": {},
+                      "item_id": "962"
+                    }
+                  ]
+                },
+                {
+                  "amount": {
+                    "amount": "-45.07",
+                    "amount_multiplied": -45069010,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 40",
+                      "starling_text": "Comissões de afiliados"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 41",
+                      "starling_text": "Texto 42"
+                    }
+                  },
+                  "item_id": "9063",
+                  "sub_item_list": [
+                    {
+                      "amount": {
+                        "amount": "-45.07",
+                        "amount_multiplied": -45069010,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 43",
+                          "starling_text": "Texto 44"
+                        },
+                        "tooltip": {
+                          "starling_key": "Texto 41",
+                          "starling_text": "Texto 42"
+                        }
+                      },
+                      "item_id": "964",
+                      "sub_item_list": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "fund_order_id": "9000000000000000015",
+          "order_create_time": 1789566385752,
+          "order_delivery_time": 1790278865272,
+          "payment_id": "9000000000000000016",
+          "settlement_date": 1790899199000,
+          "statement_date": 1790899199000,
+          "statement_id": "9000000000000000018",
+          "to_settle_reason": 2,
+          "total_net_amount": {
+            "amount": "281.48",
+            "amount_multiplied": 281478670,
+            "currency": "BRL",
+            "symbol": "R$"
+          },
+          "trade_order_id": "900000000000000014",
+          "transaction_status": 4
+        },
+        "message": ""
+      }
+    },
+    {
+      "metodo": "POST",
+      "url": "https://seller-br.tiktok.com/api/oec/pay/merchant/statement/view/order_breakdown",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "breakdown_info": [
+            {
+              "amount": {
+                "amount": "428.28",
+                "amount_multiplied": 428284100,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "item_express": {
+                "is_display": true,
+                "name": {
+                  "starling_key": "Texto 2",
+                  "starling_text": "Texto 3"
+                },
+                "show_zero": true
+              },
+              "item_id": "911",
+              "sub_item_list": [
+                {
+                  "amount": {
+                    "amount": "625.98",
+                    "amount_multiplied": 625984100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "fee_source": 1,
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 7",
+                      "starling_text": "Texto 8"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 9",
+                      "starling_text": "Texto 10"
+                    }
+                  },
+                  "item_factor_map": {},
+                  "item_id": "953"
+                },
+                {
+                  "amount": {
+                    "amount": "-198",
+                    "amount_multiplied": -197700000,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "fee_source": 1,
+                  "item_express": {
+                    "extra_info_type": 1,
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 11",
+                      "starling_text": "Texto 12"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 13",
+                      "starling_text": "Texto 14"
+                    }
+                  },
+                  "item_factor_map": {},
+                  "item_id": "954"
+                }
+              ]
+            },
+            {
+              "amount": {
+                "amount": "-20",
+                "amount_multiplied": -19770000,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "item_express": {
+                "is_display": true,
+                "name": {
+                  "starling_key": "Texto 1",
+                  "starling_text": "Custo líquido de frete"
+                },
+                "show_zero": true
+              },
+              "item_id": "95",
+              "sub_item_list": [
+                {
+                  "amount": {
+                    "amount": "-66.75",
+                    "amount_multiplied": -66750110,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 15",
+                      "starling_text": "Custo do frete"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 16",
+                      "starling_text": "Texto 17"
+                    }
+                  },
+                  "item_id": "955",
+                  "sub_item_list": []
+                },
+                {
+                  "amount": {
+                    "amount": "46.98",
+                    "amount_multiplied": 46980110,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 18",
+                      "starling_text": "Texto 19"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 20",
+                      "starling_text": "Texto 21"
+                    }
+                  },
+                  "item_id": "956",
+                  "sub_item_list": []
+                }
+              ]
+            },
+            {
+              "amount": {
+                "amount": "-55.34",
+                "amount_multiplied": -55342820,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "item_express": {
+                "is_display": true,
+                "name": {
+                  "starling_key": "Texto 4",
+                  "starling_text": "Taxas e impostos"
+                },
+                "show_zero": true
+              },
+              "item_id": "912",
+              "sub_item_list": [
+                {
+                  "amount": {
+                    "amount": "-25.69",
+                    "amount_multiplied": -25694410,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 26",
+                      "starling_text": "Texto 27"
+                    },
+                    "tooltip": {
+                      "params": [
+                        {
+                          "starling_key": "Texto 28",
+                          "starling_text": "Exibir detalhes",
+                          "type": 1,
+                          "value": "Texto 29"
+                        },
+                        {
+                          "type": 4
+                        }
+                      ],
+                      "starling_key": "Texto 30",
+                      "starling_text": "Texto 31"
+                    }
+                  },
+                  "item_id": "9058",
+                  "sub_item_list": []
+                },
+                {
+                  "amount": {
+                    "amount": "-29.65",
+                    "amount_multiplied": -29648410,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 32",
+                      "starling_text": "Taxas de serviço"
+                    }
+                  },
+                  "item_id": "9059",
+                  "sub_item_list": [
+                    {
+                      "amount": {
+                        "amount": "-25.69",
+                        "amount_multiplied": -25694410,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 33",
+                          "starling_text": "Taxa de serviço do SFP"
+                        },
+                        "tooltip": {
+                          "params": [
+                            {
+                              "starling_key": "Texto 28",
+                              "starling_text": "Exibir detalhes",
+                              "type": 1,
+                              "value": "Texto 34"
+                            }
+                          ],
+                          "starling_key": "Texto 35",
+                          "starling_text": "Texto 36"
+                        }
+                      },
+                      "item_factor_map": {
+                        "exemption_activity_id": [
+                          "9000000000000000060"
+                        ]
+                      },
+                      "item_id": "961"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-4",
+                        "amount_multiplied": -3954000,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 37",
+                          "starling_text": "Taxa por item vendido"
+                        },
+                        "tooltip": {
+                          "starling_key": "Texto 38",
+                          "starling_text": "Texto 39"
+                        }
+                      },
+                      "item_factor_map": {},
+                      "item_id": "962"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "fund_order_id": "9000000000000000019",
+          "order_create_time": 1789644818632,
+          "order_delivery_time": 1790176626016,
+          "payment_id": "9000000000000000020",
+          "settlement_date": 1790812799000,
+          "statement_date": 1790812799000,
+          "statement_id": "9000000000000000021",
+          "to_settle_reason": 2,
+          "total_net_amount": {
+            "amount": "353.17",
+            "amount_multiplied": 353171280,
+            "currency": "BRL",
+            "symbol": "R$"
+          },
+          "trade_order_id": "900000000000000002",
+          "transaction_status": 4
+        },
+        "message": ""
+      }
+    },
+    {
+      "metodo": "POST",
+      "url": "https://seller-br.tiktok.com/api/oec/pay/merchant/statement/view/order_breakdown",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "breakdown_info": [
+            {
+              "amount": {
+                "amount": "362.38",
+                "amount_multiplied": 362384100,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "item_express": {
+                "is_display": true,
+                "name": {
+                  "starling_key": "Texto 2",
+                  "starling_text": "Texto 3"
+                },
+                "show_zero": true
+              },
+              "item_id": "911",
+              "sub_item_list": [
+                {
+                  "amount": {
+                    "amount": "362.38",
+                    "amount_multiplied": 362384100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "fee_source": 1,
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 7",
+                      "starling_text": "Texto 8"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 9",
+                      "starling_text": "Texto 10"
+                    }
+                  },
+                  "item_factor_map": {},
+                  "item_id": "953"
+                }
+              ]
+            },
+            {
+              "amount": {
+                "amount": "0",
+                "amount_multiplied": 0,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "item_express": {
+                "is_display": true,
+                "name": {
+                  "starling_key": "Texto 1",
+                  "starling_text": "Custo líquido de frete"
+                },
+                "show_zero": true
+              },
+              "item_id": "95",
+              "sub_item_list": [
+                {
+                  "amount": {
+                    "amount": "-90.72",
+                    "amount_multiplied": -90717940,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 15",
+                      "starling_text": "Custo do frete"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 16",
+                      "starling_text": "Texto 17"
+                    }
+                  },
+                  "item_id": "955",
+                  "sub_item_list": []
+                },
+                {
+                  "amount": {
+                    "amount": "70.95",
+                    "amount_multiplied": 70947940,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 18",
+                      "starling_text": "Texto 19"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 20",
+                      "starling_text": "Texto 21"
+                    }
+                  },
+                  "item_id": "956",
+                  "sub_item_list": []
+                },
+                {
+                  "amount": {
+                    "amount": "20",
+                    "amount_multiplied": 19770000,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 22",
+                      "starling_text": "Texto 23"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 24",
+                      "starling_text": "Texto 25"
+                    }
+                  },
+                  "item_id": "957",
+                  "sub_item_list": []
+                }
+              ]
+            },
+            {
+              "amount": {
+                "amount": "-58.31",
+                "amount_multiplied": -58308320,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "item_express": {
+                "is_display": true,
+                "name": {
+                  "starling_key": "Texto 4",
+                  "starling_text": "Taxas e impostos"
+                },
+                "show_zero": true
+              },
+              "item_id": "912",
+              "sub_item_list": [
+                {
+                  "amount": {
+                    "amount": "-21.74",
+                    "amount_multiplied": -21740410,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 26",
+                      "starling_text": "Texto 27"
+                    },
+                    "tooltip": {
+                      "params": [
+                        {
+                          "starling_key": "Texto 28",
+                          "starling_text": "Exibir detalhes",
+                          "type": 1,
+                          "value": "Texto 29"
+                        },
+                        {
+                          "type": 4
+                        }
+                      ],
+                      "starling_key": "Texto 30",
+                      "starling_text": "Texto 31"
+                    }
+                  },
+                  "item_id": "9058",
+                  "sub_item_list": []
+                },
+                {
+                  "amount": {
+                    "amount": "-25.69",
+                    "amount_multiplied": -25694410,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 32",
+                      "starling_text": "Taxas de serviço"
+                    }
+                  },
+                  "item_id": "9059",
+                  "sub_item_list": [
+                    {
+                      "amount": {
+                        "amount": "-21.74",
+                        "amount_multiplied": -21740410,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 33",
+                          "starling_text": "Taxa de serviço do SFP"
+                        },
+                        "tooltip": {
+                          "params": [
+                            {
+                              "starling_key": "Texto 28",
+                              "starling_text": "Exibir detalhes",
+                              "type": 1,
+                              "value": "Texto 34"
+                            }
+                          ],
+                          "starling_key": "Texto 35",
+                          "starling_text": "Texto 36"
+                        }
+                      },
+                      "item_factor_map": {
+                        "exemption_activity_id": [
+                          "9000000000000000060"
+                        ]
+                      },
+                      "item_id": "961"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-4",
+                        "amount_multiplied": -3954000,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 37",
+                          "starling_text": "Taxa por item vendido"
+                        },
+                        "tooltip": {
+                          "starling_key": "Texto 38",
+                          "starling_text": "Texto 39"
+                        }
+                      },
+                      "item_factor_map": {},
+                      "item_id": "962"
+                    }
+                  ]
+                },
+                {
+                  "amount": {
+                    "amount": "-10.87",
+                    "amount_multiplied": -10873500,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 40",
+                      "starling_text": "Comissões de afiliados"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 41",
+                      "starling_text": "Texto 42"
+                    }
+                  },
+                  "item_id": "9063",
+                  "sub_item_list": [
+                    {
+                      "amount": {
+                        "amount": "-10.87",
+                        "amount_multiplied": -10873500,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 45",
+                          "starling_text": "Texto 46"
+                        },
+                        "tooltip": {
+                          "starling_key": "Texto 47",
+                          "starling_text": "Texto 48"
+                        }
+                      },
+                      "item_id": "965",
+                      "sub_item_list": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "fund_order_id": "9000000000000000023",
+          "order_create_time": 1785520071030,
+          "order_delivery_time": 1786048924383,
+          "payment_id": "9000000000000000024",
+          "settlement_date": 1786665599000,
+          "statement_date": 1786665599000,
+          "statement_id": "9000000000000000025",
+          "to_settle_reason": 2,
+          "total_net_amount": {
+            "amount": "304.08",
+            "amount_multiplied": 304075780,
+            "currency": "BRL",
+            "symbol": "R$"
+          },
+          "trade_order_id": "900000000000000022",
+          "transaction_status": 4
+        },
+        "message": ""
+      }
+    },
+    {
+      "metodo": "POST",
+      "url": "https://seller-br.tiktok.com/api/oec/pay/merchant/statement/view/order_breakdown",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "data": {
+          "breakdown_info": [
+            {
+              "amount": {
+                "amount": "362.38",
+                "amount_multiplied": 362384100,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "item_express": {
+                "is_display": true,
+                "name": {
+                  "starling_key": "Texto 2",
+                  "starling_text": "Texto 3"
+                },
+                "show_zero": true
+              },
+              "item_id": "911",
+              "sub_item_list": [
+                {
+                  "amount": {
+                    "amount": "362.38",
+                    "amount_multiplied": 362384100,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "fee_source": 1,
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 7",
+                      "starling_text": "Texto 8"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 9",
+                      "starling_text": "Texto 10"
+                    }
+                  },
+                  "item_factor_map": {},
+                  "item_id": "953"
+                }
+              ]
+            },
+            {
+              "amount": {
+                "amount": "0",
+                "amount_multiplied": 0,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "item_express": {
+                "is_display": true,
+                "name": {
+                  "starling_key": "Texto 1",
+                  "starling_text": "Custo líquido de frete"
+                },
+                "show_zero": true
+              },
+              "item_id": "95",
+              "sub_item_list": [
+                {
+                  "amount": {
+                    "amount": "-24.48",
+                    "amount_multiplied": -24475260,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 15",
+                      "starling_text": "Custo do frete"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 16",
+                      "starling_text": "Texto 17"
+                    }
+                  },
+                  "item_id": "955",
+                  "sub_item_list": []
+                },
+                {
+                  "amount": {
+                    "amount": "4.71",
+                    "amount_multiplied": 4705260,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 18",
+                      "starling_text": "Texto 19"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 20",
+                      "starling_text": "Texto 21"
+                    }
+                  },
+                  "item_id": "956",
+                  "sub_item_list": []
+                },
+                {
+                  "amount": {
+                    "amount": "20",
+                    "amount_multiplied": 19770000,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 22",
+                      "starling_text": "Texto 23"
+                    },
+                    "tooltip": {
+                      "starling_key": "Texto 24",
+                      "starling_text": "Texto 25"
+                    }
+                  },
+                  "item_id": "957",
+                  "sub_item_list": []
+                }
+              ]
+            },
+            {
+              "amount": {
+                "amount": "-46.12",
+                "amount_multiplied": -46116820,
+                "currency": "BRL",
+                "symbol": "R$"
+              },
+              "item_express": {
+                "is_display": true,
+                "name": {
+                  "starling_key": "Texto 4",
+                  "starling_text": "Taxas e impostos"
+                },
+                "show_zero": true
+              },
+              "item_id": "912",
+              "sub_item_list": [
+                {
+                  "amount": {
+                    "amount": "-21.74",
+                    "amount_multiplied": -21740410,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 26",
+                      "starling_text": "Texto 27"
+                    },
+                    "tooltip": {
+                      "params": [
+                        {
+                          "starling_key": "Texto 28",
+                          "starling_text": "Exibir detalhes",
+                          "type": 1,
+                          "value": "Texto 29"
+                        },
+                        {
+                          "type": 4
+                        }
+                      ],
+                      "starling_key": "Texto 30",
+                      "starling_text": "Texto 31"
+                    }
+                  },
+                  "item_id": "9058",
+                  "sub_item_list": []
+                },
+                {
+                  "amount": {
+                    "amount": "-24.38",
+                    "amount_multiplied": -24376410,
+                    "currency": "BRL",
+                    "symbol": "R$"
+                  },
+                  "item_express": {
+                    "is_display": true,
+                    "name": {
+                      "starling_key": "Texto 32",
+                      "starling_text": "Taxas de serviço"
+                    }
+                  },
+                  "item_id": "9059",
+                  "sub_item_list": [
+                    {
+                      "amount": {
+                        "amount": "-21.74",
+                        "amount_multiplied": -21740410,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 33",
+                          "starling_text": "Taxa de serviço do SFP"
+                        },
+                        "tooltip": {
+                          "params": [
+                            {
+                              "starling_key": "Texto 28",
+                              "starling_text": "Exibir detalhes",
+                              "type": 1,
+                              "value": "Texto 34"
+                            }
+                          ],
+                          "starling_key": "Texto 35",
+                          "starling_text": "Texto 36"
+                        }
+                      },
+                      "item_factor_map": {
+                        "exemption_activity_id": [
+                          "9000000000000000060"
+                        ]
+                      },
+                      "item_id": "961"
+                    },
+                    {
+                      "amount": {
+                        "amount": "-3",
+                        "amount_multiplied": -2636000,
+                        "currency": "BRL",
+                        "symbol": "R$"
+                      },
+                      "item_express": {
+                        "is_display": true,
+                        "name": {
+                          "starling_key": "Texto 37",
+                          "starling_text": "Taxa por item vendido"
+                        },
+                        "tooltip": {
+                          "starling_key": "Texto 38",
+                          "starling_text": "Texto 39"
+                        }
+                      },
+                      "item_factor_map": {},
+                      "item_id": "962"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "fund_order_id": "9000000000000000036",
+          "order_create_time": 1782169274290,
+          "order_delivery_time": 1782415024158,
+          "payment_id": "9000000000000000037",
+          "settlement_date": 1785110399000,
+          "statement_date": 1785110399000,
+          "statement_id": "9000000000000000038",
+          "to_settle_reason": 2,
+          "total_net_amount": {
+            "amount": "316.27",
+            "amount_multiplied": 316267280,
+            "currency": "BRL",
+            "symbol": "R$"
+          },
+          "trade_order_id": "900000000000000035",
+          "transaction_status": 4
+        },
+        "message": ""
+      }
+    }
+  ]
+}
