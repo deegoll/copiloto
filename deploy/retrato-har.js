@@ -15,10 +15,13 @@
 'use strict';
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 
-const PESSOAL = /^(buyer|receiver|recipient|comprador|destinatario|cliente|customer|shipping|consignee)?_?(name|nome|first_?name|last_?name|full_?name|nick_?name|user_?name|apelido|email|e_?mail|phone|telefone|celular|mobile|cpf|cnpj|doc_?number|document|documento|tax_?id|street|street_?name|street_?number|rua|logradouro|endereco|address|address_?line\d?|full_?address|zip_?code|zip|cep|postal_?code|neighborhood|bairro|city|cidade|district|complement|complemento|avatar|portrait)$/i;
+const PESSOAL = /^(buyer|receiver|recipient|comprador|destinatario|cliente|customer|shipping|consignee)?_?(name|nome|first_?name|last_?name|full_?name|nick_?name|user_?name|apelido|email|e_?mail|phone|telefone|celular|mobile|cpf|cnpj|doc_?number|document|documento|tax_?id|street|street_?name|street_?number|rua|logradouro|endereco|address|address_?line\d?|full_?address|zip_?code|zip|cep|postal_?code|neighborhood|bairro|city|cidade|district|complement|complemento|state|estado|uf|province|region|avatar|portrait)$/i;
 const DONO = /buyer|receiver|recipient|comprador|destinat|client|customer|shipping|address|endereco|contact|contato|consignee|seller|vendedor|shop_?name|loja/i;
 const TITULO = /^(title|titulo|name|nome|item_?name|product_?name|model_?name|variation_?name|description|descricao|shop_?name|store_?name)$/i;
 const SKU = /sku|seller_?code|codigo|item_?code|model_?sku|ean|gtin|barcode/i;
+// Blocos sigilosos inteiros (banco, empresa, e-mail financeiro) e rótulos de pares nome/valor que são dado pessoal (M3, 08/10).
+const SIGILO = /^(bank_?account|bank|banco|conta_?bancaria|org|organization|empresa|company|financial_?email|billing|payout|pix_?key|chave_?pix)$/i;
+const PAR = /(^|_)(customer|buyer|cliente|comprador|recipient|destinatario)?_?(name|nome|email|phone|telefone|celular|cpf|cnpj|document|documento|doc_?number|address|endereco|zip|cep|street|rua|nickname|apelido)$/i;
 const ID_CHAVE = /(^|_)(id|ids|sn|order_?sn|uuid|code|token|hash|number|numero)$|Id$|^id/i;
 const VALOR = /price|preco|preço|amount|valor|total|fee|taxa|tarifa|cost|custo|stock|estoque|qtd|quantity|quantidade|sold|vendid|income|renda|repasse|commission|comissao|discount|desconto|shipping_?fee|frete|balance|saldo|revenue|gmv/i;
 const ESTADO = /^[A-Z][A-Z0-9_]{1,40}$|^[a-z][a-z0-9_]{1,30}$/;   // "READY_TO_SHIP", "normal", "unpaid"
@@ -40,16 +43,24 @@ function criaAnonimo(semente) {
         .replace(/\(?\b\d{2}\)?\s?9?\d{4}[-\s]?\d{4}\b/g, '(00) 00000-0000')
         .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b|\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g, '***')
         .replace(/\d{6,}/g, d => novoId(d));
+    // Tudo que está dentro vira de mentira, mantendo os tipos (string "***", número 0, booleano e null como estão).
+    const apaga = x => (Array.isArray(x) ? x.map(apaga) : x && typeof x === 'object' ? Object.keys(x).reduce((o, k) => { o[k] = apaga(x[k]); return o; }, {})
+        : typeof x === 'number' ? 0 : typeof x === 'string' ? (x === '' ? '' : '***') : x);
     function anda(v, chave, caminho) {
         if (Array.isArray(v)) return v.map(x => anda(x, chave, caminho));
         if (v && typeof v === 'object') {
+            // Bloco inteiro do banco, da empresa ou do e-mail financeiro (retrato M3 da Magalu): só a estrutura, todo valor vira "***"/0.
+            if (SIGILO.test(String(chave || ''))) return apaga(v);
             const o = {};
-            Object.keys(v).forEach(k => { o[k] = anda(v[k], k, caminho + '.' + k); });
+            // Par nome/valor ({key: "customer_name", value: "Fulana"}, {name: "cpf", value: …}): a chave pessoal está no TEXTO, não no nome do campo.
+            const rotulo = ['key', 'name', 'field', 'label', 'type'].map(c => v[c]).find(x => typeof x === 'string' && PAR.test(x.replace(/[-\s]/g, '_')));
+            Object.keys(v).forEach(k => { o[k] = rotulo && /^(value|valor|val|text|content)$/i.test(k) ? apaga(v[k]) : anda(v[k], k, caminho + '.' + k); });
             return o;
         }
         const k = String(chave || ''), kk = k.replace(/[-\s]/g, '_');
         if (v === null || typeof v === 'boolean') return v;
-        if (PESSOAL.test(kk) && (DONO.test(caminho) || /cpf|cnpj|email|phone|telefone|celular|mobile|cep|zip|postal|doc_?number|street|address/i.test(kk))) return typeof v === 'number' ? 0 : (v === '' ? '' : '***');
+        if (/^(org_?id|cnpj|company_?id|seller_?document|razao_?social|nome_?fantasia|trade_?name|legal_?name)$/i.test(kk)) return typeof v === 'number' ? 0 : (v === '' ? '' : '***');   // empresa do vendedor (M3)
+        if (PESSOAL.test(kk) && (DONO.test(caminho) || /cpf|cnpj|email|phone|telefone|celular|mobile|cep|zip|postal|doc_?number|street|address/i.test(kk))) return typeof v === 'number' ? 0 : (v === '' ? '' : '***');   // endereço do comprador E do vendedor (seller_address.state: retrato M2)
         if (typeof v === 'number') {
             if (/time|date|data|_at$|ts$/i.test(k) && v > 1e9) return v;   // timestamp: fica (não é dado pessoal e o código lê datas)
             if (ID_CHAVE.test(k) || (Number.isInteger(v) && Math.abs(v) >= 1e5 && !VALOR.test(k))) return +novoId(v) || v;
@@ -62,7 +73,12 @@ function criaAnonimo(semente) {
             const n = +v.replace(',', '.'), r = String(num(n));
             return v.indexOf(',') >= 0 ? r.replace('.', ',') : r;
         }
-        if (/^https?:\/\//.test(v)) return limpaTexto(v.split('?')[0]);
+        if (/^https?:\/\//.test(v)) {
+            // Imagem e página de produto do vendedor (cdn, fotos, anúncio): o endereço inteiro sai (diz qual é a loja); a API do canal fica, sem a query.
+            if (/\.(jpe?g|png|webp|gif|avif|svg)(\?|$)|\/(img|image|images|imagem|foto|photo|media|cdn|file|produto|product|p)\//i.test(v) || /cdn|static|img|image|media/i.test(v.split('/')[2] || ''))
+                return 'https://exemplo.invalid/' + (/\.(jpe?g|png|webp|gif|avif|svg)(\?|$)/i.test(v) ? 'imagem.jpg' : 'pagina');
+            return limpaTexto(v.split('?')[0]);
+        }
         if (SKU.test(k)) return troca('sku', v, n => 'SKU-' + n);
         if (TITULO.test(k)) return DONO.test(caminho) ? '***' : troca('titulo', v, n => 'Produto ' + n);
         if (ID_CHAVE.test(k)) return novoId(v);
