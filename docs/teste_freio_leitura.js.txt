@@ -1,0 +1,30 @@
+// node tests/copiloto/teste_freio_leitura.js — freio da leitura em segundo plano (revisão do TI da DB1, 08/10/2026):
+// captcha ou 5 respostas 429 seguidas pausam a leitura por 15 min; 429 isolado não pausa; sucesso zera a contagem.
+const path = require('path');
+globalThis.chrome = { storage: { local: { get: async () => ({}), set: async () => {}, remove: async () => {} } }, runtime: {} };
+const SHC = require(path.join(__dirname, '../../extension-copiloto/calc.js'));
+let falhas = 0;
+const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) falhas++; };
+const B = 'https://vendedores.mercadolivre.com.br';
+(async () => {
+    let chamadas = 0, resp = { ok: true, status: 200, url: B + '/x' };
+    const f = async () => { chamadas++; return resp; };
+    await SHC.buscarVendo(B + '/x', {}, f);
+    ok(chamadas === 1 && SHC.pausaLeitura() === 0, 'leitura normal passa e não pausa');
+    resp = { ok: false, status: 429, url: B + '/x' };
+    for (let i = 0; i < 4; i++) await SHC.buscarVendo(B + '/x', {}, f);
+    ok(SHC.pausaLeitura() === 0, '4 respostas 429 seguidas: ainda não pausa (cada chamador já tenta de novo)');
+    resp = { ok: true, status: 200, url: B + '/x' };
+    await SHC.buscarVendo(B + '/x', {}, f);
+    resp = { ok: false, status: 429, url: B + '/x' };
+    for (let i = 0; i < 4; i++) await SHC.buscarVendo(B + '/x', {}, f);
+    ok(SHC.pausaLeitura() === 0, 'um sucesso no meio zera a contagem');
+    await SHC.buscarVendo(B + '/x', {}, f);
+    await SHC.buscarVendo(B + '/x', {}, f); await SHC.buscarVendo(B + '/x', {}, f); await SHC.buscarVendo(B + '/x', {}, f); await SHC.buscarVendo(B + '/x', {}, f);
+    ok(SHC.pausaLeitura() > 14 * 60e3, '5 respostas 429 seguidas pausam por ~15 min');
+    chamadas = 0;
+    const r = await SHC.buscarVendo(B + '/y', {}, f);
+    ok(chamadas === 0 && r.pausado === true && r.ok === false, 'pausado: não chama o ML, devolve resposta falsa não-ok com pausado:true');
+    console.log(falhas ? falhas + ' FALHA(S)' : 'TUDO OK');
+    process.exit(falhas ? 1 : 0);
+})();

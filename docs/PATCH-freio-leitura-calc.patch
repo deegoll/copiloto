@@ -1,0 +1,38 @@
+diff --git a/extension-copiloto/calc.js b/extension-copiloto/calc.js
+index cb4510e..4fe642a 100644
+--- a/extension-copiloto/calc.js
++++ b/extension-copiloto/calc.js
+@@ -94,7 +94,7 @@
+     const desviou = r => !!r && r.type === 'opaqueredirect';
+     const urlLogin = u => /login|registration|\/lgz\//i.test(u || '');
+     const loginFalso = () => ({ ok: false, status: 302, url: 'https://www.mercadolivre.com.br/login?redirecionado', redirecionadoLogin: true });
+-    SHC.buscarVendo = async function (url, init, ir) {
++    const buscarVendoBruto = async function (url, init, ir) {
+         const f = ir || root.fetch;
+         const soGet = !(init && init.method && String(init.method).toUpperCase() !== 'GET');
+         const naPagina = !!(root.location && /^https?:$/.test(root.location.protocol));
+@@ -122,6 +122,24 @@
+         }
+     };
+ 
++    // Freio (revisão de segurança do TI, 08/10/2026): o ML mandou para captcha/desafio ou respondeu 429 cinco vezes seguidas → o Copiloto PARA de ler em segundo
++    // plano por 15 min (service worker e páginas da extensão; leitura feita dentro da página do ML segue, é a seller navegando).
++    // Resposta falsa {ok:false,status:429,pausado:true}: os chamadores já tratam resposta que não é ok. Estado só em memória: o worker reiniciar zera.
++    const PAUSA_MS = 15 * 60e3;
++    let pausadoAte = 0;
++    const captcha = r => !!r && /captcha|recaptcha|challenge|account-verification/i.test(r.url || '');
++    let seguidos429 = 0;   // 429 isolado já tem retentativa própria nos chamadores; só 5 seguidos ou captcha acionam a pausa
++    SHC.pausaLeitura = () => Math.max(0, pausadoAte - Date.now());
++    SHC.buscarVendo = async function (url, init, ir) {
++        const naPagina = !!(root.location && /^https?:$/.test(root.location.protocol));
++        if (naPagina) return buscarVendoBruto(url, init, ir);
++        if (Date.now() < pausadoAte) return { ok: false, status: 429, url: url, pausado: true };
++        const r = await buscarVendoBruto(url, init, ir);
++        seguidos429 = r && r.status === 429 ? seguidos429 + 1 : 0;
++        if (captcha(r) || seguidos429 >= 5) { pausadoAte = Date.now() + PAUSA_MS; seguidos429 = 0; }
++        return r;
++    };
++
+     SHC.moeda = v => (v === null || v === undefined || !isFinite(v)) ? '—'
+         : (v < 0 ? '−' : '') + 'R$ ' + Math.abs(Number(v)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+ 

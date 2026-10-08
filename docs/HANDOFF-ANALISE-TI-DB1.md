@@ -26,3 +26,9 @@ Regras fixas: nada de dado de cliente no GitHub; sem `git push --force`, sem mer
 1. `git pull` e ler o topo do `COORDENACAO.md`.
 2. Reservar os arquivos do item que for fazer.
 3. Trabalhar num ramo `nuvem*/...`, rodar a suíte, publicar o ramo e dar o recado no quadro.
+
+## Atualização (08/10, noite) — o que já foi feito
+- Item 2 (termo "auditoria") e item 3 (`docs/REGISTRO-DE-RISCOS.md`): feitos, commit `5b67139`.
+- Item 4, parte do **freio**: feito no projeto local (`extension-copiloto/calc.js`, `SHC.buscarVendo`): captcha/desafio ou 5 respostas 429 seguidas pausam a leitura em segundo plano por 15 min (`SHC.pausaLeitura()`); leitura dentro da página do ML não muda. Patch em `docs/PATCH-freio-leitura-calc.patch`, teste em `docs/teste_freio_leitura.js.txt` (copiar para `tests/copiloto/teste_freio_leitura.js`). Suíte local: 111 arquivos mais o novo, todos verdes. Liberado pela dona (calc.js).
+- **Não feito de propósito:** "só com aba do ML aberta". Quebra a sincronização em segundo plano que as telas usam; decidir com a dona se vale (ou deixar a sincronização desligada por padrão).
+- Item 1 (cifrar token do ERP) segue esperando a junção do PR #15.
