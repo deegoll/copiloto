@@ -56,6 +56,9 @@ importScripts('nucleo/util.js', 'nucleo/modelo.js', 'nucleo/tarifas.js', 'nucleo
 // 3.3.0 (E8): TikTok destravado. 'scripting' e o site só como permissões OPCIONAIS (pedidas no clique em Ajustes); os 2 scripts da tela
 // só são registrados com as 2 concedidas E cfg.modulos.tiktok === true (SHC.tt.sincronizarScripts). Nenhum content_script fixo no TikTok.
 SHC.tt.instalarFundo();
+// 3.4.0: etiquetas de ganho (Shopee, TikTok, Magalu): registra os scripts das listas só com o canal ligado e a permissão do site (etiqueta-registro.js).
+importScripts('termos-canais.js', 'etiqueta-registro.js');   // termos-canais.js: a versão dos termos por canal (3.4.0)
+SHC.etqReg.instalarFundo();
 
 const BASE = 'https://vendedores.mercadolivre.com.br';
 const PAGINAS_MAX = 40;          // promoções: 25 famílias por página → até 1.000 produtos

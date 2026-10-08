@@ -29,7 +29,9 @@
     "https://app.omie.com.br/*",
     "https://www.bling.com.br/*",
     "https://api.bling.com.br/*",
-    "https://seller-br.tiktok.com/*"
+    "https://seller-br.tiktok.com/*",
+    "https://seller.shopee.com.br/*",
+    "https://seller.magalu.com/*"
   ],
   "background": {
     "service_worker": "background.js"
