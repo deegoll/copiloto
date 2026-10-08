@@ -76,9 +76,10 @@ async function atualizarAlertas(conta) {
         const [saiu, promos] = await Promise.all([SHC.lerChave('promoSaiu:' + c), SHC.lerPromos(c)]), its = (an && an.itens) || [];
         promo = SHC.promoAlertas(saiu, SHC.promoTermina(its, promos, hoje, cfg.promo_aviso_dias), Date.now(), its);
     } catch (e) { promo = []; /* derivado: nunca derruba os alertas */ }
+    const erpx = await SHC.lerChave('erpx:' + c);   // B2 parte 3: parado do ERP com estoque (SHC.erpConferir, gravado pelo 09-custos-erp)
     const experiencia = await SHC.lerChave('exp:' + c);   // v3.3: experiência de compra (juntarExperiencia); tarefas = avisos da lista de Anúncios (fiscal:<conta>)
     const anom = SHC.anomalias(c, { alertas: r, posvenda: pvd, frete: frh, conferir: cnf, rateio: rat, cert, medidas: med, titulos, perguntas: perg, reputacao: rep, remessas, nfe, fatura, familias, prejuizo, promo,
-        experiencia, itens: (an && an.itens) || [], tarefas: (fiscal && fiscal.tarefas) || [] }, cfg);   // v2.8: módulos desligados não contam
+        experiencia, erpx, itens: (an && an.itens) || [], tarefas: (fiscal && fiscal.tarefas) || [] }, cfg);   // v2.8: módulos desligados não contam
     const snapAnom = Object.assign({ ts: Date.now() }, anom, { itens: anom.itens.slice(0, 200) });
     // Por conta também ("suas contas juntas", SHC.dadosContas). v3.3 (bloqueio 5): a chave geral (ícone e painel) só com a conta ABERTA agora.
     const aberta = (await SHC.contaAtual()) === c;

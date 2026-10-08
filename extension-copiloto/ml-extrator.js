@@ -3300,6 +3300,24 @@
             const resto = fa.total - fa.repor.length;
             if (resto > 0 || fa.textoSemRepor) add('familia', 'Faturamento por família: ' + fa.textoSemRepor + '.', { chave: 'anom|familia', qtd: resto });
         } else if (fa && fa.total > 0) add('familia', 'Faturamento por família: ' + fa.texto + '.', { chave: 'anom|familia', qtd: fa.total });
+        // B2 parte 3 (3.3.1): parado do ERP com estoque (erpx:<conta>, SHC.erpCruzar: parado com temNoErp = ativo e com estoque no ERP, e o ML
+        // diz "Sem estoque no ML" no anúncio do SKU): 1 item por SKU, com o estoque lido no ERP. Só com a trava da conferência aberta
+        // (aguardando null: a lista vem vazia mesmo assim) e de OUTRA conta não entra. O SKU que o aviso do Full ou o "Repor" já mostram não repete.
+        const ex = d.erpx, rx = ex && ex.r;
+        if (rx && !rx.aguardando && Array.isArray(rx.parado) && (!ex.conta || !conta || String(ex.conta) === String(conta))) {
+            const ks = x => (SHC.normalizaSku ? SHC.normalizaSku(x) : String(x || '').trim().toUpperCase()), ja = new Set(), jaId = new Set();
+            lista.filter(a => a.tipo === 'full').forEach(a => { if (a.sku) ja.add(ks(a.sku)); if (a.itemId) jaId.add(String(a.itemId)); });
+            ((fa && fa.repor) || []).forEach(x => { if (x && x.sku) ja.add(ks(x.sku)); });
+            const nomeErp = ex.nome || 'ERP';
+            rx.parado.filter(p => p && p.temNoErp && p.sku && p.estoqueErp > 0).forEach(p => {
+                const an = (p.anuncios || []).filter(a => a && a.motivo === 'Sem estoque no ML'), id = (an[0] && an[0].itemId) || '';
+                if (ja.has(ks(p.sku)) || an.some(a => jaId.has(String(a.itemId)))) return;
+                ja.add(ks(p.sku));
+                add('familia', 'Sem estoque no ML e com ' + SHC.qtd(p.estoqueErp, 'unidade', 'unidades') + ' no ' + nomeErp + ': ' + (p.nome ? p.nome + ' (SKU ' + p.sku + ')' : 'o SKU ' + p.sku)
+                    + '. Atualize o estoque do anúncio no ML.', { chave: 'anom|erpParado|' + ks(p.sku), itemId: id, sku: p.sku, estoqueErp: p.estoqueErp,
+                    link: id && SHC.ERPX_URL_ANUNCIO ? SHC.ERPX_URL_ANUNCIO(id) : '' });
+            });
+        }
         // v3.2: venda nova no prejuízo (prejuizo:<conta>, SHC.vendasPrejuizo): 1 por venda, ou 1 só com todas quando passam de 3. Urgente.
         if (d.prejuizo && SHC.prejuizoAlertas) SHC.prejuizoAlertas(d.prejuizo, agora).forEach(a => add('prejuizo', a.texto, a));
         // v3.2.0: avisos de promoção já montados (SHC.promoAlertas): 1 por anúncio que saiu da promoção e 1 por promoção que está acabando.
