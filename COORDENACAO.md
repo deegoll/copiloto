@@ -19,7 +19,6 @@ Pedido da dona (07/10, 00:09 BRT): a 3.3.0 validada, com commit e **enviada à C
 | Lado | Tarefa | Arquivos reservados | Desde |
 |---|---|---|---|
 | nuvem 2 | **3.4.0 · etiquetas de sobra na Shopee e na Magalu** (pedido da dona, 07/10 11:05): na lista de produtos do Seller Center da Shopee e do painel da Magalu, a etiqueta "Sobra R$ X · margem Y%" por produto, com o custo cadastrado no Copiloto. A Shopee já tem a tabela oficial no núcleo (`tarifas.js`). A Magalu precisa da tabela oficial (M4). **Espera os retratos M2, M3 e M4 da local** | ramo `nuvem2/etiquetas-shopee-magalu` (a criar), só depois dos retratos | 07/10 11:05 |
-| nuvem | **B3 · Buy Box perdida no sino** (tipo 'catalogo'; vermelho com estoque no Full) | ramo `nuvem/b3-buybox-sino` (base `nuvem/b2p3-erp-parados-sino`): `ml-extrator.js` e teste novo `teste_buybox_sino_b3.js` | 08/10 rotina |
 | local | Juntar o trabalho da nuvem na 3.3.0 do projeto local (a suíte completa tem de ficar verde) e depois sincronizar este ramo com ela, por cima e sem force. Espera a nuvem liberar os arquivos das correções da auditoria; a local traz essas correções junto | nenhum nesta pasta até a nuvem liberar (o trabalho é no projeto local) | 07/10 03:10 |
 
 ## Fila
@@ -73,7 +72,7 @@ Backlog do rastreio (07/10, por impacto em faturamento e margem; cada item com t
 
 - ~~B1~~ (feito, PR #7) Ruptura que o sino não vê: a previsão do painel no `SHC.alertasDe`, casar anúncios pelo SKU, guardar 14 meses de histórico, "Acaba hoje" no lugar de "0 dias", teste de paridade painel × sino.
 - ~~B2~~ (feito: parte 1 `nuvem/b2-ruptura-estoque-proprio`, `c3291da`; parte 2 `nuvem/b2p2-ruptura-sku`, `531aa72`; parte 3 `nuvem/b2p3-erp-parados-sino`, `ca6e908`) Ruptura do estoque próprio: o SKU que zerou as vendas do mês não some do `SHC.familiasAcoes`; um item por SKU com dias de cobertura no `SHC.anomalias`; os parados do ERP com estoque no sino.
-- B3 Buy Box perdida no sino (tipo 'catalogo'; vermelho quando tem estoque no Full).
+- ~~B3~~ (feito: `nuvem/b3-buybox-sino`, `45bb6a1`) Buy Box perdida no sino (tipo 'catalogo'; vermelho quando tem estoque no Full).
 - B4 Pausa repentina (`SHC.pausasRegistra`), separando esgotado de pausa do vendedor.
 - B5 Conversão caindo (unidades ÷ visitas do vbAnuncio) no `porQueCaiu` e no sino.
 - B6 Frete: mesmo SKU com frete diferente no sino; a subida do frete pelo histórico diário; sem o corte de 200 e sem contar o mesmo pedido duas vezes.
@@ -101,6 +100,12 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 - **Para a local (do rastreio da nuvem, 07/10):** retratos que dão confiança ao que já existe, todos anonimizados: resposta de `/anuncios/api/tasks`; pós-venda (o product-id é o número do pedido?); tabela do Full com produto sem vendas ("0" ou "—"); promoção ativa preenchida; paginação `?page=N` das Vendas; se o Faturador traz o id da conta; bloco "Custos por estoque antigo" e cobranças de remessa; código da restrição "em revisão"; `/anuncios/lista/precos?task=PRICE_SUGGESTION`; opiniões do produto (só nota média e contagem de 1 e 2 estrelas); se "Alterar anúncio" traz a descrição.
 
 ## Recados
+
+- **nuvem → local (08/10 UTC): B3 pronta no ramo `nuvem/b3-buybox-sino`, commit `45bb6a1`** (base `nuvem/b2p3-erp-parados-sino`, que já traz o `nuvem/331-centavos` e o B2; mexe em código da extensão: **o zip e o SHA no `VERSOES.md` ficam com você**).
+  - `SHC.anomalias` (`ml-extrator.js`): o anúncio ATIVO com o selo do ML "perdendo" ou "restrito" (competição da lista de Anúncios) vira 1 item do sino, tipo `catalogo`, aba Catálogo: "<título>: perdendo a Buy Box do catálogo por preço. Sem ela o anúncio quase não vende." Motivo desconhecido: sem "por quê". "Competindo" (texto antigo, sem selo), "dividindo", "ganhando" e pausado não entram.
+  - Vermelho quando o mesmo MLB tem unidades aptas no Full (`ml:full`), e o texto diz quantas. `fundo/07-alertas-promocoes-full.js` passa o `full` ao `SHC.anomalias` (sha256 novo no `teste_fundo_dividido.js`, com o motivo).
+  - Teste novo `teste_buybox_sino_b3.js` (anúncios inventados; o código antigo quebra). Suíte do GitHub: `TUDO OK` (22 arquivos + núcleo). **Rode a de 111** (o `teste_ml_intocado` pode pedir o hash novo do `ml-extrator.js`).
+  - **Falta (é seu, `painel-lateral.js`):** pôr `catalogo: 'Catálogo'` no `ROT_ANOM` para o item aparecer em "Alertas desta aba" do Catálogo; e, como a bolinha da aba Catálogo já soma os "perdendo" pelo `extra`, conferir que o `P.contadoresAbas` sem `al` não conta o mesmo anúncio 2 vezes.
 
 - **nuvem 2 (08/10): itens 2 e 3 da análise do TI da DB1 prontos no PR #16** (`nuvem2/ti-db1-textos`, `1f48af1`, base `nuvem/handoff-ti-db1`). Só documentação. "Revisão automatizada por IA, não substitui auditoria independente" no `SEGURANCA-COPILOTO.md` e no rascunho da política. `docs/REGISTRO-DE-RISCOS.md` com os riscos A a E; os campos de dono, decisão e aceite ficam em branco para a DB1/Marca Seleta assinar. Os arquivos reservados ficam livres.
 
@@ -605,6 +610,7 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 | Lado | Tarefa | Commit |
 |---|---|---|
+| nuvem | B3: Buy Box perdida no sino, tipo 'catalogo', vermelho com estoque no Full (ramo `nuvem/b3-buybox-sino`) | `45bb6a1` |
 | nuvem | B2 parte 3: parado do ERP com estoque e sem estoque no ML vira 1 item por SKU no sino (ramo `nuvem/b2p3-erp-parados-sino`) | `ca6e908` |
 | nuvem | B2 parte 2: 1 item por SKU para repor no sino, com os dias de cobertura (ramo `nuvem/b2p2-ruptura-sku`) | `531aa72` |
 | nuvem | N-A: retomada só do que falhou: etapa com erro deixa o ciclo aberto e `soErros:true` refaz só ela (ramo `nuvem/na-retomada-erros`, PR #12) | `df8c721` |
