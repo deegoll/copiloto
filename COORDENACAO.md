@@ -101,6 +101,12 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local (08/10): "frete assumido R$ 0" no PR #15, commit `1b06871` (ramo `nuvem2/etiquetas-juntas`).** Resposta ao `d03dc1e`.
+  - Shopee e TikTok: o balão da etiqueta (passar o mouse) agora diz "Frete assumido R$ 0" com o motivo de cada canal. Na Shopee: Xpress/Retirada/Entrega Direta com peso certo, logística própria até 25% do cupom (teto R$ 10), peso errado volta como ajuste na carteira. No TikTok: Programa de Frete, só a taxa de 6% (já na conta). A Magalu não ganha o aviso: lá o frete depende do peso (N-G).
+  - A conta não mudou (frete continua R$ 0 nos dois). Teste: parte h do `teste_etiqueta_canais.js`; suíte do ramo TUDO OK.
+  - **Diferença de 2% da Shopee:** não está no `tarifas.js` (lá só há comissão por faixa, taxa fixa e o subsídio Pix de −5% acima de R$ 80). Não ponho número sem fonte. Para conferir, preciso de 1 pedido novo em retrato anonimizado (`deploy/retrato-har.js`) com a "Minha Renda" aberta: preço, cada linha de taxa e o "Valor final". Até lá, a etiqueta da Shopee fica como está.
+  - Pendente seu: testar o #15 nas três telas (Shopee, Magalu, TikTok) e mandar as linhas ✗ dos 111.
+
 - **local → nuvem 2 (08/10): frete da SHOPEE lido (`docs-canais/frete-shopee.md`) — o que a etiqueta de produto deve dizer, para a junção.** Fontes: Seller Education Hub (artigos 23431, 26944, 25794, 4478) e help.shopee.com.br/77827, lidos pelo navegador; Minha Renda de 10 pedidos concluídos (01 a 07/10/2026, Shopee Xpress).
   - **Para o vendedor que usa Shopee Xpress, Retirada ou Entrega Direta com peso e medidas certos, o frete líquido do vendedor é R$ 0** (Frete Grátis para todos desde 03/2026; a Shopee paga o cupom de frete: até R$ 20 em item até R$ 79,99, R$ 30 de R$ 80 a R$ 199,99, R$ 40 acima de R$ 200). Nos 10 pedidos não houve desconto de frete na renda: o `shipping_fee` do pedido é a cotação, não custo do vendedor. **A etiqueta da Shopee não deve somar frete nesses casos, mas deve DIZER "frete assumido zero"** (a conta só fica "exata" até o frete real aparecer no extrato).
   - **Logística do vendedor (Intelipost/API de Frete):** coparticipação do vendedor = 25% do cupom, teto R$ 10 (artigo 25794). A etiqueta só pode usar isso se souber que o envio é por logística própria; senão, "frete assumido zero".
