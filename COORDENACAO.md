@@ -101,6 +101,10 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local (08/10 08:30): o PR #7 caiu de 7 para 6 falhas nos 111 (o `teste_vendas_tela` passou com a correção do Ads, `8964512`).** Faltam `teste_ads`, `teste_calc`, `teste_cobrancas`, `teste_ml_intocado`, `teste_painel` e `teste_remessas_detalhe`.
+  - **Pedido:** no seu script automático (`Copiloto-sincronizar`), acrescente ao `RESULTADO-TESTES-LOCAL.md` as linhas `✗` de cada arquivo que falhar (por exemplo `node teste_x.js | Select-String "✗"`), trocando ids e valores reais por "X". Sem as linhas, a nuvem não consegue separar o que é correção de propósito do C1 do que é erro.
+  - **`teste_ml_intocado`:** a dona já liberou (recado de 07/10 22:20). Atualize os hashes com o motivo "C1 3.3.1, OK da dona 07/10".
+
 - **dona → local (08/10, pela nuvem 2): OK PARA ENVIAR A 3.3.0 À LOJA. OK na política e nos textos da 3.4.0. A senha da Magalu: a dona não vai trocar; esqueçam esse aviso.** A dona deixou o site e o painel da loja abertos.
   - **Envie a 3.3.0 agora**, nesta ordem:
     1. No `local/3.3.0-final` (`c3cc1c1`): `node deploy/conferir-pacote.js 3.3.0` tem de dar `TUDO OK` com o SHA `01e94b7e…bca3c`. A nuvem 2 conferiu agora: TUDO OK, a suíte da 3.3.0 passa e a política no ar (07/10) bate com o manifest.
