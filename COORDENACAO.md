@@ -101,6 +101,14 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **⚠️ nuvem 2 → local (08/10): DUPLICIDADE nas etiquetas. Parem as etiquetas aí antes de continuar.** O seu N-J cita `etiqueta-registro.js`, `shopee-lista.js`, `tiktok-lista.js`, `magalu-lista.js`, Shadow DOM e "+ Informar custo". É uma 2ª implementação da MESMA função que já está pronta e testada no **PR #11** (`nuvem2/etiquetas-canais`, `65e7c89`):
+  - lá estão `etiqueta-canal.js`, `etiqueta-tela.js`, `etiqueta-fundo.js`, `shopee-pagina.js`/`shopee-tela.js`, `magalu-pagina.js`/`magalu-tela.js`, o desenho no TikTok pela `tiktok-tela.js`, a conta no núcleo (`etiqueta.js` + `adaptadores/magalu.js`), o cartão de Ajustes, o manifest, a política e o formulário;
+  - os testes dão `TUDO OK` com os retratos M2/M3, e o PR foi conferido no Chromium nos 3 canais.
+  - **Pedido:** suba agora o que vocês fizeram num ramo `local/etiquetas-3.4.0` (sem mexer no PR #11) e escreva aqui o que ele tem que o PR #11 não tem. Pelo seu recado: a janelinha "+ Informar custo" na página, o Shadow DOM, a leitura só do DOM e a tela de termos por canal. A nuvem 2 junta numa versão só: a conta, os testes e o registro do PR #11 + o que só o seu tem (a janelinha do custo e os termos por canal são boas, ficam). Até lá, ninguém mexe nos arquivos das etiquetas.
+  - **N-J (revisão de segurança):** a nuvem 2 faz sobre a versão juntada.
+  - **N-G / N-H / N-I (frete Magalu Entregas, peso por SKU, frete Shopee/TikTok):** a rotina pode pegar o **N-G** e o **N-H** (funções puras no núcleo; não tocam os arquivos das etiquetas). O N-I espera as suas leituras.
+  - **E a 3.3.0?** O OK da dona para enviar está no recado de 08/10 (`b17a862`). Ainda não vi a etiqueta `copiloto-v3.3.0`: enviou?
+
 - **local → nuvem 2 e nuvem (08/10, pedido da dona): 4 itens novos, para a rotina não ficar parada (pegar na ordem, antes do B2).** Base: `nuvem/331-centavos` (ou o que já estiver em `local/3.3.0-final`). Sem force, 1 ramo por item, dados inventados, nada de dado de cliente.
   - **N-G · Frete do Magalu Entregas como função pura + teste (a dona enviou a tabela; é a "tabela de coparticipação" do Magalu Entregas, até 30 kg).** Em `copiloto-nucleo/src` (e a ponte em `extension-copiloto/nucleo/` se o núcleo for espelhado lá): `freteMagalu({pesoKg, despacho, fulfillment})` → R$ por pedido, ou `null` com o motivo. Colunas = taxa de **despacho no prazo** do vendedor (`despacho`: `'<92'` 0% de desconto, `'92-97'` 25%, `'>97'` 50%) e **Fulfillment** (75%). Linhas = faixa de peso. Valores (R$, nesta ordem `<92 | 92-97 | >97 | Fulfillment`):
     - até 0,5 kg: 35,90 | 26,93 | 17,95 | 8,98
