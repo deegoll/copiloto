@@ -158,5 +158,12 @@ console.log('g) Magalu (N-D): os retratos M3, a comissão do contrato e o leitor
     ok(!/images|brand|ncm|dimension|extra_data/.test(JSON.stringify(cp)) && JSON.stringify(MG.produtosDaLista(cp)) === JSON.stringify(ps), 'da lista sai só o que a etiqueta usa, e dá a mesma lista');
 }
 
+console.log('h) frete assumido zero, dito no balão (leitura da local 08/10)');
+{
+    const sp = SHC.etqDosProdutos('shopee', [{ produto_id: '1', sku: 'A', preco: 100 }], {}, {}, HOJE)[0], tt = SHC.etqDosProdutos('tiktok', [{ produto_id: '1', sku: 'A', preco: 100 }], {}, {}, HOJE)[0];
+    const mg = SHC.etqDosProdutos('magalu', [{ produto_id: '1', sku: 'A', preco: 100 }], {}, {}, HOJE)[0];
+    ok(/Frete assumido R\$ 0/.test(sp.detalhe) && /Programa de Frete/.test(tt.detalhe) && !/Frete assumido/.test(mg.detalhe), 'Shopee e TikTok dizem "frete assumido R$ 0" (com o motivo); a Magalu não (lá o frete depende do peso)');
+}
+
 console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK');
 process.exit(f ? 1 : 0);

@@ -120,7 +120,11 @@
             const faixa = ns => { const l = ns.filter(n => typeof n === 'number'); if (!l.length) return null; const a = Math.min(...l), b = Math.max(...l); return a === b ? E.moeda(a) : E.moeda(a) + ' a ' + E.moeda(b); };
             const preco = faixa(e.variacoes.map(v => v.preco)), custo = faixa(e.variacoes.map(v => v.custo));
             const rotulo = [preco, custo ? 'custo ' + custo : null, e.texto].filter(Boolean).join(' · ');
-            return { produto_id: p.produto_id, nome: p.nome || '', sku: p.sku || '', skus, classe: e.classe, texto: e.texto, rotulo, detalhe, extras: [] };
+            // Frete (leitura da local, 08/10, docs-canais/frete-*.md): com o programa de frete do canal e peso/medidas certos o frete do vendedor
+            // é R$ 0; a etiqueta não soma frete, mas DIZ que assumiu zero (o ajuste por peso errado ou devolução vem depois, no extrato).
+            const FRETE_ZERO = { shopee: 'Frete assumido R$ 0: com Shopee Xpress, Retirada ou Entrega Direta e peso/medidas certos, a Shopee paga o cupom de frete. Logística própria: até 25% do cupom (teto R$ 10). Peso errado volta como ajuste na carteira.',
+                tiktok: 'Frete assumido R$ 0 (Programa de Frete do TikTok, peso/medidas certos): você paga só a taxa de 6% do programa, que já está na conta. Ajuste de peso ou devolução por sua conta voltam depois.' };
+            return { produto_id: p.produto_id, nome: p.nome || '', sku: p.sku || '', skus, classe: e.classe, texto: e.texto, rotulo, detalhe: detalhe + (FRETE_ZERO[canal] ? '\n' + FRETE_ZERO[canal] : ''), extras: [] };
         });
     };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
