@@ -1,13 +1,13 @@
 # Segurança do Copiloto: o que foi conferido e o que dizer às clientes
 
-Auditoria do código em 01/10/2026, com revisões em 02/10/2026. Este documento trata só do **Copiloto** (a extensão do Chrome), não do SellerHub.
+Revisão automatizada do código por IA em 01/10/2026, com revisões em 02/10/2026. **Não substitui auditoria independente** (pedido do TI da DB1, 08/10/2026). Este documento trata só do **Copiloto** (a extensão do Chrome), não do SellerHub.
 
 Situação das versões hoje (02/10/2026):
 
 | Versão | Onde está |
 |---|---|
 | 3.1.0 e 3.2.0 | Substituídas pela 3.2.1 na Chrome Web Store |
-| 3.2.1 "blindada" | **Publicada na Chrome Web Store** (a ficha mostra a 3.2.1, atualizada em 02/10/2026). Pacote guardado: `deploy/copiloto-chrome-web-store/copiloto-v3.2.1.zip` |
+| 3.2.1 (correções de segurança) | **Publicada na Chrome Web Store** (a ficha mostra a 3.2.1, atualizada em 02/10/2026). Pacote guardado: `deploy/copiloto-chrome-web-store/copiloto-v3.2.1.zip` |
 
 Atualização de 02/10/2026: com a 3.2.1 publicada, os trechos abaixo que tratam a 3.1.0 como a versão das clientes, o envio da 3.2.1 e o teste antes do envio ficam como registro do que foi feito.
 
@@ -15,9 +15,9 @@ Atualização de 02/10/2026: com a 3.2.1 publicada, os trechos abaixo que tratam
 
 ## Parte A: para você
 
-### Quem fez e o que é esta auditoria
+### Quem fez e o que é esta revisão
 
-Foi uma **auditoria interna**, feita com ajuda de IA (Claude), lendo o código da extensão linha a linha e testando cada correção.
+Foi uma **revisão automatizada por IA** (Claude), lendo o código da extensão linha a linha e testando cada correção. **Não substitui auditoria independente.**
 **Não é uma certificação nem um teste de invasão (pentest) feito por uma empresa de fora.** Se um dia quiser um selo, é preciso contratar uma empresa de segurança.
 
 ### O que foi conferido
@@ -97,7 +97,8 @@ A lista técnica completa está em `deploy/copiloto-chrome-web-store/NOVIDADES-3
 ### Frases para NÃO usar com clientes
 
 - "100% seguro", "impossível de hackear" ou "à prova de ataques". Nenhum programa é.
-- "Certificado" ou "auditado por empresa de segurança". Foi uma auditoria interna.
+- "Certificado", "auditado" ou "auditoria de segurança". Foi uma revisão automatizada por IA, que não substitui auditoria independente.
+- "Blindado" ou "versão blindada".
 - "Aprovado pelo Google como seguro". A loja revisa a extensão, mas isso não é um selo de segurança.
 - "O Mercado Livre não vê o seu custo". Veja o risco 1. Diga: "o Copiloto não envia o seu custo para ninguém".
 - "Só faz GET" ou "só lê as telas que você abre". O Copiloto também lê em segundo plano (sincronização), faz 2 consultas por POST que não gravam nada (notas fiscais e Simulador) e, quando o ML desvia a leitura do Ads, abre sozinho uma aba do Mercado Ads por alguns segundos (no máximo 1 vez a cada 6 h). Diga: "o Copiloto só **consulta**; não altera nada na sua conta".
@@ -149,7 +150,7 @@ A lista técnica completa está em `deploy/copiloto-chrome-web-store/NOVIDADES-3
 > - **Não pede a sua senha** e não guarda dados dos seus compradores.
 > - **Os seus números ficam no seu Chrome.** Hoje nada vai para servidores nossos nem para terceiros.
 > - **Pede pouca permissão ao Chrome**, e o que é extra (Mercado Pago, ERP) só é pedido quando você clica.
-> - **Código revisado** em uma auditoria interna de segurança em 01/10/2026.
+> - **Código revisado** por uma revisão automatizada por IA em 01/10/2026 (não substitui auditoria independente).
 >
 > Dica: conecte o seu ERP com um usuário só de leitura.
 > [Leia a política de privacidade completa](https://especialistaemmarketplace.com.br/sellerhub/copiloto/privacidade.html)
