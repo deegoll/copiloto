@@ -676,7 +676,7 @@
         // 3.4.0 (N-B): a tela também desenha a etiqueta de ganho em Gerenciar produtos (etiqueta-canal.js + etiqueta-tela.js, com o núcleo
         // para a conta). Nada disso grava: a etiqueta é feita na aba com o que a captura já manda ao fundo.
         { id: 'copiloto-tt-tela', matches: [TT.ORIGEM], js: ['calc.js', 'store.js', 'nucleo/util.js', 'nucleo/modelo.js', 'nucleo/tarifas.js', 'nucleo/etiqueta.js',
-            'nucleo/adaptador.js', 'nucleo/adaptadores/tiktok.js', 'etiqueta-canal.js', 'etiqueta-tela.js', 'tiktok-tela.js'], runAt: 'document_start', persistAcrossSessions: true },
+            'nucleo/adaptador.js', 'nucleo/adaptadores/tiktok.js', 'etiqueta-canal.js', 'tiktok-lista.js', 'etiqueta-tela.js', 'tiktok-tela.js'], runAt: 'document_start', persistAcrossSessions: true },
     ];
     /**
      * As 2 permissões OPCIONAIS do TikTok, pedidas juntas no mesmo clique em Ajustes e devolvidas juntas ao desligar:

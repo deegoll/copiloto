@@ -9,6 +9,11 @@
     const SHC = root.SHC = root.SHC || {};
     const CN = () => root.CopilotoNucleo || {};
     const CANAL_SHC = { shopee: 'sp' };
+    // Leitores de tela de cada canal (shopee-lista.js, tiktok-lista.js, magalu-lista.js, da sessão local, conferidos ao vivo em 07/10): eles se
+    // apresentam por SHC.etiquetaCanal.iniciar({canal, urlOk, linhas, ler}); aqui só guardamos para o desenho (etiqueta-tela.js) pôr a etiqueta
+    // ao lado do PREÇO de cada linha. Os números da etiqueta vêm da resposta que a tela recebeu (os *-tela.js), não do texto da página.
+    SHC.etqListas = SHC.etqListas || {};
+    SHC.etiquetaCanal = SHC.etiquetaCanal || { iniciar: a => { if (a && a.canal) SHC.etqListas[a.canal] = a; } };
 
     /** opc.calcular da etiqueta para a Shopee: o SHC.calcular('sp') → o formato do núcleo. */
     SHC.etqCalcularSp = cfg => (preco, ctx) => {
@@ -104,7 +109,7 @@
             return doSku(sku);
         };
         const c = cfg || {};
-        const base = { imposto_pct: SHC.num(c.imposto_pct) || 0, margem_alvo_pct: SHC.num(c.margem_alvo_pct) || 0, comissao_pct: canal === 'magalu' ? SHC.num(c.mg_comissao_pct) : undefined };
+        const base = { imposto_pct: SHC.num(c.imposto_pct) || 0, margem_alvo_pct: SHC.num(c.margem_alvo_pct) || 0, comissao_pct: canal === 'magalu' ? (SHC.num(c.magalu_comissao_pct) !== null ? SHC.num(c.magalu_comissao_pct) : SHC.num(c.mg_comissao_pct)) : undefined };
         const opc = canal === 'shopee' && SHC.calcular ? { calcular: SHC.etqCalcularSp(c) } : null;
         return (produtos || []).map(p => {
             const e = E.doProduto(canal, p, custoDe, base, hoje, opc);

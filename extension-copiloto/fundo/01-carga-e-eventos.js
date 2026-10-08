@@ -58,7 +58,7 @@ importScripts('nucleo/util.js', 'nucleo/modelo.js', 'nucleo/tarifas.js', 'nucleo
 SHC.tt.instalarFundo();
 // 3.4.0 (N-C): etiqueta de ganho na lista de produtos da Shopee. Como o TikTok: 'scripting' e o site só como permissões OPCIONAIS (clique em
 // Ajustes); os scripts só são registrados com as 2 concedidas E cfg.etiquetas.shopee === true (SHC.etqSincronizar). Nada é gravado da Shopee.
-importScripts('etiqueta-fundo.js');
+importScripts('termos-canais.js', 'etiqueta-fundo.js');   // termos por canal (sessão local): sem o aceite, nenhum script do canal
 SHC.etqInstalarFundo();
 
 const BASE = 'https://vendedores.mercadolivre.com.br';

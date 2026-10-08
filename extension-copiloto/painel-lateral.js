@@ -7834,39 +7834,6 @@
         $('#okCanais').textContent = '✓ Salvo';
         setTimeout(() => { $('#okCanais').textContent = ''; }, 2500);
     });
-    // 3.4.0 (N-C): "Etiquetas nos outros canais" › Shopee. Ligar: pede as 2 permissões opcionais DENTRO do clique e grava cfg.etiquetas.shopee
-    // (o fundo registra os scripts: SHC.etqSincronizar). Desligar: grava false, o fundo tira os scripts e só então as permissões voltam.
-    // TikTok (N-B): a etiqueta vem junto com a leitura do TikTok (as mesmas permissões); a chave só grava cfg.etiquetas.tiktok (false = desliga).
-    const cxEtqTt = $('#etq-tiktok');
-    if (cxEtqTt) {
-        SHC.lerCfg().then(c => { cxEtqTt.checked = !(c && c.etiquetas && c.etiquetas.tiktok === false); }).catch(() => {});
-        cxEtqTt.addEventListener('change', async () => {
-            try { cfg = await SHC.salvarCfg({ etiquetas: Object.assign({}, cfg.etiquetas, { tiktok: cxEtqTt.checked }) }, { semMarcar: true }); } catch (x) { return falhaGravar(x); }
-            avisa(cxEtqTt.checked ? '✓ Etiqueta do TikTok ligada (com o TikTok Shop ligado em Canais de venda).' : 'Etiqueta do TikTok desligada.', 5000);
-        });
-    }
-    // Shopee e Magalu: a mesma chave (canal, permissão, histórico apagado ao desligar).
-    const PERM_ETQ = { shopee: { permissions: ['scripting'], origins: ['https://seller.shopee.com.br/*'] },
-        magalu: { permissions: ['scripting'], origins: ['https://seller.magalu.com/*', 'https://magalu-sellers.magalu.com/*'] } };
-    const APAGAR_ETQ = { shopee: ['etq:hist:shopee'], magalu: ['etq:hist:magalu', 'etq:mg:comissao'] };
-    ['shopee', 'magalu'].forEach(canal => {
-    const PERM_ETQ_SP = PERM_ETQ[canal], cxEtqSp = $('#etq-' + canal), nomeEtq = canal === 'shopee' ? 'Shopee' : 'Magalu';
-    if (cxEtqSp) {
-        Promise.all([SHC.lerCfg(), chrome.permissions.contains(PERM_ETQ_SP)]).then(([c, tem]) => { cxEtqSp.checked = !!(c && c.etiquetas && c.etiquetas[canal] === true) && !!tem; }).catch(() => {});
-        cxEtqSp.addEventListener('change', () => {
-            const ligar = cxEtqSp.checked;
-            let pedido;   // request dentro do clique, antes de qualquer await (senão o Chrome recusa)
-            try { pedido = ligar ? chrome.permissions.request(PERM_ETQ_SP) : Promise.resolve(true); } catch (x) { pedido = Promise.resolve(false); }
-            Promise.resolve(pedido).catch(() => false).then(async ok => {
-                if (ligar && !ok) { cxEtqSp.checked = false; avisa('O Chrome não deixou ler a ' + nomeEtq + '. Tente de novo.', 8000); return; }
-                try { cfg = await SHC.salvarCfg({ etiquetas: Object.assign({}, cfg.etiquetas, { [canal]: ligar }) }, { semMarcar: true }); } catch (x) { return falhaGravar(x); }
-                await Promise.resolve(chrome.runtime.sendMessage({ acao: 'etq_sincronizar' })).catch(() => {});
-                if (!ligar) { await Promise.resolve(chrome.permissions.remove(PERM_ETQ_SP)).catch(() => {}); await Promise.resolve(chrome.storage.local.remove(APAGAR_ETQ[canal])).catch(() => {}); }   // desligar apaga o histórico
-                avisa(ligar ? '✓ Etiquetas ligadas. Abra (ou recarregue) a lista de produtos na ' + nomeEtq + '.' : 'Etiquetas da ' + nomeEtq + ' desligadas.', 6000);
-            }).catch(() => {});
-        });
-    }
-    });
     // Ads do TikTok por mês (SHC.tt.salvarAds): campo vazio = "não informado" (apaga o valor; o mês fica "≈"), nunca 0; valor negativo é recusado;
     // "Não uso Ads no TikTok" grava nao_uso, e os meses sem valor valem 0 de propósito.
     async function salvarAdsTT() {

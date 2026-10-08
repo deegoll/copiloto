@@ -11,18 +11,19 @@
         shopee: { nome: 'Shopee', origens: ['https://seller.shopee.com.br/*'],
             scripts: [
                 { id: 'copiloto-etq-sp-pagina', js: ['shopee-pagina.js'], world: 'MAIN' },
-                { id: 'copiloto-etq-sp-tela', js: ISOLADO.concat(['nucleo/adaptadores/shopee.js', 'etiqueta-canal.js', 'etiqueta-tela.js', 'shopee-tela.js']) },
+                { id: 'copiloto-etq-sp-tela', js: ISOLADO.concat(['nucleo/adaptadores/shopee.js', 'etiqueta-canal.js', 'shopee-lista.js', 'etiqueta-tela.js', 'shopee-tela.js']) },
             ] },
         // N-D: o Portal do Seller (seller.magalu.com, docs/canais/magalu.md) e o magalu-sellers.magalu.com (Financeiro, retrato M3).
         // As APIs lidas (api-product*.magalu.com) não precisam de permissão: o script só vê a resposta que a própria página recebeu.
         magalu: { nome: 'Magalu', origens: ['https://seller.magalu.com/*', 'https://magalu-sellers.magalu.com/*'],
             scripts: [
                 { id: 'copiloto-etq-mg-pagina', js: ['magalu-pagina.js'], world: 'MAIN' },
-                { id: 'copiloto-etq-mg-tela', js: ISOLADO.concat(['nucleo/adaptadores/magalu.js', 'etiqueta-canal.js', 'etiqueta-tela.js', 'magalu-tela.js']) },
+                { id: 'copiloto-etq-mg-tela', js: ISOLADO.concat(['nucleo/adaptadores/magalu.js', 'etiqueta-canal.js', 'magalu-lista.js', 'etiqueta-tela.js', 'magalu-tela.js']) },
             ] },
     };
     SHC.etqPerm = canal => ({ permissions: ['scripting'], origins: SHC.ETQ_CANAIS[canal].origens.slice() });
-    SHC.etqLigada = (cfg, canal) => !!(cfg && cfg.etiquetas && cfg.etiquetas[canal] === true);
+    // 3.4.0 (termos por canal, da sessão local): Shopee e Magalu só ligam com o aceite da versão ATUAL dos termos (cfg.termos[canal]).
+    SHC.etqLigada = (cfg, canal) => !!(cfg && cfg.etiquetas && cfg.etiquetas[canal] === true) && !!root.CopilotoTermos && root.CopilotoTermos.aceito(cfg, canal);
     const registro = c => SHC.ETQ_CANAIS[c].scripts.map(s => Object.assign({ matches: SHC.ETQ_CANAIS[c].origens.slice(), runAt: 'document_start', persistAcrossSessions: true }, s));
     let fila = Promise.resolve();
     const emFila = f => { const p = fila.then(() => f()); fila = p.catch(() => {}); return p; };
@@ -57,12 +58,12 @@
         }
         if (ch.storage && ch.storage.onChanged) ch.storage.onChanged.addListener((mud, onde) => {
             if (onde !== 'local' || !mud.cfg) return;
-            const antes = (mud.cfg.oldValue || {}).etiquetas || {}, depois = (mud.cfg.newValue || {}).etiquetas || {};
-            if (Object.keys(SHC.ETQ_CANAIS).some(c => (antes[c] === true) !== (depois[c] === true))) SHC.etqSincronizar().catch(() => {});
+            const antes = mud.cfg.oldValue || {}, depois = mud.cfg.newValue || {};   // o interruptor OU o aceite dos termos mudou
+            if (Object.keys(SHC.ETQ_CANAIS).some(c => SHC.etqLigada(antes, c) !== SHC.etqLigada(depois, c))) SHC.etqSincronizar().catch(() => {});
         });
         // O painel (Ajustes) pede a sincronização ao desligar, ANTES de devolver as permissões (sem 'scripting' o fundo não desregistra mais).
         ch.runtime.onMessage.addListener((msg, sender, responder) => {
-            if (!msg || msg.acao !== 'etq_sincronizar' || !(sender && sender.id === ch.runtime.id && /^chrome-extension:\/\//.test(sender.url || ''))) return false;
+            if (!msg || (msg.acao !== 'etq_sincronizar' && msg.acao !== 'etiquetas_sincronizar') || !(sender && sender.id === ch.runtime.id && /^chrome-extension:\/\//.test(sender.url || ''))) return false;
             SHC.etqSincronizar().then(responder, () => responder({}));
             return true;
         });

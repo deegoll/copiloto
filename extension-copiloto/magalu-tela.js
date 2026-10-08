@@ -19,7 +19,7 @@
         ps.forEach(p => { if (p.frete_medio !== null) hist = SHC.etqHistGrava(hist, p.produto_id, 'frete', dia, p.frete_medio); });
         chrome.storage.local.set({ [HIST]: hist }).catch(() => {});
         // A comissão: a que a seller digitou em Ajustes manda; senão a do contrato (Financeiro). Sem as duas: "não lida" (nunca suposta).
-        const manual = SHC.num(cfg.mg_comissao_pct), contrato = com && SHC.num(com.pct);
+        const manual = SHC.num(cfg.magalu_comissao_pct) !== null ? SHC.num(cfg.magalu_comissao_pct) : SHC.num(cfg.mg_comissao_pct), contrato = com && SHC.num(com.pct);
         const es = SHC.etqDosProdutos('magalu', ps, custos, Object.assign({}, cfg, { mg_comissao_pct: manual !== null ? manual : contrato }), dia);
         es.forEach(e => {
             if (manual === null && contrato !== null && /^Sobra|^Prejuízo|^De prejuízo|^Sobra de/.test(e.texto)) {

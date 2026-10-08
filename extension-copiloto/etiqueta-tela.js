@@ -33,6 +33,43 @@
         s.style.cssText = 'display:inline-block;margin-left:4px;padding:0 5px;border-radius:9px;font:500 10px/15px system-ui,sans-serif;background:' + fundo + ';color:' + letra;
         return s;
     }
+    // Janelinha "+ Informar custo" (da sessão local, como a do ML): digita o custo do SKU, salva em SHC.salvarCustoSku (vale para todos os
+    // canais) e a etiqueta se recalcula sozinha (os *-tela.js ouvem o storage). Nada é escrito na página do canal; o site não vê o que se digita.
+    function abreCusto(junto, it) {
+        const velha = d.getElementById('copiloto-etq-custo'); if (velha) velha.remove();
+        const host = d.createElement('span'); host.id = 'copiloto-etq-custo'; host.setAttribute(ATTR, 'janela');
+        host.style.cssText = 'position:relative;display:inline-block;vertical-align:middle';
+        const sombra = host.attachShadow({ mode: 'open' });
+        const st = d.createElement('style');
+        st.textContent = '.pop{position:absolute;z-index:2147483001;top:4px;left:0;background:#fff;border:1px solid #dadce0;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.18);'
+            + 'padding:8px;display:flex;flex-direction:column;gap:6px;min-width:190px;font:12px/1.4 system-ui,sans-serif;color:#202124}input{font:inherit;padding:4px 6px;border:1px solid #bdc1c6;border-radius:6px}'
+            + '.err{color:#c5221f;min-height:1em}.acoes{display:flex;gap:6px}button{font:inherit;border-radius:6px;padding:3px 10px;cursor:pointer;border:1px solid #1a73e8}.sv{background:#1a73e8;color:#fff}.cn{background:#fff;color:#1a73e8}';
+        const pop = d.createElement('div'); pop.className = 'pop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Informar custo do SKU');
+        const sku = it.sku || it.skus[0], t = d.createElement('b'); t.textContent = 'Custo do SKU ' + (SHC().normalizaSku ? SHC().normalizaSku(sku) : sku);
+        const inp = d.createElement('input'); inp.type = 'text'; inp.setAttribute('inputmode', 'decimal'); inp.placeholder = 'Ex.: 250,00'; inp.setAttribute('aria-label', 'Custo em reais');
+        const err = d.createElement('span'); err.className = 'err';
+        const linha = d.createElement('span'); linha.className = 'acoes';
+        const ok = d.createElement('button'); ok.type = 'button'; ok.className = 'sv'; ok.textContent = 'Salvar';
+        const no = d.createElement('button'); no.type = 'button'; no.className = 'cn'; no.textContent = 'Cancelar';
+        linha.append(ok, no); pop.append(t, inp, err, linha); sombra.append(st, pop);
+        const fecha = () => host.remove();
+        const salva = async () => {
+            const S = SHC(), v = S.num ? S.num(inp.value) : Number(String(inp.value).replace(',', '.'));
+            if (!(v > 0)) { err.textContent = 'Digite um valor maior que zero. Ex.: 250,00'; return; }
+            ok.disabled = true;
+            try { await S.salvarCustoSku(sku, { custo: S.r2 ? S.r2(v) : v, titulo: String(it.nome || '').slice(0, 120), origem: 'manual' }); fecha(); }
+            catch (e) { err.textContent = 'Não consegui salvar. Recarregue a página e tente de novo.'; ok.disabled = false; }
+        };
+        const para = e => { try { e.stopPropagation(); } catch (x) { /* ok */ } };
+        ['click', 'mousedown', 'mouseup', 'keyup', 'keypress', 'input'].forEach(n => pop.addEventListener(n, para));
+        pop.addEventListener('keydown', e => { para(e); if (e.key === 'Enter') { e.preventDefault(); salva(); } else if (e.key === 'Escape') fecha(); });
+        ok.addEventListener('click', salva); no.addEventListener('click', fecha);
+        junto.insertAdjacentElement('afterend', host);
+        try { inp.focus(); } catch (e) { /* ok */ }
+    }
+    const SHC = () => w.SHC || {};
+    // Só abre a janelinha com 1 SKU (produto sem variações ou variações com o mesmo SKU); várias variações: o painel de Custos.
+    const umSku = it => it.classe === 'sem_custo' && [...new Set((it.skus && it.skus.length ? it.skus : [it.sku]).filter(Boolean))].length === 1;
     const textoDe = it => (it.rotulo || it.texto) + (it.extras || []).map(x => x.texto).join('');
     function etiqueta(it) {
         const [fundo, letra] = cor(it.classe), s = d.createElement('span');
@@ -40,6 +77,12 @@
         s.dataset.copilotoTexto = textoDe(it);
         s.textContent = it.rotulo || it.texto;
         (it.extras || []).forEach(x => s.appendChild(selo(x)));
+        if (umSku(it)) {   // "+ Informar custo": a janelinha aqui mesmo
+            const b = d.createElement('button'); b.type = 'button'; b.textContent = '+ Informar custo';
+            b.style.cssText = 'margin-left:6px;border:1px dashed #1a73e8;background:#fff;color:#1a73e8;border-radius:9px;font:600 10px/15px system-ui,sans-serif;padding:0 6px;cursor:pointer';
+            b.addEventListener('click', e => { try { e.preventDefault(); e.stopPropagation(); } catch (x) { /* ok */ } abreCusto(s, it); });
+            s.appendChild(b);
+        }
         s.title = 'Copiloto · ' + it.texto + (it.detalhe && it.detalhe !== it.texto ? '\n' + it.detalhe : '') + (it.classe === 'sem_custo' ? '\nCadastre o custo pelo SKU no painel do Copiloto.' : '');
         s.style.cssText = 'display:inline-block;margin:2px 0 2px 6px;padding:1px 6px;border-radius:10px;font:600 11px/16px system-ui,sans-serif;white-space:nowrap;'
             + 'background:' + fundo + ';color:' + letra + ';border:1px solid ' + letra + '33;vertical-align:middle;cursor:help';
@@ -65,6 +108,27 @@
             }
         }
         let postas = 0;
+        const L = (w.SHC && w.SHC.etqListas && w.SHC.etqListas[canal]) || null, ancorados = new Map();
+        if (L && typeof L.linhas === 'function' && typeof L.ler === 'function' && (typeof L.urlOk !== 'function' || L.urlOk())) {
+            let ls = [];
+            try { ls = L.linhas() || []; } catch (e) { ls = []; }
+            ls.slice(0, 400).forEach(linha => {
+                let info = null;
+                try { info = L.ler(linha); } catch (e) { info = null; }
+                const k = info && norm(info.sku);
+                if (!k || !info.ancora) return;
+                const it = itens.find(x => (x.skus && x.skus.length ? x.skus : [x.sku]).some(sk => norm(sk) === k));
+                if (it && !ancorados.has(it)) ancorados.set(it, info.ancora);
+            });
+        }
+        ancorados.forEach((el, it) => {
+            achados.delete(it);
+            const prox = el.nextElementSibling;
+            if (prox && prox.getAttribute(ATTR) === it.produto_id && prox.dataset.copilotoTexto === textoDe(it)) return;
+            if (prox && prox.hasAttribute(ATTR)) prox.remove();
+            el.insertAdjacentElement('afterend', etiqueta(it));
+            postas++;
+        });
         achados.forEach((a, it) => (a.nome.length ? a.nome : a.sku).forEach(el => {
             const prox = el.nextElementSibling;
             if (prox && prox.getAttribute(ATTR) === it.produto_id && prox.dataset.copilotoTexto === textoDe(it)) return;   // já está

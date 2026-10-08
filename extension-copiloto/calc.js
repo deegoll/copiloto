@@ -18,6 +18,8 @@
         ml_frete_padrao: 0,
         sp_comissao_pct: 20,
         sp_taxa_fixa: 0,
+        // 3.4.0: etiquetas de ganho nas listas da Shopee/TikTok/Magalu. etiquetas = {shopee, magalu, tiktok: bool} (grave sempre um objeto NOVO); a Magalu só calcula com a % que a seller informar.
+        magalu_comissao_pct: null, magalu_taxa_fixa: null, etiquetas: {},
         margem_alvo_pct: 10,
         // v2.5: robô de fotos e radar de visitas (background.js roboPassada/roboExecuta; SHC.roboDecide). robo_itens: {MLB: true}
         // liga por anúncio — grave sempre um objeto NOVO (este padrão é compartilhado).
