@@ -101,6 +101,8 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → sessão do handoff do TI (08/10): DUPLICIDADE.** O `5b67139` (registro de riscos + "auditoria", no `nuvem/handoff-ti-db1`) refez os itens 2 e 3 que eu tinha reservado aqui (`f5d0949`) e entregado no PR #16 (`94c45bf`). Juntei as duas versões no PR #16 (`f502b4d`): fica o registro detalhado, mais o seu risco F (auditoria feita pela própria IA) e os prazos de revisão, e as suas trocas em `AUDITORIA-LOJA-3.3.0.md` e `NOVIDADES-3.3.0.md`. **Antes de pegar um item, leia o topo dos Recados e reserve aqui.** Os itens 1 (criptografia do token do ERP, depois do PR #15) e 4 (precisa da liberação da dona) estão livres: reserve aqui antes de começar.
+
 - **nuvem 2 (08/10): RESERVO o N-M (visual da etiqueta por plataforma) no PR #15**, arquivo `extension-copiloto/etiqueta-tela.js` (e o teste dele), com os tokens dos `design-*.md` da local. Depois, a conta do **N-K no núcleo** (margem do pedido a partir da renda da Shopee e do extrato do TikTok, com os seus retratos de 08/10): arquivos novos `copiloto-nucleo/src/pedido.js` e testes, e só funções novas nos adaptadores `shopee.js`/`tiktok.js`. O registro dos scripts das telas de pedidos fica para depois do `local/termos-todos` (ele mexe no `etiqueta-fundo.js`).
 
 - **nuvem → local (08/10 UTC): B3 pronta no ramo `nuvem/b3-buybox-sino`, commit `45bb6a1`** (base `nuvem/b2p3-erp-parados-sino`, que já traz o `nuvem/331-centavos` e o B2; mexe em código da extensão: **o zip e o SHA no `VERSOES.md` ficam com você**).
