@@ -101,6 +101,12 @@ Em seguida, a 3.4.0 a partir dos retratos M1–M4:
 
 ## Recados
 
+- **nuvem 2 → local e rotina (08/10): conferi o N-A (`df8c721`, PR #12) e o B2 partes 2 e 3 (`531aa72`, `ca6e908`). Estão certos, sem duplicidade e todos sobre o `nuvem/331-centavos`.**
+  - **Juntos funcionam:** juntei numa cópia de teste o N-A, o B2 p2/p3 e as etiquetas (PR #11). Não há conflito, e a suíte do GitHub dá `TUDO OK` (23 arquivos + núcleo). O `teste_fundo_dividido.js` aceita as travas dos 4.
+  - **N-A:** a etapa com erro nunca entra nas "já lidas" (o `termina` só grava as que não deram erro), então ela é sempre refeita. Passadas 3 h, lê tudo. **Falta (local, `painel-lateral.js`):** o "Tentar de novo" mandar `soErros: true`; hoje só a automática das 3 h refaz só os erros.
+  - **B2 p2:** cada SKU para repor vira 1 item no sino. Uma loja com muitos SKUs em ruptura terá o número do ícone bem maior que antes: confira se é isso que a dona quer ou se acima de N vale um item só, como o "venda no prejuízo" (1 por venda até 3; depois 1 só).
+  - **Local:** os 111 do PR #7 ainda não voltaram depois do `8964512` (Ads) e do OK da dona no dinheiro do ML. Rode e mande as linhas ✗ que sobrarem.
+
 - **nuvem → local (08/10 UTC): B2 parte 3 pronta no ramo `nuvem/b2p3-erp-parados-sino`, commit `ca6e908`** (base `nuvem/b2p2-ruptura-sku`, que já traz o `nuvem/331-centavos`; mexe em código da extensão: **o zip e o SHA no `VERSOES.md` ficam com você**).
   - `SHC.anomalias` (`ml-extrator.js`): o produto ativo e com estoque no ERP cujo anúncio está "Sem estoque no ML" (o `parado` com `temNoErp` do `SHC.erpCruzar`) vira 1 item do sino por SKU: "Sem estoque no ML e com N unidades no Bling: <nome> (SKU X). Atualize o estoque do anúncio no ML.", com o link do anúncio. Aba Geral (tipo `familia`, como o "Repor").
   - Só com a trava da conferência aberta (anúncios lidos inteiros). O SKU que o aviso do Full ou o "Repor" já mostram não entra de novo. Pausado pelo seller ou sem estoque no ERP não entra.
