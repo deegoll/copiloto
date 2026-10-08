@@ -21,8 +21,9 @@ Fontes no repositório: `deploy/seguranca/copiloto/SEGURANCA-COPILOTO.md` (revis
 | C | Dependência de telas e rotas internas não documentadas | alta | médio | | | |
 | D | Tráfego da extensão lido como robô pelo canal | média | médio | | | |
 | E | Token do ERP guardado sem criptografia no navegador | baixa | alto | | | |
+| F | "Auditoria" feita pela própria IA que ajudou a escrever o código | média | médio | | | |
 
-A probabilidade e o impacto acima são uma **proposta** para discussão, não uma medição.
+A probabilidade e o impacto acima são uma **proposta** para discussão, não uma medição. Prazos de revisão sugeridos: 30 dias para C, D e E; 90 dias para A, B e F.
 
 ---
 
@@ -104,6 +105,20 @@ A probabilidade e o impacto acima são uma **proposta** para discussão, não um
 
 **O que falta (item 1 do handoff, depois da junção do PR #15).**
 - Criptografar com AES-GCM (Web Crypto), com chave derivada de uma senha da seller (PBKDF2, sal por instalação). A senha nunca é guardada. Sem senha, o token não é guardado.
+
+**Dono:** ____________ **Decisão:** ____________ **Revisar em:** ____/____/______
+
+---
+
+## F. "Auditoria" feita pela própria IA
+
+**O que é.** As revisões de segurança até hoje foram feitas por IA, a mesma que ajudou a escrever o código. Não houve revisão independente nem pentest. Chamar isso de "auditoria" dá uma falsa sensação de segurança.
+
+**O que já existe.**
+- Os textos de segurança passaram a dizer "revisão automatizada por IA, não substitui auditoria independente" (`SEGURANCA-COPILOTO.md`, `NOVIDADES-3.3.0.md`, `AUDITORIA-LOJA-3.3.0.md`, rascunho da política).
+
+**O que falta.**
+- Decidir se contrata revisão independente ou pentest externo.
 
 **Dono:** ____________ **Decisão:** ____________ **Revisar em:** ____/____/______
 
