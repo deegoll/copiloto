@@ -19,12 +19,16 @@
             return;
         }
         res.classList.add(c.classe);
-        const pmin = SHC.precoMinimo(canal, item, cfg, 0);
-        res.innerHTML = 'Sobra no final<div class="v">' + SHC.moeda(c.sobra_rs) + ' <span style="font-size:13px">(' + pct(c.sobra_pct) + ')</span></div>'
+        // #14: frete grátis sem valor: a sobra é um teto ("até", antes do frete), nunca "frete R$ 0,00" firme; o preço mínimo
+        // que cai acima de R$ 79 depende do frete (SHC.precoMinimo dá null) → pede o frete em vez de inventar o número.
+        const semFrete = c.frete_desconhecido, pmin = SHC.precoMinimo(canal, item, cfg, 0);
+        const pminSemFrete = !pmin && canal === 'ml' && SHC.calcular(canal, 79, item, cfg).frete_desconhecido;
+        res.innerHTML = (!semFrete ? 'Sobra no final' : c.sobra_rs >= 0 ? 'Lucro até (antes do frete)' : 'Prejuízo já antes do frete')
+            + '<div class="v">' + SHC.moeda(c.sobra_rs) + ' <span style="font-size:13px">(' + (semFrete && c.sobra_rs >= 0 ? 'até ' : '') + pct(c.sobra_pct) + ')</span></div>'
             + 'Comissão ' + SHC.moeda(c.comissao_rs) + (c.taxa_fixa_rs ? ' · taxa fixa ' + SHC.moeda(c.taxa_fixa_rs) : '')
-            + ' · frete ' + SHC.moeda(c.frete_rs) + (c.imposto_rs ? ' · imposto ' + SHC.moeda(c.imposto_rs) : '')
-            + (pmin ? '<br>Preço mínimo sem prejuízo: <b>' + SHC.moeda(pmin) + '</b>' : '')
-            + (c.frete_desconhecido ? '<br>⚠ Acima de R$ 79 o frete é seu: informe quanto paga.' : '')
+            + (semFrete ? ' · frete: falta o valor' : ' · frete ' + SHC.moeda(c.frete_rs)) + (c.imposto_rs ? ' · imposto ' + SHC.moeda(c.imposto_rs) : '')
+            + (pmin ? '<br>Preço mínimo sem prejuízo: <b>' + SHC.moeda(pmin) + '</b>' : pminSemFrete ? '<br>Preço mínimo sem prejuízo: informe o frete para calcular.' : '')
+            + (semFrete ? '<br>⚠ Acima de R$ 79 o frete é seu: informe quanto paga.' : '')
             + (c.tarifa_aviso ? '<br>⚠ ' + c.tarifa_aviso : '');
     }
 

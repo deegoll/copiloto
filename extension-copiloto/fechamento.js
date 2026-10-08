@@ -282,6 +282,48 @@
         return { txt: (l.dir === 'sobe' ? '▲ ' : '▼ ') + q, cls: noRitmo ? 'igual' : l.dir };
     };
 
+    // Revisão 07/10/2026 ("cada centavo"): 2 regras sobre a MESMA cobrança (pedido + tipo + anúncio) — repetida + venda cancelada sem estorno,
+    // repetida + tarifa acima, repetida + frete fora da curva — pediam de volta o mesmo dinheiro 2 vezes (R$ 15 de R$ 10 cobrados).
+    // Fica a regra que pede mais (a soma das repetidas ou a outra; no empate, a outra: "venda cancelada" é o motivo verdadeiro), nunca
+    // acima do cobrado líquido (teto(chave, itens); null = não sabido); a repetição que sai vira fato no motivo. Dúvida fica como está.
+    // A repetida pede as cópias a mais sobre 1 cobrança legítima (o esperado): só vale com o líquido cobrindo TODAS as cópias. Estorno que
+    // não casou com a cópia (outro valor) deixa o líquido menor e não dá para saber o que ele acertou: nunca um "valor devido" inventado
+    // (antes: esperado = cobrado − teto, R$ 8 que ninguém leu). Sobrou mais que 1 cobrança → dúvida (o texto só pergunta); não sobrou → sai.
+    // Revisão 2 (07/10/2026): o recorte é a PRÓPRIA cobrança (propria(x) → {k: texto|MLB, liq, solto, orfao} | null = não sabido), não o tipo:
+    // outra cobrança do mesmo tipo (frete extra, tarifa de processamento, o mesmo texto em outro pagamento) escondia o estorno de outro valor
+    // feito na repetida, e ela pedia R$ 20 firmes quando sobravam R$ 8. Firme só sem estorno solto (que não casou com cobrança de mesmo
+    // texto|MLB|valor) do mesmo texto nem estorno de texto sem cobrança no pedido (órfão) no mesmo tipo|MLB. A sobra = cópias − estorno solto.
+    // → a lista sem as sobreposições (item mudado = objeto novo; nunca mexe nos de entrada)
+    const umaVezPorCobranca = (lista, chave, teto, propria) => {
+        const g = {}, fora = new Set(), troca = new Map(), soma = (l, c) => r2(l.reduce((s, x) => s + (x[c] || 0), 0));
+        lista.forEach(x => { if (x && !x.duvida && x.diferenca > 0) { const k = chave(x); (g[k] || (g[k] = [])).push(x); } });
+        Object.keys(g).forEach(k => {
+            const xs = g[k], t = teto(k, xs), rep = xs.filter(x => x.regra === 'repetida'), out = xs.filter(x => x.regra !== 'repetida').sort((a, b) => b.diferenca - a.diferenca);
+            const pr = new Map(rep.map(x => [x, propria ? propria(x) : null])), firme = x => { const p = pr.get(x); return !p || (!(p.solto > 0) && !p.orfao); };
+            const cobre = (t === null || soma(rep, 'valor') <= t + 0.005) && rep.every(firme), o = out.length && (!cobre || out[0].diferenca >= soma(rep, 'diferenca')) ? out[0] : null;
+            xs.forEach(x => { if (o ? x !== o : x.regra !== 'repetida') fora.add(x); });
+            if (o) {
+                if (t !== null && o.diferenca > t + 0.005) { fora.add(o); return; }   // nunca acima do cobrado (as regras já usam o líquido)
+                // repetida = o fato para o texto do chamado (o da estimativa não leva o motivo); repetidaMin = as cópias a mais, quando certas.
+                const r = rep.map(y => SHC.moeda(y.esperado) + ' × ' + Math.round(y.valor / y.esperado)).join(', ');
+                if (rep.length) troca.set(o, Object.assign({}, o, { motivo: (o.motivo || '') + ' Também aparece repetida neste pedido: ' + r + '.', repetida: r }, cobre ? { repetidaMin: soma(rep, 'diferenca') } : {}));
+                return;
+            }
+            if (cobre) return;
+            if (!pr.get(rep[0]) && !(t > soma(rep, 'esperado') + 0.005)) { rep.forEach(x => fora.add(x)); return; }   // lista guardada: só o líquido do tipo
+            rep.forEach(x => {
+                const n = Math.round(x.valor / x.esperado), c = SHC.moeda(x.esperado) + ' × ' + n, p = pr.get(x);
+                // Sobra acima de 1 cobrança de cada = as cópias deste texto − o estorno solto dele (o que for que ele acertou). Não sobrou → sai.
+                if (p && !(soma(rep.filter(y => (pr.get(y) || {}).k === p.k), 'diferenca') - p.solto > 0.005)) { fora.add(x); return; }
+                // "ficaram" = o líquido da própria cobrança (as deste texto no pedido − os estornos dela), só quando o estorno foi dela.
+                const ficou = !p ? ' e ficaram ' + SHC.moeda(t) + ' cobrados' : p.solto > 0 ? ' e ficaram ' + SHC.moeda(p.liq) + ' cobrados em “' + x.cobranca + '” no pedido' : '';
+                troca.set(x, Object.assign({}, x, { motivo: 'A mesma cobrança aparece ' + n + ' vezes neste pedido (' + c + '), mas houve estorno' + ficou
+                    + '. O estorno pode já ter acertado a repetição — confira no detalhe da venda.',
+                    duvida: 'Esta cobrança foi lançada ' + n + ' vezes neste pedido (' + c + ') e depois houve um estorno. Ela foi lançada em duplicidade? Se foi, o estorno já devolveu as cópias a mais?' }));
+            });
+        });
+        return lista.filter(x => !fora.has(x)).map(x => troca.get(x) || x);
+    };
     /**
      * Quanto dá para recuperar (ESTIMATIVA; só o que tem base, cada parcela com a origem):
      *  - cobrancas: "Cobranças para conferir" (SHC.fech.conferir: tarifa acima do que a venda mostra, cobrança repetida);
@@ -308,19 +350,25 @@
     const ORIGEM_CURTA = { cobrancas: '', estorno: 'venda cancelada', devolucao: 'devolução × pós-venda · 30 dias' };
     F.recuperar = function (d) {
         d = d || {};
-        const parcelas = [], add = (id, rotulo, origem, itens) => {
-            const valor = r2(itens.reduce((s, x) => s + (x.valor || 0), 0));
-            if (itens.length && valor > 0) parcelas.push({ id, rotulo, origem, curta: ORIGEM_CURTA[id], valor, itens });
+        // resto = {n, valor}: o que fica fora da lista de itens (só o frete, acima do corte de 200) — entra no valor e na contagem.
+        const parcelas = [], add = (id, rotulo, origem, itens, resto) => {
+            const valor = r2(itens.reduce((s, x) => s + (x.valor || 0), 0) + (resto ? resto.valor : 0));
+            if (itens.length && valor > 0) parcelas.push(Object.assign({ id, rotulo, origem, curta: ORIGEM_CURTA[id], valor, n: itens.length + (resto ? resto.n : 0), itens }, resto ? { resto } : {}));
         };
         // 3.3.0 (trava do frete): o frete cobrado acima da régua fica à parte, com o valor COBRADO (nunca a diferença como "a recuperar").
         // Todos, com ou sem a dúvida de 2+ unidades: a mesma contagem do cartão "Frete para conferir" da aba Frete (P.freteCobrado).
         const fr = ((d.conc && d.conc.pagoAMais) || []).filter(p => p && p.diferenca > 0);
         const frIt = fr.map(p => Object.assign({ pedido: p.pedido, itemId: p.itemId, data: p.data, valor: p.cobrado, cobrado: p.cobrado, motivo: F.FRETE_CONFERIR },
             p.pedidoFrete ? { pedidoFrete: p.pedidoFrete } : {}));
+        // A contagem vem do porItem (sem o corte de 200 da lista pagoAMais), como o P.freteCobrado: acima de 200 a tela não diz 200 e a aba Frete 290.
+        const pi = d.conc && d.conc.porItem, frN = pi ? Object.keys(pi).reduce((t, k) => t + ((pi[k] && pi[k].n) || 0) + ((pi[k] && pi[k].nt) || 0), 0) : frIt.length;
         // v3.1: "para conferir" gravado pela versão anterior pode ter a tarifa de devolução: ela nunca entra no que dá para recuperar.
         // v3.3: dúvida (pode ser legítima: 1 cobrança por pagamento/envio, frete de venda cancelada já despachada) fica só no "para conferir".
         // 3.3.0 (trava do frete): o frete fora da curva também (o guardado antes da trava vem sem a dúvida: sai pela regra).
-        const cf = (d.conferir || []).filter(x => x && !x.duvida && !F.freteSemChamado(x) && x.diferenca > 0 && SHC.tipoCustoFechamento(x.cobranca) !== 'devolucao');
+        // Lista guardada antes da revisão de 07/10/2026 pode ter 2 regras na mesma cobrança: conta 1 vez só (teto = o cobrado líquido da outra regra).
+        const cf = umaVezPorCobranca((d.conferir || []).filter(x => x && !x.duvida && !F.freteSemChamado(x) && x.diferenca > 0 && SHC.tipoCustoFechamento(x.cobranca) !== 'devolucao'),
+            x => x.pedido + '|' + SHC.tipoCustoFechamento(x.cobranca) + '|' + x.itemId,
+            (k, xs) => (xs.some(x => x.regra !== 'repetida') ? Math.max(...xs.filter(x => x.regra !== 'repetida').map(x => x.valor)) : null)).filter(x => !x.duvida);
         add('cobrancas', 'Cobranças acima do esperado', 'Cobranças para conferir (tarifa acima do que a venda mostra, cobrança repetida)',
             cf.filter(x => x.regra !== 'sem_estorno').map(x => Object.assign({}, x, { cobrado: x.valor, valor: x.diferenca })));
         add('estorno', 'Cancelada ou devolvida sem estorno', 'Venda cancelada: a tarifa voltou, outra cobrança do pedido não',
@@ -334,7 +382,7 @@
         add('devolucao', 'Tarifa de devolução para questionar', 'Tarifa de devolução × pós-venda · últimos 30 dias', dv.filter(x => x.cor === 'verde' && x.recuperar > 0).map(dvIt));
         const am = dv.filter(x => x.cor === 'amarelo' && x.recuperar > 0).map(dvIt);
         return { total: r2(parcelas.reduce((s, p) => s + p.valor, 0)), parcelas, devConferir: { valor: r2(am.reduce((s, x) => s + x.valor, 0)), itens: am },
-            freteConferir: { n: frIt.length, itens: frIt }, fullConferir: { n: fuIt.length, itens: fuIt } };
+            freteConferir: { n: Math.max(frN, frIt.length), itens: frIt }, fullConferir: { n: fuIt.length, itens: fuIt } };
     };
     /** v3.2: frete:<conta>:hist × posvenda:<conta> → SHC.devolucoesContestar (tarifas de devolução dos últimos 30 dias) | null (frete de devoluções não lido). */
     F.devolucoesDe = (fh, pv) => (fh && fh.devolucoes && Array.isArray(fh.devolucoes.lista) && SHC.devolucoesContestar
@@ -396,7 +444,8 @@
         const ped = {};
         // v3.1: a tarifa de devolução (frete de VOLTA do produto devolvido) nunca vira pedido de revisão: fica só no custo do mês.
         (cobs || []).forEach(c => { if (c && c.orderId && c.valor >= 0 && SHC.tipoCustoFechamento(c.texto, c.id) !== 'devolucao') (ped[c.orderId] || (ped[c.orderId] = [])).push(c); });
-        const out = [], freteItem = {};
+        const out = [], freteItem = {}, chaves = new Map(), liqDe = {};   // item → pedido|tipo|MLB; pedido|tipo|MLB → cobrado − estornado (teto)
+        const proprias = new Map();   // repetida → a própria cobrança no pedido (umaVezPorCobranca): {k: pedido|texto|MLB, liq, solto, orfao}
         const tituloDe = (id, cs) => ((cs.find(c => c.titulo) || {}).titulo) || ((itensPorId[id] || {}).titulo) || '';
         Object.keys(ped).forEach(o => {
             const cs = ped[o], data = cs.map(c => c.data).filter(Boolean).sort()[0] || '';
@@ -408,10 +457,10 @@
                 liq[k] = r2((liq[k] || 0) + (c.estorno ? -c.valor : c.valor));
                 if (op && !c.estorno) (ops[k] || (ops[k] = new Set())).add(op);
                 // v3.3: o conceptId entra na chave: só é "repetida" a mesma cobrança sobre o MESMO pagamento, pedido ou envio.
-                const gt = String(c.texto).replace(/^cancelamento\s+(d[oa]s?|de)\s+/i, '').toLowerCase() + '|' + c.itemId + '|' + c.valor, g = gt + '|' + op;
+                const tx = String(c.texto).replace(/^cancelamento\s+(d[oa]s?|de)\s+/i, '').toLowerCase() + '|' + c.itemId, gt = tx + '|' + c.valor, g = gt + '|' + op;
                 const x = grupos[g] || (grupos[g] = { c: 0, e: 0, cob: c, op, gt });
                 if (c.estorno) x.e++; else { x.c++; x.cob = c; }
-                const T = totais[gt] || (totais[gt] = { c: 0, e: 0, ops: 0 });
+                const T = totais[gt] || (totais[gt] = { c: 0, e: 0, ops: 0, tx, k, v: c.valor });
                 if (c.estorno) T.e++; else T.c++;
             });
             // v3.3.1: o estorno vem com OUTRO conceptId (visto no storage: cobrança …|CFONPN, estorno …|BFONPN, mesmo valor) → cai em outro grupo.
@@ -419,21 +468,33 @@
             // sobra = cobranças − estornos − nº de pagamentos/envios com cobrança em aberto (1 legítima para cada). Cada grupo gasta da sobra.
             Object.keys(grupos).forEach(g => { if (grupos[g].c - grupos[g].e > 0) totais[grupos[g].gt].ops++; });
             Object.keys(totais).forEach(gt => { const T = totais[gt]; T.sobra = T.c - T.e - T.ops; });
+            // Revisão 2 (07/10/2026): a própria cobrança = texto|MLB (sem valor nem conceptId). liq = as cobranças − os estornos dela;
+            // solto = o estorno dela que não casou com cobrança de mesmo valor (parcial, de cópia ou não: não se sabe o que acertou).
+            // Estorno solto de um texto sem cobrança no pedido (órfão) pode ser de qualquer cobrança do mesmo tipo|MLB; com nome que não diz o
+            // tipo ('outro'), de qualquer cobrança do MLB.
+            const doTx = {}, orfao = {};
+            Object.keys(totais).forEach(gt => { const T = totais[gt], d = doTx[T.tx] || (doTx[T.tx] = { liq: 0, solto: 0, c: 0 });
+                d.liq = r2(d.liq + (T.c - T.e) * T.v); d.c += T.c; if (T.e > T.c) d.solto = r2(d.solto + (T.e - T.c) * T.v); });
+            Object.keys(totais).forEach(gt => { const T = totais[gt]; if (T.e > T.c && !doTx[T.tx].c) orfao[T.k] = true; });
+            Object.keys(liq).forEach(k => { liqDe[o + '|' + k] = liq[k]; });
             // 3.3.0: tipo = o da cobrança pelo texto e pelo código (c.id), para a trava do frete valer também com o texto vazio.
-            const base = (c, extra) => Object.assign({ pedido: o, data, itemId: c.itemId, titulo: tituloDe(c.itemId, cs), cobranca: c.texto, tipo: SHC.tipoCustoFechamento(c.texto, c.id) }, extra);
+            const base = (c, extra) => { const x = Object.assign({ pedido: o, data, itemId: c.itemId, titulo: tituloDe(c.itemId, cs), cobranca: c.texto, tipo: SHC.tipoCustoFechamento(c.texto, c.id) }, extra);
+                chaves.set(x, o + '|' + SHC.tipoCustoFechamento(c.texto, c.id) + '|' + c.itemId); return x; };
             Object.keys(grupos).forEach(g => {
                 const x = grupos[g], T = totais[x.gt], porOp = POR_OPERACAO[SHC.tipoCustoFechamento(x.cob.texto, x.cob.id)];
                 const n = 1 + Math.min(x.c - x.e - 1, T.sobra);
                 if (n < 2) return;
                 T.sobra -= n - 1;
                 // Sem o conceptId numa cobrança que vem 1 vez por pagamento/envio: pode ser legítima → só "para conferir" (duvida), fora do "Como pedir de volta".
-                const duvida = !x.op && !!porOp;
-                out.push(base(x.cob, Object.assign({ regra: 'repetida', valor: r2(x.cob.valor * n), esperado: x.cob.valor, diferenca: r2(x.cob.valor * (n - 1)),
+                const duvida = !x.op && !!porOp, d = doTx[T.tx];
+                const it = base(x.cob, Object.assign({ regra: 'repetida', valor: r2(x.cob.valor * n), esperado: x.cob.valor, diferenca: r2(x.cob.valor * (n - 1)),
                     motivo: duvida ? 'Esta cobrança aparece ' + n + ' vezes neste pedido, com o mesmo valor. Pode ser 1 cobrança por ' + porOp + ' — confira no detalhe da venda (o pedido pode ter tido '
                         + n + ' ' + porOp + 's).'
                         : 'A mesma cobrança aparece ' + n + ' vezes neste pedido, com o mesmo valor' + (x.op ? ', sobre o mesmo ' + (porOp || 'pedido') : '') + '.' },
                     // duvida = a pergunta do chamado (texto para o ML; o motivo acima é para a dona).
-                    duvida ? { duvida: 'Esta cobrança aparece ' + n + ' vezes neste pedido, com o mesmo valor. O pedido teve ' + n + ' ' + porOp + 's (uma cobrança para cada) ou ela foi lançada em duplicidade?' } : {})));
+                    duvida ? { duvida: 'Esta cobrança aparece ' + n + ' vezes neste pedido, com o mesmo valor. O pedido teve ' + n + ' ' + porOp + 's (uma cobrança para cada) ou ela foi lançada em duplicidade?' } : {}));
+                out.push(it);
+                proprias.set(it, { k: o + '|' + T.tx, liq: d.liq, solto: d.solto, orfao: !!(orfao[SHC.tipoCustoFechamento(x.cob.texto, x.cob.id) + '|' + x.cob.itemId] || orfao['outro|' + x.cob.itemId]) });
             });
             // Venda cancelada: tarifa de venda estornada por inteiro, outra cobrança do MESMO pedido sem estorno.
             const cancelada = cs.some(c => c.estorno && SHC.tipoCustoFechamento(c.texto, c.id) === 'tarifa_venda')
@@ -471,7 +532,9 @@
                         : 'O frete deste pedido ficou acima do que este anúncio costuma pagar. O valor está certo para a faixa de preço, o peso e as unidades desta venda?' }));
             });
         });
-        return out.sort((a, b) => b.diferenca - a.diferenca);
+        // 2 regras na mesma cobrança (repetida + cancelada/tarifa/frete): 1 item só, nunca acima do cobrado líquido daquele tipo no pedido;
+        // a repetida firme só sem estorno solto da própria cobrança (revisão 2).
+        return umaVezPorCobranca(out, x => chaves.get(x), k => (k in liqDe ? liqDe[k] : null), x => proprias.get(x) || null).sort((a, b) => b.diferenca - a.diferenca);
     };
 
     // ── v3.4 (05/10, print da dona: "por que o sistema apresenta informações diferentes?"): a regra antiga comparava a tarifa cobrada com o
@@ -543,7 +606,12 @@
         return { ts: Date.now(), total: (cands || []).length, itens: itens.sort((a, b) => b.diferenca - a.diferenca), batem, semDetalhe, faltam, dets };
     };
     /** Lista para conferir (F.conferir, da tela ou do fundo) + as tarifas provadas (prova:<conta>). A regra 'tarifa' antiga (preço de hoje) sai. */
-    F.juntaConferir = (itens, prova) => (itens || []).filter(x => x && x.regra !== 'tarifa').concat((prova && prova.itens) || []).sort((a, b) => (b.diferenca || 0) - (a.diferenca || 0));
+    // 3.3.1 (C1 na 3.3.0, achado do teste "cada centavo"): a tarifa provada entra pela mesma regra "1 vez por cobrança" do F.recuperar — sem ela,
+    // a repetida e a tarifa da mesma cobrança somavam no "para conferir" (R$ 24,00 de R$ 20,00 cobrados) e cada uma tinha o seu chamado.
+    F.juntaConferir = (itens, prova) => umaVezPorCobranca((itens || []).filter(x => x && x.regra !== 'tarifa').concat((prova && prova.itens) || []),
+        x => x.pedido + '|' + SHC.tipoCustoFechamento(x.cobranca) + '|' + x.itemId,
+        (k, xs) => (xs.some(x => x.regra !== 'repetida') ? Math.max(...xs.filter(x => x.regra !== 'repetida').map(x => x.valor)) : null))
+        .sort((a, b) => (b.diferenca || 0) - (a.diferenca || 0));
     /** Frase do andamento da conferência das tarifas (seção "Quanto dá para recuperar"). '' = nada conferido ainda. */
     F.fraseProva = function (prova, provando) {
         if (provando) return 'Conferindo a tarifa de ' + SHC.qtd(provando, 'venda', 'vendas') + ' no detalhe de cada venda do ML…';
@@ -619,7 +687,15 @@
         const REGRA = { devolucao: ['devolucao'] }, regra = REGRA[x.regra] || (/devolu/i.test(x.cobranca || '') ? ['devolucao'] : []);
         // Esperado ESTIMADO (tarifa pelo preço de hoje, frete pela mediana dos outros pedidos) ou item guardado por versão anterior ("pode estar
         // certo"): sem chamado, fica "para conferir" (regra da dona: chamado só com prova). Sem esta linha ele cairia na contestação abaixo.
-        if (x.estimado || /pode estar certo/i.test(x.motivo || '')) return '';
+        // Revisão C1 (07/10/2026), junção na 3.3.1: se a estimativa ganhou de uma cobrança REPETIDA (umaVezPorCobranca: x.repetida/x.repetidaMin),
+        // a cobrança em dobro é fato (prova) — o texto pede só o estorno da cópia a mais, nunca a diferença estimada.
+        if (x.estimado || /pode estar certo/i.test(x.motivo || '')) {
+            if (!(x.repetidaMin > 0)) return '';
+            return SHC.textoContestacao({ assunto: 'Contestação de cobrança em duplicidade: ' + x.cobranca, ids: [['Pedido', '#' + x.pedido], ['Anúncio', x.itemId || '']],
+                intro: 'Uma cobrança do Faturamento' + (x.data ? ' de ' + dataBR(x.data) : '') + (x.titulo ? ' (anúncio “' + x.titulo + '”)' : '') + ' foi lançada mais de uma vez neste pedido.',
+                fatos: [x.repetida ? 'A mesma cobrança foi lançada mais de uma vez neste pedido: ' + x.repetida : '', 'Valor lançado em duplicidade: ' + SHC.moeda(x.repetidaMin)],
+                regras: regra, pedido: 'o estorno da cobrança lançada em duplicidade (' + SHC.moeda(x.repetidaMin) + ') na nossa conta.' });
+        }
         return SHC.textoContestacao({ assunto: 'Contestação de cobrança indevida: ' + x.cobranca, ids: [['Pedido', '#' + x.pedido]].concat(x.pedidoFrete && x.pedidoFrete !== x.pedido ? [['Frete', '#' + x.pedidoFrete]] : [], [['Anúncio', x.itemId || '']]),
             intro: 'Identificamos uma cobrança acima do valor devido no Faturamento' + (x.data ? ' em ' + dataBR(x.data) : '') + (x.titulo ? ' (anúncio “' + x.titulo + '”)' : '') + '.',
             fatos: ['Valor cobrado: ' + SHC.moeda(x.valor), 'Valor devido: ' + SHC.moeda(x.esperado), 'Diferença: ' + SHC.moeda(x.diferenca), 'Por quê: ' + x.motivo],
@@ -869,8 +945,8 @@
         const fq = rec && rec.freteConferir && rec.freteConferir.itens && rec.freteConferir.itens.length ? rec.freteConferir : null;
         const itFq = x => `<li><span><b>Pedido #${esc(x.pedido)} · ${t(x.itemId)}</b><small>frete cobrado ${esc(SHC.moeda(x.cobrado))}${x.data ? ' · ' + esc(dataBR(x.data).slice(0, 5)) : ''}</small></span><b class="num">${esc(SHC.moeda(x.cobrado))}</b>`
             + `<span class="acoes"><a class="lnk" href="${esc(F.URL.cobranca(x.pedidoFrete || x.pedido))}" target="_blank" rel="noopener">Conferir no ML</a></span></li>`;
-        const blocoFq = () => (fq ? `<div class="parc freteconf"><div class="pc-cab"><b><span class="pt at"></span>Frete: para conferir <small>fora do total</small></b><b class="num">${esc(SHC.qtd(fq.itens.length, 'pedido', 'pedidos'))}</b></div>`
-            + `<span class="mini">${esc(F.FRETE_CONFERIR)}</span>`
+        const blocoFq = () => (fq ? `<div class="parc freteconf"><div class="pc-cab"><b><span class="pt at"></span>Frete: para conferir <small>fora do total</small></b><b class="num">${esc(SHC.qtd(fq.n || fq.itens.length, 'pedido', 'pedidos'))}</b></div>`
+            + `<span class="mini">${esc(F.FRETE_CONFERIR)}${fq.n > fq.itens.length ? esc(' Na lista, os ' + fq.itens.length + ' de maior diferença.') : ''}</span>`
             + `<div data-vm-box><ul class="rec-it">${fq.itens.slice(0, 5).map(itFq).join('')}</ul>${fq.itens.length > 5 ? `<ul class="rec-it vm-x">${fq.itens.slice(5).map(itFq).join('')}</ul>` : ''}${F.vmBotao(fq.itens.length, 5)}</div></div>` : '');
         // 3.3.0: a remessa do Full com diferença, à parte e fora do total (F.FULL_CONFERIR), com o link da remessa no ML.
         const fu = rec && rec.fullConferir && rec.fullConferir.itens && rec.fullConferir.itens.length ? rec.fullConferir : null;
@@ -891,7 +967,9 @@
                 + `<span class="acoes"><button class="bt sec pq" data-copiar-rec="${p.id}:${i}">Copiar texto do chamado</button>`
                 + (p.id === 'estorno' ? `<a class="lnk" href="${esc(SHC.POSVENDA_URL || F.URL.faturamento)}" target="_blank" rel="noopener">Ver no pós-venda</a>` : `<a class="lnk" href="${esc(F.URL.cobranca(x.pedido))}" target="_blank" rel="noopener">Abrir a cobrança</a>`) + '</span></li>';
         };
-        return cab + `<p class="rec-tot"><b>${esc(SHC.moeda(rec.total))}</b> em ${esc(SHC.qtd(rec.parcelas.reduce((s, p) => s + p.itens.length, 0), 'item', 'itens'))}</p>`
+        // Frete acima do corte de 200: 1 linha com os que ficaram fora da lista (a soma da tela fecha com o valor da parcela).
+        const resto = p => (p.resto ? `<ul class="rec-it"><li><span><b>Mais ${esc(SHC.qtd(p.resto.n, 'pedido', 'pedidos'))}</b><small>Os de menor diferença: a lista mostra os ${p.itens.length} maiores. O total é o mesmo da aba Frete.</small></span><b class="num">${esc(SHC.moeda(p.resto.valor))}</b></li></ul>` : '');
+        return cab + `<p class="rec-tot"><b>${esc(SHC.moeda(rec.total))}</b> em ${esc(SHC.qtd(rec.parcelas.reduce((s, p) => s + (p.n || p.itens.length), 0), 'item', 'itens'))}</p>`
             + rec.parcelas.map(p => `<div class="parc ${p.id}"><div class="pc-cab"><b>${p.id === 'devolucao' ? '<span class="pt ok"></span>' : ''}${esc(p.rotulo)}</b><b class="num">${esc(SHC.moeda(p.valor))}</b></div><span class="mini">Origem: ${esc(p.origem)}</span>`
                 + `<div data-vm-box><ul class="rec-it">${p.itens.slice(0, 5).map((x, i) => item(p, x, i)).join('')}</ul>${p.itens.length > 5 ? `<ul class="rec-it vm-x">${p.itens.slice(5).map((x, i) => item(p, x, i + 5)).join('')}</ul>` : ''}${F.vmBotao(p.itens.length, 5)}</div></div>`).join('') + blocoFq() + blocoFu() + blocoDc() + rod;
     };
@@ -1014,7 +1092,8 @@
         let t = modo === 'misto' ? cus + (cancel && cancel.ml >= 0.01 ? ' mais os cancelamentos da fatura (' + SHC.moeda(cancel.ml) + '): o Copiloto já tirou os cancelamentos das linhas; a fatura, não.' : '.')
             : modo === 'liquido' ? cus + (ant ? ' mais os cancelamentos de faturas anteriores (' + SHC.moeda(ant) + '), que a fatura põe nos pagamentos.' : '.')
             : cus + (cancel && Math.abs(cancel.dif) >= 0.01 ? ' menos a diferença nos cancelamentos (' + sinalM(cancel.dif) + ').' : '.');
-        if (Math.abs(resto) > F.BATE_RS) t += ' Os outros ' + SHC.moeda(Math.abs(resto)) + ' não dá para saber de onde vêm: confira no detalhe da fatura.';
+        // Pela fatura o total já é ✗ com R$ 0,01: o resto entra a partir de 1 centavo (nos modos estimados, só o que passa da folga de R$ 1).
+        if (modo === 'fatura' ? Math.abs(resto) >= 0.005 : Math.abs(resto) > F.BATE_RS) t += ' Os outros ' + SHC.moeda(Math.abs(resto)) + ' não dá para saber de onde vêm: confira no detalhe da fatura.';
         return t;
     };
     /**
@@ -1036,7 +1115,9 @@
         if (!soma && (!fech || fech.parcial || (fech.ate && fech.ate < fimMesISO(mes)))) return Object.assign(base, { semFech: true });
         const pt = soma ? soma.porTipo : fech.porTipo || {}, ept = soma ? null : fech.estornosPorTipo || null;
         const modo = soma ? (soma.modo === 'fatura' ? 'fatura' : 'ciclo') : ept ? 'bruto' : cat.categorias.length && cat.categorias.every(c => typeof c.cancelado === 'number') ? 'liquido' : 'misto';
-        const exato = modo === 'fatura', bateL = (dif, m) => (exato ? Math.abs(dif) < 0.015 : F.bate(dif, m));
+        // Pela fatura: os 2 lados já em centavos inteiros (r2) → "bate" só com diferença menor que meio centavo (R$ 0,01 já é ✗).
+        // A folga de R$ 1 / 0,5% (F.bate) é só dos modos estimados (ciclo por data, mês do calendário).
+        const exato = modo === 'fatura', bateL = (dif, m) => (exato ? Math.abs(dif) < 0.005 : F.bate(dif, m));
         // Ciclo por data com a fatura anterior lida: tira do Copiloto as notas de crédito da fatura anterior (antPrev) em vez de somar o "ant" desta.
         const cicloAnt = modo === 'ciclo' && typeof antPrev === 'number';
         // v3.4: a mesma "Taxa de parcelamento" o ML às vezes põe em "Tarifas de venda" e às vezes em "Taxas de parcelamento" (ao vivo, maio
@@ -1094,7 +1175,7 @@
         // "Cancelamentos de tarifas em estornos" (nos pagamentos): tarifas desta fatura canceladas depois do fechamento. Informativa (fora do total
         // da fatura): o Copiloto confere pelas notas de crédito com a data da fatura seguinte (só no modo 'fatura').
         const estornos = sub && ant > 0 ? (() => { const c = exato && typeof soma.ncProx === 'number' ? soma.ncProx : null;
-            return { id: 'estornos', rotulo: 'Cancelamentos de tarifas em estornos', ml: ant, cop: c, info: true, ok: c !== null && Math.abs(c - ant) < 0.015,
+            return { id: 'estornos', rotulo: 'Cancelamentos de tarifas em estornos', ml: ant, cop: c, info: true, ok: c !== null && Math.abs(c - ant) < 0.005,
                 motivo: 'São tarifas desta fatura canceladas depois do fechamento. O ML devolve nos pagamentos e o Copiloto conta na fatura seguinte.' }; })() : null;
         // Total. Pela fatura: custos − cancelamentos dela. Ciclo com antPrev: o líquido do ciclo + as notas de crédito da fatura anterior (que a
         // fatura não tira). Senão: o Copiloto tira todo cancelamento; a fatura, só os dela → soma de volta o "ant".
@@ -1103,8 +1184,8 @@
             const liq = soma ? soma.total : SHC.TIPOS_FECHAMENTO.reduce((s, id) => s + (SHC.num(pt[id]) || 0), 0);
             const c = r2(liq + (exato ? 0 : cicloAnt ? antPrev : ant)), dif = r2(c - cat.total);
             // "✓ bate" no total só com diferença de até R$ 1, ou dentro dos 0,5% E com todas as linhas batendo (0,5% de um total grande
-            // escondia uma linha ✗ de R$ 61). Pela fatura: ao centavo.
-            const ok = exato ? Math.abs(dif) < 0.015 : Math.abs(dif) <= F.BATE_RS || (F.bate(dif, cat.total) && linhas.every(l => l.ok) && (!cancel || cancel.ok));
+            // escondia uma linha ✗ de R$ 61). Pela fatura: ao centavo (R$ 0,01 de diferença = ✗).
+            const ok = exato ? Math.abs(dif) < 0.005 : Math.abs(dif) <= F.BATE_RS || (F.bate(dif, cat.total) && linhas.every(l => l.ok) && (!cancel || cancel.ok));
             total = { id: 'total', rotulo: 'Total da fatura', ml: cat.total, cop: c, dif, ok, motivo: ok ? '' : F.motivoTotal(modo, linhas, cancel, ant, dif) };
         }
         // A manchete fala primeiro de custo (o que pode ser cobrança a mais); o cancelamento que não bate só vem depois.

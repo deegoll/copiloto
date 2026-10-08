@@ -1,8 +1,9 @@
 // copiloto-nucleo · motor de lucro (por pedido, por produto e fechamento do mês). A conta é determinística; a IA só explica.
 //   receita         = Σ(preço × qtd) − desconto do vendedor            (o cupom da plataforma não entra: quem paga é o canal)
 //   receita_liquida = receita − reembolso                              (devolução)
-//   repasse         = receita_liquida − Σ tarifas do pedido            (estorno entra com sinal −; 'ads' não entra aqui)
-//   lucro_antes_ads = repasse − custo × qtd − receita_liquida × imposto% − outros
+//   repasse         = receita_liquida − Σ tarifas do pedido            (estorno entra com sinal −; 'ads' não entra aqui, SALVO o Ads que o
+//                     − Ads tirado do repasse                           canal tirou do repasse da venda: tarifa 'ads' com origem_pagamento 'venda')
+//   lucro_antes_ads = repasse (+ Ads tirado do repasse) − custo × qtd − receita_liquida × imposto% − outros
 //   lucro_real      = lucro_antes_ads − ads rateado (por anúncio e dia)
 //   margem          = lucro_real / receita_liquida
 // Leitura que falhou nunca vira zero: o resultado sai com status 'nao_lido' (ou 'sem_custo') e os números que dependem dela em null.
@@ -16,6 +17,23 @@
     const chaveItem = it => (it && (it.sku || it.anuncio_id)) || '';
     /** Valor da linha: o total que o canal deu, senão preço × qtd. null = não lido. */
     const valorItem = it => (it.total !== null && it.total !== undefined ? it.total : (it.preco_unit === null || it.preco_unit === undefined ? null : U.r2(it.preco_unit * it.qtd)));
+
+    /**
+     * Divide um valor (R$) pelos pesos, pelo MAIOR RESTO: a soma das partes = o valor, no centavo; cada parte a menos de 1 centavo da
+     * exata (valor × peso ÷ Σ pesos) e nenhuma com o sinal trocado (R$ 0,05 em 10 partes iguais = 5 × 0,01 + 5 × 0,00, nunca −0,04 no último).
+     * Peso ≤ 0 ou inválido vale 0; todos 0 → partes iguais. Empate de resto: a ordem da lista. valor null → partes null (não lido).
+     */
+    function reparte(valor, pesos) {
+        const n = (pesos || []).length, v = U.r2(valor);
+        if (v === null) return Array.from({ length: n }, () => null);
+        let ws = (pesos || []).map(p => (typeof p === 'number' && isFinite(p) && p > 0 ? p : 0)), W = ws.reduce((a, b) => a + b, 0);
+        if (!(W > 0)) { ws = ws.map(() => 1); W = n; }
+        const C = Math.round(Math.abs(v) * 100), sinal = v < 0 ? -1 : 1;   // centavos inteiros
+        const exatas = ws.map(w => C * w / W), cs = exatas.map(e => Math.floor(e + 1e-9));
+        let falta = C - cs.reduce((a, b) => a + b, 0);
+        exatas.map((e, i) => ({ i, resto: e - cs[i] })).sort((a, b) => b.resto - a.resto || a.i - b.i).forEach(x => { if (falta > 0) { cs[x.i]++; falta--; } });
+        return cs.map(c => (c === 0 ? 0 : sinal * c / 100));
+    }
 
     /**
      * Custo unitário de um SKU num dia, com vigência e kit (componentes somados, até 5 níveis).
@@ -58,7 +76,7 @@
      *   tarifas: Tarifa[] do canal (as do pedido são filtradas por pedido_id) | naoLido | undefined (= não lido),
      *   custos: CustoSKU[], imposto_pct | impostos: Imposto[], outros: R$ extra do pedido (embalagem etc.),
      *   ads: número ou {total, porAnuncio} (de rateioAds) | naoLido | undefined (= canal não informa → 0),
-     *   devolucoes: Devolucao[], estimar_tarifas: true → sem tarifa lida, estima pela tabela do canal (marcado 'estimada'),
+     *   devolucoes: Devolucao[], estimar_tarifas: true → sem tarifa lida, estima pela tabela do canal (marcado 'estimada'; o cancelado nunca),
      *   contexto_tarifa: {tipo_anuncio, frete_gratis_programa, ...} (para a estimativa), margem_alvo_pct, tabela
      * }
      */
@@ -86,7 +104,7 @@
         let tarifas = null, estimadas = false;
         const lidas = ctx.tarifas;
         if (Array.isArray(lidas)) tarifas = lidas.filter(t => t && t.pedido_id === pedido.id);
-        else if (ctx.estimar_tarifas && !faltando.length) {
+        else if (ctx.estimar_tarifas && !faltando.length && !cancelado) {
             tarifas = [];
             pedido.itens.forEach(it => {
                 const unit = it.qtd > 0 ? ((valorItem(it) || 0) - desconto * ((valorItem(it) || 0)) / (bruto || 1)) / it.qtd : 0;
@@ -96,7 +114,11 @@
             });
             estimadas = true;
             avisos.push('tarifas estimadas pela tabela do canal (não lidas)');
-        } else faltando.push('tarifas');
+        } else {
+            faltando.push('tarifas');
+            // Cancelado: a venda foi estornada e a tabela (comissão, fixo, SFP sobre o preço cheio) não vale. Só conta o que sobrou e foi LIDO.
+            if (cancelado && ctx.estimar_tarifas) avisos.push('cancelado sem tarifa lida: o que sobrou depois do estorno não foi lido (a tabela não vale para venda estornada)');
+        }
         if (tarifas && cancelado === false && reembolsoTotal) {
             // Com reembolso total o canal pode não cobrar comissão/fixo (TikTok): vale o que foi LIDO. Estimativa: só o que fica (programa de frete).
             if (estimadas) tarifas = tarifas.filter(t => t.tipo === 'programa_frete');
@@ -105,14 +127,16 @@
         if (tarifas && !tarifas.some(t => t.tipo === 'frete_devolucao')) devs.forEach(d => { if (d.frete_volta > 0) tarifas.push({ tipo: 'frete_devolucao', valor: d.frete_volta, pedido_id: pedido.id, texto_original: 'frete de volta (devolução)' }); });
 
         const porTipo = {};
-        let adsDoPedido = 0;
+        let adsDoPedido = 0, adsNoRepasse = 0;
         (tarifas || []).forEach(t => {
-            if (t.tipo === 'ads') { adsDoPedido = U.r2(adsDoPedido + t.valor); return; }
+            // 'ads' com origem_pagamento 'venda' (o adaptador diz: veio no extrato/escrow do pedido — GMV Pay do TikTok, ads_escrow da Shopee):
+            // o canal pagou a menos por ele → sai do repasse, senão a conciliação acusa "a menor" falso. Sem origem ou 'fatura': fora do repasse.
+            if (t.tipo === 'ads') { adsDoPedido = U.r2(adsDoPedido + t.valor); if (t.origem_pagamento === 'venda') adsNoRepasse = U.r2(adsNoRepasse + t.valor); return; }
             porTipo[t.tipo] = U.r2((porTipo[t.tipo] || 0) + t.valor);
             if (t.estimada) estimadas = true;
         });
         const tarifasRs = tarifas ? U.soma(Object.keys(porTipo), k => porTipo[k]) : null;
-        const repasse = tarifas && !faltando.length ? U.r2(receitaLiq - tarifasRs) : null;   // falta preço ou tabela = sem repasse
+        const repasse = tarifas && !faltando.length ? U.r2(receitaLiq - tarifasRs - adsNoRepasse) : null;   // falta preço ou tabela = sem repasse
 
         // ── Custo (SKU e kit) ──
         const semCusto = [], custoPorSku = {};
@@ -139,22 +163,29 @@
         else if (typeof ctx.ads === 'number') adsRs = U.r2(adsRs + ctx.ads);
         else if (ctx.ads && typeof ctx.ads === 'object') { adsRs = U.r2(adsRs + (U.num(ctx.ads.total) || 0)); adsPorAnuncio = ctx.ads.porAnuncio || {}; }
 
-        const lucroAntesAds = repasse !== null && !semCusto.length ? U.r2(repasse - custo - imposto - outros) : null;
+        const lucroAntesAds = repasse !== null && !semCusto.length ? U.r2(repasse + adsNoRepasse - custo - imposto - outros) : null;
         const lucroReal = lucroAntesAds !== null && !faltando.includes('ads') ? U.r2(lucroAntesAds - adsRs) : null;
         const margem = lucroReal !== null && receitaLiq > 0 ? Math.round(lucroReal / receitaLiq * 10000) / 100 : null;
         const alvo = U.num(ctx.margem_alvo_pct) || 0;
         const status = faltando.length ? 'nao_lido' : (semCusto.length ? 'sem_custo' : (cancelado ? 'cancelado' : 'ok'));
 
-        // Rateio por item (para o lucro por produto): custo exato; o resto pela participação do item na receita bruta.
-        const porItem = pedido.itens.map(it => {
-            const k = chaveItem(it), part = bruto > 0 ? (valorItem(it) || 0) / bruto : 1 / pedido.itens.length;
-            const mesmos = pedido.itens.filter(x => x.anuncio_id && x.anuncio_id === it.anuncio_id);
-            const partAnuncio = mesmos.length > 1 ? ((valorItem(it) || 0)) / (U.soma(mesmos, x => (valorItem(x) || 0)) || 1) : 1;
-            const adsItem = it.anuncio_id && adsPorAnuncio[it.anuncio_id] !== undefined ? U.r2(adsPorAnuncio[it.anuncio_id] * partAnuncio) : U.r2((adsRs - U.soma(Object.keys(adsPorAnuncio), a => adsPorAnuncio[a])) * part);
+        // Rateio por item (para o lucro por produto): custo exato; o resto pela participação do item na receita bruta, pelo maior resto
+        // (Σ itens = o pedido, no centavo). Ads de um anúncio fica nos itens dele; o Ads do pedido sem anúncio, nos itens sem Ads próprio.
+        const its = pedido.itens, nIt = its.length, pesos = its.map(it => (bruto > 0 ? (valorItem(it) || 0) : 1));
+        const recI = reparte(receitaLiq, pesos), tarI = reparte(tarifasRs, pesos), outI = reparte(outros, pesos), impI = reparte(imposto, pesos), adsRepI = reparte(adsNoRepasse, pesos);
+        const adsI = its.map(() => 0), poeAds = (i, v) => { adsI[i] = U.r2(adsI[i] + v); };
+        const anuncios = Object.keys(adsPorAnuncio).filter(a => its.some(it => it.anuncio_id === a));
+        anuncios.forEach(a => {
+            const ix = its.map((it, i) => (it.anuncio_id === a ? i : -1)).filter(i => i >= 0);
+            reparte(U.num(adsPorAnuncio[a]) || 0, ix.map(i => valorItem(its[i]) || 0)).forEach((v, k) => poeAds(ix[k], v));
+        });
+        const semAnuncio = its.map((it, i) => (anuncios.indexOf(it.anuncio_id) < 0 ? i : -1)).filter(i => i >= 0), alvoAds = semAnuncio.length ? semAnuncio : its.map((it, i) => i);
+        reparte(U.r2(adsRs - U.soma(anuncios, a => U.num(adsPorAnuncio[a]) || 0)), alvoAds.map(i => pesos[i])).forEach((v, k) => poeAds(alvoAds[k], v));
+        const porItem = its.map((it, i) => {
+            const k = chaveItem(it), part = bruto > 0 ? (valorItem(it) || 0) / bruto : 1 / nIt;
             const c = custoUnitario(ctx.custos, k, pedido.data_venda);
-            return { sku: k, anuncio_id: it.anuncio_id, qtd: it.qtd, participacao: part,
-                receita: U.r2(receitaLiq * part), tarifas: tarifasRs === null ? null : U.r2(tarifasRs * part),
-                custo: c ? (custoZero ? 0 : U.r2(c.custo * it.qtd)) : null, outros: U.r2(outros * part), imposto: U.r2(imposto * part), ads: adsItem };
+            return { sku: k, anuncio_id: it.anuncio_id, qtd: it.qtd, participacao: part, receita: recI[i], tarifas: tarI[i],
+                custo: c ? (custoZero ? 0 : U.r2(c.custo * it.qtd)) : null, outros: outI[i], imposto: impI[i], ads: adsI[i], ads_repasse: adsRepI[i] };
         });
 
         const linhas = [];
@@ -164,12 +195,14 @@
             if (reembolso) linhas.push({ rotulo: 'Reembolso ao comprador', valor: -reembolso, de: 'canal' });
         }
         Object.keys(porTipo).forEach(k => linhas.push({ rotulo: 'Tarifa: ' + k + (estimadas ? ' (estimada)' : ''), valor: -porTipo[k], de: 'canal' }));
+        if (adsNoRepasse) linhas.push({ rotulo: 'Ads pago com o repasse', valor: -adsNoRepasse, de: 'canal' });
         if (repasse !== null) linhas.push({ rotulo: '= Repasse do canal', valor: repasse, de: 'canal', total: true });
         if (custo || semCusto.length) linhas.push({ rotulo: 'Custo do produto', valor: semCusto.length ? null : -custo, de: 'seller' });
         if (outros) linhas.push({ rotulo: 'Outros custos', valor: -outros, de: 'seller' });
         linhas.push({ rotulo: 'Imposto (' + String(al.pct).replace('.', ',') + '%)', valor: -imposto, de: 'seller' });
-        if (lucroAntesAds !== null) linhas.push({ rotulo: '= Lucro antes do Ads', valor: lucroAntesAds, de: 'seller', total: true });
-        if (adsRs) linhas.push({ rotulo: 'Ads (rateado)', valor: -adsRs, de: 'seller' });
+        // Com Ads tirado do repasse a conta já passou por ele: sem a linha "antes do Ads" (que não seria a soma das de cima); o resto do Ads depois.
+        if (lucroAntesAds !== null && !adsNoRepasse) linhas.push({ rotulo: '= Lucro antes do Ads', valor: lucroAntesAds, de: 'seller', total: true });
+        if (U.r2(adsRs - adsNoRepasse)) linhas.push({ rotulo: 'Ads (rateado)', valor: -U.r2(adsRs - adsNoRepasse), de: 'seller' });
         if (lucroReal !== null) linhas.push({ rotulo: lucroReal < 0 ? '= Prejuízo' : '= Lucro', valor: lucroReal, de: 'seller', total: true });
 
         return Object.assign(base, {
@@ -177,7 +210,7 @@
             bruto, desconto_vendedor: desconto, receita, reembolso, receita_liquida: receitaLiq,
             tarifas_por_tipo: porTipo, tarifas_rs: tarifasRs, tarifas_estimadas: estimadas, repasse,
             custo_rs: semCusto.length ? null : custo, custo_por_sku: custoPorSku, outros_rs: outros,
-            imposto_pct: al.pct, imposto_rs: imposto, lucro_antes_ads: lucroAntesAds, ads_rs: faltando.includes('ads') ? null : adsRs,
+            imposto_pct: al.pct, imposto_rs: imposto, lucro_antes_ads: lucroAntesAds, ads_rs: faltando.includes('ads') ? null : adsRs, ads_no_repasse: adsNoRepasse,
             lucro_real: lucroReal, margem_pct: margem,
             classe: lucroReal === null ? status : (lucroReal < 0 ? 'prejuizo' : (margem !== null && margem < alvo ? 'apertado' : 'lucrativo')),
             por_item: porItem, linhas,
@@ -201,10 +234,9 @@
             if (a.anuncio_id) validos.forEach(p => { if (!noDia(p)) return; const peso = U.soma(p.itens.filter(it => it.anuncio_id === a.anuncio_id), it => (valorItem(it) || 0)); if (peso > 0) alvo.push({ p, peso }); });
             const somaPeso = U.soma(alvo, x => x.peso);
             if (!alvo.length || !(somaPeso > 0)) { naoRateado.push(a); totN += a.custo; return; }
-            let resto = U.r2(a.custo);
+            const partes = reparte(a.custo, alvo.map(x => x.peso));   // maior resto: nenhuma parte negativa e a soma = o custo
             alvo.forEach((x, i) => {
-                const v = i === alvo.length - 1 ? resto : U.r2(a.custo * x.peso / somaPeso);   // o último leva o centavo que sobra
-                resto = U.r2(resto - v);
+                const v = partes[i];
                 const e = porPedido[x.p.id] || (porPedido[x.p.id] = { total: 0, porAnuncio: {} });
                 e.total = U.r2(e.total + v);
                 e.porAnuncio[a.anuncio_id] = U.r2((e.porAnuncio[a.anuncio_id] || 0) + v);
@@ -233,20 +265,20 @@
             itens.forEach(x => {
                 const k = [r.canal, r.conta, mes, U.normalizaSku(x.sku)].join('|');
                 const s = g[k] || (g[k] = { sku: x.sku, canal: r.canal || null, conta: r.conta || '', mes, pedidos: 0, unidades: 0, receita: 0, tarifas: 0, custo: 0, outros: 0,
-                    imposto: 0, ads: 0, lucro_antes_ads: 0, lucro_real: 0, pendentes: 0, pedidos_ids: [] });
+                    imposto: 0, ads: 0, ads_repasse: 0, lucro_antes_ads: 0, lucro_real: 0, pendentes: 0, pedidos_ids: [] });
                 if (r.status !== 'ok' && r.status !== 'cancelado') { s.pendentes++; return; }
                 if (doMes) s.pedidos += r.vendas || 0;
                 else if (s.pedidos_ids.indexOf(r.pedido_id) < 0) { s.pedidos_ids.push(r.pedido_id); s.pedidos++; }
                 if (r.status === 'ok') s.unidades += x.qtd;
                 const antes = x.antes !== undefined ? x.antes : x.receita - (x.tarifas || 0) - (x.custo || 0) - x.outros - x.imposto;
-                s.receita += x.receita; s.tarifas += x.tarifas || 0; s.custo += x.custo || 0; s.outros += x.outros; s.imposto += x.imposto; s.lucro_antes_ads += antes;
+                s.receita += x.receita; s.tarifas += x.tarifas || 0; s.custo += x.custo || 0; s.outros += x.outros; s.imposto += x.imposto; s.lucro_antes_ads += antes; s.ads_repasse += x.ads_repasse || 0;
                 if (x.ads === null || s.ads === null) { s.ads = null; s.lucro_real = null; }   // não lido nunca vira zero
                 else { s.ads += x.ads; s.lucro_real += antes - x.ads; }
             });
         });
         return Object.keys(g).map(k => {
             const s = g[k];
-            ['receita', 'tarifas', 'custo', 'outros', 'imposto', 'ads', 'lucro_antes_ads', 'lucro_real'].forEach(c => { s[c] = U.r2(s[c]); });
+            ['receita', 'tarifas', 'custo', 'outros', 'imposto', 'ads', 'ads_repasse', 'lucro_antes_ads', 'lucro_real'].forEach(c => { s[c] = U.r2(s[c]); });
             s.margem_pct = s.lucro_real !== null && s.receita > 0 ? Math.round(s.lucro_real / s.receita * 10000) / 100 : null;
             delete s.pedidos_ids;
             return s;
@@ -313,5 +345,5 @@
         return { total, aprox: motivos.length > 0, motivos, canais };
     }
 
-    return { custoUnitario, aliquota, lucroPedido, rateioAds, lucroPorProduto, fechamentoMes, somaCanais };
+    return { custoUnitario, aliquota, lucroPedido, rateioAds, lucroPorProduto, fechamentoMes, somaCanais, reparte };
 });

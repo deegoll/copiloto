@@ -419,15 +419,20 @@
      * O detalhe do extrato (transaction/detail) só vale no lugar da lista do Financeiro quando cobre TODAS as linhas dela deste pedido.
      * Ex.: venda de 477,92 aberta no detalhe + estorno de −188 em outro extrato, lido só pela lista: o detalhe sozinho daria R$ 188 a mais.
      * Confere pelos ids (linha da lista = statement_detail_id = extrato_detalhe_id do detalhe) e pela soma dos repasses (até 0,01).
-     * → { usar, parcial }
+     * Extrato com valor vazio/ilegível ou que não fecha com o settlement do TikTok (aviso do núcleo) NUNCA vale como exato: ilegivel = true.
+     * → { usar, parcial, ilegivel }
      */
     TT.detalheCobre = function (ped, f, j) {
-        if (!j) return { usar: false, parcial: false };
-        if (!f || f.repasse === null) return { usar: true, parcial: false };
+        if (!j) return { usar: false, parcial: false, ilegivel: false };
+        // C1 (#34): extrato com valor vazio/ilegível ou que não fecha com o settlement do TikTok nunca vale como exato.
+        const fecha = t => !!(t.confere && typeof t.confere.diferenca === 'number' && Math.abs(t.confere.diferenca) <= 0.01) && !(t.avisos || []).some(a => /sem valor/.test(a));
+        if (!valores(ped && ped.trans).every(fecha)) return { usar: false, parcial: false, ilegivel: true };
+        if (!f || f.repasse === null) return { usar: true, parcial: false, ilegivel: false };
         const usar = N.pedidoTemDetalhe(f.repasses, valores(ped && ped.trans));   // a mesma regra do "N de M pedidos com detalhe" (núcleo)
-        return { usar, parcial: !usar };
+        return { usar, parcial: !usar, ilegivel: false };
     };
     const AVISO_VOLTOU = 'reembolso total sem saber se o produto voltou: o custo do produto foi contado';
+    const AVISO_ILEGIVEL = 'o detalhe do extrato tem valor vazio/ilegível ou não fecha com o que o TikTok pagou';
 
     TT.lucroDoPedido = function (ped, ctx) {
         ctx = Object.assign({ custos: {}, cfg: {}, skumap: {} }, ctx || {});
@@ -439,8 +444,9 @@
         const lista = !j && !!f && f.receita !== null && f.repasse !== null, avisos = [];
         // Receita que o detalhe do pedido mostra (preço de origem − desconto do vendedor): com ela, a lista revela o reembolso.
         const detIt = det ? det.pedido.itens : [];
-        const detReceita = detIt.length && detIt.every(it => typeof it.total === 'number') ? U.r2(U.soma(detIt, it => it.total) - (det.pedido.desconto_vendedor || 0)) : null;
-        let bruto = null, desconto = 0, reembolso = 0, tarifas, estimar = false, devolveu = false;
+        const detBruto = detIt.length && detIt.every(it => typeof it.total === 'number') ? U.soma(detIt, it => it.total) : null;   // null = preço não lido
+        const detReceita = detBruto !== null ? U.r2(detBruto - (det.pedido.desconto_vendedor || 0)) : null;
+        let bruto = null, desconto = 0, reembolso = 0, tarifas, estimar = false, devolveu = false, impostoIncerto = false;
         if (j) {
             bruto = j.receita.bruto; desconto = j.receita.desconto_vendedor; reembolso = j.receita.reembolso;
             tarifas = j.tarifas.slice();
@@ -452,10 +458,27 @@
             devolveu = (f.receita <= 0 && f.repasse < 0) || (reembolso > 0 && reembolso >= bruto - 0.01);
             if (reembolso > 0 && !devolveu) avisos.push('reembolso parcial de ' + String(reembolso.toFixed(2)).replace('.', ',') + ' (lista do Financeiro × detalhe do pedido)');
             if (cob.parcial) avisos.push('o detalhe do extrato cobre só parte das linhas deste pedido: vale a lista do Financeiro (tarifas estimadas)');
+            if (cob.ilegivel) avisos.push(AVISO_ILEGIVEL + ': vale a lista do Financeiro (tarifas estimadas)');
+        } else if (cob.ilegivel) {
+            // Só o detalhe do extrato, com valor ilegível ou sem fechar: "não lido" (nada de frete/tarifa R$ 0,00 inventado nem repasse a mais).
+            // Preço do extrato só se veio (> 0) e sem valor ilegível: bloco in_come ausente/renomeado dá 0 sem aviso → "—", nunca R$ 0,00.
+            const recLida = j0.receita.bruto > 0 && !j0.avisos.some(a => /receita sem valor/.test(a)), doDet = detBruto !== null;
+            bruto = doDet ? detBruto : (recLida ? j0.receita.bruto : null);
+            desconto = doDet ? det.pedido.desconto_vendedor || 0 : (recLida ? j0.receita.desconto_vendedor : 0);
+            // Reembolso lido no extrato (só as linhas legíveis) não some; sem ele, o do detalhe devolvido (como no ramo só-Pedidos). Receita do
+            // extrato com valor ilegível: o reembolso pode ser maior que o lido → o imposto (sobre preço − reembolso) aparece "—", nunca sobre o
+            // preço cheio (salvo nada lido no extrato e o detalhe devolvido: vale a presunção do detalhe, como no ramo só-Pedidos).
+            const reembExt = j0.receita.reembolso, reembDet = det && det.pedido.status === 'devolvido' && det.devolucao
+                ? (det.pedido.reembolso > 0 ? det.pedido.reembolso : (bruto === null ? 0 : U.r2(bruto - desconto))) : 0;
+            reembolso = reembExt > 0 ? reembExt : reembDet;
+            impostoIncerto = !recLida && !(reembExt === 0 && reembDet > 0);
+            tarifas = M.naoLido(AVISO_ILEGIVEL);
+            avisos.push(AVISO_ILEGIVEL); avisos.push.apply(avisos, j0.avisos);
         } else if (det) {
-            bruto = U.soma(det.pedido.itens, it => it.total); desconto = det.pedido.desconto_vendedor || 0; estimar = true;
+            // Preço de algum item não lido (origem vazia/ilegível): bruto null → o motor dá "não lido" e o Preço "—" (nunca R$ 0,00 no KPI).
+            bruto = detBruto; desconto = det.pedido.desconto_vendedor || 0; estimar = true;
             // Devolvido e visto só em Pedidos: o detalhe não traz o valor do reembolso → total (o motor deixa só o SFP, que não volta).
-            if (det.pedido.status === 'devolvido' && det.devolucao) reembolso = det.pedido.reembolso > 0 ? det.pedido.reembolso : U.r2(bruto - desconto);
+            if (det.pedido.status === 'devolvido' && det.devolucao) reembolso = det.pedido.reembolso > 0 ? det.pedido.reembolso : (bruto === null ? 0 : U.r2(bruto - desconto));
         }
         // Divide o valor entre os SKUs pelo peso (receita do SKU); o último fica com o resto (a soma bate no centavo).
         const somaPeso = U.soma(base, b => (b.peso > 0 ? b.peso : 0)), somaQtd = U.soma(base, b => b.qtd);
@@ -477,15 +500,22 @@
         const devolucoes = det && det.devolucao ? [Object.assign({}, det.devolucao, { pedido_id: id })] : [];
         const r = CN.motor.lucroPedido(pedido, { tarifas: estimar ? undefined : tarifas, estimar_tarifas: estimar, custos, devolucoes,
             imposto_pct: num(ctx.cfg.imposto_pct), margem_alvo_pct: num(ctx.cfg.margem_alvo_pct) });
+        // Extrato ilegível sem saber o reembolso: imposto não lido (null → "—"), nunca o do preço cheio. Cancelado: receita 0, imposto 0 lido.
+        if (impostoIncerto && pedido.status !== 'cancelado') { r.imposto_rs = null; (r.linhas || []).forEach(l => { if (/^Imposto \(/.test(l.rotulo)) l.valor = null; }); }
+        // Preço não lido (o motor não tem receita de onde tirar o reembolso) e reembolso legível no extrato: ele aparece, a receita líquida "—".
+        if (impostoIncerto && bruto === null && reembolso > 0 && pedido.status !== 'cancelado') Object.assign(r, { reembolso, receita_liquida: null });
         // Reembolso total visto só pela lista (sem o preço de origem, a receita já vem 0): o motor não percebe o reembolso → o aviso vem daqui.
         const voltou = devolucoes.map(d => d.produto_voltou).find(v => v === true || v === false);
         r.avisos = (r.avisos || []).concat(avisos);
         if (devolveu && voltou === undefined && r.avisos.indexOf(AVISO_VOLTOU) < 0) r.avisos.push(AVISO_VOLTOU);
         return Object.assign(r, {
-            dia: data, canal_venda: pedido.canal_venda || null,
-            estimado: !!((f && f.estimado) || (j && j.repasses.some(x => x.estimado)) || estimar || r.tarifas_estimadas || cob.parcial),
-            exato: !!j, lido_em: ped.lido_em || null, tela: j ? maisNova(ped.trans, TT.TELA.transacao).tela : (f ? maisNova(ped.linhas, TT.TELA.pedidos_fin).tela : 'Pedidos'),
-            extratos: f ? f.extratos : [], data_prevista: (f && f.data_prevista) || null, status_repasse: f ? (f.estimado ? 'a_liberar' : 'disponivel') : null,
+            dia: data, canal_venda: pedido.canal_venda || null, cancelado: pedido.status === 'cancelado',
+            // "estimado" só quando algo foi estimado (preço não lido ou cancelado sem tarifa lida: o motor não estima → não é "estimado").
+            estimado: !!((f && f.estimado) || (j && j.repasses.some(x => x.estimado)) || r.tarifas_estimadas || cob.parcial),
+            exato: !!j, lido_em: ped.lido_em || null, tela: j || (cob.ilegivel && !lista) ? maisNova(ped.trans, TT.TELA.transacao).tela : (f ? maisNova(ped.linhas, TT.TELA.pedidos_fin).tela : 'Pedidos'),
+            // Situação e data prevista do repasse: da lista do Financeiro; sem ela, do detalhe do extrato (o "Est." lido só lá entra no "Previsto").
+            extratos: f ? f.extratos : [], data_prevista: (f && f.data_prevista) || (j && j.repasses.map(x => x.data_prevista).filter(Boolean).sort().pop()) || null,
+            status_repasse: f ? (f.estimado ? 'a_liberar' : 'disponivel') : (j && j.repasses.length ? (j.repasses.some(x => x.estimado) ? 'a_liberar' : 'disponivel') : null),
             itens: itens.map((x, i) => ({ sku: x.it.sku, sku_vendedor: x.s.sku || null, sku_id: x.it.anuncio_id || null, titulo: x.it.titulo, qtd: x.it.qtd, canal_venda: base[i].canal_venda || pedido.canal_venda || null })),
             skus_lista: f && f.skus.length ? f.skus : null,   // os 3 grupos de cada SKU da linha da lista (TT.porGrupo)
             _modelo: { pedido, tarifas: Array.isArray(tarifas) ? tarifas : [], repasses: j ? j.repasses : (f ? f.repasses : []), devolucoes },
@@ -530,7 +560,7 @@
         return ps.map(p => {
             const e = extra[U.normalizaSku(p.sku)] || {};
             return Object.assign(p, { titulo: e.titulo || '', sku_id: e.sku_id || null, sku_vendedor: e.sku_vendedor || null, canais: e.canais || {}, aproximado: !!e.aproximado,
-                repasse: U.r2(p.receita - p.tarifas), afiliado_rs: e.afiliado || 0,
+                repasse: U.r2(p.receita - p.tarifas - (p.ads_repasse || 0)), afiliado_rs: e.afiliado || 0,   // o Ads tirado do repasse (GMV Pay) também sai
                 afiliado_pct: e.receita_exata > 0 ? Math.round(e.afiliado / e.receita_exata * 10000) / 100 : null });
         });
     };
@@ -562,7 +592,9 @@
         const hoje = U.dia(opts.hoje) || U.hoje(), desde = U.somaDias(hoje, -29);
         const ctx = { conta: d.conta, custos: d.custos || {}, cfg: d.cfg || {}, skumap: d.skumap || {} };
         const pedidos = (d.peds || []).map(p => TT.lucroDoPedido(p, ctx)).sort((a, b) => String(b.dia || '').localeCompare(String(a.dia || '')));
-        const mes = pedidos.filter(r => r.dia && r.dia >= desde && r.dia <= hoje), ok = mes.filter(r => r.status === 'ok');
+        // KPI com os mesmos pedidos da aba Produtos e do fechamento (motor): 'ok' e 'cancelado' (o frete/tarifa LIDO que ficou no cancelado é
+        // prejuízo; o cancelado sem tarifa lida o motor não estima: sai 'nao_lido', fora do KPI e de Produtos).
+        const mes = pedidos.filter(r => r.dia && r.dia >= desde && r.dia <= hoje), ok = mes.filter(r => r.status === 'ok' || r.status === 'cancelado');
         const lucro = ok.length ? U.soma(ok, r => r.lucro_real) : null, receita = U.soma(ok, r => r.receita_liquida);
         const margem = lucro !== null && receita > 0 ? Math.round(lucro / receita * 10000) / 100 : null, alvo = num(ctx.cfg.margem_alvo_pct) || 0;
         const sau = d.saude || {}, prazo = (sau.indicadores || []).find(x => x.indicador === 'prazo_repasse_dias') || null;
@@ -573,8 +605,10 @@
         const junta = c => [].concat.apply([], modelos.map(m => m[c]));
         const conc = CN.conciliacao.conciliar({ pedidos: junta('pedido'), tarifas: junta('tarifas'), repasses: junta('repasses'), devolucoes: junta('devolucoes'), hoje,
             prazo_dias: prazo && prazo.valor > 0 ? { tiktok: prazo.valor } : undefined });
-        const porDia = {};
-        pedidos.filter(r => r.status_repasse === 'a_liberar' && r.repasse !== null).forEach(r => { const x = r.data_prevista || 'sem data'; porDia[x] = U.r2((porDia[x] || 0) + r.repasse); });
+        // "Previsto": só o que ainda está a liberar, linha a linha (venda paga + devolução "Est." → só a devolução; o que já foi pago não é previsto).
+        const porDia = {}, liberado = x => x.status === 'disponivel' || x.status === 'sacado';
+        pedidos.filter(r => r.status_repasse === 'a_liberar' && r.repasse !== null).forEach(r => (r._modelo.repasses || []).filter(x => !liberado(x)).forEach(x => {
+            const dd = x.data_prevista || r.data_prevista || 'sem data'; porDia[dd] = U.r2((porDia[dd] || 0) + x.valor); }));
         return {
             conta: d.conta, vazio: !(d.peds || []).length && !['extratos', 'areceber', 'saldo', 'saude', 'afil', 'camp', 'falha', 'dev', 'anuncios', 'tarefas', 'resumo_fin', 'pago', 'listas'].some(c => d[c]),
             kpis: {

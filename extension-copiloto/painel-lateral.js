@@ -74,6 +74,7 @@
     };
     // Digitado aqui = origem 'manual' (a leitura do Tiny não troca, SHC.tinyDigitado); o título gravado antes fica.
     P.gravarCusto = async function (alvo, custo, titulo) {
+        custo = SHC.r2(custo);   // em centavos, como o SHC.salvarCusto e o salvarCustoSku: "1,005" → 1,01 no campo, na etiqueta e na conta
         const tit = atual => (titulo && !(atual && atual.titulo) ? { titulo } : {});
         if (alvo.sku) return SHC.salvarCustoSku(alvo.sku, Object.assign({ custo, origem: 'manual' }, tit(await SHC.lerChave(SHC.chaveSku(alvo.sku)))));
         for (const k of alvo.chaves) { const a = (await SHC.lerChave(k)) || {}; await SHC.gravarChave(k, Object.assign(a, tit(a), { custo, origem: 'manual', atualizado: Date.now() })); }
@@ -244,23 +245,9 @@
             cliques: numDe(o, ['clicks', 'cliques']), impressoes: numDe(o, ['impressions', 'prints', 'impressoes']),
         };
     };
-    // F8: o patrocinado de CATÁLOGO vem com o id do produto de catálogo. Liga ao anúncio da seller pelo título quando só UM anúncio
-    // tem esse título (a mesma regra de ads.js A.porSku); sem ligação, soma em catalogoSemLigacao (a manchete diz "veredito sobre X de Y").
-    P.adsLigaCatalogo = function (snap, itens) {
-        if (!snap || !Array.isArray(snap.anuncios)) return snap;
-        const norm = SHC.normalizaTitulo || (t => String(t || '').toLowerCase().trim()), porTitulo = new Map();
-        (itens || []).forEach(i => { const t = norm(i.titulo); if (t) porTitulo.set(t, porTitulo.has(t) && porTitulo.get(t) !== i.itemId ? '' : i.itemId); });
-        let semLig = 0, ligados = 0;
-        const anuncios = snap.anuncios.map(a => {
-            const o = Object.assign({}, (a && a.metrics) || {}, (a && a.metricas) || {}, a || {});
-            if (!(o.catalogoProduto || o.type === 'catalog')) return a;
-            const id = porTitulo.get(norm(o.titulo || o.title));
-            if (id) { ligados++; return Object.assign({}, a, { itemId: id, catalogoProduto: false, type: 'catalogo_ligado', catalogoLigado: true }); }
-            semLig += numDe(o, ['cost', 'custo', 'investimento', 'gasto']) || 0;
-            return a;
-        });
-        return Object.assign({}, snap, { anuncios, catalogoLigados: ligados, catalogoSemLigacao: SHC.r2(semLig) });
-    };
+    // F8: o patrocinado de CATÁLOGO ligado ao anúncio da seller pelo título (SHC.adsLigaCatalogo, ml-extrator.js: a mesma ligação do ícone e
+    // da etiqueta da venda); sem ligação, soma em catalogoSemLigacao (a manchete diz "veredito sobre X de Y").
+    P.adsLigaCatalogo = (snap, itens) => SHC.adsLigaCatalogo(snap, itens);
     // F22: Full com mais produtos que o teto de leitura (50 páginas de 20).
     P.fullParcialTxt = f => 'Leitura em parte: ' + P.milhar(((f && f.produtos) || []).length) + ' de ' + P.milhar((f && f.totalProdutos) || 0) + ' produtos do Full lidos.';
     // Anúncio finalizado no ML (closed, também "closed_migrated_to_up"): não é anúncio em venda (F24, Logística).
@@ -272,28 +259,53 @@
         const parte = 'Veredito sobre ' + SHC.moeda(SHC.r2(gastoTotal - semLig)) + ' de ' + SHC.moeda(gastoTotal) + ' (' + SHC.moeda(semLig) + ' de catálogo sem ligação a um anúncio seu).';
         return tipo === 'compensa' && semLig > gastoTotal - semLig ? 'Ads: sem veredito da conta toda. ' + parte : fato + ' ' + parte;
     };
-    // Ponto de equilíbrio por anúncio: sobra antes do Ads = sobra por unidade (preço de hoje) × vendas do Ads; acima = o Ads custou
-    // mais que essa sobra. ACOS = Ads ÷ receita do Ads; equilíbrio = margem antes do Ads (sobra ÷ preço). Sem custo → sem selo.
-    // → [{a, it, sobraUn, margem, acos, antes, depois, acima, semCusto}] (acima primeiro, depois maior gasto); só anúncio com gasto.
+    // Ponto de equilíbrio por anúncio: sobra antes do Ads = margem antes do Ads (sobra ÷ preço de hoje) × receita do Ads e lucro depois =
+    // antes − Ads, no centavo (SHC.adsLucro: a mesma conta de ads.html, A.montante); acima = o Ads custou mais que essa sobra (= ACOS acima
+    // do equilíbrio). Vendido abaixo do preço de hoje (promoção) a sobra cai junto. ACOS = Ads ÷ receita do Ads. Sem custo → sem selo.
+    // #26: o fundo grava uma linha por anúncio e campanha; o anúncio em várias campanhas é UMA entrada, com as campanhas somadas (como ads.html
+    // por SKU, o cartão "Ads deste anúncio" e o ícone): a venda que o ML atribui a uma campanha em que ele gastou R$ 0 entra na sobra.
+    // "Dá para investir mais" (P.adsFiltros) olha só o que foi pago: acosPago/vendasPagas das campanhas com gasto (venda grátis não conta).
+    // linhas = as linhas do anúncio, uma por campanha (veredito da campanha, P.adsCampanhasLista); a lista leva .linhas = as de TODOS os
+    // anúncios, também dos que não gastaram nada (a venda atribuída sem gasto entra na campanha, como em ads.html).
+    // → [{a, it, sobraUn, margem, acos, acosPago, vendasPagas, antes, depois, acima, semCusto, linhas}] (acima primeiro, depois maior gasto);
+    //   só anúncio com gasto.
     P.adsEquilibrio = function (snap, itens, sobraDe) {
-        const porId = {};
+        const porId = {}, grupos = new Map(), todas = [];
         (itens || []).forEach(it => { porId[it.itemId] = it; });
-        return ((snap && snap.anuncios) || []).map(P.adsDoAnuncio).filter(a => a && a.gasto > 0).map(a => {
+        ((snap && snap.anuncios) || []).map(P.adsDoAnuncio).filter(Boolean).forEach(a => {
             const it = porId[a.itemId] || null, s = it ? sobraDe(it) : null, semCusto = !(s && s.sobra !== null);
-            const antes = semCusto ? null : SHC.r2(s.sobra * a.vendas);
-            return { a, it, semCusto, sobraUn: semCusto ? null : s.sobra, margem: semCusto ? null : s.pct,
-                acos: a.receita > 0 ? a.gasto / a.receita * 100 : null, antes, depois: antes === null ? null : SHC.r2(antes - a.gasto),
-                acima: !semCusto && a.gasto > antes + 0.004 };
-        }).sort((x, y) => (y.acima - x.acima) || (y.a.gasto - x.a.gasto));
+            const l = semCusto ? null : SHC.adsLucro(s.pct, a.receita, a.gasto);
+            const x = { a, it, semCusto, sobraUn: semCusto ? null : s.sobra, margem: semCusto ? null : s.pct,
+                acos: a.receita > 0 ? a.gasto / a.receita * 100 : null, antes: l ? l.antes : null, depois: l ? l.depois : null, acima: !!l && l.acima };
+            todas.push(x);
+            (grupos.get(a.itemId) || grupos.set(a.itemId, []).get(a.itemId)).push(x);
+        });
+        const lista = [...grupos.values()].map(ls => {
+            const x = ls[0], soma = (xs, k) => SHC.r2(xs.reduce((t, y) => t + (y.a[k] || 0), 0)), pagas = ls.filter(y => y.a.gasto > 0);
+            const somaN = k => (ls.some(y => y.a[k] !== null) ? soma(ls, k) : null);
+            const a = ls.length === 1 ? x.a : Object.assign({}, x.a, { gasto: soma(ls, 'gasto'), receita: soma(ls, 'receita'), vendas: soma(ls, 'vendas'),
+                cliques: somaN('cliques'), impressoes: somaN('impressoes'), campanhaId: '', campanha: ls.map(y => y.a.campanha).filter(Boolean).join(', ') });
+            const l = x.semCusto ? null : SHC.adsLucro(x.margem, ls.map(y => y.a)), rp = soma(pagas, 'receita');
+            return Object.assign({}, x, { a, acos: a.receita > 0 ? a.gasto / a.receita * 100 : null, acosPago: rp > 0 ? soma(pagas, 'gasto') / rp * 100 : null,
+                vendasPagas: soma(pagas, 'vendas'), antes: l ? l.antes : null, depois: l ? l.depois : null, acima: !!l && l.acima, linhas: ls });
+        }).filter(x => x.a.gasto > 0).sort((x, y) => (y.acima - x.acima) || (y.a.gasto - x.a.gasto));
+        lista.linhas = todas;
+        return lista;
     };
-    // Ads da conta no mês pelo Faturamento (fech:<conta>:<AAAA-MM>.porTipo): Product Ads e Publicidade de Seguidores.
-    // Tipo que não veio = null (não lido), nunca 0. Sinal: o valor gasto, positivo.
+    // Linhas (anúncio × campanha) de P.adsEquilibrio: as de todos os anúncios; numa lista sem .linhas (filtrada), as das entradas dela.
+    P.adsLinhas = eq => (eq && eq.linhas) || (eq || []).flatMap(x => x.linhas || [x]);
+    // Ads da conta no mês pelo Faturamento (fech:<conta>:<AAAA-MM>.porTipo): Product Ads e Publicidade de Seguidores, LÍQUIDOS (cobrado −
+    // estornado, como o Fechamento). Tipo que não veio = null (não lido), nunca 0. Sinal: positivo = gasto; negativo = os estornos passaram
+    // das cobranças no mês (crédito, nunca gasto: o Math.abs mostrava "R$ 15,00 de Product Ads"). texto = a frase do cartão Ads.
     P.adsDoFechamento = function (fech) {
         const pt = (fech && fech.porTipo) || null;
         if (!pt) return null;
-        const v = k => (SHC.num(pt[k]) === null ? null : SHC.r2(Math.abs(SHC.num(pt[k]))));
-        const ads = v('ads'), seguidores = v('ads_seguidores');
-        return ads === null && seguidores === null ? null : { ads, seguidores, total: SHC.r2((ads || 0) + (seguidores || 0)) };
+        const v = k => (SHC.num(pt[k]) === null ? null : SHC.r2(SHC.num(pt[k])));
+        const ads = v('ads'), seguidores = v('ads_seguidores'), est = ' (estornos maiores que as cobranças)';
+        if (ads === null && seguidores === null) return null;
+        const texto = (ads === null ? 'Product Ads não lido' : SHC.moeda(ads) + ' de Product Ads' + (ads < 0 ? est : ''))
+            + (seguidores ? (seguidores < 0 ? ' e ' : ' + ') + SHC.moeda(seguidores) + ' de Publicidade de Seguidores' + (seguidores < 0 ? est : '') : '');
+        return { ads, seguidores, total: SHC.r2((ads || 0) + (seguidores || 0)), texto };
     };
     // 3.3.0 (E15): Ads por canal (MATRIZ (c), TELAS §5). meses = [{ canal, conta?, ads, bruto, aprox?, motivo? }], o mês de cada canal no formato
     // do núcleo (ml.mesDaCascata / SHC.tt.mes): ads = o gasto do mês (ML: fatura; TikTok: o campo de Ajustes, 0 = "não uso"), bruto = todas as vendas.
@@ -317,7 +329,7 @@
     };
 
     // ── Saúde do estoque no Full (por produto). prevQtd = previsão de 30 dias (P.previsaoFull).
-    // Dias até acabar = o menor entre o que o ML mostra e aptas ÷ previsão. O mínimo compara com aptas + a caminho.
+    // Dias até acabar = o menor entre o que o ML mostra e ⌊aptas × 30 ÷ previsão⌋. O mínimo compara com aptas + a caminho.
     // Classes: sem_estoque (0 aptas) · critico (acaba em ≤ 7 dias vendendo, ou abaixo do mínimo em unidades que o seller definiu)
     // · parado (tem estoque, 0 vendas em 30 dias) · atencao (≤ 15 dias) · excedente (cobertura > 90 dias ou o ML mostra unidades
     // com tempo de estoque) · saudavel. Campo que o ML não mostrou: sem classe (null), nunca um número inventado.
@@ -329,7 +341,7 @@
         const out = { classe: null, dias: null, cobertura: null, minUn: fm.minUn, definido: fm.definido, abaixoMin: fm.abaixo, faltam: fm.faltam, sugerido: fm.sugerido, alerta: false };
         if (aptas === null) return out;
         const tem = Math.max(0, aptas);
-        if (prevQtd > 0) out.cobertura = Math.floor(tem / (prevQtd / 30));
+        if (prevQtd > 0) out.cobertura = Math.floor(tem * 30 / prevQtd);   // multiplica antes: 23 × 30 ÷ 23 = 30 (23 ÷ (23 ÷ 30) dava 29,999…)
         const ml = typeof p.diasAteEsgotar === 'number' && isFinite(p.diasAteEsgotar) ? p.diasAteEsgotar : null;
         const ds = [ml, out.cobertura].filter(x => x !== null);
         out.dias = ds.length ? Math.min(...ds) : null;
@@ -385,7 +397,7 @@
         // O plano cobre os dias escolhidos na tela; se ele não chega ao mínimo, vale o mínimo.
         const envia = l.qtd > 0 && l.qtd >= falta ? ` Sugestão: enviar ${l.qtd} un.` : (falta > 0 ? ` Envie pelo menos ${falta} un. para chegar ao mínimo.` : '');
         if (s.classe === 'sem_estoque') return `Sem estoque no Full${P.un(p.vendas30) > 0 ? ` e você vendeu ${P.un(p.vendas30)} nos últimos 30 dias` : ''}.${cam ? ` ${cam} un. a caminho.` : ''}${envia}`;
-        const acaba = s.dias !== null && s.dias <= 7 ? `Acaba em ${P.dias(s.dias)}.` : '';
+        const acaba = s.dias !== null && s.dias <= 7 ? (s.dias <= 0 ? 'Acaba hoje.' : `Acaba em ${P.dias(s.dias)}.`) : '';
         const min = s.abaixoMin ? ` Abaixo do estoque mínimo: mínimo ${s.minUn} un.; você tem ${Math.max(0, P.un(p.aptas))} aptas${cam ? ' + ' + cam + ' a caminho' : ''}.` : '';
         return (acaba + min + envia).trim();
     };
@@ -633,28 +645,10 @@
     const semAcento = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     P.normTitulo = t => SHC.normalizaTitulo ? SHC.normalizaTitulo(t) : semAcento(t).replace(/[^a-z0-9]+/g, ' ').trim();
     // Mês que mais pesa nos próximos 30 dias (hoje + 15 dias), um ano antes: 24/09/2026 → '2025-10'.
-    P.mesAnoPassado = hoje => P.mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') + 15 * 864e5).toISOString().slice(0, 7), 12);
-    // Previsão de 30 dias = o maior entre as vendas dos últimos 30 dias (ML) e as do mesmo mês do ano passado (vm|ml).
-    // Campo que o ML não mostrou fica null (não vira 0): sem os dois números → qtd null (sem sugestão).
-    // lidos = meses lidos inteiros no Faturamento (ml:cobrancas mesesLidos): lá, mês sem a chave no vm = 0 vendas.
-    // v3.3 (pedido da dona 07/10/2026: "sugerir pelo estoque, pelo giro e pela sazonalidade"):
-    //  · PARADO (opc.aptas > 0 e nenhuma venda em 30 dias) não usa o ano passado: com estoque e sem venda o problema é o anúncio (exposição,
-    //    experiência, preço), não a época — mandar mais só empaca e gera armazenagem. fonte 'parado', qtd 0.
-    //  · Sazonalidade: vendas de 30 dias × índice do ano passado (mês alvo ÷ mês destes 30 dias, os dois de um ano antes). Só entra com 3+ vendas
-    //    no mês base e só para subir (até 3×): queda de época já aparece nas vendas de 30 dias. Vale o maior entre 30 dias, ano passado e índice.
-    P.SAZONAL_MAX = 3;
-    P.previsaoFull = function (vendas30, vm, hoje, lidos, opc) {
-        const u = P.un(vendas30), ult30 = u === null ? null : Math.max(0, u), mes = P.mesAnoPassado(hoje);
-        const doMes = m => (vm && vm[m] !== undefined && vm[m] !== null ? P.un(vm[m]) : (vm && (lidos || []).indexOf(m) >= 0 ? 0 : null));
-        const a = doMes(mes), ano = a === null ? null : Math.max(0, a);
-        if (ult30 === 0 && P.un(opc && opc.aptas) > 0) return { qtd: 0, fonte: 'parado', ult30, mes, anoPassado: ano, base: null, baseAno: null, indice: null };
-        const base = P.mesMenos(new Date(Date.parse(hoje + 'T12:00:00Z') - 15 * 864e5).toISOString().slice(0, 7), 12), b = base === mes ? null : doMes(base);
-        const indice = ult30 > 0 && ano !== null && b >= 3 && ano > b ? Math.min(P.SAZONAL_MAX, SHC.r2(ano / b)) : null;
-        const saz = indice ? Math.ceil(ult30 * indice - 1e-9) : null;
-        const qtd = ult30 === null && ano === null ? null : Math.max(ult30 || 0, ano || 0, saz || 0);
-        const fonte = saz !== null && qtd === saz && saz > Math.max(ult30 || 0, ano || 0) ? 'sazonal' : ano !== null && (ult30 === null || ano > ult30) ? 'anoPassado' : 'ult30';
-        return { qtd, fonte, ult30, mes, anoPassado: ano, base: indice ? base : null, baseAno: indice ? b : null, indice };
-    };
+    P.mesAnoPassado = hoje => SHC.mesAnoPassado(hoje);
+    // Previsão de 30 dias = o maior entre as vendas dos últimos 30 dias, as do mesmo mês do ano passado e 30 dias × índice sazonal (v3.3);
+    // parado = 0. A conta fica em SHC.previsaoFull (ml-extrator.js) — a MESMA do ícone e do sino (SHC.alertasDe, no service worker) (#19).
+    P.previsaoFull = (vendas30, vm, hoje, lidos, opc) => SHC.previsaoFull(vendas30, vm, hoje, lidos, opc);
     /**
      * v3.3 Saúde do anúncio antes de mandar estoque ao Full (pedido da dona 07/10/2026: "se o anúncio estiver no vermelho ou abaixo da média,
      * ele não sai mais, empaca e começa a girar custo de armazenamento"). its = anúncios do produto (P.anunciosDoFull).
@@ -734,7 +728,7 @@
             if (ir.length > 1) {
                 const tot = ir.reduce((a, q) => a + Math.max(0, P.un(q.vendas30) || 0), 0), u = P.un(p.vendas30);
                 parte = { n: ir.length, pct: tot > 0 && u !== null ? Math.max(0, u) / tot * 100 : null };
-                vm = parte.pct === null ? null : Object.keys(vm || {}).reduce((o, m) => { const v = P.un(vm[m]); if (v !== null) o[m] = Math.round(v * parte.pct / 100); return o; }, {});
+                vm = SHC.vmDaParte(vm, parte.pct);   // a mesma divisão do ícone (SHC.alertasDe)
             }
             const prev = Object.assign(P.previsaoFull(p.vendas30, vm, ctx.hoje, ctx.mesesLidos, { aptas: p.aptas }), { parte });
             const ua = P.un(p.aptas), uc = P.un(p.aCaminho);
@@ -749,7 +743,7 @@
             return { p, prev, aptas, aCaminho, semCaminho: uc === null, semDado, alvo, bruto, qtd: bruto, limitado: false, lucro, travas, cautela, diasUsados,
                 motivoLucro: lucro === null ? (lo.motivo || 'sem_custo') : '', semAnuncio: lo.motivo === 'sem_anuncio', seg, semSegmento: seg === null && temLivre,
                 segTitulo: seg !== null ? String((esp.find(e => e.id === seg) || {}).titulo || '').replace(/:.*$/, '') : '',
-                esgota: !semDado.length && prev.qtd > 0 ? Math.floor((aptas + aCaminho) / (prev.qtd / 30)) : null };
+                esgota: !semDado.length && prev.qtd > 0 ? Math.floor((aptas + aCaminho) * 30 / prev.qtd) : null };   // multiplica antes (conta exata não perde 1 dia)
         });
         const faixa = l => l.esgota === null ? FAIXAS.length + 1 : FAIXAS.filter(f => l.esgota > f).length;
         const lu = l => l.lucro === null ? -1e9 : l.lucro, ruim = l => l.lucro !== null && l.lucro < 0;
@@ -760,19 +754,21 @@
         });
         return { linhas, livre, dias };
     };
-    // Anúncios do retrato que são este produto do Full: pelos MLB (quando o ML traz) ou pelo SKU; sem os dois, pelo título.
-    P.idsDoFull = p => [...new Set([].concat(p.itemIds || [], p.itemId ? [p.itemId] : []).filter(Boolean))];
-    P.anunciosDoFull = function (p, itens) {
-        const sku = SHC.normalizaSku(p.sku || ''), tn = P.normTitulo(p.titulo), ids = P.idsDoFull(p);
-        const r = (itens || []).filter(it => ids.indexOf(it.itemId) >= 0 || (sku && SHC.normalizaSku(it.sku) === sku));
-        return r.length || !tn || sku || ids.length ? r : (itens || []).filter(it => P.normTitulo(it.titulo) === tn);
-    };
+    // Anúncios do retrato que são este produto do Full: pelos MLB (quando o ML traz) ou pelo SKU; sem os dois, pelo título. A regra fica em
+    // SHC.anunciosDoFull (ml-extrator.js) — a MESMA do ícone (SHC.alertasDe, no service worker), que soma o vm|ml destes anúncios.
+    P.idsDoFull = p => SHC.idsDoFull(p);
+    P.anunciosDoFull = (p, itens) => SHC.anunciosDoFull(p, itens);
     P.explicaFull = function (l, dias) {
         const x = l.prev, nm = P.nomeMes(x.mes), out = [], p = l.p || {};
         const naoLido = l.semAnuncio ? '' : ` As vendas de ${nm} ainda não foram lidas.`;
         if (l.semAnuncio) out.push(`Não achei o anúncio deste produto na sua lista${p.sku ? ' (SKU ' + p.sku + ')' : ''}: sem lucro e sem vendas do ano passado.`);
         if (x.fonte === 'parado') out.push(`Você tem ${l.aptas} aptas e nenhuma venda nos últimos 30 dias${x.anoPassado ? ` (em ${nm} do ano passado foram ${x.anoPassado})` : ''}: não usei o ano passado. Com estoque e sem venda, o problema é o anúncio (exposição, experiência de compra ou preço), não a época.`);
-        else if (x.fonte === 'sazonal') out.push(`Nos últimos 30 dias você vendeu ${x.ult30}. No ano passado, ${nm} vendeu ${x.anoPassado} contra ${x.baseAno} em ${P.nomeMes(x.base)} (${String(x.indice).replace('.', ',')}×): usei ${x.ult30} × ${String(x.indice).replace('.', ',')} = ${x.qtd}.`);
+        else if (x.fonte === 'sazonal') {
+            // #21: a conta que fecha — "7 × 1,33 = 9,31 → 10 (arredondado para cima)"; conta inteira: "6 × 1,5 = 9".
+            const vg = v => String(v).replace('.', ','), c = typeof x.conta === 'number' ? x.conta : SHC.r2(x.ult30 * x.indice);
+            out.push(`Nos últimos 30 dias você vendeu ${x.ult30}. No ano passado, ${nm} vendeu ${x.anoPassado} contra ${x.baseAno} em ${P.nomeMes(x.base)} (${vg(x.indice)}×): usei ${x.ult30} × ${vg(x.indice)} = `
+                + (Number.isInteger(c) && c === x.qtd ? `${x.qtd}.` : `${vg(c)} → ${x.qtd} (arredondado para cima).`));
+        }
         else if (x.ult30 === null && x.anoPassado === null) out.push('O ML não mostrou as vendas dos últimos 30 dias deste produto.' + naoLido);
         else if (x.ult30 === null) out.push(`O ML não mostrou as vendas dos últimos 30 dias deste produto. Em ${nm} você vendeu ${x.anoPassado}: usei ${nm}, o mesmo mês do ano passado.`);
         else if (x.anoPassado === null) out.push(`Nos últimos 30 dias você vendeu ${x.ult30}.${naoLido} Usei os últimos 30 dias.`);
@@ -887,7 +883,8 @@
     const ESTRATEGIA = { PROFITABILITY: 'Rentabilidade', GROWTH: 'Crescimento', VISIBILITY: 'Visibilidade' };
     P.estrategiaTxt = e => ESTRATEGIA[String(e || '').toUpperCase()] || (e ? String(e).toLowerCase() : '');
     const ativoTxt = s => /^(a|active|ativo|ativa)$/i.test(String(s || '')) ? 'ativo' : (/^(p|paused|pausado|pausada)$/i.test(String(s || '')) ? 'pausado' : '');
-    // Métricas somadas + razões: CTR, CPC, ROAS, ACOS (sem venda pelo Ads: ACOS null, nunca 0).
+    // Métricas somadas + razões: CTR, CPC, ROAS, ACOS (sem venda pelo Ads: ACOS null, nunca 0). ACOS e CTR crus (o texto, SHC.pctTxt,
+    // arredonda uma vez só, como ads.html); ROAS com SHC.r2 = o mesmo texto de ads.html (A.xTxt arredonda o ROAS cru com SHC.r2).
     const razoes = m => Object.assign(m, {
         ctr: m.impressoes > 0 && m.cliques !== null ? m.cliques / m.impressoes * 100 : null, cpc: m.cliques > 0 ? SHC.r2(m.gasto / m.cliques) : null,
         roas: m.gasto > 0 ? SHC.r2(m.receita / m.gasto) : null, acos: m.receita > 0 ? m.gasto / m.receita * 100 : null });
@@ -897,7 +894,7 @@
         const xs = brutos.map(P.adsDoAnuncio), soma = k => xs.some(x => x[k] !== null) ? SHC.r2(xs.reduce((t, x) => t + (x[k] || 0), 0)) : null;
         const cid = String(brutos[0].campanhaId || (brutos[0].campaign && brutos[0].campaign.id) || '');
         const c = ((snap && snap.campanhas) || []).find(k => String(k.id) === cid) || {};
-        return { noAds: true, status: ativoTxt(brutos[0].status),
+        return { noAds: true, status: ativoTxt(brutos[0].status), linhas: xs,   // linhas = uma por campanha (o lucro do veredito, SHC.adsLucro)
             campanha: { id: cid, nome: c.nome || c.name || xs[0].campanha || '', estrategia: P.estrategiaTxt(c.estrategia || c.strategy), roasObjetivo: SHC.num(c.roasObjetivo !== undefined ? c.roasObjetivo : c.roasTarget), status: ativoTxt(c.status) },
             m: razoes({ gasto: soma('gasto') || 0, receita: soma('receita') || 0, vendas: soma('vendas') || 0, cliques: soma('cliques'), impressoes: soma('impressoes') }) };
     };
@@ -911,18 +908,24 @@
         const a = m(c.metricas || c.metrics), b = m(ant.metricas || ant.metrics || ant);
         return a.gasto === null || b.gasto === null ? null : { atual: a, antes: b };
     };
-    // Compensa? eq = SHC.adsEquilibrio (ACOS de equilíbrio = margem antes do Ads) | null (sem custo).
-    P.adsVeredito = function (m, eq) {
+    // Compensa? eq = SHC.adsEquilibrio (ACOS de equilíbrio = margem antes do Ads) | null (sem custo). l = lucro depois do Ads (SHC.adsLucro das
+    // linhas do anúncio, a mesma conta da lista e de ads.html); sem l, o de m. #23: decide pelo lucro no centavo, não por ACOS < equilíbrio em
+    // ponto flutuante: > 0 compensa, < 0 não compensa, R$ 0,00 = 'empate' (o Ads levou tudo o que sobrou: nem "compensa" nem "acima").
+    P.adsVeredito = function (m, eq, l) {
         if (!m || !(m.gasto > 0)) return { tipo: 'semGasto', texto: 'Sem gasto no período' };
         if (!eq) return { tipo: 'semCusto', texto: 'Informe o custo para saber se compensa' };
-        if (m.acos !== null && m.acos < eq.equilibrio) return { tipo: 'compensa', texto: 'Compensa', det: `ACOS ${SHC.pctTxt(m.acos)}, abaixo do equilíbrio de ${SHC.pctTxt(eq.equilibrio)}: o Ads deixa lucro.` };
-        return { tipo: 'nao', texto: 'Não compensa', det: m.acos === null ? `Gastou ${SHC.moeda(m.gasto)} sem venda pelo Ads.` : `ACOS ${SHC.pctTxt(m.acos)}, acima do equilíbrio de ${SHC.pctTxt(eq.equilibrio)}: o Ads leva mais do que sobra da venda.` };
+        const d = (l || SHC.adsLucro(eq.equilibrio, m.receita, m.gasto)).depois, ac = SHC.pctTxt(m.acos), qe = SHC.pctTxt(eq.equilibrio);
+        if (d > 0) return { tipo: 'compensa', texto: 'Compensa', det: `ACOS ${ac}, abaixo do equilíbrio de ${qe}: o Ads deixa lucro.` };
+        if (d === 0) return { tipo: 'empate', texto: 'No equilíbrio', det: `ACOS ${ac}, no equilíbrio de ${qe}: o Ads levou tudo o que sobrou da venda (lucro R$ 0,00).` };
+        return { tipo: 'nao', texto: 'Não compensa', det: m.acos === null ? `Gastou ${SHC.moeda(m.gasto)} sem venda pelo Ads.` : `ACOS ${ac}, acima do equilíbrio de ${qe}: o Ads leva mais do que sobra da venda.` };
     };
-    // Visão geral da conta no Mercado Ads: resumo do ML (resumo.total) e, no que faltar, a soma dos anúncios.
+    // Visão geral da conta no Mercado Ads: resumo do ML (resumo.total) e, no que faltar, a soma das CAMPANHAS (como ads.html, A.kpis: a lista
+    // de campanhas vem inteira e a de anúncios pode vir em parte, completo:false); sem métricas de campanha, a soma dos anúncios.
     P.adsConta = function (snap) {
         if (!snap || snap.temAds === false) return null;
-        const r = snap.resumo ? (snap.resumo.total || snap.resumo) : {}, as = snap.anuncios || [];
-        const um = (ks) => { const v = numDe(r, ks); return v !== null ? v : (as.length ? SHC.r2(as.reduce((t, a) => t + (numDe(Object.assign({}, a.metrics || {}, a.metricas || {}, a), ks) || 0), 0)) : null); };
+        const r = snap.resumo ? (snap.resumo.total || snap.resumo) : {}, cm = (snap.campanhas || []).map(c => c && (c.metricas || c.metrics)).filter(Boolean);
+        const base = cm.length ? cm : (snap.anuncios || []).map(a => Object.assign({}, a.metrics || {}, a.metricas || {}, a));
+        const um = (ks) => { const v = numDe(r, ks); return v !== null ? v : (base.length ? SHC.r2(base.reduce((t, o) => t + (numDe(o, ks) || 0), 0)) : null); };
         const m = razoes({ gasto: um(['custo', 'cost', 'investimento', 'gasto']) || 0, receita: um(['receita', 'totalAmount', 'amountTotal']) || 0,
             vendas: um(['vendas', 'unitsQuantity', 'soldQuantityTotal', 'unidades']) || 0, cliques: um(['cliques', 'clicks']), impressoes: um(['impressoes', 'prints', 'impressions']) });
         m.tacos = numDe(r, ['tacos']);
@@ -935,12 +938,16 @@
     const orcDia = c => SHC.num(c.orcamentoDiario !== undefined && c.orcamentoDiario !== null ? c.orcamentoDiario : (c.dailyBudget !== undefined ? c.dailyBudget : c.orcamento));
     // Compensa? de um grupo de anúncios (campanha ou conta) pelo equilíbrio do Copiloto (P.adsEquilibrio): o Ads gastou menos que a
     // sobra das vendas que trouxe. Só os anúncios com custo entram; sem nenhum → 'semCusto'.
+    // xs = entradas de P.adsEquilibrio (conta) ou linhas de uma campanha (P.adsLinhas): a linha com custo e sem gasto entra com a venda dela
+    // (#26); semCusto = quantos gastaram sem o custo informado.
     P.adsVereditoDe = function (xs, gastoTotal) {
-        const com = (xs || []).filter(x => !x.semCusto), sem = (xs || []).length - com.length;
+        const com = (xs || []).filter(x => !x.semCusto), sem = (xs || []).filter(x => x.semCusto && x.a.gasto > 0).length;
         if (!(gastoTotal > 0)) return Object.assign(P.adsVeredito(null, null), { semCusto: sem });
-        if (!com.length) return { tipo: 'semCusto', texto: 'Sem cálculo', semCusto: sem };
-        const s = k => com.reduce((t, x) => t + (k === 'antes' ? x.antes : x.a[k]), 0), g = s('gasto'), r = s('receita');
-        return Object.assign(P.adsVeredito(razoes({ gasto: g, receita: r, vendas: 0, cliques: null, impressoes: null }), { equilibrio: r > 0 ? s('antes') / r * 100 : 0 }), { semCusto: sem });
+        if (!com.some(x => x.a.gasto > 0)) return { tipo: 'semCusto', texto: 'Sem cálculo', semCusto: sem };
+        const s = k => SHC.r2(com.reduce((t, x) => t + (k === 'antes' ? x.antes : x.a[k]), 0)), g = s('gasto'), r = s('receita'), antes = s('antes');
+        // #23: o lucro no centavo (Σ sobra − Σ Ads) decide, como a lista e ads.html; o equilíbrio = Σ sobra ÷ Σ receita só vai no texto.
+        return Object.assign(P.adsVeredito(razoes({ gasto: g, receita: r, vendas: 0, cliques: null, impressoes: null }), { equilibrio: r > 0 ? antes / r * 100 : 0 },
+            { antes, depois: SHC.r2(antes - g) }), { semCusto: sem });
     };
     // Campanhas criadas: status, orçamento/dia, gasto, vendas, ACOS, nº de anúncios, perda de aparições e o selo compensa/não compensa.
     // Métricas: as da campanha no Mercado Ads; sem elas, a soma dos anúncios dela. eq = P.adsEquilibrio. Ativas primeiro, maior gasto.
@@ -957,15 +964,21 @@
             return { id, nome: String(c.nome || c.name || 'Campanha ' + id), status: ativoTxt(c.status), statusBruto: String(c.status || ''), orcamentoDia: orcDia(c),
                 estrategia: P.estrategiaTxt(c.estrategia || c.strategy), anuncios: dela.length, m,
                 perdeOrcamento: sh ? SHC.num(sh.perdidasOrcamento) : null, perdeClassificacao: sh ? SHC.num(sh.perdidasClassificacao) : null,
-                veredito: P.adsVereditoDe((eq || []).filter(x => x.a.campanhaId === id), m.gasto) };
+                veredito: P.adsVereditoDe(P.adsLinhas(eq).filter(x => x.a.campanhaId === id), m.gasto) };
         }).sort((x, y) => ((y.status === 'ativo') - (x.status === 'ativo')) || (y.m.gasto - x.m.gasto));
     };
-    // Filtros do "Ver por produto" sobre P.adsEquilibrio. Escalar = ACOS até 60% da folga (equilíbrio − meta), com venda.
+    // Linha "Total" da tabela de campanhas: a soma das linhas que ela mostra (P.adsCampanhasLista), no centavo, e o ACOS dessa soma.
+    P.adsCampanhasTotal = function (camps) {
+        const s = k => SHC.r2((camps || []).reduce((t, c) => t + ((c.m && c.m[k]) || 0), 0));
+        return razoes({ gasto: s('gasto'), receita: s('receita'), vendas: s('vendas'), cliques: null, impressoes: null });
+    };
+    // Filtros do "Ver por produto" sobre P.adsEquilibrio. Escalar = ACOS até 60% da folga (equilíbrio − meta), com venda, só no que foi pago
+    // (acosPago, vendasPagas: a venda atribuída a uma campanha sem gasto não diz que vale investir mais).
     P.adsFiltros = function (lista, meta) {
-        const mt = SHC.num(meta) || 0;
+        const mt = SHC.num(meta) || 0, ac = x => (x.acosPago !== undefined ? x.acosPago : x.acos), vp = x => (x.vendasPagas !== undefined ? x.vendasPagas : x.a.vendas);
         return {
             acima: lista.filter(x => x.acima),
-            escalar: lista.filter(x => !x.semCusto && !x.acima && x.acos !== null && x.a.vendas > 0 && x.margem - mt > 0 && x.acos <= (x.margem - mt) * 0.6),
+            escalar: lista.filter(x => !x.semCusto && !x.acima && ac(x) !== null && vp(x) > 0 && x.margem - mt > 0 && ac(x) <= (x.margem - mt) * 0.6),
             semVenda: lista.filter(x => !(x.a.vendas > 0)),
             semCusto: lista.filter(x => x.semCusto),
         };
@@ -4246,8 +4259,9 @@
         // F9: lista do Ads lida só em parte → não afirma "não está no Ads".
         if (!x.noAds && adsSnap.completo === false) return `<div class="card">${cab}<p style="margin:6px 0 0;font-size:12.5px">${esc(P.adsNaoAchei(adsSnap))}</p>${abrir}</div>`;
         if (!x.noAds) return `<div class="card">${cab}<p style="margin:6px 0 0;font-size:12.5px"><b>No Ads: não.</b> Este anúncio não está em nenhuma campanha do Mercado Ads (${esc(periodoAds())}).</p>${abrir}</div>`;
-        const m = x.m, c = x.campanha, eq = it._soAds ? null : SHC.adsEquilibrio(it, custoDe(it), cfg), v = P.adsVeredito(m, eq);
-        const cor = { compensa: 'ok', nao: 'ruim', semCusto: 'neutra', semGasto: 'neutra' }[v.tipo], kc = { compensa: 'ok', nao: 'pr' }[v.tipo] || '';
+        // #23: o veredito pelo lucro do anúncio no centavo, com as campanhas dele somadas (a conta da lista "Por produto" e de ads.html).
+        const m = x.m, c = x.campanha, eq = it._soAds ? null : SHC.adsEquilibrio(it, custoDe(it), cfg), v = P.adsVeredito(m, eq, eq ? SHC.adsLucro(eq.equilibrio, x.linhas) : null);
+        const cor = { compensa: 'ok', empate: 'aviso', nao: 'ruim', semCusto: 'neutra', semGasto: 'neutra' }[v.tipo], kc = { compensa: 'ok', empate: 'at', nao: 'pr' }[v.tipo] || '';
         const selo = (s, a) => s === 'ativo' ? ` <span class="selo ok">Ativ${a}</span>` : s === 'pausado' ? ` <span class="selo at">Pausad${a}</span>` : '';   // anúncio (o) e campanha (a)
         const vs = P.adsCampanhaVs(adsSnap, c.id), ap = adsSnap.anterior && adsSnap.anterior.periodo;
         const lin = (r, a, b, fmt, bom) => `<tr><td>${r}</td><td><b>${a === null ? '—' : fmt(a)}</b>${setaAds(a, b, bom)}</td><td>${b === null ? '—' : fmt(b)}</td></tr>`;
@@ -4587,7 +4601,7 @@
     // Tudo do ads:<conta> (Mercado Ads, só leitura) e do equilíbrio do Copiloto. Criar, pausar ou mudar orçamento é com você, no Mercado Ads. ──
     const FILTROS_ADS = [['acima', 'Acima do equilíbrio', 'p'], ['escalar', 'Dá para escalar', 'l'], ['semVenda', 'Sem venda com gasto', 'a'], ['semCusto', 'Sem custo', 'n']];
     const ROAS_TXT = 'ROAS = quanto voltou de venda para cada R$ 1 no Ads.';
-    const SELO_VER = { compensa: ['ok', 'Compensa'], nao: ['pr', 'Não compensa'], semCusto: ['', 'Sem cálculo'], semGasto: ['', 'Sem gasto'] };
+    const SELO_VER = { compensa: ['ok', 'Compensa'], empate: ['at', 'No equilíbrio'], nao: ['pr', 'Não compensa'], semCusto: ['', 'Sem cálculo'], semGasto: ['', 'Sem gasto'] };
     const seloVer = v => { const [c, t] = SELO_VER[v.tipo] || ['', v.texto || '']; return `<span class="selo ${c}"${v.det ? ` title="${esc(v.det)}"` : ''}>${esc(t)}</span>`; };
     const seloCamp = c => c.status === 'ativo' ? '<span class="selo ok">Ativa</span>' : c.status === 'pausado' ? '<span class="selo at">Pausada</span>' : c.statusBruto ? `<span class="selo">${esc(c.statusBruto.toLowerCase())}</span>` : '';
     const perdeTxt = c => {
@@ -4608,7 +4622,7 @@
     const blocoAd = (k, titulo, resumo, dentro) => `<div class="card ad-bl"><div class="ad-cab"><div class="ad-t"><h3>${esc(titulo)}</h3><span>${resumo}</span></div>${dentro ? btVer(k) : ''}</div>${dentro && aberto(k) ? '<div class="ad-in">' + dentro + '</div>' : ''}</div>`;
     function cardAdsSku() {
         const fm = P.adsDoFechamento(fechMes), mes = P.nomeMes(SHC.hoje().slice(0, 7));
-        const totMes = fm ? `Ads da conta em ${esc(mes)} (Faturamento): ${fm.ads !== null ? SHC.moeda(fm.ads) + ' de Product Ads' : 'Product Ads não lido'}${fm.seguidores ? ' + ' + SHC.moeda(fm.seguidores) + ' de Publicidade de Seguidores' : ''}.` : '';
+        const totMes = fm ? `Ads da conta em ${esc(mes)} (Faturamento): ${esc(fm.texto)}.` : '';   // estorno líquido com o sinal − (P.adsDoFechamento)
         const cab = '<div class="ch"><h3>Ads</h3></div>', rodMes = totMes ? `<p class="det">${totMes}</p>` : '';
         if (!adsSnap) return `<div class="card">${cab}<p class="det">Aparece depois da próxima leitura do Mercado Ads.</p>${rodMes}</div>`;
         if (adsSnap.temAds === false) return `<div class="card">${cab}<p class="det">Esta conta não usa o Mercado Ads.</p>${rodMes}</div>`;
@@ -4616,16 +4630,17 @@
         const camps = P.adsCampanhasLista(adsSnap, lista), ver = P.adsVereditoDe(lista, m.gasto), per = periodoAds(), nAc = fs.acima.length;
         const tit = x => esc(x.a.titulo || (x.it && x.it.titulo) || x.a.itemId);
         // Manchete (1 frase) e KPIs
-        const fato = P.adsFatoCatalogo(ver.tipo === 'compensa' ? `O Ads dá lucro (ACOS ${pctOu(m.acos)}).` : ver.tipo === 'nao' ? `O Ads leva mais do que sobra (ACOS ${pctOu(m.acos)}).` : `Ads: ${SHC.moeda(m.gasto)} em 30 dias.`,
+        const fato = P.adsFatoCatalogo(ver.tipo === 'compensa' ? `O Ads dá lucro (ACOS ${pctOu(m.acos)}).` : ver.tipo === 'nao' ? `O Ads leva mais do que sobra (ACOS ${pctOu(m.acos)}).`
+            : ver.tipo === 'empate' ? `O Ads empata: levou tudo o que sobrou das vendas (ACOS ${pctOu(m.acos)}).` : `Ads: ${SHC.moeda(m.gasto)} em 30 dias.`,
             ver.tipo, m.gasto, adsSnap && adsSnap.catalogoSemLigacao);   // F8
         const acao = nAc ? (nAc === 1 ? `${fs.acima[0].a.titulo || fs.acima[0].a.itemId} gasta mais do que aguenta.` : `${ver.tipo === 'compensa' ? 'Só ' : ''}${nAc} produtos gastam mais do que aguentam.`)
             : fs.escalar.length ? `${SHC.qtd(fs.escalar.length, 'produto aguenta', 'produtos aguentam')} investir mais.` : 'Nada pede sua atenção agora.';
-        const ptM = ver.tipo === 'nao' ? 'pr' : nAc ? 'at' : ver.tipo === 'compensa' ? 'ok' : '';
+        const ptM = ver.tipo === 'nao' ? 'pr' : nAc || ver.tipo === 'empate' ? 'at' : ver.tipo === 'compensa' ? 'ok' : '';
         // v3.1 (imagem aprovada): KPI em R$ inteiro ("R$ 1.433", ESPEC §5); ACOS e ROAS com a cor do veredito da conta.
-        const kR = v => SHC.moeda(Math.round(v || 0)).replace(/,00$/, ''), corV = ver.tipo === 'compensa' ? 'ok' : ver.tipo === 'nao' ? 'pr' : '';
+        const kR = v => SHC.moeda(Math.round(v || 0)).replace(/,00$/, ''), corV = { compensa: 'ok', empate: 'at', nao: 'pr' }[ver.tipo] || '';
         let h = `<p class="manchete"><span class="pt ${ptM}"></span><b>${esc(fato)}</b> ${esc(acao)}</p>
           <div class="kpis k4">${kpiN('', 'Investimento 30 dias', kR(m.gasto), esc(per))}${kpiN('', 'Vendas pelo Ads', kR(m.receita), esc(SHC.qtd(m.vendas, 'venda', 'vendas')))}`
-          + kpiN(corV, 'ACOS ⓘ', pctOu(m.acos), ver.tipo === 'compensa' ? 'abaixo da sua margem' : ver.tipo === 'nao' ? 'acima da sua margem' : '', ACOS_TXT)
+          + kpiN(corV, 'ACOS ⓘ', pctOu(m.acos), { compensa: 'abaixo da sua margem', empate: 'no limite da sua margem', nao: 'acima da sua margem' }[ver.tipo] || '', ACOS_TXT)
           + kpiN(m.roas !== null ? corV : '', 'ROAS ⓘ', xTxt(m.roas), m.roas !== null ? esc('R$ ' + (Math.round(m.roas * 100) / 100).toLocaleString('pt-BR') + ' por R$ 1') : '', ROAS_TXT) + '</div>';
         // Precisa de você: acima do equilíbrio (até 3; primeiro o que já dá prejuízo antes do Ads) e o que dá para escalar (até 2).
         // Tirar / Ajustar / Ver só ABREM o Ads do anúncio (detalhe na própria aba): mudar a campanha é com você, no Mercado Ads.
@@ -4641,8 +4656,8 @@
         const resCamp = [nAt ? SHC.qtd(nAt, 'ativa', 'ativas') : SHC.qtd(camps.length, 'campanha', 'campanhas')].concat(camps.slice(0, 2).map(c => `${c.nome} ACOS ${pctOu(c.m.acos)}`)).join(' · ');
         // Cor da campanha: a mesma conta do selo (anúncios dela com custo: vendas, Ads e sobra antes do Ads), agora com o "apertado".
         const corCamp = c => {
-            const xs = lista.filter(x => x.a.campanhaId === c.id && !x.semCusto), s = k => xs.reduce((t, x) => t + (k === 'antes' ? x.antes : x.a[k]), 0);
-            return xs.length ? P.saudeRetorno(s('receita'), s('gasto'), s('antes'), cfg.margem_alvo_pct) : '';
+            const xs = P.adsLinhas(lista).filter(x => x.a.campanhaId === c.id && !x.semCusto), s = k => xs.reduce((t, x) => t + (k === 'antes' ? x.antes : x.a[k]), 0);
+            return xs.some(x => x.a.gasto > 0) ? P.saudeRetorno(s('receita'), s('gasto'), s('antes'), cfg.margem_alvo_pct) : '';
         };
         const maxC = escalaRet(camps, c => [c.m.receita, c.m.gasto]);
         const linhaCamp = c => {
@@ -4654,7 +4669,7 @@
                 + `<tr class="rbl"><td colspan="4">${barraRet(c.m.receita, c.m.gasto, maxC, cor)}</td></tr>`;
         };
         h += camps.length ? blocoAd('ads:camp', 'Campanhas criadas', esc(resCamp), legRet('investimento no Ads') + `<table class="tb"><thead><tr><th>Campanha</th><th>Gasto</th><th>Vendas</th><th title="${esc(ACOS_TXT)}">ACOS</th></tr></thead><tbody>`
-                + camps.map(linhaCamp).join('') + (camps.length > 1 ? `<tr><td><b>Total</b></td><td><b>${SHC.moeda(m.gasto)}</b></td><td><b>${SHC.moeda(m.receita)}</b></td><td><b>${pctOu(m.acos)}</b></td></tr>` : '') + '</tbody></table>'
+                + camps.map(linhaCamp).join('') + (camps.length > 1 ? (t => `<tr><td><b>Total</b></td><td><b>${SHC.moeda(t.gasto)}</b></td><td><b>${SHC.moeda(t.receita)}</b></td><td><b>${pctOu(t.acos)}</b></td></tr>`)(P.adsCampanhasTotal(camps)) : '') + '</tbody></table>'   // Total = Σ das linhas acima
                 + `<p class="det">${esc(per)}. Compensa = o Ads gastou menos do que sobra das vendas que trouxe (pelo custo que você informou).${adsSnap.completo === false ? ' Parte dos anúncios não foi lida.' : ''}</p>`)
             : blocoAd('ads:camp', 'Campanhas criadas', 'Nenhuma campanha lida no Mercado Ads.', '');
         // [Ver mais] Resumo da conta
@@ -5066,7 +5081,7 @@
         });
     }
     const chaveFull = p => [p.produtoId || '', p.variacao || '', p.itemId || p.sku || p.titulo || ''].join('|');   // variações do mesmo anúncio: uma chave cada
-    const idsDoPlano = p => [...new Set(P.anunciosDoFull(p, itens).map(it => it.itemId).concat(P.idsDoFull(p)))];
+    const idsDoPlano = p => SHC.idsDoProdutoFull(p, itens);   // MLB do Full + os do mesmo SKU: os mesmos do ícone (SHC.alertasDe)
     // v2.7: remessas (lista + detalhe lido na rodada lenta) — recolhido: "2 abertas · 3 fechadas nos últimos 30 dias · R$ X gastos em remessas este mês".
     function cardRemessas() {
         const rr = remessas ? SHC.remessasResumo(remessas, remDet, SHC.hoje().slice(0, 7)) : null;
@@ -5215,7 +5230,7 @@
             + `<div class="acoes" style="justify-content:flex-start"><button class="bt leve" data-sim-ver>Recalcular</button></div>`
             + `<div class="recnota neutra"><b>${fmtUn(s.unidades)} un.</b> · volume ${fmt3(s.volumeM3)} m³${s.semMedida.length ? ' (sem ' + SHC.qtd(s.semMedida.length, 'SKU', 'SKUs') + ')' : ''} · peso ${kg(s.pesoKg)}${s.semPeso.length ? ' (sem ' + SHC.qtd(s.semPeso.length, 'SKU', 'SKUs') + ')' : ''}${s.volumesEstimados.texto ? ' · ' + esc(s.volumesEstimados.texto) : ''}<br>`
             + `Veículo sugerido: ${s.veiculo ? '<b>' + esc(s.veiculo) + '</b>' : esc(s.veiculoMotivo)}<br>`
-            + (s.custoEstimado ? `Custo estimado da coleta: <b>${SHC.moeda(s.custoEstimado.valor)}</b> (de ${SHC.moeda(s.custoEstimado.min)} a ${SHC.moeda(s.custoEstimado.max)}) · ${SHC.moeda(s.custoEstimado.porUnidade)} por unidade, a média das suas últimas ${SHC.qtd(s.custoEstimado.base, 'remessa fechada', 'remessas fechadas')} com cobrança.` : esc(s.custoMotivo)) + '</div>'
+            + (s.custoEstimado ? `Custo estimado da coleta: <b>${SHC.moeda(s.custoEstimado.valor)}</b> (de ${SHC.moeda(s.custoEstimado.min)} a ${SHC.moeda(s.custoEstimado.max)}) · ${SHC.moeda(s.custoEstimado.porUnidade)} por unidade, ${esc(s.custoEstimado.baseTxt)}.` : esc(s.custoMotivo)) + '</div>'
             + '<p class="det">O Mercado Livre cobra a coleta por distância e não publica a tabela: o custo aqui é o que ele cobrou nas suas remessas anteriores, por unidade. Volume = a soma das caixas dos produtos, sem folga. Fonte: Estoque Full, Gestão de envios Full e as medidas dos seus anúncios.</p>';
         return h + '</div>';
     }
@@ -6197,7 +6212,7 @@
                 return `<li class="acao at"><div class="tx"><b>Pedido ${esc(y.pedido)}</b><span>${esc(curtoTxt(y.cobranca, 34))} · ${SHC.moeda(y.valor)} a mais</span></div><button class="bt leve pq" data-conc-copiar="${n}">${concCopiado === n ? '✓ Copiado' : 'Copiar chamado'}</button></li>`;
             };
             // v3.2.0: "Dá para recuperar" aparece 1 vez só (no KPI); o cartão diz o que fazer.
-            h += `<div class="card" id="concRec"><div class="ch"><h3>Como pedir de volta</h3><span class="selo at">${rec.parcelas.length ? 'estimativa' : 'vale conferir'}</span></div>`
+            h += `<div class="card" id="concRec"><div class="ch"><h3>Como pedir de volta</h3><span class="selo at">${rec.parcelas.length ? 'estimativa' : devConf ? 'vale conferir' : 'para conferir'}</span></div>`
                 + rec.parcelas.map(p => `<p class="rs" style="margin:8px 0 2px"><b>${esc(p.rotulo)}</b> · ${SHC.moeda(p.valor)}${p.curta ? ` · <span title="${esc('Origem: ' + p.origem)}">${esc(p.curta)}</span>` : ''}</p><ul class="acoes">${vmLista('conc:rec:' + p.id, p.itens, 3)[0].map(y => it(p, y)).join('')}</ul>`
                     + (p.itens.length > 3 ? `<p class="rs">${vmLista('conc:rec:' + p.id, p.itens, 3)[1]}</p>` : '')).join('')
                 + (devConf ? `<p class="det"><span class="pt at"></span>Fora do total: ${SHC.moeda(rec.devConferir.valor)} em tarifas de devolução que valem conferir (aba Frete).</p>` : '')
@@ -7343,7 +7358,7 @@
     }
     async function salvarCustoFamilia(chave) {
         const inp = document.querySelector(`[data-custo="${CSS.escape(chave)}"]`), v = SHC.num(inp.value);
-        if (!(v > 0)) { inp.style.borderColor = '#DC2626'; inp.focus(); return; }
+        if (!(SHC.r2(v) > 0)) { inp.style.borderColor = '#DC2626'; inp.focus(); return; }   // 0,004 vira 0 em centavos: não é custo
         const f = snap.familias.find(x => x.chave === chave);
         const alvo = P.alvoCusto(skusFam[chave] || [], ((f && f.anuncios) || []).concat((propsPorFam[chave] || []).map(p => p.itemId)), custoFam[chave], chave);
         if (!alvo) return;
@@ -7356,7 +7371,7 @@
     async function salvarCustoGrupo(chave, bt) {
         const perto = bt && bt.parentElement && bt.parentElement.querySelector && bt.parentElement.querySelector('[data-csku]');
         const inp = perto || document.querySelector(`[data-csku="${CSS.escape(chave)}"]`), v = SHC.num(inp.value);
-        if (!(v > 0)) { inp.style.borderColor = '#DC2626'; inp.title = P.MSG_CUSTO; avisa(P.MSG_CUSTO, 8000); inp.focus(); return; }   // só a borda vermelha não diz o que fazer
+        if (!(SHC.r2(v) > 0)) { inp.style.borderColor = '#DC2626'; inp.title = P.MSG_CUSTO; avisa(P.MSG_CUSTO, 8000); inp.focus(); return; }   // só a borda vermelha não diz o que fazer; 0,004 vira 0 em centavos
         const g = grupos.find(x => x.chave === chave) || (chave.indexOf('sku:') === 0 ? { sku: chave.slice(4), itens: [{}], titulo: '' } : null);   // 3.3.0 (E14): SKU que só o TikTok tem (filtro TikTok) → c|sku|<SKU>
         if (!g) return;
         catEditando = null;

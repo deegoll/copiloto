@@ -77,7 +77,7 @@ Algumas regras de formato:
 
 Quando uma leitura falha, o adaptador devolve `M.naoLido(motivo)`. O motor então responde `status: 'nao_lido'`, informa em `faltando` o que faltou e deixa `repasse` e `lucro_real` em `null`. Custo não informado dá `status: 'sem_custo'`. O mesmo vale para um kit com um componente sem custo: o núcleo nunca soma um custo parcial.
 
-Tarifa estimada pela tabela só entra com `estimar_tarifas: true` e sai marcada (`tarifas_estimadas`). Um canal sem tabela na data continua "não lido".
+Tarifa estimada pela tabela só entra com `estimar_tarifas: true` e sai marcada (`tarifas_estimadas`). Um canal sem tabela na data continua "não lido". O pedido cancelado nunca é estimado (ver **Cancelado** abaixo).
 
 ---
 
@@ -87,7 +87,7 @@ Tarifa estimada pela tabela só entra com `estimar_tarifas: true` e sai marcada 
 lucro = vendas − tarifas do canal − frete a seu cargo − afiliados − Ads − devoluções − imposto − custo
 ```
 
-- **Imposto** sobre a receita líquida de canceladas e devoluções: `(vendas − canceladas − reembolsos) × imposto%`. É a regra da `F.cascata` do fechamento do ML (`extension-copiloto/fechamento.js:160`) e o motor já faz assim (`motor.js:135`). Não trocar por "imposto sobre a venda cheia".
+- **Imposto** sobre a receita líquida de canceladas e devoluções: `(vendas − canceladas − reembolsos) × imposto%`. É a regra da `F.cascata` do fechamento do ML (`extension-copiloto/fechamento.js:160`) e o motor já faz assim (`motor.js:159`). Não trocar por "imposto sobre a venda cheia".
 - Canal novo entra só com o adaptador (o que vendeu e o que foi cobrado). A conta é esta, a mesma para todos.
 - **"Ads não lido nunca vira zero" (3.3.0, E6).** Canal que não traz o Ads nas tarifas (só o TikTok: o gasto do GMV Max fica fora do repasse) usa o Ads do mês digitado em Ajustes. No `fechamentoMes`, com `ads_nas_tarifas: false`, o `ads_mes` sai do lucro do mês; sem ele o mês leva `aprox: true` ("≈") com o motivo, e o canal sai do "melhor". "Não uso Ads" é 0 informado de propósito. No ML o Ads vem na fatura e a regra não se aplica.
 
@@ -96,20 +96,22 @@ lucro = vendas − tarifas do canal − frete a seu cargo − afiliados − Ads 
 ```
 receita         = Σ(preço × qtd) − desconto do vendedor      (o cupom da plataforma não entra: quem paga é o canal)
 receita_liquida = receita − reembolso
-repasse         = receita_liquida − Σ tarifas do pedido       (estorno com sinal −; 'ads' fica fora)
-lucro_antes_ads = repasse − custo × qtd − receita_liquida × imposto% − outros
-lucro_real      = lucro_antes_ads − Ads rateado (por anúncio e dia)
+repasse         = receita_liquida − Σ tarifas do pedido       (estorno com sinal −; 'ads' fica fora, SALVO o Ads com
+                  − Ads tirado do repasse                       origem_pagamento 'venda': esse sai do repasse)
+lucro_antes_ads = repasse + Ads tirado do repasse − custo × qtd − receita_liquida × imposto% − outros
+lucro_real      = lucro_antes_ads − Ads do pedido (o tirado do repasse + o rateado por anúncio e dia)
 margem          = lucro_real / receita_liquida
 ```
 
 Como a fórmula se aplica em cada caso:
+- **Ads tirado do repasse:** a tarifa `ads` com `origem_pagamento: 'venda'` é o Ads que o canal descontou do repasse da própria venda. O adaptador marca assim o que veio no extrato ou no escrow do pedido: o GMV Pay no extrato do TikTok e o `ads_escrow_top_up_fee_or_technical_support_fee` da Shopee. Esse Ads sai do repasse (o repasse do motor fica igual ao que o canal pagou, e a conciliação não acusa "a menor" falso) e entra uma vez só no lucro, junto com o Ads rateado. A conta do pedido mostra a linha "Ads pago com o repasse". A tarifa `ads` com origem `'fatura'` (o Ads do ML cobrado na fatura) fica fora do repasse. Atenção: o padrão do modelo para tarifa é `'venda'`, então o adaptador que lê Ads de fatura tem de marcar `'fatura'`, como o do ML faz.
 - **Por produto:** use `lucroPorProduto(resultados, porMes)`. Agrupa por **SKU normalizado × canal × conta**, e também **× mês** com `porMes = true` (3.3.0; `util.normalizaSku` = a regra do `SHC.normalizaSku`). Sem `porMes`, soma o período que veio, como sempre. O custo de cada SKU é exato. O resto é dividido pela participação do item na receita, e o Ads do anúncio fica com o item daquele anúncio. Aceita também as linhas do `adaptadores.ml.produtosDoMes`. Linha com Ads "—" deixa `ads` e `lucro_real` do produto em `null`; o `lucro_antes_ads` continua. Com `pendentes > 0`, o `lucro_antes_ads` é só o das linhas com conta, não o total do SKU: a tela confere os pendentes antes de mostrar. As linhas do ML somam o lucro sem arredondar (`lucro_antes_ads_exato`) e arredondam só no SKU, como o `SHC.familias`.
 - **Produto × mês do ML (3.3.0):** use `adaptadores.ml.produtosDoMes({ mes, vbAnuncio, retrato, custoDe, imposto_pct, ads, conta })`. É a porta "mês × anúncio": as vendas por anúncio do mês (`vbAnuncio:<conta>`), o retrato do anúncio e o custo pronto (`custoDe`). Na extensão, o `SHC.custoDeAnuncio` entra embrulhado, porque devolve `{chave, dados}`: `info => { const c = SHC.custoDeAnuncio(custos, info); return c ? c.dados : null; }`. Faz a mesma conta do lucro estimado do `SHC.familias`, por anúncio com venda. O Ads por anúncio vem só da fatura (`ads`, formato do `ad|ml|<MLB>`); sem o valor, Ads e `lucro` ficam "—". A trava do `ml.test.js` compara com o `SHC.familias` ao centavo, sem folga, em 56 anúncios × mês, e também por SKU e no mês. A porta "venda a venda" fica fora da 3.3.0.
 - **Mês:** use `fechamentoMes({ mes, resultados, tarifas, adsNaoRateado })`. O fechamento soma as tarifas sem pedido (fatura, Full, assinatura) e o Ads que não teve venda para ratear. Com `ads_rateados` (o padrão), a tarifa 'ads' da fatura não entra de novo. Para o canal sem Ads nas tarifas, passe `ads_nas_tarifas: false` e `ads_mes` (veja a regra acima).
 - **Mês do ML (3.3.0):** use `adaptadores.ml.mesDaCascata({ mes, vb, fech, produtos, imposto_pct, despesas, afil, conta })`. Recebe as **mesmas entradas** da `F.cascata` do Fechamento (`extension-copiloto/fechamento.js`) e faz a mesma conta, linha a linha: vendas brutas, canceladas e devolvidas, cobranças por tipo menos os estornos (tipos do `RENOMEIA`), líquido, custo dos produtos, imposto, lucro, despesas fixas e sobra. Ads e Full vêm só das cobranças da fatura (`fech.porTipo`), uma vez. O afiliado é só informativo. O "não lido" fica `null` nos mesmos lugares, e `faltando` diz o que deixou o lucro em "—". A trava do `ml.test.js` compara as duas contas ao centavo em 27 meses (com imposto 0% e centavos quebrados): mudar uma sem a outra derruba a suíte.
 - **Soma dos canais ("Todos"):** use `motor.somaCanais(meses, campo)` (campo padrão `'lucro'`). Dá o total e o % de cada canal numa conta só (valor ÷ total, 1 casa; sem % quando o total não é positivo). Canal com `aprox` põe "≈" no total; canal sem número fica fora da soma e entra em `motivos`. Nenhum número dá total `null`, nunca 0.
 - **Devolução:** o reembolso sai da receita. O custo do produto é contado, a não ser que `produto_voltou: true`. No TikTok, `reverse_type 2` quer dizer reembolso sem devolução: o vendedor perde o produto.
-- **Cancelado:** receita, custo e imposto ficam em 0. Só conta a tarifa que sobrou depois do estorno.
+- **Cancelado:** receita, custo e imposto ficam em 0. Só conta a tarifa que sobrou depois do estorno, e só se foi **lida** (lista ou extrato do canal). Sem tarifa lida, o motor não estima pela tabela (a venda foi estornada): o pedido sai `nao_lido`, com o aviso "cancelado sem tarifa lida", e fica fora do lucro por produto e do fechamento.
 
 ---
 

@@ -12,16 +12,18 @@
     'use strict';
 
     const O = (conta, fonte) => ({ canal: 'tiktok', conta: String(conta || ''), fonte: fonte || 'tela' });
-    /** {amount:"-32.99"} → −32.99 · {format_price:"R$ 546,36"} → 546.36 · número → número · resto → null. */
+    /** {amount:"-32.99"} → −32.99 · {format_price:"R$ 546,36"} → 546.36 · número → número · resto → null. Vazio ("" ou só espaço) → null, nunca 0. */
     function dinheiro(a) {
         if (a === null || a === undefined) return null;
         if (typeof a === 'number') return isFinite(a) ? a : null;
         if (typeof a === 'object') {
-            if (a.amount !== undefined) { const n = typeof a.amount === 'object' ? dinheiro(a.amount) : Number(String(a.amount).trim()); return n === null || !isFinite(n) ? null : U.r2(n); }
+            if (a.amount !== undefined) { const t = typeof a.amount === 'object' ? null : String(a.amount).trim(), n = typeof a.amount === 'object' ? dinheiro(a.amount) : (t === '' ? null : Number(t)); return n === null || !isFinite(n) ? null : U.r2(n); }
             if (a.format_price !== undefined) return U.num(a.format_price);
             return null;
         }
-        const n = Number(String(a).trim());
+        const t = String(a).trim();
+        if (t === '') return null;   // Number("") = 0: vazio viraria R$ 0,00
+        const n = Number(t);
         return isFinite(n) ? U.r2(n) : U.num(a);
     }
     const idTxt = v => (v === null || v === undefined || v === '' || v === '0' ? null : String(v));
@@ -109,9 +111,10 @@
         let frete = null;
         const sf = r.shipping_fee_detail && Array.isArray(r.shipping_fee_detail.fee_list) ? folhas(r.shipping_fee_detail.fee_list) : null;
         if (sf) {
-            let cheio = 0, cliente = 0, subsidio = 0, outros = 0, peso = null, desc = '';
+            let cheio = 0, cliente = 0, subsidio = 0, outros = 0, peso = null, desc = '', ilegivel = false;
             sf.forEach(f => {
-                const v = dinheiro(f.amount) || 0, k = String((f.starling && f.starling.starling_key) || '');
+                const v = dinheiro(f.amount), k = String((f.starling && f.starling.starling_key) || '');
+                if (v === null) { ilegivel = true; avisos.push('frete sem valor: ' + (f.type || k || texto(f))); return; }   // ilegível nunca vira 0
                 if (f.type === 'fbm_shipping_fee' || /forward_shipping/.test(k)) {
                     cheio = U.r2(cheio - v);
                     const m = /weight\s*:\s*(\d+)\s*g/i.exec(String(f.description || '') + ' ' + String((f.extra && f.extra.weight) || ''));
@@ -121,9 +124,10 @@
                 else if (f.type === 'shipping_fee_discount' || /covered|subsid/.test(k)) subsidio = U.r2(subsidio + v);
                 else { outros = U.r2(outros + v); avisos.push('frete não mapeado: ' + (f.type || k)); }
             });
-            const liquido = U.r2(cheio - cliente - subsidio - outros);
-            frete = M.criar('frete', Object.assign(O(conta, opts.fonte), { pedido_id: pedidoId, cobrado_vendedor: liquido, pago_comprador: cliente, cheio, subsidio, peso_cobrado_g: peso, descricao: desc }));
-            tarifas.push(M.criar('tarifa', Object.assign({}, baseT, { id: pedidoId + '#frete', tipo: 'frete_venda', valor: liquido, texto_original: 'Frete líquido (custo − cliente − subsídio)', estimada: pendente })));
+            // Uma linha do frete ilegível = frete não lido: sem valores e sem a tarifa frete_venda (o extrato "não fecha" e a extensão não o usa).
+            const lido = v => (ilegivel ? null : v), liquido = U.r2(cheio - cliente - subsidio - outros);
+            frete = M.criar('frete', Object.assign(O(conta, opts.fonte), { pedido_id: pedidoId, cobrado_vendedor: lido(liquido), pago_comprador: lido(cliente), cheio: lido(cheio), subsidio: lido(subsidio), peso_cobrado_g: peso, descricao: desc }));
+            if (!ilegivel) tarifas.push(M.criar('tarifa', Object.assign({}, baseT, { id: pedidoId + '#frete', tipo: 'frete_venda', valor: liquido, texto_original: 'Frete líquido (custo − cliente − subsídio)', estimada: pendente })));
         } else {
             const ship = dinheiro(r.shipping_amount);
             if (ship !== null && ship !== 0) tarifas.push(M.criar('tarifa', Object.assign({}, baseT, { id: pedidoId + '#frete', tipo: 'frete_venda', valor: U.r2(-ship), texto_original: 'shipping_amount', estimada: pendente })));
@@ -314,11 +318,12 @@
         const avisos = [], pi = m.payment_info || {}, skus = Array.isArray(m.skus) ? m.skus : [];
         const origem = dinheiro(pi.main_order_origin_sale_price), subtotal = dinheiro(pi.subtotal), plat = dinheiro(pi.platform_discount_total) || 0;
         const descVend = dinheiro(pi.seller_discount_total) || 0;
-        const somaUnit = U.soma(skus, s => (dinheiro(s.total_price) !== null ? dinheiro(s.total_price) : (dinheiro(s.unit_price) || 0) * (s.quantity || 1)));
-        const itens = skus.map(s => {
-            const tot = dinheiro(s.total_price) !== null ? dinheiro(s.total_price) : U.r2((dinheiro(s.unit_price) || 0) * (s.quantity || 1));
-            // O preço do SKU já vem SEM o cupom da plataforma e SEM o desconto do vendedor: volta ao preço de origem pela participação.
-            const linha = origem !== null && somaUnit > 0 ? U.r2(origem * tot / somaUnit) : null;
+        const tots = skus.map(s => (dinheiro(s.total_price) !== null ? dinheiro(s.total_price) : U.r2((dinheiro(s.unit_price) || 0) * (s.quantity || 1))));
+        // O preço do SKU já vem SEM o cupom da plataforma e SEM o desconto do vendedor: volta ao preço de origem pela participação, pelo maior
+        // resto (Σ itens = preço de origem no centavo: R$ 100,00 em 3 SKUs pagos a R$ 33,33 = 33,34 + 33,33 + 33,33, nunca 99,99).
+        const linhas = origem !== null && U.soma(tots) > 0 ? MO.reparte(origem, tots) : skus.map(() => null);
+        const itens = skus.map((s, i) => {
+            const linha = linhas[i];
             return { sku: String(s.seller_sku_name || ''), anuncio_id: idTxt(s.sku_id) || '', titulo: String(s.product_name || '').slice(0, 200) + (s.sku_name ? ' · ' + s.sku_name : ''),
                 qtd: Number(s.quantity) || 1, total: linha, preco_unit: linha === null ? null : U.r2(linha / (Number(s.quantity) || 1)) };
         });
