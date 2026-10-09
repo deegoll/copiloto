@@ -1,0 +1,3142 @@
+{
+  "canal": "magalu",
+  "tela": "produtos",
+  "lido_em": "2026-10-07",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "GET",
+      "url": "https://api-product-search.magalu.com/seller/v1/portfolios/products",
+      "parametros": [
+        "status__ne",
+        "status__ne",
+        "_limit",
+        "_offset"
+      ],
+      "status": 200,
+      "corpo": {
+        "results": [
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2022-08-26T13:52:34.967000",
+            "description": "Produto 1",
+            "extra_data": {
+              "fulfillment": "true",
+              "IdProduct": "9000001"
+            },
+            "isbn": "",
+            "ncm": "7607.20.00",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-1",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-07T08:26:57.432000",
+            "attributes": [
+              {
+                "type": "COR",
+                "value": "PRETO"
+              }
+            ],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 8,
+              "depth": 10,
+              "height": 6,
+              "weight": 264
+            },
+            "fulfillment": true,
+            "group_id": "900000000000000000000003",
+            "id_marketplace": "abe4dac6b4",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 791,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 679
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 627,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 671
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1318,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 1318
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              }
+            ],
+            "package": {
+              "width": 8,
+              "depth": 10,
+              "height": 6,
+              "weight": 264
+            },
+            "price_offer": {
+              "lowest_price": 2961,
+              "best_seller_offer": null,
+              "price_pix": 2824
+            },
+            "prices": [
+              {
+                "list_price": 2972,
+                "price": 2972,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 0,
+              "datasheet": 0,
+              "images_quantity": 10,
+              "images_resolution": 10,
+              "total_score": 46,
+              "full_stock": false,
+              "catalog": 46,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 46,
+              "modality_scale": 0,
+              "pricing_index_scale": 14.94,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.41,
+              "experience": 34.67,
+              "updated_at": "2026-10-07T14:29:11.247000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 16.26,
+              "average_shipping_period": 5.15
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 659,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 2",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2023-09-11T21:26:19.412000",
+            "description": "Produto 1",
+            "extra_data": {
+              "IdProduct": "9000001"
+            },
+            "hidden": false,
+            "isbn": "",
+            "ncm": "7607.20.00",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-2",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-07T08:00:56.627000",
+            "attributes": [
+              {
+                "type": "COR",
+                "value": "BRANCO"
+              }
+            ],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 8,
+              "depth": 10,
+              "height": 6,
+              "weight": 264
+            },
+            "fulfillment": false,
+            "group_id": "900000000000000000000003",
+            "id_marketplace": "gcg24bcaba",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              }
+            ],
+            "package": {
+              "width": 8,
+              "depth": 10,
+              "height": 6,
+              "weight": 264
+            },
+            "price_offer": {
+              "lowest_price": 3287,
+              "best_seller_offer": null,
+              "price_pix": 3287
+            },
+            "prices": [
+              {
+                "list_price": 3460,
+                "price": 3460,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 0,
+              "datasheet": 0,
+              "images_quantity": 7,
+              "images_resolution": 10,
+              "total_score": 43,
+              "full_stock": false,
+              "catalog": 43,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 43,
+              "modality_scale": 0,
+              "pricing_index_scale": 46.12,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.41,
+              "experience": 33.24,
+              "updated_at": "2026-10-07T08:56:16.820000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 14.05,
+              "average_shipping_period": 5.3
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 658,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 2",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2022-08-26T14:31:40.988000",
+            "description": "Produto 3",
+            "ean": "9000000000008",
+            "has_ean": true,
+            "extra_data": {
+              "fulfillment": "true",
+              "IdProduct": "90009"
+            },
+            "ncm": "90000010",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-3",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "type": "product",
+            "updated_at": "2026-10-07T02:23:51.129000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [
+              {
+                "type": "Marca",
+                "value": "Marca X"
+              },
+              {
+                "type": "Modelo",
+                "value": "SKU-M9"
+              },
+              {
+                "type": "Garantia",
+                "value": "36 meses"
+              },
+              {
+                "type": "Texto 2",
+                "value": "Não se aplica"
+              },
+              {
+                "type": "Texto 3",
+                "value": "Não se aplica"
+              },
+              {
+                "type": "Texto 4",
+                "value": "Não se aplica"
+              }
+            ],
+            "dimension": {
+              "width": 9,
+              "depth": 34,
+              "height": 9,
+              "weight": 3163
+            },
+            "fulfillment": true,
+            "group_id": "900000000000000000000011",
+            "id_marketplace": "900000012",
+            "images": [
+              {
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1443,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 1003
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1648,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 1318
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1648,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 989
+              }
+            ],
+            "package": {
+              "width": 9,
+              "depth": 34,
+              "height": 9,
+              "weight": 3163
+            },
+            "price_offer": {
+              "lowest_price": 7844,
+              "best_seller_offer": null,
+              "price_pix": 9328
+            },
+            "prices": [
+              {
+                "list_price": 9885,
+                "price": 9819,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 7,
+              "datasheet": 7,
+              "images_quantity": 10,
+              "images_resolution": 10,
+              "total_score": 59,
+              "full_stock": false,
+              "catalog": 59,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 59,
+              "modality_scale": 0,
+              "pricing_index_scale": 16.76,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 41.33,
+              "updated_at": "2026-10-07T14:29:11.247000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 6.92,
+              "average_shipping_period": 4.5
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 656,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 4",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": false,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2023-09-11T21:20:30.036000",
+            "description": "Produto 5",
+            "has_ean": true,
+            "extra_data": {
+              "IdProduct": "90000000000014"
+            },
+            "hidden": false,
+            "isbn": "",
+            "ncm": "90000015",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-4",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-07T01:08:26.267000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 42,
+              "depth": 7,
+              "height": 7,
+              "weight": 1318
+            },
+            "fulfillment": false,
+            "group_id": "900000000000000000000016",
+            "id_marketplace": "fkjj2042ea",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              }
+            ],
+            "package": {
+              "width": 42,
+              "depth": 7,
+              "height": 7,
+              "weight": 1318
+            },
+            "price_offer": {
+              "lowest_price": 8764,
+              "best_seller_offer": null,
+              "price_pix": 8764
+            },
+            "prices": [
+              {
+                "list_price": 10544,
+                "price": 9225,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 0,
+              "datasheet": 0,
+              "images_quantity": 10,
+              "images_resolution": 10,
+              "total_score": 46,
+              "full_stock": false,
+              "catalog": 46,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 46,
+              "modality_scale": 0,
+              "pricing_index_scale": 31.14,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 41.47,
+              "updated_at": "2026-10-07T08:56:16.820000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 15.93,
+              "average_shipping_period": 4.86
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 654,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 6",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2022-08-26T14:18:30.351000",
+            "description": "Produto 7",
+            "ean": "9000000000023",
+            "has_ean": true,
+            "extra_data": {
+              "fulfillment": "true",
+              "IdProduct": "90024"
+            },
+            "isbn": "",
+            "ncm": "90000015",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-5",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-06T05:02:46.114000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [
+              {
+                "type": "REFERENCIA",
+                "value": "SKU-M3"
+              },
+              {
+                "type": "SUPORTE PARA TV",
+                "value": "TODOS OS MODELOS"
+              },
+              {
+                "type": "POLEGADAS",
+                "value": "10″ ATÉ 55″"
+              },
+              {
+                "type": "FURAÇÃO VESA:",
+                "value": "75 X 75 ATÉ 400 X 400 MM"
+              },
+              {
+                "type": "TIPO",
+                "value": "Texto 5"
+              },
+              {
+                "type": "LOCAL DE INSTALAÇÃO",
+                "value": "PAREDE"
+              },
+              {
+                "type": "CARGA MÁXIMA:",
+                "value": "16KG"
+              },
+              {
+                "type": "Texto 3",
+                "value": "Não se aplica"
+              },
+              {
+                "type": "Texto 4",
+                "value": "Não se aplica"
+              },
+              {
+                "type": "Garantia",
+                "value": "3 ANOS"
+              }
+            ],
+            "dimension": {
+              "width": 4,
+              "depth": 33,
+              "height": 4,
+              "weight": 1911
+            },
+            "fulfillment": true,
+            "group_id": "900000000000000000000025",
+            "id_marketplace": "ehj0h1d5f1",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 527,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 527
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1186,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 791
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 791,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 1054
+              }
+            ],
+            "package": {
+              "width": 4,
+              "depth": 33,
+              "height": 4,
+              "weight": 1911
+            },
+            "price_offer": {
+              "lowest_price": 17807,
+              "best_seller_offer": null,
+              "price_pix": 21911
+            },
+            "prices": [
+              {
+                "list_price": 23065,
+                "price": 23064,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 7,
+              "datasheet": 13,
+              "images_quantity": 10,
+              "images_resolution": 10,
+              "total_score": 66,
+              "full_stock": false,
+              "catalog": 66,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 66,
+              "modality_scale": 0,
+              "pricing_index_scale": 33.08,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 37.19,
+              "updated_at": "2026-10-07T14:29:11.247000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 23.22,
+              "average_shipping_period": 5.05
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 659,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 8",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": false,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2022-08-26T15:04:07.312000",
+            "description": "Produto 9",
+            "ean": "9000000000028",
+            "has_ean": true,
+            "extra_data": {
+              "fulfillment": "true",
+              "IdProduct": "90029"
+            },
+            "ncm": "90000010",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 1,
+            "sku": "SKU-6",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-05T11:17:08.687000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 8,
+              "depth": 16,
+              "height": 8,
+              "weight": 1516
+            },
+            "fulfillment": true,
+            "group_id": "900000000000000000000030",
+            "id_marketplace": "ebg0a9c7d9",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1318,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 1318
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 443,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 295
+              }
+            ],
+            "package": {
+              "width": 8,
+              "depth": 16,
+              "height": 8,
+              "weight": 1516
+            },
+            "price_offer": {
+              "lowest_price": 10016,
+              "best_seller_offer": null,
+              "price_pix": 10016
+            },
+            "prices": [
+              {
+                "list_price": 11862,
+                "price": 10543,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 7,
+              "ean": 7,
+              "datasheet": 0,
+              "images_quantity": 7,
+              "images_resolution": 7,
+              "total_score": 40,
+              "full_stock": false,
+              "catalog": 40,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 40,
+              "modality_scale": 0,
+              "pricing_index_scale": 31.36,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 36.23,
+              "updated_at": "2026-10-07T08:56:16.820000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 22.7,
+              "average_shipping_period": 4.9
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 659,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 10",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2022-08-26T14:02:25.115000",
+            "description": "Produto 11",
+            "has_ean": true,
+            "extra_data": {
+              "IdProduct": "MLB3440520907"
+            },
+            "isbn": "",
+            "ncm": "90000015",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-7",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-05T10:50:34.518000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 5,
+              "depth": 26,
+              "height": 5,
+              "weight": 527
+            },
+            "fulfillment": false,
+            "group_id": "900000000000000000000031",
+            "id_marketplace": "fd2dc0d472",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 330,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 328
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 330,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 327
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 313,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 330
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 330,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 271
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 330,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 287
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 312,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 330
+              }
+            ],
+            "package": {
+              "width": 5,
+              "depth": 26,
+              "height": 5,
+              "weight": 527
+            },
+            "price_offer": {
+              "lowest_price": 14398,
+              "best_seller_offer": null,
+              "price_pix": 14398
+            },
+            "prices": [
+              {
+                "list_price": 16475,
+                "price": 15156,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 7,
+              "ean": 0,
+              "datasheet": 0,
+              "images_quantity": 10,
+              "images_resolution": 7,
+              "total_score": 36,
+              "full_stock": false,
+              "catalog": 36,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 36,
+              "modality_scale": 0,
+              "pricing_index_scale": 33.83,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 40.88,
+              "updated_at": "2026-10-07T08:56:16.820000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 17.19,
+              "average_shipping_period": 5.05
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 658,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 12",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2023-09-25T21:00:06.420000",
+            "description": "Produto 13",
+            "has_ean": true,
+            "extra_data": {
+              "IdProduct": "9000000000036"
+            },
+            "hidden": false,
+            "isbn": "",
+            "ncm": "90000015",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-8",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-04T02:12:11.683000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 42,
+              "depth": 7,
+              "height": 7,
+              "weight": 1318
+            },
+            "fulfillment": false,
+            "group_id": "900000000000000000000037",
+            "id_marketplace": "jg1eh5e32a",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 525,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 525
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 658,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 658
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              }
+            ],
+            "package": {
+              "width": 42,
+              "depth": 7,
+              "height": 7,
+              "weight": 1318
+            },
+            "price_offer": {
+              "lowest_price": 9390,
+              "best_seller_offer": null,
+              "price_pix": 9390
+            },
+            "prices": [
+              {
+                "list_price": 10544,
+                "price": 9884,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 0,
+              "datasheet": 0,
+              "images_quantity": 10,
+              "images_resolution": 7,
+              "total_score": 43,
+              "full_stock": false,
+              "catalog": 43,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 43,
+              "modality_scale": 0,
+              "pricing_index_scale": 32.39,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 43.01,
+              "updated_at": "2026-10-07T08:56:16.820000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 13.9,
+              "average_shipping_period": 4.67
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 655,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 14",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2023-10-09T20:38:01.149000",
+            "description": "Produto 15",
+            "has_ean": true,
+            "extra_data": {
+              "IdProduct": "9000000000000040",
+              "fulfillment": "false"
+            },
+            "hidden": false,
+            "isbn": "",
+            "ncm": "90000015",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-9",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-03T09:31:17.664000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 13,
+              "depth": 31,
+              "height": 4,
+              "weight": 1812
+            },
+            "fulfillment": false,
+            "group_id": "900000000000000000000041",
+            "id_marketplace": "gg138hh314",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              }
+            ],
+            "package": {
+              "width": 13,
+              "depth": 31,
+              "height": 4,
+              "weight": 1812
+            },
+            "price_offer": {
+              "lowest_price": 17807,
+              "best_seller_offer": null,
+              "price_pix": 15681
+            },
+            "prices": [
+              {
+                "list_price": 16506,
+                "price": 16506,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 0,
+              "datasheet": 0,
+              "images_quantity": 10,
+              "images_resolution": 10,
+              "total_score": 46,
+              "full_stock": false,
+              "catalog": 46,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 46,
+              "modality_scale": 0,
+              "pricing_index_scale": 54.8,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 51.72,
+              "updated_at": "2026-10-07T14:29:11.247000+00:00",
+              "experience_range": "HIGH",
+              "average_shipping_cost": 16.9,
+              "average_shipping_period": 5.01
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 659,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 16",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2022-08-26T16:14:04.154000",
+            "description": "Produto 17",
+            "ean": "9000000000044",
+            "has_ean": true,
+            "extra_data": {
+              "fulfillment": "true",
+              "IdProduct": "90045"
+            },
+            "ncm": "90000010",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-10",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "type": "product",
+            "updated_at": "2026-10-02T18:26:13.593000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [
+              {
+                "type": "Modelo",
+                "value": "SLL01B"
+              },
+              {
+                "type": "Garantia",
+                "value": "36 meses"
+              }
+            ],
+            "dimension": {
+              "width": 11,
+              "depth": 34,
+              "height": 11,
+              "weight": 2504
+            },
+            "fulfillment": true,
+            "group_id": "900000000000000000000046",
+            "id_marketplace": "900000047",
+            "images": [
+              {
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1648,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 1318
+              },
+              {
+                "content_type": "image/jpeg",
+                "width": 1318,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 923
+              },
+              {
+                "content_type": "image/jpeg",
+                "width": 1318,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 923
+              },
+              {
+                "content_type": "image/jpeg",
+                "width": 1318,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 923
+              }
+            ],
+            "package": {
+              "width": 11,
+              "depth": 34,
+              "height": 11,
+              "weight": 2504
+            },
+            "price_offer": {
+              "lowest_price": 8764,
+              "best_seller_offer": null,
+              "price_pix": 8764
+            },
+            "prices": [
+              {
+                "list_price": 9885,
+                "price": 9225,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 7,
+              "datasheet": 0,
+              "images_quantity": 10,
+              "images_resolution": 10,
+              "total_score": 53,
+              "full_stock": false,
+              "catalog": 53,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 53,
+              "modality_scale": 0,
+              "pricing_index_scale": 30.99,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 35.04,
+              "updated_at": "2026-10-07T08:56:16.820000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 23.61,
+              "average_shipping_period": 4.94
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 657,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 18",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          }
+        ],
+        "meta": {
+          "offset": 0,
+          "links": {
+            "previous": "Texto 6",
+            "next": "Texto 7",
+            "self": "Texto 6"
+          }
+        }
+      }
+    },
+    {
+      "metodo": "GET",
+      "url": "https://api-product-search.magalu.com/seller/v1/portfolios/products",
+      "parametros": [
+        "status__ne",
+        "status__ne",
+        "_limit",
+        "_offset"
+      ],
+      "status": 200,
+      "corpo": {
+        "results": [
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2022-08-26T13:52:34.967000",
+            "description": "Produto 1",
+            "extra_data": {
+              "fulfillment": "true",
+              "IdProduct": "9000001"
+            },
+            "isbn": "",
+            "ncm": "7607.20.00",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-1",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-07T08:26:57.432000",
+            "attributes": [
+              {
+                "type": "COR",
+                "value": "PRETO"
+              }
+            ],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 8,
+              "depth": 10,
+              "height": 6,
+              "weight": 264
+            },
+            "fulfillment": true,
+            "group_id": "900000000000000000000003",
+            "id_marketplace": "abe4dac6b4",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 791,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 679
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 627,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 671
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1318,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 1318
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              }
+            ],
+            "package": {
+              "width": 8,
+              "depth": 10,
+              "height": 6,
+              "weight": 264
+            },
+            "price_offer": {
+              "lowest_price": 2961,
+              "best_seller_offer": null,
+              "price_pix": 2824
+            },
+            "prices": [
+              {
+                "list_price": 2972,
+                "price": 2972,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 0,
+              "datasheet": 0,
+              "images_quantity": 10,
+              "images_resolution": 10,
+              "total_score": 46,
+              "full_stock": false,
+              "catalog": 46,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 46,
+              "modality_scale": 0,
+              "pricing_index_scale": 14.94,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.41,
+              "experience": 34.67,
+              "updated_at": "2026-10-07T14:29:11.247000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 16.26,
+              "average_shipping_period": 5.15
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 659,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 2",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2023-09-11T21:26:19.412000",
+            "description": "Produto 1",
+            "extra_data": {
+              "IdProduct": "9000001"
+            },
+            "hidden": false,
+            "isbn": "",
+            "ncm": "7607.20.00",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-2",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-07T08:00:56.627000",
+            "attributes": [
+              {
+                "type": "COR",
+                "value": "BRANCO"
+              }
+            ],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 8,
+              "depth": 10,
+              "height": 6,
+              "weight": 264
+            },
+            "fulfillment": false,
+            "group_id": "900000000000000000000003",
+            "id_marketplace": "gcg24bcaba",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              }
+            ],
+            "package": {
+              "width": 8,
+              "depth": 10,
+              "height": 6,
+              "weight": 264
+            },
+            "price_offer": {
+              "lowest_price": 3287,
+              "best_seller_offer": null,
+              "price_pix": 3287
+            },
+            "prices": [
+              {
+                "list_price": 3460,
+                "price": 3460,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 0,
+              "datasheet": 0,
+              "images_quantity": 7,
+              "images_resolution": 10,
+              "total_score": 43,
+              "full_stock": false,
+              "catalog": 43,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 43,
+              "modality_scale": 0,
+              "pricing_index_scale": 46.12,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.41,
+              "experience": 33.24,
+              "updated_at": "2026-10-07T08:56:16.820000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 14.05,
+              "average_shipping_period": 5.3
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 658,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 2",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2022-08-26T14:31:40.988000",
+            "description": "Produto 3",
+            "ean": "9000000000008",
+            "has_ean": true,
+            "extra_data": {
+              "fulfillment": "true",
+              "IdProduct": "90009"
+            },
+            "ncm": "90000010",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-3",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "type": "product",
+            "updated_at": "2026-10-07T02:23:51.129000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [
+              {
+                "type": "Marca",
+                "value": "Marca X"
+              },
+              {
+                "type": "Modelo",
+                "value": "SKU-M9"
+              },
+              {
+                "type": "Garantia",
+                "value": "36 meses"
+              },
+              {
+                "type": "Texto 2",
+                "value": "Não se aplica"
+              },
+              {
+                "type": "Texto 3",
+                "value": "Não se aplica"
+              },
+              {
+                "type": "Texto 4",
+                "value": "Não se aplica"
+              }
+            ],
+            "dimension": {
+              "width": 9,
+              "depth": 34,
+              "height": 9,
+              "weight": 3163
+            },
+            "fulfillment": true,
+            "group_id": "900000000000000000000011",
+            "id_marketplace": "900000012",
+            "images": [
+              {
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1443,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 1003
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1648,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 1318
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1648,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 989
+              }
+            ],
+            "package": {
+              "width": 9,
+              "depth": 34,
+              "height": 9,
+              "weight": 3163
+            },
+            "price_offer": {
+              "lowest_price": 7844,
+              "best_seller_offer": null,
+              "price_pix": 9328
+            },
+            "prices": [
+              {
+                "list_price": 9885,
+                "price": 9819,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 7,
+              "datasheet": 7,
+              "images_quantity": 10,
+              "images_resolution": 10,
+              "total_score": 59,
+              "full_stock": false,
+              "catalog": 59,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 59,
+              "modality_scale": 0,
+              "pricing_index_scale": 16.76,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 41.33,
+              "updated_at": "2026-10-07T14:29:11.247000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 6.92,
+              "average_shipping_period": 4.5
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 656,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 4",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": false,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2023-09-11T21:20:30.036000",
+            "description": "Produto 5",
+            "has_ean": true,
+            "extra_data": {
+              "IdProduct": "90000000000014"
+            },
+            "hidden": false,
+            "isbn": "",
+            "ncm": "90000015",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-4",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-07T01:08:26.267000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 42,
+              "depth": 7,
+              "height": 7,
+              "weight": 1318
+            },
+            "fulfillment": false,
+            "group_id": "900000000000000000000016",
+            "id_marketplace": "fkjj2042ea",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              }
+            ],
+            "package": {
+              "width": 42,
+              "depth": 7,
+              "height": 7,
+              "weight": 1318
+            },
+            "price_offer": {
+              "lowest_price": 8764,
+              "best_seller_offer": null,
+              "price_pix": 8764
+            },
+            "prices": [
+              {
+                "list_price": 10544,
+                "price": 9225,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 0,
+              "datasheet": 0,
+              "images_quantity": 10,
+              "images_resolution": 10,
+              "total_score": 46,
+              "full_stock": false,
+              "catalog": 46,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 46,
+              "modality_scale": 0,
+              "pricing_index_scale": 31.14,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 41.47,
+              "updated_at": "2026-10-07T08:56:16.820000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 15.93,
+              "average_shipping_period": 4.86
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 654,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 6",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2022-08-26T14:18:30.351000",
+            "description": "Produto 7",
+            "ean": "9000000000023",
+            "has_ean": true,
+            "extra_data": {
+              "fulfillment": "true",
+              "IdProduct": "90024"
+            },
+            "isbn": "",
+            "ncm": "90000015",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-5",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-06T05:02:46.114000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [
+              {
+                "type": "REFERENCIA",
+                "value": "SKU-M3"
+              },
+              {
+                "type": "SUPORTE PARA TV",
+                "value": "TODOS OS MODELOS"
+              },
+              {
+                "type": "POLEGADAS",
+                "value": "10″ ATÉ 55″"
+              },
+              {
+                "type": "FURAÇÃO VESA:",
+                "value": "75 X 75 ATÉ 400 X 400 MM"
+              },
+              {
+                "type": "TIPO",
+                "value": "Texto 5"
+              },
+              {
+                "type": "LOCAL DE INSTALAÇÃO",
+                "value": "PAREDE"
+              },
+              {
+                "type": "CARGA MÁXIMA:",
+                "value": "16KG"
+              },
+              {
+                "type": "Texto 3",
+                "value": "Não se aplica"
+              },
+              {
+                "type": "Texto 4",
+                "value": "Não se aplica"
+              },
+              {
+                "type": "Garantia",
+                "value": "3 ANOS"
+              }
+            ],
+            "dimension": {
+              "width": 4,
+              "depth": 33,
+              "height": 4,
+              "weight": 1911
+            },
+            "fulfillment": true,
+            "group_id": "900000000000000000000025",
+            "id_marketplace": "ehj0h1d5f1",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 527,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 527
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1186,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 791
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 791,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 1054
+              }
+            ],
+            "package": {
+              "width": 4,
+              "depth": 33,
+              "height": 4,
+              "weight": 1911
+            },
+            "price_offer": {
+              "lowest_price": 17807,
+              "best_seller_offer": null,
+              "price_pix": 21911
+            },
+            "prices": [
+              {
+                "list_price": 23065,
+                "price": 23064,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 7,
+              "datasheet": 13,
+              "images_quantity": 10,
+              "images_resolution": 10,
+              "total_score": 66,
+              "full_stock": false,
+              "catalog": 66,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 66,
+              "modality_scale": 0,
+              "pricing_index_scale": 33.08,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 37.19,
+              "updated_at": "2026-10-07T14:29:11.247000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 23.22,
+              "average_shipping_period": 5.05
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 659,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 8",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": false,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2022-08-26T15:04:07.312000",
+            "description": "Produto 9",
+            "ean": "9000000000028",
+            "has_ean": true,
+            "extra_data": {
+              "fulfillment": "true",
+              "IdProduct": "90029"
+            },
+            "ncm": "90000010",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 1,
+            "sku": "SKU-6",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-05T11:17:08.687000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 8,
+              "depth": 16,
+              "height": 8,
+              "weight": 1516
+            },
+            "fulfillment": true,
+            "group_id": "900000000000000000000030",
+            "id_marketplace": "ebg0a9c7d9",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1318,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 1318
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 443,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 295
+              }
+            ],
+            "package": {
+              "width": 8,
+              "depth": 16,
+              "height": 8,
+              "weight": 1516
+            },
+            "price_offer": {
+              "lowest_price": 10016,
+              "best_seller_offer": null,
+              "price_pix": 10016
+            },
+            "prices": [
+              {
+                "list_price": 11862,
+                "price": 10543,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 7,
+              "ean": 7,
+              "datasheet": 0,
+              "images_quantity": 7,
+              "images_resolution": 7,
+              "total_score": 40,
+              "full_stock": false,
+              "catalog": 40,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 40,
+              "modality_scale": 0,
+              "pricing_index_scale": 31.36,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 36.23,
+              "updated_at": "2026-10-07T08:56:16.820000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 22.7,
+              "average_shipping_period": 4.9
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 659,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 10",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2022-08-26T14:02:25.115000",
+            "description": "Produto 11",
+            "has_ean": true,
+            "extra_data": {
+              "IdProduct": "MLB3440520907"
+            },
+            "isbn": "",
+            "ncm": "90000015",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-7",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-05T10:50:34.518000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 5,
+              "depth": 26,
+              "height": 5,
+              "weight": 527
+            },
+            "fulfillment": false,
+            "group_id": "900000000000000000000031",
+            "id_marketplace": "fd2dc0d472",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 330,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 328
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 330,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 327
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 313,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 330
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 330,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 271
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 330,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 287
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 312,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 330
+              }
+            ],
+            "package": {
+              "width": 5,
+              "depth": 26,
+              "height": 5,
+              "weight": 527
+            },
+            "price_offer": {
+              "lowest_price": 14398,
+              "best_seller_offer": null,
+              "price_pix": 14398
+            },
+            "prices": [
+              {
+                "list_price": 16475,
+                "price": 15156,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 7,
+              "ean": 0,
+              "datasheet": 0,
+              "images_quantity": 10,
+              "images_resolution": 7,
+              "total_score": 36,
+              "full_stock": false,
+              "catalog": 36,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 36,
+              "modality_scale": 0,
+              "pricing_index_scale": 33.83,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 40.88,
+              "updated_at": "2026-10-07T08:56:16.820000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 17.19,
+              "average_shipping_period": 5.05
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 658,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 12",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2023-09-25T21:00:06.420000",
+            "description": "Produto 13",
+            "has_ean": true,
+            "extra_data": {
+              "IdProduct": "9000000000036"
+            },
+            "hidden": false,
+            "isbn": "",
+            "ncm": "90000015",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-8",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-04T02:12:11.683000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 42,
+              "depth": 7,
+              "height": 7,
+              "weight": 1318
+            },
+            "fulfillment": false,
+            "group_id": "900000000000000000000037",
+            "id_marketplace": "jg1eh5e32a",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 525,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 525
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 659,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 659
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 658,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 658
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              }
+            ],
+            "package": {
+              "width": 42,
+              "depth": 7,
+              "height": 7,
+              "weight": 1318
+            },
+            "price_offer": {
+              "lowest_price": 9390,
+              "best_seller_offer": null,
+              "price_pix": 9390
+            },
+            "prices": [
+              {
+                "list_price": 10544,
+                "price": 9884,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 0,
+              "datasheet": 0,
+              "images_quantity": 10,
+              "images_resolution": 7,
+              "total_score": 43,
+              "full_stock": false,
+              "catalog": 43,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 43,
+              "modality_scale": 0,
+              "pricing_index_scale": 32.39,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 43.01,
+              "updated_at": "2026-10-07T08:56:16.820000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 13.9,
+              "average_shipping_period": 4.67
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 655,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 14",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2023-10-09T20:38:01.149000",
+            "description": "Produto 15",
+            "has_ean": true,
+            "extra_data": {
+              "IdProduct": "9000000000000040",
+              "fulfillment": "false"
+            },
+            "hidden": false,
+            "isbn": "",
+            "ncm": "90000015",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-9",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "updated_at": "2026-10-03T09:31:17.664000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [],
+            "dimension": {
+              "width": 13,
+              "depth": 31,
+              "height": 4,
+              "weight": 1812
+            },
+            "fulfillment": false,
+            "group_id": "900000000000000000000041",
+            "id_marketplace": "gg138hh314",
+            "images": [
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              }
+            ],
+            "package": {
+              "width": 13,
+              "depth": 31,
+              "height": 4,
+              "weight": 1812
+            },
+            "price_offer": {
+              "lowest_price": 17807,
+              "best_seller_offer": null,
+              "price_pix": 15681
+            },
+            "prices": [
+              {
+                "list_price": 16506,
+                "price": 16506,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 0,
+              "datasheet": 0,
+              "images_quantity": 10,
+              "images_resolution": 10,
+              "total_score": 46,
+              "full_stock": false,
+              "catalog": 46,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 46,
+              "modality_scale": 0,
+              "pricing_index_scale": 54.8,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 51.72,
+              "updated_at": "2026-10-07T14:29:11.247000+00:00",
+              "experience_range": "HIGH",
+              "average_shipping_cost": 16.9,
+              "average_shipping_period": 5.01
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 659,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 16",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          },
+          {
+            "active": true,
+            "brand": "Marca X",
+            "created_at": "2022-08-26T16:14:04.154000",
+            "description": "Produto 17",
+            "ean": "9000000000044",
+            "has_ean": true,
+            "extra_data": {
+              "fulfillment": "true",
+              "IdProduct": "90045"
+            },
+            "ncm": "90000010",
+            "org": "vendedor-x",
+            "origin": "national",
+            "perishable": false,
+            "promotion_count": 0,
+            "sku": "SKU-10",
+            "status": "PUBLISHED",
+            "tax_replacement": false,
+            "type": "product",
+            "updated_at": "2026-10-02T18:26:13.593000",
+            "attributes": [],
+            "channel_id": "900000000000000000000000000000000002",
+            "datasheet": [
+              {
+                "type": "Modelo",
+                "value": "SLL01B"
+              },
+              {
+                "type": "Garantia",
+                "value": "36 meses"
+              }
+            ],
+            "dimension": {
+              "width": 11,
+              "depth": 34,
+              "height": 11,
+              "weight": 2504
+            },
+            "fulfillment": true,
+            "group_id": "900000000000000000000046",
+            "id_marketplace": "900000047",
+            "images": [
+              {
+                "content_type": "image/jpeg",
+                "width": 675,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 675
+              },
+              {
+                "external_url": "https://exemplo.invalid/imagem.jpg",
+                "content_type": "image/jpeg",
+                "width": 1648,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 1318
+              },
+              {
+                "content_type": "image/jpeg",
+                "width": 1318,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 923
+              },
+              {
+                "content_type": "image/jpeg",
+                "width": 1318,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 923
+              },
+              {
+                "content_type": "image/jpeg",
+                "width": 1318,
+                "url": "https://exemplo.invalid/imagem.jpg",
+                "height": 923
+              }
+            ],
+            "package": {
+              "width": 11,
+              "depth": 34,
+              "height": 11,
+              "weight": 2504
+            },
+            "price_offer": {
+              "lowest_price": 8764,
+              "best_seller_offer": null,
+              "price_pix": 8764
+            },
+            "prices": [
+              {
+                "list_price": 9885,
+                "price": 9225,
+                "currency": "BRL",
+                "channel": "Texto 1"
+              }
+            ],
+            "score": {
+              "title": 13,
+              "description": 13,
+              "ean": 7,
+              "datasheet": 0,
+              "images_quantity": 10,
+              "images_resolution": 10,
+              "total_score": 53,
+              "full_stock": false,
+              "catalog": 53,
+              "seller_reputation": 2.7,
+              "seller_reputation_scale": 60,
+              "catalog_scale": 53,
+              "modality_scale": 0,
+              "pricing_index_scale": 30.99,
+              "seller_reputation_weight": 0.07,
+              "catalog_weight": 0.03,
+              "modality_weight": 0.02,
+              "pricing_index_weight": 0.44,
+              "experience": 35.04,
+              "updated_at": "2026-10-07T08:56:16.820000+00:00",
+              "experience_range": "MEDIUM",
+              "average_shipping_cost": 23.61,
+              "average_shipping_period": 4.94
+            },
+            "steps": {
+              "blocklist": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": "OK"
+              },
+              "marketplace": {
+                "step": "DONE",
+                "message_type": "SUCCESS",
+                "action": null
+              }
+            },
+            "stocks": [
+              {
+                "type": "on_seller",
+                "available": 657,
+                "reserved": 0
+              }
+            ],
+            "title": "Produto 18",
+            "urls": [
+              {
+                "url": "https://exemplo.invalid/produto",
+                "channel": "Texto 1"
+              }
+            ],
+            "validation_metadata": {
+              "status": "FINISHED",
+              "result": "APPROVED"
+            },
+            "videos": [],
+            "competitive": true,
+            "modality": "AGENCIA"
+          }
+        ],
+        "meta": {
+          "offset": 0,
+          "links": {
+            "previous": "Texto 6",
+            "next": "Texto 7",
+            "self": "Texto 6"
+          }
+        }
+      }
+    }
+  ]
+}

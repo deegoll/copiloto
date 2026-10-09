@@ -1,0 +1,1730 @@
+{
+  "canal": "shopee",
+  "tela": "renda-pedido",
+  "lido_em": "2026-10-08",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "POST",
+      "url": "https://seller.shopee.com.br/api/v4/accounting/pc/seller_income/income_detail/get_order_income_components",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "message": "success",
+        "user_message": "success",
+        "data": {
+          "order_info": {
+            "order_id": 900000000000002,
+            "order_sn": "90000000000003",
+            "is_cb_sip_aff_order": false,
+            "shipping_carrier": "",
+            "released_time": 1791465196,
+            "source": "Shopee Wallet",
+            "status": 7,
+            "is_outlet_shop_order": false
+          },
+          "seller_income_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 7743780,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 95,
+                    "field_name": "PRODUCT_PRICE",
+                    "amount": 8151000,
+                    "display_name": "Preço do Produto",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 96,
+                    "field_name": "PIX_DISCOUNT",
+                    "amount": -407220,
+                    "display_name": "Ajuste por pagamento via PIX",
+                    "hide_amount": false
+                  }
+                ]
+              },
+              {
+                "field_id": 97,
+                "field_name": "SHIPPING_SUBTOTAL",
+                "amount": 0,
+                "display_name": "Subtotal de Frete",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 98,
+                    "field_name": "SHIPPING_FEE_PAID_BY_BUYER",
+                    "amount": 0,
+                    "display_name": "Taxa de frete paga pelo comprador",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 99,
+                    "field_name": "ACTUAL_SHIPPING_FEE",
+                    "amount": -1035540,
+                    "display_name": "Taxa de Frete Paga pela Shopee para Você",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 910,
+                    "field_name": "SHIPPING_REBATE_FROM_SHOPEE",
+                    "amount": 1035540,
+                    "display_name": "Desconto de frete pago pela Shopee",
+                    "hide_amount": false
+                  }
+                ],
+                "ext_info": {}
+              },
+              {
+                "field_id": 911,
+                "field_name": "FEES_AND_CHARGES",
+                "amount": -2053920,
+                "display_name": "Taxas e Encargos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 912,
+                    "field_name": "COMMISSION_FEE",
+                    "amount": -848760,
+                    "display_name": "Taxa de comissão líquida",
+                    "caption": "Texto 5",
+                    "link": "https://seller.shopee.com.br/edu/article/5575",
+                    "hide_amount": false,
+                    "sub_breakdown": [
+                      {
+                        "field_id": 913,
+                        "field_name": "COMMISSION_FEE_BREAKDOWN_ORIGINAL_VALUE",
+                        "amount": -1026960,
+                        "display_name": "Taxa de comissão bruta",
+                        "hide_amount": false
+                      },
+                      {
+                        "field_id": 914,
+                        "field_name": "COMMISSION_FEE_BREAKDOWN_SELLER_BORNE_REBATE_VALUE",
+                        "amount": 178200,
+                        "display_name": "Ajuste por participação em ação comercial",
+                        "hide_amount": false
+                      }
+                    ],
+                    "ext_info": {
+                      "commission_fee_infos": [
+                        {
+                          "name": "***",
+                          "amount": 0,
+                          "rule_id": 9000015,
+                          "fee_rate": 8316
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "field_id": 916,
+                    "field_name": "SERVICE_FEE",
+                    "amount": -1205160,
+                    "display_name": "Taxa de serviço líquida",
+                    "hide_amount": false,
+                    "ext_info": {
+                      "service_fee_infos": [
+                        {
+                          "name": "***",
+                          "amount": -114180,
+                          "rule_id": 9000017,
+                          "fee_rate": 0
+                        },
+                        {
+                          "name": "***",
+                          "amount": -1320000,
+                          "rule_id": 9000018,
+                          "fee_rate": 0
+                        }
+                      ],
+                      "service_fee_rebate": {
+                        "name": "***",
+                        "amount": 229020
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "field_id": 919,
+                "field_name": "ESCROW_AMOUNT",
+                "amount": 5689860,
+                "display_name": "Renda do pedido",
+                "hide_amount": false
+              }
+            ]
+          },
+          "buyer_payment_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 8151000,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false
+              },
+              {
+                "field_id": 920,
+                "field_name": "SHIPPING_FEE",
+                "amount": 0,
+                "display_name": "Taxa de Frete",
+                "hide_amount": false
+              },
+              {
+                "field_id": 96,
+                "field_name": "SHOPEE_VOUCHER_DISCOUNT",
+                "amount": 0,
+                "display_name": "Cupom Shopee",
+                "hide_amount": false
+              },
+              {
+                "field_id": 921,
+                "field_name": "SELLER_VOUCHER_DISCOUNT",
+                "amount": 0,
+                "display_name": "Cupom do Vendedor",
+                "hide_amount": false
+              },
+              {
+                "field_id": 922,
+                "field_name": "PIX_DISCOUNT",
+                "amount": -407220,
+                "display_name": "PIX Discount",
+                "hide_amount": false
+              },
+              {
+                "field_id": 923,
+                "field_name": "BUYER_PAID_AMOUNT",
+                "amount": 7743780,
+                "display_name": "Pagamento total do comprador",
+                "hide_amount": false
+              }
+            ]
+          },
+          "order_item_list": {
+            "order_items": [
+              {
+                "item_id": 90000000024,
+                "model_id": 900000000025,
+                "group_id": "91",
+                "line_item_id": 900000000000026,
+                "price": 8151000,
+                "amount": 1,
+                "subtotal": 8151000,
+                "product_name": "Produto 1",
+                "product_sku": "SKU-1",
+                "product_image": "Texto 9",
+                "model_name": "Produto 2",
+                "model_sku": "SKU-2",
+                "sub_type": 0,
+                "bundle_item_price": 0,
+                "is_add_on_subitem": false,
+                "is_pre_order": false,
+                "is_delivery_insured": false,
+                "returned_qty": 0,
+                "cancelled_qty": 0,
+                "show_return_tag": false,
+                "show_cancellation_tag": false,
+                "is_overseas_return_insured": false,
+                "has_spu_vsku": false,
+                "is_cncb_lff_tagged": false
+              }
+            ]
+          },
+          "adjustment_info": {
+            "total_adjustment_amount": 0,
+            "amount_after_adjustment": 5689860
+          },
+          "error_codes": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "metodo": "POST",
+      "url": "https://seller.shopee.com.br/api/v4/accounting/pc/seller_income/income_detail/get_order_income_components",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "message": "success",
+        "user_message": "success",
+        "data": {
+          "order_info": {
+            "order_id": 900000000000027,
+            "order_sn": "90000000000028",
+            "is_cb_sip_aff_order": false,
+            "shipping_carrier": "",
+            "released_time": 1791405893,
+            "source": "Shopee Wallet",
+            "status": 7,
+            "is_outlet_shop_order": false
+          },
+          "seller_income_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 12540000,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 95,
+                    "field_name": "PRODUCT_PRICE",
+                    "amount": 13199340,
+                    "display_name": "Preço do Produto",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 96,
+                    "field_name": "PIX_DISCOUNT",
+                    "amount": -659340,
+                    "display_name": "Ajuste por pagamento via PIX",
+                    "hide_amount": false
+                  }
+                ]
+              },
+              {
+                "field_id": 97,
+                "field_name": "SHIPPING_SUBTOTAL",
+                "amount": 0,
+                "display_name": "Subtotal de Frete",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 98,
+                    "field_name": "SHIPPING_FEE_PAID_BY_BUYER",
+                    "amount": 0,
+                    "display_name": "Taxa de frete paga pelo comprador",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 99,
+                    "field_name": "ACTUAL_SHIPPING_FEE",
+                    "amount": -794640,
+                    "display_name": "Taxa de Frete Paga pela Shopee para Você",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 910,
+                    "field_name": "SHIPPING_REBATE_FROM_SHOPEE",
+                    "amount": 794640,
+                    "display_name": "Desconto de frete pago pela Shopee",
+                    "hide_amount": false
+                  }
+                ],
+                "ext_info": {}
+              },
+              {
+                "field_id": 911,
+                "field_name": "FEES_AND_CHARGES",
+                "amount": -2508660,
+                "display_name": "Taxas e Encargos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 912,
+                    "field_name": "COMMISSION_FEE",
+                    "amount": -1295580,
+                    "display_name": "Taxa de comissão líquida",
+                    "caption": "Texto 5",
+                    "link": "https://seller.shopee.com.br/edu/article/5575",
+                    "hide_amount": false,
+                    "sub_breakdown": [
+                      {
+                        "field_id": 913,
+                        "field_name": "COMMISSION_FEE_BREAKDOWN_ORIGINAL_VALUE",
+                        "amount": -1663200,
+                        "display_name": "Taxa de comissão bruta",
+                        "hide_amount": false
+                      },
+                      {
+                        "field_id": 914,
+                        "field_name": "COMMISSION_FEE_BREAKDOWN_SELLER_BORNE_REBATE_VALUE",
+                        "amount": 367620,
+                        "display_name": "Ajuste por participação em ação comercial",
+                        "hide_amount": false
+                      }
+                    ],
+                    "ext_info": {
+                      "commission_fee_infos": [
+                        {
+                          "name": "***",
+                          "amount": 0,
+                          "rule_id": 9000015,
+                          "fee_rate": 8316
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "field_id": 916,
+                    "field_name": "SERVICE_FEE",
+                    "amount": -1213080,
+                    "display_name": "Taxa de serviço líquida",
+                    "hide_amount": false,
+                    "ext_info": {
+                      "service_fee_infos": [
+                        {
+                          "name": "***",
+                          "amount": -184800,
+                          "rule_id": 9000017,
+                          "fee_rate": 0
+                        },
+                        {
+                          "name": "***",
+                          "amount": -1320000,
+                          "rule_id": 9000018,
+                          "fee_rate": 0
+                        },
+                        {
+                          "name": "***",
+                          "amount": 0,
+                          "rule_id": 91,
+                          "fee_rate": 0
+                        }
+                      ],
+                      "service_fee_rebate": {
+                        "name": "***",
+                        "amount": 291720
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "field_id": 919,
+                "field_name": "ESCROW_AMOUNT",
+                "amount": 10031340,
+                "display_name": "Renda do pedido",
+                "hide_amount": false
+              }
+            ]
+          },
+          "buyer_payment_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 13199340,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false
+              },
+              {
+                "field_id": 920,
+                "field_name": "SHIPPING_FEE",
+                "amount": 0,
+                "display_name": "Taxa de Frete",
+                "hide_amount": false
+              },
+              {
+                "field_id": 96,
+                "field_name": "SHOPEE_VOUCHER_DISCOUNT",
+                "amount": 0,
+                "display_name": "Cupom Shopee",
+                "hide_amount": false
+              },
+              {
+                "field_id": 921,
+                "field_name": "SELLER_VOUCHER_DISCOUNT",
+                "amount": 0,
+                "display_name": "Cupom do Vendedor",
+                "hide_amount": false
+              },
+              {
+                "field_id": 922,
+                "field_name": "PIX_DISCOUNT",
+                "amount": -659340,
+                "display_name": "PIX Discount",
+                "hide_amount": false
+              },
+              {
+                "field_id": 923,
+                "field_name": "BUYER_PAID_AMOUNT",
+                "amount": 12540000,
+                "display_name": "Pagamento total do comprador",
+                "hide_amount": false
+              }
+            ]
+          },
+          "order_item_list": {
+            "order_items": [
+              {
+                "item_id": 90000000024,
+                "model_id": 900000000029,
+                "group_id": "91",
+                "line_item_id": 900000000000030,
+                "price": 13199340,
+                "amount": 1,
+                "subtotal": 13199340,
+                "product_name": "Produto 1",
+                "product_sku": "SKU-1",
+                "product_image": "Texto 10",
+                "model_name": "Produto 3",
+                "model_sku": "SKU-3",
+                "sub_type": 0,
+                "bundle_item_price": 0,
+                "is_add_on_subitem": false,
+                "is_pre_order": false,
+                "is_delivery_insured": false,
+                "returned_qty": 0,
+                "cancelled_qty": 0,
+                "show_return_tag": false,
+                "show_cancellation_tag": false,
+                "is_overseas_return_insured": false,
+                "has_spu_vsku": false,
+                "is_cncb_lff_tagged": false
+              }
+            ]
+          },
+          "adjustment_info": {
+            "total_adjustment_amount": 0,
+            "amount_after_adjustment": 10031340
+          },
+          "error_codes": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "metodo": "POST",
+      "url": "https://seller.shopee.com.br/api/v4/accounting/pc/seller_income/income_detail/get_order_income_components",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "message": "success",
+        "user_message": "success",
+        "data": {
+          "order_info": {
+            "order_id": 900000000000031,
+            "order_sn": "90000000000032",
+            "is_cb_sip_aff_order": false,
+            "shipping_carrier": "",
+            "released_time": 1791304187,
+            "source": "Shopee Wallet",
+            "status": 7,
+            "is_outlet_shop_order": false
+          },
+          "seller_income_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 1188000,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 95,
+                    "field_name": "PRODUCT_PRICE",
+                    "amount": 2508000,
+                    "display_name": "Preço do Produto",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 933,
+                    "field_name": "VOUCHER_DISCOUNT_FROM_SHOPEE",
+                    "amount": -1320000,
+                    "display_name": "Cupom",
+                    "hide_amount": false
+                  }
+                ]
+              },
+              {
+                "field_id": 97,
+                "field_name": "SHIPPING_SUBTOTAL",
+                "amount": 0,
+                "display_name": "Subtotal de Frete",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 98,
+                    "field_name": "SHIPPING_FEE_PAID_BY_BUYER",
+                    "amount": 1024980,
+                    "display_name": "Taxa de frete paga pelo comprador",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 99,
+                    "field_name": "ACTUAL_SHIPPING_FEE",
+                    "amount": -1024980,
+                    "display_name": "Taxa de Frete Paga pela Shopee para Você",
+                    "hide_amount": false
+                  }
+                ],
+                "ext_info": {}
+              },
+              {
+                "field_id": 923,
+                "field_name": "REBATE_AND_VOUCHER",
+                "amount": 604560,
+                "display_name": "Cupons & descontos.",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 934,
+                    "field_name": "REMAINING_VOUCHER_DISCOUNT_FROM_SHOPEE",
+                    "amount": 604560,
+                    "display_name": "Incentivo de cupom",
+                    "hide_amount": false
+                  }
+                ]
+              },
+              {
+                "field_id": 911,
+                "field_name": "FEES_AND_CHARGES",
+                "amount": -168300,
+                "display_name": "Taxas e Encargos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 912,
+                    "field_name": "COMMISSION_FEE",
+                    "amount": 0,
+                    "display_name": "Taxa de comissão líquida",
+                    "caption": "Texto 11",
+                    "link": "https://seller.shopee.com.br/edu/article/5575",
+                    "hide_amount": false,
+                    "sub_breakdown": [
+                      {
+                        "field_id": 913,
+                        "field_name": "COMMISSION_FEE_BREAKDOWN_ORIGINAL_VALUE",
+                        "amount": -451440,
+                        "display_name": "Taxa de comissão bruta",
+                        "hide_amount": false
+                      },
+                      {
+                        "field_id": 914,
+                        "field_name": "COMMISSION_FEE_BREAKDOWN_SELLER_BORNE_REBATE_VALUE",
+                        "amount": 451440,
+                        "display_name": "Ajuste por participação em ação comercial",
+                        "hide_amount": false
+                      }
+                    ],
+                    "ext_info": {
+                      "commission_fee_infos": [
+                        {
+                          "name": "***",
+                          "amount": 0,
+                          "rule_id": 9000035,
+                          "fee_rate": 11880
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "field_id": 916,
+                    "field_name": "SERVICE_FEE",
+                    "amount": -58740,
+                    "display_name": "Taxa de serviço líquida",
+                    "hide_amount": false,
+                    "ext_info": {
+                      "service_fee_infos": [
+                        {
+                          "name": "***",
+                          "amount": -50160,
+                          "rule_id": 9000036,
+                          "fee_rate": 0
+                        },
+                        {
+                          "name": "***",
+                          "amount": -264000,
+                          "rule_id": 9000037,
+                          "fee_rate": 0
+                        },
+                        {
+                          "name": "***",
+                          "amount": -8580,
+                          "rule_id": 91,
+                          "fee_rate": 0
+                        }
+                      ],
+                      "service_fee_rebate": {
+                        "name": "***",
+                        "amount": 264000
+                      }
+                    }
+                  },
+                  {
+                    "field_id": 938,
+                    "field_name": "AMS_COMMISSION_FEE",
+                    "amount": -59400,
+                    "display_name": "Taxa de comissão Afiliados do Vendedor",
+                    "caption": "Texto 13",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 939,
+                    "field_name": "ADS_ESCROW_TOP_UP_FEE",
+                    "amount": -50160,
+                    "display_name": "Taxa da Recarga Automática (Pedido)",
+                    "caption": "Texto 15",
+                    "link": "",
+                    "hide_amount": false
+                  }
+                ]
+              },
+              {
+                "field_id": 919,
+                "field_name": "ESCROW_AMOUNT",
+                "amount": 1624260,
+                "display_name": "Renda do pedido",
+                "hide_amount": false
+              }
+            ]
+          },
+          "buyer_payment_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 2508000,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false
+              },
+              {
+                "field_id": 920,
+                "field_name": "SHIPPING_FEE",
+                "amount": 1024980,
+                "display_name": "Taxa de Frete",
+                "hide_amount": false
+              },
+              {
+                "field_id": 96,
+                "field_name": "SHOPEE_VOUCHER_DISCOUNT",
+                "amount": -1320000,
+                "display_name": "Cupom Shopee",
+                "hide_amount": false
+              },
+              {
+                "field_id": 921,
+                "field_name": "SELLER_VOUCHER_DISCOUNT",
+                "amount": 0,
+                "display_name": "Cupom do Vendedor",
+                "hide_amount": false
+              },
+              {
+                "field_id": 923,
+                "field_name": "BUYER_PAID_AMOUNT",
+                "amount": 2212980,
+                "display_name": "Pagamento total do comprador",
+                "hide_amount": false
+              }
+            ]
+          },
+          "order_item_list": {
+            "order_items": [
+              {
+                "item_id": 90000000040,
+                "model_id": 900000000041,
+                "group_id": "91",
+                "line_item_id": 900000000000042,
+                "price": 2508000,
+                "amount": 1,
+                "subtotal": 2508000,
+                "product_name": "Produto 4",
+                "product_sku": "SKU-4",
+                "product_image": "Texto 16",
+                "model_name": "",
+                "model_sku": "",
+                "sub_type": 0,
+                "bundle_item_price": 0,
+                "is_add_on_subitem": false,
+                "is_pre_order": false,
+                "is_delivery_insured": false,
+                "returned_qty": 0,
+                "cancelled_qty": 0,
+                "show_return_tag": false,
+                "show_cancellation_tag": false,
+                "is_overseas_return_insured": false,
+                "has_spu_vsku": false,
+                "is_cncb_lff_tagged": false
+              }
+            ]
+          },
+          "adjustment_info": {
+            "total_adjustment_amount": 0,
+            "amount_after_adjustment": 1624260
+          },
+          "error_codes": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "metodo": "POST",
+      "url": "https://seller.shopee.com.br/api/v4/accounting/pc/seller_income/income_detail/get_order_income_components",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "message": "success",
+        "user_message": "success",
+        "data": {
+          "order_info": {
+            "order_id": 900000000000043,
+            "order_sn": "90000000000044",
+            "is_cb_sip_aff_order": false,
+            "shipping_carrier": "",
+            "released_time": 1791303577,
+            "source": "Shopee Wallet",
+            "status": 7,
+            "is_outlet_shop_order": false
+          },
+          "seller_income_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 8778000,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 95,
+                    "field_name": "PRODUCT_PRICE",
+                    "amount": 8778000,
+                    "display_name": "Preço do Produto",
+                    "hide_amount": false
+                  }
+                ]
+              },
+              {
+                "field_id": 97,
+                "field_name": "SHIPPING_SUBTOTAL",
+                "amount": 0,
+                "display_name": "Subtotal de Frete",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 98,
+                    "field_name": "SHIPPING_FEE_PAID_BY_BUYER",
+                    "amount": 0,
+                    "display_name": "Taxa de frete paga pelo comprador",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 99,
+                    "field_name": "ACTUAL_SHIPPING_FEE",
+                    "amount": -794640,
+                    "display_name": "Taxa de Frete Paga pela Shopee para Você",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 910,
+                    "field_name": "SHIPPING_REBATE_FROM_SHOPEE",
+                    "amount": 794640,
+                    "display_name": "Desconto de frete pago pela Shopee",
+                    "hide_amount": false
+                  }
+                ],
+                "ext_info": {}
+              },
+              {
+                "field_id": 911,
+                "field_name": "FEES_AND_CHARGES",
+                "amount": -2724480,
+                "display_name": "Taxas e Encargos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 912,
+                    "field_name": "COMMISSION_FEE",
+                    "amount": -1053360,
+                    "display_name": "Taxa de comissão líquida",
+                    "caption": "Texto 17",
+                    "link": "https://seller.shopee.com.br/edu/article/5575",
+                    "hide_amount": false,
+                    "sub_breakdown": [
+                      {
+                        "field_id": 913,
+                        "field_name": "COMMISSION_FEE_BREAKDOWN_ORIGINAL_VALUE",
+                        "amount": -1053360,
+                        "display_name": "Taxa de comissão bruta",
+                        "hide_amount": false
+                      }
+                    ],
+                    "ext_info": {
+                      "commission_fee_infos": [
+                        {
+                          "name": "***",
+                          "amount": 0,
+                          "rule_id": 900045,
+                          "fee_rate": 7920
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "field_id": 916,
+                    "field_name": "SERVICE_FEE",
+                    "amount": -1495560,
+                    "display_name": "Taxa de serviço líquida",
+                    "hide_amount": false,
+                    "ext_info": {
+                      "service_fee_infos": [
+                        {
+                          "name": "***",
+                          "amount": -175560,
+                          "rule_id": 900046,
+                          "fee_rate": 0
+                        },
+                        {
+                          "name": "***",
+                          "amount": -1320000,
+                          "rule_id": 900047,
+                          "fee_rate": 0
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "field_id": 939,
+                    "field_name": "ADS_ESCROW_TOP_UP_FEE",
+                    "amount": -175560,
+                    "display_name": "Taxa da Recarga Automática (Pedido)",
+                    "caption": "Texto 15",
+                    "link": "",
+                    "hide_amount": false
+                  }
+                ]
+              },
+              {
+                "field_id": 919,
+                "field_name": "ESCROW_AMOUNT",
+                "amount": 6053520,
+                "display_name": "Renda do pedido",
+                "hide_amount": false
+              }
+            ]
+          },
+          "buyer_payment_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 8778000,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false
+              },
+              {
+                "field_id": 920,
+                "field_name": "SHIPPING_FEE",
+                "amount": 0,
+                "display_name": "Taxa de Frete",
+                "hide_amount": false
+              },
+              {
+                "field_id": 96,
+                "field_name": "SHOPEE_VOUCHER_DISCOUNT",
+                "amount": 0,
+                "display_name": "Cupom Shopee",
+                "hide_amount": false
+              },
+              {
+                "field_id": 921,
+                "field_name": "SELLER_VOUCHER_DISCOUNT",
+                "amount": 0,
+                "display_name": "Cupom do Vendedor",
+                "hide_amount": false
+              },
+              {
+                "field_id": 933,
+                "field_name": "SHOPEE_COINS_REDEEMED",
+                "amount": -457380,
+                "display_name": "Moedas Shopee Resgatadas",
+                "caption": "693 moedas",
+                "hide_amount": false,
+                "ext_info": {
+                  "coin_used": 457
+                }
+              },
+              {
+                "field_id": 923,
+                "field_name": "BUYER_PAID_AMOUNT",
+                "amount": 8320620,
+                "display_name": "Pagamento total do comprador",
+                "hide_amount": false
+              }
+            ]
+          },
+          "order_item_list": {
+            "order_items": [
+              {
+                "item_id": 90000000048,
+                "model_id": 900000000049,
+                "group_id": "91",
+                "line_item_id": 900000000000050,
+                "price": 8778000,
+                "amount": 1,
+                "subtotal": 8778000,
+                "product_name": "Produto 5",
+                "product_sku": "SKU-2",
+                "product_image": "Texto 18",
+                "model_name": "",
+                "model_sku": "",
+                "sub_type": 0,
+                "bundle_item_price": 0,
+                "is_add_on_subitem": false,
+                "is_pre_order": false,
+                "is_delivery_insured": false,
+                "returned_qty": 0,
+                "cancelled_qty": 0,
+                "show_return_tag": false,
+                "show_cancellation_tag": false,
+                "is_overseas_return_insured": false,
+                "has_spu_vsku": false,
+                "is_cncb_lff_tagged": false
+              }
+            ]
+          },
+          "adjustment_info": {
+            "total_adjustment_amount": 0,
+            "amount_after_adjustment": 6053520
+          },
+          "error_codes": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "metodo": "POST",
+      "url": "https://seller.shopee.com.br/api/v4/accounting/pc/seller_income/income_detail/get_order_income_components",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "message": "success",
+        "user_message": "success",
+        "data": {
+          "order_info": {
+            "order_id": 900000000000051,
+            "order_sn": "90000000000052",
+            "is_cb_sip_aff_order": false,
+            "shipping_carrier": "",
+            "released_time": 1791296322,
+            "source": "Shopee Wallet",
+            "status": 7,
+            "is_outlet_shop_order": false
+          },
+          "seller_income_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 0,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 95,
+                    "field_name": "PRODUCT_PRICE",
+                    "amount": 15675000,
+                    "display_name": "Preço do Produto",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 920,
+                    "field_name": "REFUND_AMOUNT",
+                    "amount": -15675000,
+                    "display_name": "Valor do Reembolso",
+                    "hide_amount": false,
+                    "ext_info": {
+                      "return_id": 900000000000053
+                    }
+                  }
+                ]
+              },
+              {
+                "field_id": 97,
+                "field_name": "SHIPPING_SUBTOTAL",
+                "amount": 0,
+                "display_name": "Subtotal de Frete",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 98,
+                    "field_name": "SHIPPING_FEE_PAID_BY_BUYER",
+                    "amount": 0,
+                    "display_name": "Taxa de frete paga pelo comprador",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 99,
+                    "field_name": "ACTUAL_SHIPPING_FEE",
+                    "amount": 0,
+                    "display_name": "Taxa de Frete Paga pela Shopee para Você",
+                    "hide_amount": false
+                  }
+                ],
+                "ext_info": {}
+              },
+              {
+                "field_id": 919,
+                "field_name": "ESCROW_AMOUNT",
+                "amount": 0,
+                "display_name": "Renda do pedido",
+                "hide_amount": false
+              }
+            ]
+          },
+          "buyer_payment_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 15675000,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false
+              },
+              {
+                "field_id": 920,
+                "field_name": "SHIPPING_FEE",
+                "amount": 1261920,
+                "display_name": "Taxa de Frete",
+                "hide_amount": false
+              },
+              {
+                "field_id": 96,
+                "field_name": "SHOPEE_VOUCHER_DISCOUNT",
+                "amount": 0,
+                "display_name": "Cupom Shopee",
+                "hide_amount": false
+              },
+              {
+                "field_id": 921,
+                "field_name": "SELLER_VOUCHER_DISCOUNT",
+                "amount": 0,
+                "display_name": "Cupom do Vendedor",
+                "hide_amount": false
+              },
+              {
+                "field_id": 954,
+                "field_name": "BUYER_TRANSACTION_FEE",
+                "amount": 1871760,
+                "display_name": "Acréscimo por método de pagamento",
+                "hide_amount": false
+              },
+              {
+                "field_id": 923,
+                "field_name": "BUYER_PAID_AMOUNT",
+                "amount": 18808680,
+                "display_name": "Pagamento total do comprador",
+                "hide_amount": false
+              }
+            ]
+          },
+          "order_item_list": {
+            "order_items": [
+              {
+                "item_id": 90000000055,
+                "model_id": 900000000056,
+                "group_id": "91",
+                "line_item_id": 900000000000057,
+                "price": 15675000,
+                "amount": 1,
+                "subtotal": 15675000,
+                "product_name": "Produto 6",
+                "product_sku": "SKU-5",
+                "product_image": "Texto 20",
+                "model_name": "",
+                "model_sku": "",
+                "sub_type": 0,
+                "bundle_item_price": 0,
+                "is_add_on_subitem": false,
+                "is_pre_order": false,
+                "is_delivery_insured": false,
+                "returned_qty": 1,
+                "cancelled_qty": 0,
+                "show_return_tag": true,
+                "show_cancellation_tag": false,
+                "is_overseas_return_insured": false,
+                "has_spu_vsku": false,
+                "is_cncb_lff_tagged": false
+              }
+            ]
+          },
+          "adjustment_info": {
+            "components": [
+              {
+                "description": "Produto 7",
+                "date": 1791309675,
+                "adj_complete_date": "9000000058",
+                "adjustment_amount": 11764500
+              }
+            ],
+            "total_adjustment_amount": 11764500,
+            "amount_after_adjustment": 11764500
+          },
+          "error_codes": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "metodo": "POST",
+      "url": "https://seller.shopee.com.br/api/v4/accounting/pc/seller_income/income_detail/get_order_income_components",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "message": "success",
+        "user_message": "success",
+        "data": {
+          "order_info": {
+            "order_id": 900000000000059,
+            "order_sn": "90000000000060",
+            "is_cb_sip_aff_order": false,
+            "shipping_carrier": "",
+            "released_time": 1791291505,
+            "source": "Shopee Wallet",
+            "status": 7,
+            "is_outlet_shop_order": false
+          },
+          "seller_income_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 12853500,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 95,
+                    "field_name": "PRODUCT_PRICE",
+                    "amount": 12853500,
+                    "display_name": "Preço do Produto",
+                    "hide_amount": false
+                  }
+                ]
+              },
+              {
+                "field_id": 97,
+                "field_name": "SHIPPING_SUBTOTAL",
+                "amount": 0,
+                "display_name": "Subtotal de Frete",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 98,
+                    "field_name": "SHIPPING_FEE_PAID_BY_BUYER",
+                    "amount": 76560,
+                    "display_name": "Taxa de frete paga pelo comprador",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 99,
+                    "field_name": "ACTUAL_SHIPPING_FEE",
+                    "amount": -2056560,
+                    "display_name": "Taxa de Frete Paga pela Shopee para Você",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 910,
+                    "field_name": "SHIPPING_REBATE_FROM_SHOPEE",
+                    "amount": 1980000,
+                    "display_name": "Desconto de frete pago pela Shopee",
+                    "hide_amount": false
+                  }
+                ],
+                "ext_info": {}
+              },
+              {
+                "field_id": 911,
+                "field_name": "FEES_AND_CHARGES",
+                "amount": -3377220,
+                "display_name": "Taxas e Encargos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 912,
+                    "field_name": "COMMISSION_FEE",
+                    "amount": -1542420,
+                    "display_name": "Taxa de comissão líquida",
+                    "caption": "Texto 17",
+                    "link": "https://seller.shopee.com.br/edu/article/5575",
+                    "hide_amount": false,
+                    "sub_breakdown": [
+                      {
+                        "field_id": 913,
+                        "field_name": "COMMISSION_FEE_BREAKDOWN_ORIGINAL_VALUE",
+                        "amount": -1542420,
+                        "display_name": "Taxa de comissão bruta",
+                        "hide_amount": false
+                      }
+                    ],
+                    "ext_info": {
+                      "commission_fee_infos": [
+                        {
+                          "name": "***",
+                          "amount": 0,
+                          "rule_id": 9000035,
+                          "fee_rate": 7920
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "field_id": 916,
+                    "field_name": "SERVICE_FEE",
+                    "amount": -1577400,
+                    "display_name": "Taxa de serviço líquida",
+                    "hide_amount": false,
+                    "ext_info": {
+                      "service_fee_infos": [
+                        {
+                          "name": "***",
+                          "amount": -257400,
+                          "rule_id": 9000036,
+                          "fee_rate": 0
+                        },
+                        {
+                          "name": "***",
+                          "amount": -1320000,
+                          "rule_id": 9000037,
+                          "fee_rate": 0
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "field_id": 939,
+                    "field_name": "ADS_ESCROW_TOP_UP_FEE",
+                    "amount": -257400,
+                    "display_name": "Taxa da Recarga Automática (Pedido)",
+                    "caption": "Texto 15",
+                    "link": "",
+                    "hide_amount": false
+                  }
+                ]
+              },
+              {
+                "field_id": 919,
+                "field_name": "ESCROW_AMOUNT",
+                "amount": 9476280,
+                "display_name": "Renda do pedido",
+                "hide_amount": false
+              }
+            ]
+          },
+          "buyer_payment_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 12853500,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false
+              },
+              {
+                "field_id": 920,
+                "field_name": "SHIPPING_FEE",
+                "amount": 76560,
+                "display_name": "Taxa de Frete",
+                "hide_amount": false
+              },
+              {
+                "field_id": 96,
+                "field_name": "SHOPEE_VOUCHER_DISCOUNT",
+                "amount": 0,
+                "display_name": "Cupom Shopee",
+                "hide_amount": false
+              },
+              {
+                "field_id": 921,
+                "field_name": "SELLER_VOUCHER_DISCOUNT",
+                "amount": 0,
+                "display_name": "Cupom do Vendedor",
+                "hide_amount": false
+              },
+              {
+                "field_id": 933,
+                "field_name": "SHOPEE_COINS_REDEEMED",
+                "amount": -223080,
+                "display_name": "Moedas Shopee Resgatadas",
+                "caption": "338 moedas",
+                "hide_amount": false,
+                "ext_info": {
+                  "coin_used": 223
+                }
+              },
+              {
+                "field_id": 923,
+                "field_name": "BUYER_PAID_AMOUNT",
+                "amount": 12706980,
+                "display_name": "Pagamento total do comprador",
+                "hide_amount": false
+              }
+            ]
+          },
+          "order_item_list": {
+            "order_items": [
+              {
+                "item_id": 90000000061,
+                "model_id": 900000000062,
+                "group_id": "91",
+                "line_item_id": 900000000000063,
+                "price": 12853500,
+                "amount": 1,
+                "subtotal": 12853500,
+                "product_name": "Produto 8",
+                "product_sku": "SKU-6",
+                "product_image": "Texto 21",
+                "model_name": "Produto 9",
+                "model_sku": "SKU-6",
+                "sub_type": 0,
+                "bundle_item_price": 0,
+                "is_add_on_subitem": false,
+                "is_pre_order": false,
+                "is_delivery_insured": false,
+                "returned_qty": 0,
+                "cancelled_qty": 0,
+                "show_return_tag": false,
+                "show_cancellation_tag": false,
+                "is_overseas_return_insured": false,
+                "has_spu_vsku": false,
+                "is_cncb_lff_tagged": false
+              }
+            ]
+          },
+          "adjustment_info": {
+            "total_adjustment_amount": 0,
+            "amount_after_adjustment": 9476280
+          },
+          "error_codes": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "metodo": "POST",
+      "url": "https://seller.shopee.com.br/api/v4/accounting/pc/seller_income/income_detail/get_order_income_components",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "code": 91,
+        "message": "success",
+        "user_message": "success",
+        "data": {
+          "order_info": {
+            "order_id": 900000000000064,
+            "order_sn": "90000000000065",
+            "is_cb_sip_aff_order": false,
+            "shipping_carrier": "",
+            "released_time": 1790684628,
+            "source": "Shopee Wallet",
+            "status": 7,
+            "is_outlet_shop_order": false
+          },
+          "seller_income_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 19596720,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 95,
+                    "field_name": "PRODUCT_PRICE",
+                    "amount": 29469000,
+                    "display_name": "Preço do Produto",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 96,
+                    "field_name": "PIX_DISCOUNT",
+                    "amount": -1030920,
+                    "display_name": "Ajuste por pagamento via PIX",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 933,
+                    "field_name": "VOUCHER_DISCOUNT_FROM_SHOPEE",
+                    "amount": -8841360,
+                    "display_name": "Cupom",
+                    "hide_amount": false
+                  }
+                ]
+              },
+              {
+                "field_id": 97,
+                "field_name": "SHIPPING_SUBTOTAL",
+                "amount": 0,
+                "display_name": "Subtotal de Frete",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 98,
+                    "field_name": "SHIPPING_FEE_PAID_BY_BUYER",
+                    "amount": 0,
+                    "display_name": "Taxa de frete paga pelo comprador",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 99,
+                    "field_name": "ACTUAL_SHIPPING_FEE",
+                    "amount": -2635380,
+                    "display_name": "Taxa de Frete Paga pela Shopee para Você",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 910,
+                    "field_name": "SHIPPING_REBATE_FROM_SHOPEE",
+                    "amount": 2635380,
+                    "display_name": "Desconto de frete pago pela Shopee",
+                    "hide_amount": false
+                  }
+                ],
+                "ext_info": {}
+              },
+              {
+                "field_id": 923,
+                "field_name": "REBATE_AND_VOUCHER",
+                "amount": 4620000,
+                "display_name": "Cupons & descontos.",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 934,
+                    "field_name": "REMAINING_VOUCHER_DISCOUNT_FROM_SHOPEE",
+                    "amount": 4620000,
+                    "display_name": "Incentivo de cupom",
+                    "hide_amount": false
+                  }
+                ]
+              },
+              {
+                "field_id": 911,
+                "field_name": "FEES_AND_CHARGES",
+                "amount": -1531860,
+                "display_name": "Taxas e Encargos",
+                "hide_amount": false,
+                "sub_breakdown": [
+                  {
+                    "field_id": 912,
+                    "field_name": "COMMISSION_FEE",
+                    "amount": 0,
+                    "display_name": "Taxa de comissão líquida",
+                    "caption": "Texto 17",
+                    "link": "https://seller.shopee.com.br/edu/article/5575",
+                    "hide_amount": false,
+                    "sub_breakdown": [
+                      {
+                        "field_id": 913,
+                        "field_name": "COMMISSION_FEE_BREAKDOWN_ORIGINAL_VALUE",
+                        "amount": -3536280,
+                        "display_name": "Taxa de comissão bruta",
+                        "hide_amount": false
+                      },
+                      {
+                        "field_id": 914,
+                        "field_name": "COMMISSION_FEE_BREAKDOWN_SELLER_BORNE_REBATE_VALUE",
+                        "amount": 3536280,
+                        "display_name": "Ajuste por participação em ação comercial",
+                        "hide_amount": false
+                      }
+                    ],
+                    "ext_info": {
+                      "commission_fee_infos": [
+                        {
+                          "name": "***",
+                          "amount": 0,
+                          "rule_id": 900045,
+                          "fee_rate": 7920
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "field_id": 916,
+                    "field_name": "SERVICE_FEE",
+                    "amount": -632940,
+                    "display_name": "Taxa de serviço líquida",
+                    "hide_amount": false,
+                    "ext_info": {
+                      "service_fee_infos": [
+                        {
+                          "name": "***",
+                          "amount": -589380,
+                          "rule_id": 900046,
+                          "fee_rate": 0
+                        },
+                        {
+                          "name": "***",
+                          "amount": -1716000,
+                          "rule_id": 900066,
+                          "fee_rate": 0
+                        },
+                        {
+                          "name": "***",
+                          "amount": -43560,
+                          "rule_id": 91,
+                          "fee_rate": 0
+                        }
+                      ],
+                      "service_fee_rebate": {
+                        "name": "***",
+                        "amount": 1716000
+                      }
+                    }
+                  },
+                  {
+                    "field_id": 938,
+                    "field_name": "AMS_COMMISSION_FEE",
+                    "amount": -309540,
+                    "display_name": "Taxa de comissão Afiliados do Vendedor",
+                    "caption": "Texto 13",
+                    "hide_amount": false
+                  },
+                  {
+                    "field_id": 939,
+                    "field_name": "ADS_ESCROW_TOP_UP_FEE",
+                    "amount": -589380,
+                    "display_name": "Taxa da Recarga Automática (Pedido)",
+                    "caption": "Texto 15",
+                    "link": "",
+                    "hide_amount": false
+                  }
+                ]
+              },
+              {
+                "field_id": 919,
+                "field_name": "ESCROW_AMOUNT",
+                "amount": 22684860,
+                "display_name": "Renda do pedido",
+                "hide_amount": false
+              }
+            ]
+          },
+          "buyer_payment_breakdown": {
+            "breakdown": [
+              {
+                "field_id": 94,
+                "field_name": "MERCHANDISE_SUBTOTAL",
+                "amount": 29469000,
+                "display_name": "Subtotal dos Produtos",
+                "hide_amount": false
+              },
+              {
+                "field_id": 920,
+                "field_name": "SHIPPING_FEE",
+                "amount": 0,
+                "display_name": "Taxa de Frete",
+                "hide_amount": false
+              },
+              {
+                "field_id": 96,
+                "field_name": "SHOPEE_VOUCHER_DISCOUNT",
+                "amount": -2418900,
+                "display_name": "Cupom Shopee",
+                "hide_amount": false
+              },
+              {
+                "field_id": 921,
+                "field_name": "SELLER_VOUCHER_DISCOUNT",
+                "amount": -6422460,
+                "display_name": "Cupom do Vendedor",
+                "hide_amount": false
+              },
+              {
+                "field_id": 922,
+                "field_name": "PIX_DISCOUNT",
+                "amount": -1030920,
+                "display_name": "PIX Discount",
+                "hide_amount": false
+              },
+              {
+                "field_id": 923,
+                "field_name": "BUYER_PAID_AMOUNT",
+                "amount": 19596720,
+                "display_name": "Pagamento total do comprador",
+                "hide_amount": false
+              }
+            ]
+          },
+          "order_item_list": {
+            "order_items": [
+              {
+                "item_id": 90000000067,
+                "model_id": 900000000068,
+                "group_id": "91",
+                "line_item_id": 900000000000069,
+                "price": 29469000,
+                "amount": 1,
+                "subtotal": 29469000,
+                "product_name": "Produto 10",
+                "product_sku": "SKU-7",
+                "product_image": "Texto 22",
+                "model_name": "",
+                "model_sku": "",
+                "sub_type": 0,
+                "bundle_item_price": 0,
+                "is_add_on_subitem": false,
+                "is_pre_order": false,
+                "is_delivery_insured": false,
+                "returned_qty": 0,
+                "cancelled_qty": 0,
+                "show_return_tag": false,
+                "show_cancellation_tag": false,
+                "is_overseas_return_insured": false,
+                "has_spu_vsku": false,
+                "is_cncb_lff_tagged": false
+              }
+            ]
+          },
+          "adjustment_info": {
+            "total_adjustment_amount": 0,
+            "amount_after_adjustment": 22684860
+          },
+          "error_codes": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    }
+  ]
+}
