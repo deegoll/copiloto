@@ -49,7 +49,7 @@ const r = CN.motor.lucroPedido(pedido, { tarifas: t.tarifas, custos, imposto_pct
 // r.repasse, r.lucro_real, r.margem_pct, r.linhas (a conta linha a linha, pronta para a IA explicar)
 ```
 
-**Extensão (3.2.0, TikTok):** o Chrome só carrega arquivos de dentro da extensão, então `util, modelo, tarifas, motor, conciliacao, adaptador` e `adaptadores/tiktok` são **copiados** para `extension-copiloto/nucleo/` (sem build). Mudou algum deles aqui? Copie de novo: `tests/copiloto/teste_tiktok_nucleo.js` falha se a cópia não for idêntica byte a byte. Quem usa: `extension-copiloto/tiktok.js` (`SHC.tt`).
+**Extensão (3.2.0, TikTok):** o Chrome só carrega arquivos de dentro da extensão, então `util, modelo, tarifas, motor, conciliacao, adaptador` e `adaptadores/tiktok` são **copiados** para `extension-copiloto/nucleo/` (sem build). Mudou algum deles aqui? Copie de novo: `tests/copiloto/teste_tiktok_nucleo.js` falha se a cópia não for idêntica byte a byte. Quem usa: `extension-copiloto/tiktok.js` (`SHC.tt`). Na 3.3.0 (E3) entra também a cópia de `adaptadores/ml.js` (o mês do ML, `mesDaCascata`), carregada **só** no `painel-lateral.html`: o fundo não precisa dela.
 
 **Navegador (extensão):** carregue os arquivos nesta ordem. Tudo fica em `window.CopilotoNucleo`.
 
@@ -89,7 +89,7 @@ lucro = vendas − tarifas do canal − frete a seu cargo − afiliados − Ads 
 
 - **Imposto** sobre a receita líquida de canceladas e devoluções: `(vendas − canceladas − reembolsos) × imposto%`. É a regra da `F.cascata` do fechamento do ML (`extension-copiloto/fechamento.js:160`) e o motor já faz assim (`motor.js:135`). Não trocar por "imposto sobre a venda cheia".
 - Canal novo entra só com o adaptador (o que vendeu e o que foi cobrado). A conta é esta, a mesma para todos.
-- **Pendente da 3.3.0: "Ads não lido nunca vira zero".** Hoje Ads ausente conta como 0 (`motor.js:137-140`), e o TikTok, que não informa o Ads, sai "sem Ads" sem aviso. Na 3.3.0 o Ads não lido vira "≈" e o canal sai do "melhor".
+- **"Ads não lido nunca vira zero" (3.3.0, E6).** Canal que não traz o Ads nas tarifas (só o TikTok: o gasto do GMV Max fica fora do repasse) usa o Ads do mês digitado em Ajustes. No `fechamentoMes`, com `ads_nas_tarifas: false`, o `ads_mes` sai do lucro do mês; sem ele o mês leva `aprox: true` ("≈") com o motivo, e o canal sai do "melhor". "Não uso Ads" é 0 informado de propósito. No ML o Ads vem na fatura e a regra não se aplica.
 
 ## Fórmula
 
@@ -103,8 +103,11 @@ margem          = lucro_real / receita_liquida
 ```
 
 Como a fórmula se aplica em cada caso:
-- **Por produto:** use `lucroPorProduto(resultados)`. O custo de cada SKU é exato. O resto é dividido pela participação do item na receita, e o Ads do anúncio fica com o item daquele anúncio.
-- **Mês:** use `fechamentoMes({ mes, resultados, tarifas, adsNaoRateado })`. O fechamento soma as tarifas sem pedido (fatura, Full, assinatura) e o Ads que não teve venda para ratear. Com `ads_rateados` (o padrão), a tarifa 'ads' da fatura não entra de novo.
+- **Por produto:** use `lucroPorProduto(resultados, porMes)`. Agrupa por **SKU normalizado × canal × conta**, e também **× mês** com `porMes = true` (3.3.0; `util.normalizaSku` = a regra do `SHC.normalizaSku`). Sem `porMes`, soma o período que veio, como sempre. O custo de cada SKU é exato. O resto é dividido pela participação do item na receita, e o Ads do anúncio fica com o item daquele anúncio. Aceita também as linhas do `adaptadores.ml.produtosDoMes`. Linha com Ads "—" deixa `ads` e `lucro_real` do produto em `null`; o `lucro_antes_ads` continua. Com `pendentes > 0`, o `lucro_antes_ads` é só o das linhas com conta, não o total do SKU: a tela confere os pendentes antes de mostrar. As linhas do ML somam o lucro sem arredondar (`lucro_antes_ads_exato`) e arredondam só no SKU, como o `SHC.familias`.
+- **Produto × mês do ML (3.3.0):** use `adaptadores.ml.produtosDoMes({ mes, vbAnuncio, retrato, custoDe, imposto_pct, ads, conta })`. É a porta "mês × anúncio": as vendas por anúncio do mês (`vbAnuncio:<conta>`), o retrato do anúncio e o custo pronto (`custoDe`). Na extensão, o `SHC.custoDeAnuncio` entra embrulhado, porque devolve `{chave, dados}`: `info => { const c = SHC.custoDeAnuncio(custos, info); return c ? c.dados : null; }`. Faz a mesma conta do lucro estimado do `SHC.familias`, por anúncio com venda. O Ads por anúncio vem só da fatura (`ads`, formato do `ad|ml|<MLB>`); sem o valor, Ads e `lucro` ficam "—". A trava do `ml.test.js` compara com o `SHC.familias` ao centavo, sem folga, em 56 anúncios × mês, e também por SKU e no mês. A porta "venda a venda" fica fora da 3.3.0.
+- **Mês:** use `fechamentoMes({ mes, resultados, tarifas, adsNaoRateado })`. O fechamento soma as tarifas sem pedido (fatura, Full, assinatura) e o Ads que não teve venda para ratear. Com `ads_rateados` (o padrão), a tarifa 'ads' da fatura não entra de novo. Para o canal sem Ads nas tarifas, passe `ads_nas_tarifas: false` e `ads_mes` (veja a regra acima).
+- **Mês do ML (3.3.0):** use `adaptadores.ml.mesDaCascata({ mes, vb, fech, produtos, imposto_pct, despesas, afil, conta })`. Recebe as **mesmas entradas** da `F.cascata` do Fechamento (`extension-copiloto/fechamento.js`) e faz a mesma conta, linha a linha: vendas brutas, canceladas e devolvidas, cobranças por tipo menos os estornos (tipos do `RENOMEIA`), líquido, custo dos produtos, imposto, lucro, despesas fixas e sobra. Ads e Full vêm só das cobranças da fatura (`fech.porTipo`), uma vez. O afiliado é só informativo. O "não lido" fica `null` nos mesmos lugares, e `faltando` diz o que deixou o lucro em "—". A trava do `ml.test.js` compara as duas contas ao centavo em 27 meses (com imposto 0% e centavos quebrados): mudar uma sem a outra derruba a suíte.
+- **Soma dos canais ("Todos"):** use `motor.somaCanais(meses, campo)` (campo padrão `'lucro'`). Dá o total e o % de cada canal numa conta só (valor ÷ total, 1 casa; sem % quando o total não é positivo). Canal com `aprox` põe "≈" no total; canal sem número fica fora da soma e entra em `motivos`. Nenhum número dá total `null`, nunca 0.
 - **Devolução:** o reembolso sai da receita. O custo do produto é contado, a não ser que `produto_voltou: true`. No TikTok, `reverse_type 2` quer dizer reembolso sem devolução: o vendedor perde o produto.
 - **Cancelado:** receita, custo e imposto ficam em 0. Só conta a tarifa que sobrou depois do estorno.
 
@@ -191,6 +194,15 @@ Os campos vêm de `tests/copiloto/MAPEAMENTO-TIKTOK.md`, e as fixtures foram cop
 - `repassesDosExtratos` lê o `statement/list/detail`.
 - `saudeDaConta` lê o `performance/list` e o `dynamic_settlement`.
 - `criarAdaptadorTikTok({ conta, fontes })` monta o adaptador. **Ads fica de fora** ("este canal não informa o gasto com anúncios"), porque o gasto fica no Ads Manager.
+
+**Telas de 03/10/2026 (3.3.0, E6).** A tela de Finanças passou a buscar tudo por POST (`statement/view/*`), numa árvore `item_id` + `starling_key`. Os mesmos conversores aceitam os dois formatos e devolvem o mesmo resultado (a paridade é testada com a loja inventada de `tests/copiloto/fixtures/tiktok_inventado.json`):
+
+- `pedidosDaListaFinanceira` lê também `view/settled_orders` e `view/onhold_orders`. As listas trazem só 3 grupos por pedido: vendas líquidas (46), frete líquido (53) e taxas (51).
+- `transacaoDoExtrato` lê também a gaveta `view/order_breakdown`. Só ela traz a tarifa por tipo (comissão 5065, SFP 123, por item 440, criadores 113, Shop Ads de criadores 253). Quando a resposta vem sem o id, ele chega em `opts.corpo` (o que a tela mandou no pedido).
+- `repassesDosExtratos` lê também `view/statements`. Cada demonstrativo guarda `total_pedidos` e `tipos` (`tiposDoDemonstrativo`): no ciclo do demonstrativo a divisão por tipo é completa. Nó de cima fora de 46/53/51 (ajuste, rebate) vai para `ajuste` e não apaga a divisão; gaveta que vem só com os 3 grupos não vale como detalhe.
+- `pedidoTemDetalhe` e `mesDosPedidos`: no mês, vendas, taxas, frete, liquidação e lucro saem completos; a tarifa por tipo só sai quando **todos** os pedidos do mês têm detalhe. Senão é `null`, com `n_com_detalhe` de `n_pedidos`. Uma soma parcial nunca aparece como total.
+- Leitura sempre pela chave (`item_id`, `starling_key`, `feature_code`), nunca pelo texto da tela. O motivo "em espera" muda de código com a rota (devolução é 2 no `stat/info` e 5 nas listas novas) e é guardado sempre como 2.
+- Demais telas: `devolucoesDaLista`/`devolucoesAbertas` (casos contados por pedido), `indicadoresDaLoja`, `pontuacaoDaLoja` (nota vazia é "ainda não avaliado", nunca 0), `campanhasDaTela`, `campanhasInscritas` (pelo `approved_count`), `regraDePreco`, `produtosDaCampanha`, `skusDaListaDePedidos` (liga o `sku_id` ao SKU do vendedor), `produtosAnunciados`, `resumoFinanceiro`, `totalPago` e `tarefasDaPaginaInicial`.
 
 **Regra do canal.** Os Termos do Vendedor BR proíbem bot, scraper ou qualquer outro meio automatizado sem permissão escrita. Por isso, na extensão, o Copiloto só pode ler a resposta que a tela aberta pela seller já recebeu: sem fetch em segundo plano, sem POST e sem navegar sozinho. Para ler em volume, o caminho é o app ISV pelo servidor (`core/TikTokShopAPI.php` → `ext_copiloto_api.php`, ação `canal_dados`, que devolve este mesmo formato).
 

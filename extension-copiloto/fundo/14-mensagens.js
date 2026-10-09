@@ -1,6 +1,16 @@
 const daExtensao = s => !!(s && s.id === chrome.runtime.id && /^chrome-extension:\/\//.test(s.url || ''));
+// 3.3.1 (C2): ações que LEEM o Mercado Livre — as que recebem o que a aba aberta leu (o content script também confere antes de
+// mandar; aqui é a última porta) e as que as telas da extensão disparam com GET ao ML/MP. Sem o "Concordo e ligar" do canal
+// (cfg.consentimento_ml) nenhuma roda: o listener no fim do arquivo responde { ok:false, motivo:'sem_consentimento' } sem tocar em nada.
+const LEEM_ML = { concorrentes: 1, sincronizar: 1, fiscal_agora: 1, certificado: 1, vendas_brutas_mes: 1, promos_pagina: 1, anuncios_pagina: 1,
+    atacado_degraus: 1, editor_anuncios: 1, experiencia_anuncios: 1, canal_ler_anuncios: 1, sincronizar_repasse: 1, simulador: 1, saude_agora: 1,
+    medidas_agora: 1, catalogo_agora: 1, robo_rodar_agora: 1, robo_desfazer: 1 };
+// Dono de cada ação da lista: as telas da extensão (daExtensao) ou a aba do ML (daAbaDoML). O despacho confere de novo; aqui é só
+// para o fora-da-lista receber o MESMO silêncio de antes (return false, porta fechada) em vez de uma resposta que ele nunca teve.
+const SO_EXTENSAO = { concorrentes: 1, sincronizar: 1, fiscal_agora: 1, vendas_brutas_mes: 1, canal_ler_anuncios: 1, sincronizar_repasse: 1,
+    simulador: 1, saude_agora: 1, medidas_agora: 1, catalogo_agora: 1, robo_rodar_agora: 1, robo_desfazer: 1 };
 
-chrome.runtime.onMessage.addListener((msg, sender, responder) => {
+function despacha(msg, sender, responder) {
     if (!msg) return false;
     if (msg.acao === 'concorrentes') {
         if (!daExtensao(sender) || !/^MLB\d{6,14}$/.test(String(msg.itemId || ''))) return false;
@@ -24,9 +34,15 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         if (!daAbaDoML(sender)) return false;
         // semAviso APAGA o alerta: só com a conta da página e se for a aberta agora. O aviso com texto sem conta ainda vale (a CONFIRMAR AO VIVO se o Faturador traz o id).
         // v3.3 (multi-empresa): aviso SEM a conta da página só vale com 1 conta neste Chrome — com 2+, um Faturador de outra empresa marcaria
-        // o certificado desta como vencido.
-        const semConta = () => (SHC.contas ? SHC.contas() : Promise.resolve([])).then(cs => ((cs || []).length <= 1 ? 'ok' : ''), () => '');
-        (msg.conta || msg.semAviso ? daContaAtual(msg) : semConta()).then(ok => (ok ? gravarCertificado(msg) : { ok: false, motivo: 'conta' }))
+        // o certificado desta como vencido. Bloqueio 5: com 1 conta, 1 GET confere que a sessão do ML ainda é dela (a 2ª empresa que ainda não
+        // sincronizou não está em ml:contas e marcaria a 1ª). Revisão 07/10/2026: a conta CONFERIDA vai para gravarCertificado (antes ele relia
+        // ml:conta e, se a sincronização da outra empresa a trocasse no meio, gravava em cert:<outra>).
+        const semConta = () => (SHC.contas ? SHC.contas() : Promise.resolve([])).then(async cs => {
+            if ((cs || []).length > 1) return '';
+            const c = await SHC.contaAtual();
+            return c === 'atual' || (await confereSessao(c)) !== 'outra_conta' ? c : '';
+        }).catch(() => '');
+        (msg.conta || msg.semAviso ? daContaAtual(msg) : semConta()).then(conta => (conta ? gravarCertificado(msg, conta) : { ok: false, motivo: 'conta' }))
             .then(responder, () => responder({ ok: false, motivo: 'erro' }));
         return true;
     }
@@ -118,6 +134,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         SHC.contaAtual().then(async conta => {
             if (conta !== 'atual' && await confereSessao(conta) === 'outra_conta') return { ok: false, motivo: 'outra_conta' };   // repasse de outra conta não entra nesta
             const r = await sincronizarRepasse(conta, async () => {});
+            if (r.falha === 'outra_conta') return { ok: false, motivo: 'outra_conta' };   // a sessão trocou durante a leitura: nada gravado
             await emFilaStatus(async () => {
                 const st = await SHC.lerStatus();
                 Object.assign(st, r.falha ? { erroRepasse: r.falha === 'login' ? 'sem_login_mp' : 'ml_indisponivel' }
@@ -224,4 +241,19 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     }
     if (msg.acao === 'abrir_painel') { if (!daExtensao(sender)) return false; chrome.runtime.openOptionsPage(); responder({ ok: true }); return false; }
     return false;
+}
+// 3.3.1 (C2): a última porta das ações que leem o ML (LEEM_ML). Com o consentimento gravado, o despacho é o de sempre; sem ele,
+// { ok:false, motivo:'sem_consentimento' } na hora (o painel some com os botões e o content script nem manda; aqui pega qualquer caminho esquecido).
+chrome.runtime.onMessage.addListener((msg, sender, responder) => {
+    if (!msg) return false;
+    if (!LEEM_ML[msg.acao]) return despacha(msg, sender, responder);
+    if (SO_EXTENSAO[msg.acao] ? !daExtensao(sender) : !daAbaDoML(sender)) return false;   // o silêncio de sempre para quem não é o dono da ação
+    SHC.mlPermitidoAgora().then(ok => {
+        if (!ok) { responder({ ok: false, motivo: 'sem_consentimento' }); return; }
+        let feito = false;
+        const resp2 = v => { feito = true; responder(v); };
+        const r = despacha(msg, sender, resp2);
+        if (r === false && !feito) responder({ ok: false, motivo: 'negado' });
+    });
+    return true;
 });

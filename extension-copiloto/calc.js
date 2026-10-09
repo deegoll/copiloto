@@ -37,11 +37,11 @@
     // Módulos que o seller pode desligar (cada um = 1 aba do painel); Geral e Ajustes nunca somem.
     SHC.MODULOS = ['full', 'posvenda', 'promo', 'ads', 'frete', 'catalogo', 'afiliados', 'saude', 'conciliacao', 'canal'];   // v2.9: + posvenda, na ordem das abas
     // v3.2: módulos opcionais começam DESLIGADOS (TikTok pede permissão de outro site): só cfg.modulos[id] === true liga.
+    // 3.3.0: cfg.modulos.tiktok === true é a marca "canal ligado" (SHC.canaisLigados); o TikTok não é mais aba (é o filtro de canal), por isso fica fora de MODULOS.
     SHC.MODULOS_OPCIONAIS = ['tiktok'];
-    // v3.2.0: TRAVADOS = desligados mesmo com cfg.modulos[id] === true, sem interruptor em Ajustes e sem aba. O TikTok fica fora da 3.2.0
-    // (a política e a ficha da loja não citam o TikTok). Para liberar: tirar daqui, pôr de volta em MODULOS, chamar SHC.tt.instalarFundo()
-    // no background.js e devolver 'scripting' + seller-br.tiktok.com às permissões opcionais do manifest.
-    SHC.MODULOS_TRAVADOS = ['tiktok'];
+    // TRAVADOS = desligados mesmo com cfg.modulos[id] === true. O TikTok ficou aqui na 3.2.x; a 3.3.0 (E8) o destravou, com 'scripting' e o site
+    // só nas permissões OPCIONAIS do manifest e o fundo chamando SHC.tt.instalarFundo(). A lista fica para travar outro módulo um dia.
+    SHC.MODULOS_TRAVADOS = [];
     /** true a não ser que o seller tenha desligado esse módulo em Ajustes (cfg.modulos[id] === false); opcional só com === true; travado nunca. */
     SHC.moduloLigado = (cfg, id) => (SHC.MODULOS_TRAVADOS.indexOf(id) >= 0 ? false
         : SHC.MODULOS_OPCIONAIS.indexOf(id) >= 0 ? !!(cfg && cfg.modulos && cfg.modulos[id] === true)
@@ -94,7 +94,7 @@
     const desviou = r => !!r && r.type === 'opaqueredirect';
     const urlLogin = u => /login|registration|\/lgz\//i.test(u || '');
     const loginFalso = () => ({ ok: false, status: 302, url: 'https://www.mercadolivre.com.br/login?redirecionado', redirecionadoLogin: true });
-    SHC.buscarVendo = async function (url, init, ir) {
+    const buscarVendoBruto = async function (url, init, ir) {
         const f = ir || root.fetch;
         const soGet = !(init && init.method && String(init.method).toUpperCase() !== 'GET');
         const naPagina = !!(root.location && /^https?:$/.test(root.location.protocol));
@@ -120,6 +120,24 @@
             if (desviou(r) || (r && r.status >= 300 && r.status < 400)) return loginFalso();
             throw e;
         }
+    };
+
+    // Freio (revisão de segurança do TI, 08/10/2026): o ML mandou para captcha/desafio ou respondeu 429 cinco vezes seguidas → o Copiloto PARA de ler em segundo
+    // plano por 15 min (service worker e páginas da extensão; leitura feita dentro da página do ML segue, é a seller navegando).
+    // Resposta falsa {ok:false,status:429,pausado:true}: os chamadores já tratam resposta que não é ok. Estado só em memória: o worker reiniciar zera.
+    const PAUSA_MS = 15 * 60e3;
+    let pausadoAte = 0;
+    const captcha = r => !!r && /captcha|recaptcha|challenge|account-verification/i.test(r.url || '');
+    let seguidos429 = 0;   // 429 isolado já tem retentativa própria nos chamadores; só 5 seguidos ou captcha acionam a pausa
+    SHC.pausaLeitura = () => Math.max(0, pausadoAte - Date.now());
+    SHC.buscarVendo = async function (url, init, ir) {
+        const naPagina = !!(root.location && /^https?:$/.test(root.location.protocol));
+        if (naPagina) return buscarVendoBruto(url, init, ir);
+        if (Date.now() < pausadoAte) return { ok: false, status: 429, url: url, pausado: true };
+        const r = await buscarVendoBruto(url, init, ir);
+        seguidos429 = r && r.status === 429 ? seguidos429 + 1 : 0;
+        if (captcha(r) || seguidos429 >= 5) { pausadoAte = Date.now() + PAUSA_MS; seguidos429 = 0; }
+        return r;
     };
 
     SHC.moeda = v => (v === null || v === undefined || !isFinite(v)) ? '—'

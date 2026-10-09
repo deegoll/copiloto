@@ -173,7 +173,7 @@
     };
 
     const ACOES = {
-        frete: 'Veja a aba Frete no painel lateral: lá aparecem os anúncios em que o frete subiu e o texto para contestar.',
+        frete: 'Veja a aba Frete no painel lateral: lá aparecem os anúncios em que o frete subiu e os pedidos para conferir.',   // 3.3.0: trava do frete (sem chamado)
         ads: 'Abra a página "Ads por SKU" e veja quais produtos gastam mais em Ads do que sobra na venda.',
         ads_seguidores: 'Confira no Mercado Ads se a Publicidade de Seguidores está trazendo vendas.',
         tarifa_venda: 'Confira o tipo de anúncio (Clássico ou Premium) dos que mais vendem: o Premium cobra mais por venda.',
@@ -284,55 +284,64 @@
 
     /**
      * Quanto dá para recuperar (ESTIMATIVA; só o que tem base, cada parcela com a origem):
-     *  - frete: frete:<conta>:hist.conciliacao.pagoAMais (últimos 30 dias; cobrado acima do frete do anúncio; fora pedido que pode ter 2+ unidades);
-     *  - cobrancas: "Cobranças para conferir" (SHC.fech.conferir: tarifa acima, cobrança repetida, frete fora da curva — sem repetir pedido do frete);
+     *  - cobrancas: "Cobranças para conferir" (SHC.fech.conferir: tarifa acima do que a venda mostra, cobrança repetida);
      *  - estorno: venda cancelada/devolvida com a tarifa devolvida e outra cobrança não (regra 'sem_estorno');
-     *  - full: remessas do Full com inconformidade que ainda aceitam reclamação e já têm custo cobrado (SHC.remessasInconformes).
+     *  - full: saiu do total (3.3.0, regra da dona: chamado só com prova). O custo da remessa (total_charged) é coleta e/ou penalidade, nunca
+     *    "cobrado pela inconformidade": a remessa com diferença que ainda aceita reclamação vai para fullConferir (fora do total, sem R$);
+     *  - devolucao: tarifa de devolução × pós-venda (🟢; o 🟡 fica em devConferir, fora do total).
+     * 3.3.0, trava do frete (06/10, decisão da dona: o ML está negando os chamados de frete): o frete de ENVIO não entra no total nem tem texto
+     * de chamado até a regra precisa (3.3.1). A régua de hoje (frete do anúncio de 1 unidade, mediana dos outros pedidos) não sabe a faixa de
+     * preço, o peso nem as unidades da venda, e a auditoria de 05/10 (C3, H1, H2, H3, R2, R6, R7) achou chamado falso. O que era
+     * "Frete cobrado a mais (confirmado)" vai para freteConferir (fora do total): o valor cobrado e o motivo, para conferir no detalhe da venda.
+     * O "frete fora da curva" (regra 'frete') fica só em "Cobranças para conferir", como "pode estar certo".
      * Devoluções do pós-venda ficam fora: o ML não diz se o dinheiro voltou (sem base = não entra).
-     * d = { conc (hist.conciliacao), conferir (lista de itens), inconformes (lista) } → { total, parcelas:[{id, rotulo, origem, valor, itens:[…]}] }
+     * d = { conc (hist.conciliacao), conferir (lista de itens), inconformes (lista), devolucoes } →
+     *   { total, parcelas:[{id, rotulo, origem, valor, itens:[…]}], devConferir:{valor, itens}, freteConferir:{n, itens}, fullConferir:{n, itens} }
      */
-    const ORIGEM_CURTA = { frete: 'Faturamento × anúncio · 30 dias', cobrancas: '',estorno: 'venda cancelada', full: 'remessa com diferença', devolucao: 'devolução × pós-venda · 30 dias' };
+    F.FRETE_CONFERIR = 'Pode estar certo: o Copiloto ainda compara com o frete do anúncio, e o ML cobra pela faixa de preço e pelo peso da venda. Confira no detalhe da venda antes de pedir revisão.';
+    /** Item de "Cobranças para conferir" que é frete de envio: sem chamado e fora do total (trava 3.3.0). Qualquer regra: a régua ('frete'),
+     *  a cobrança repetida e a venda cancelada sem estorno (regra da dona de 06/10: nenhum texto nem contestação de frete). */
+    // Pelo tipo guardado no item (F.conferir): com o texto vazio (o ML às vezes manda o detail_1 vazio) o tipo vem do código da cobrança.
+    F.freteSemChamado = x => !!x && (x.regra === 'frete' || (x.tipo || SHC.tipoCustoFechamento(x.cobranca)) === 'frete');
+    /** 3.3.0: remessa do Full com diferença, fora do total (o custo da remessa é coleta e/ou penalidade, não o valor da diferença). */
+    F.FULL_CONFERIR = 'O que o ML cobrou na remessa é coleta e/ou penalidade, não o valor da diferença. Confira a remessa no ML; com o detalhe por produto, o texto da reclamação fica na aba Full.';
+    const ORIGEM_CURTA = { cobrancas: '', estorno: 'venda cancelada', devolucao: 'devolução × pós-venda · 30 dias' };
     F.recuperar = function (d) {
         d = d || {};
         const parcelas = [], add = (id, rotulo, origem, itens) => {
             const valor = r2(itens.reduce((s, x) => s + (x.valor || 0), 0));
             if (itens.length && valor > 0) parcelas.push({ id, rotulo, origem, curta: ORIGEM_CURTA[id], valor, itens });
         };
-        const fr = ((d.conc && d.conc.pagoAMais) || []).filter(p => p && p.diferenca > 0 && !p.talvezUnidades);
-        // O frete vem com OUTRO número que a venda (conciliaFrete casa por anúncio e data): o mesmo frete no "para conferir" (regra 'frete')
-        // sai pelo número do frete (pedidoFrete) ou, no guardado antes dele, por anúncio + data + valor cobrado.
-        const pedFrete = new Set(), chFrete = new Set();
-        fr.forEach(p => { pedFrete.add(String(p.pedido)); if (p.pedidoFrete) pedFrete.add(String(p.pedidoFrete)); chFrete.add(p.itemId + '|' + p.data + '|' + r2(p.cobrado)); });
-        const doFrete = x => x.regra === 'frete' && (pedFrete.has(String(x.pedido)) || chFrete.has(x.itemId + '|' + x.data + '|' + r2(x.valor)));
-        // "(confirmado)": aqui só entra o confirmado; o cartão da aba Frete soma também o "para conferir" (mesmo nome, outro total).
-        add('frete', 'Frete cobrado a mais (confirmado)', 'Faturamento × frete do anúncio · últimos 30 dias',
-            fr.map(p => Object.assign({ pedido: p.pedido, itemId: p.itemId, data: p.data, valor: p.diferenca, cobrado: p.cobrado, esperado: p.esperado }, p.dev > 0 ? { dev: p.dev } : {}, p.pedidoFrete ? { pedidoFrete: p.pedidoFrete } : {})));
+        // 3.3.0 (trava do frete): o frete cobrado acima da régua fica à parte, com o valor COBRADO (nunca a diferença como "a recuperar").
+        // Todos, com ou sem a dúvida de 2+ unidades: a mesma contagem do cartão "Frete para conferir" da aba Frete (P.freteCobrado).
+        const fr = ((d.conc && d.conc.pagoAMais) || []).filter(p => p && p.diferenca > 0);
+        const frIt = fr.map(p => Object.assign({ pedido: p.pedido, itemId: p.itemId, data: p.data, valor: p.cobrado, cobrado: p.cobrado, motivo: F.FRETE_CONFERIR },
+            p.pedidoFrete ? { pedidoFrete: p.pedidoFrete } : {}));
         // v3.1: "para conferir" gravado pela versão anterior pode ter a tarifa de devolução: ela nunca entra no que dá para recuperar.
         // v3.3: dúvida (pode ser legítima: 1 cobrança por pagamento/envio, frete de venda cancelada já despachada) fica só no "para conferir".
-        const cf = (d.conferir || []).filter(x => x && !x.duvida && x.diferenca > 0 && SHC.tipoCustoFechamento(x.cobranca) !== 'devolucao');
-        add('cobrancas', 'Cobranças acima do esperado', 'Cobranças para conferir (tarifa acima, repetida, frete fora da curva)',
-            cf.filter(x => x.regra !== 'sem_estorno' && !doFrete(x)).map(x => Object.assign({}, x, { valor: x.diferenca, cobrado: x.valor })));
+        // 3.3.0 (trava do frete): o frete fora da curva também (o guardado antes da trava vem sem a dúvida: sai pela regra).
+        const cf = (d.conferir || []).filter(x => x && !x.duvida && !F.freteSemChamado(x) && x.diferenca > 0 && SHC.tipoCustoFechamento(x.cobranca) !== 'devolucao');
+        add('cobrancas', 'Cobranças acima do esperado', 'Cobranças para conferir (tarifa acima do que a venda mostra, cobrança repetida)',
+            cf.filter(x => x.regra !== 'sem_estorno').map(x => Object.assign({}, x, { cobrado: x.valor, valor: x.diferenca })));
         add('estorno', 'Cancelada ou devolvida sem estorno', 'Venda cancelada: a tarifa voltou, outra cobrança do pedido não',
-            cf.filter(x => x.regra === 'sem_estorno').map(x => Object.assign({}, x, { valor: x.diferenca, cobrado: x.valor })));
-        add('full', 'Remessas do Full com diferença', 'Custo cobrado da remessa com inconformidade (ainda dá para reclamar)',
-            (d.inconformes || []).filter(r => r && r.custo > 0 && SHC.remessaPendente(r)).map(r => ({ id: r.id, quando: r.quando, prazo: r.prazo, motivos: r.motivos, link: r.link, valor: r.custo })));
+            cf.filter(x => x.regra === 'sem_estorno').map(x => Object.assign({}, x, { cobrado: x.valor, valor: x.diferenca })));
+        // 3.3.0 (regra da dona: chamado só com prova): a remessa com diferença sai do total; fica à parte, sem R$ (o total_charged não é a diferença).
+        const fuIt = (d.inconformes || []).filter(r => r && SHC.remessaPendente(r)).map(r => ({ id: r.id, quando: r.quando, prazo: r.prazo, motivos: r.motivos, link: r.link }));
         // v3.2 (pedido da dona: "temos como questionar essa tarifa?"): tarifa de devolução × pós-venda (SHC.devolucoesContestar).
         // 🟢 entra no total; 🟡 fica à parte (devConferir), fora do total; ⚪ não aparece aqui.
         const dv = d.devolucoes && Array.isArray(d.devolucoes.itens) ? d.devolucoes.itens : [];
         const dvIt = x => ({ pedido: x.pedido, itemId: x.itemId, data: x.data, valor: x.recuperar, cobrado: x.valor, cor: x.cor, regra: x.regra, motivo: x.motivo, texto: x.texto, cobranca: 'Tarifa de devolução' });
         add('devolucao', 'Tarifa de devolução para questionar', 'Tarifa de devolução × pós-venda · últimos 30 dias', dv.filter(x => x.cor === 'verde' && x.recuperar > 0).map(dvIt));
         const am = dv.filter(x => x.cor === 'amarelo' && x.recuperar > 0).map(dvIt);
-        return { total: r2(parcelas.reduce((s, p) => s + p.valor, 0)), parcelas, devConferir: { valor: r2(am.reduce((s, x) => s + x.valor, 0)), itens: am } };
+        return { total: r2(parcelas.reduce((s, p) => s + p.valor, 0)), parcelas, devConferir: { valor: r2(am.reduce((s, x) => s + x.valor, 0)), itens: am },
+            freteConferir: { n: frIt.length, itens: frIt }, fullConferir: { n: fuIt.length, itens: fuIt } };
     };
     /** v3.2: frete:<conta>:hist × posvenda:<conta> → SHC.devolucoesContestar (tarifas de devolução dos últimos 30 dias) | null (frete de devoluções não lido). */
     F.devolucoesDe = (fh, pv) => (fh && fh.devolucoes && Array.isArray(fh.devolucoes.lista) && SHC.devolucoesContestar
         ? SHC.devolucoesContestar(fh.devolucoes.lista, SHC.posvendaPorPedido(pv), !!(pv && pv.paginas > 1)) : null);   // F12: só a 1ª página lida
-    /** Texto do chamado de um frete cobrado a mais (mesmo formato de F.textoChamado; só pede a revisão). */
-    // v3.1: é só o frete de ENVIO da venda; a tarifa de devolução do mesmo pedido (dev) fica fora e o texto diz isso (nunca pede revisão dela).
-    F.chamadoFrete = (p, titulo) => F.textoChamado({ pedido: p.pedido, pedidoFrete: p.pedidoFrete || '', data: p.data, itemId: p.itemId, titulo: titulo || '', cobranca: 'Frete de envio da venda (Mercado Envios)',
-        valor: p.cobrado, esperado: p.esperado, diferenca: p.valor, regra: 'frete',   // regra: cita as regras do frete do ML (40538 e 4413)
-        motivo: 'O frete cobrado ficou acima do custo de envio que o anúncio mostra (' + SHC.moeda(p.esperado) + ').'
-            + (p.dev > 0 ? ' A tarifa de devolução deste pedido (' + SHC.moeda(p.dev) + ') não está nesta conta.' : '') });
+    /** 3.3.0, trava do frete (06/10): nenhum texto de chamado do frete de envio até a regra precisa (3.3.1). Quem ainda chamar recebe ''
+     *  (o painel e esta página tratam '' como "nada para copiar"). */
+    F.chamadoFrete = () => '';
     /**
      * Maior gargalo: o custo do ML com maior % das vendas (ou maior R$ sem vendas brutas) e o que mais subiu contra o mês anterior.
      * → { maior:{id, rotulo, valor, pct, frase, acao} | null, subiu:{id, rotulo, antes, agora, frase, acao} | null }
@@ -368,7 +377,8 @@
      * itensPorId = {MLB: anúncio do retrato (preço e tarifa de hoje)}.
      * → [{pedido, data, itemId, titulo, cobranca, valor, esperado, diferenca, motivo, regra}] da maior diferença para a menor.
      * Regras: cobrança repetida (mesmo texto, anúncio e valor, sem estorno); venda cancelada com tarifa devolvida e outra cobrança não;
-     * tarifa de venda bem acima da do anúncio (fora múltiplos: pedido com várias unidades); frete bem acima dos outros pedidos do anúncio.
+     * frete bem acima dos outros pedidos do anúncio (3.3.0: sempre "para conferir", sem chamado). A tarifa de venda é conferida à parte,
+     * no detalhe da venda (F.provaTarifa).
      */
     // Valor ≈ 2×, 3×… o de 1 unidade (±8%): pedido com várias unidades, não é alerta. ponytail: pedido de 2+ unidades com preço diferente escapa.
     const variasUnidades = razao => { const k = Math.round(razao); return k >= 2 && Math.abs(razao - k) <= 0.08 * k; };
@@ -409,7 +419,8 @@
             // sobra = cobranças − estornos − nº de pagamentos/envios com cobrança em aberto (1 legítima para cada). Cada grupo gasta da sobra.
             Object.keys(grupos).forEach(g => { if (grupos[g].c - grupos[g].e > 0) totais[grupos[g].gt].ops++; });
             Object.keys(totais).forEach(gt => { const T = totais[gt]; T.sobra = T.c - T.e - T.ops; });
-            const base = (c, extra) => Object.assign({ pedido: o, data, itemId: c.itemId, titulo: tituloDe(c.itemId, cs), cobranca: c.texto }, extra);
+            // 3.3.0: tipo = o da cobrança pelo texto e pelo código (c.id), para a trava do frete valer também com o texto vazio.
+            const base = (c, extra) => Object.assign({ pedido: o, data, itemId: c.itemId, titulo: tituloDe(c.itemId, cs), cobranca: c.texto, tipo: SHC.tipoCustoFechamento(c.texto, c.id) }, extra);
             Object.keys(grupos).forEach(g => {
                 const x = grupos[g], T = totais[x.gt], porOp = POR_OPERACAO[SHC.tipoCustoFechamento(x.cob.texto, x.cob.id)];
                 const n = 1 + Math.min(x.c - x.e - 1, T.sobra);
@@ -439,14 +450,7 @@
                             + 'Se o cancelamento não foi por minha causa (extravio ou não entregue), esta cobrança deveria ser devolvida?',
                         motivo: 'A venda foi cancelada e a tarifa de venda foi devolvida, mas ' + (t === 'frete' ? 'o frete' : 'esta cobrança') + ' não. Se o pacote já tinha saído (ou voltou para você), '
                             + 'o ML cobra o envio sem o desconto e pode estar certo. Vale pedir a revisão só se o cancelamento não foi por sua causa (extravio, não entregue) — confira no detalhe da venda.' }));
-                const it = itensPorId[id];
-                if (t === 'tarifa_venda' && it && it.tarifa > 0) {
-                    const razao = v / it.tarifa;
-                    // estimado = a frase para o suporte: o esperado é uma estimativa (o texto pede a conferência, não afirma erro).
-                    if (razao >= F.TARIFA_RAZAO && !variasUnidades(razao) && v - it.tarifa >= F.DIF_MIN) out.push(base(c, { regra: 'tarifa', valor: v, esperado: it.tarifa, diferenca: r2(v - it.tarifa),
-                        motivo: 'No preço de hoje (' + SHC.moeda(it.preco) + '), este anúncio paga ' + SHC.moeda(it.tarifa) + ' de tarifa por unidade. Se o preço da venda foi outro, pode estar certo.',
-                        estimado: 'Pelo preço atual do anúncio (' + SHC.moeda(it.preco) + '), a tarifa de venda seria de ' + SHC.moeda(it.tarifa) + ' por unidade.' }));
-                }
+                // v3.4: a tarifa acima da do anúncio saiu daqui (comparava com o preço de HOJE): F.tarifasParaConferir + F.provaTarifa.
                 if (t === 'frete' && id && !/comprador/i.test(c.texto)) (freteItem[id] || (freteItem[id] = [])).push({ c: base(c, {}), v, envios: ops[k] ? ops[k].size : 0 });
             });
         });
@@ -457,14 +461,97 @@
                 if (outros.length < 3) return;
                 const med = outros.length % 2 ? outros[(outros.length - 1) / 2] : r2((outros[outros.length / 2 - 1] + outros[outros.length / 2]) / 2);
                 // v3.3: frete de 2+ envios no mesmo pedido (pacote dividido, reenvio) = 2 fretes legítimos → só "para conferir".
+                // 3.3.0, trava do frete (06/10): todo frete fora da curva é "para conferir" (duvida), fora do total e sem chamado (F.freteSemChamado):
+                // a mediana dos outros pedidos não sabe a faixa de preço, o peso nem as unidades desta venda (auditoria de 05/10, H3).
                 if (x.v >= med * F.FRETE_RAZAO && x.v - med >= F.DIF_MIN && !variasUnidades(x.v / med)) out.push(Object.assign(x.c, { regra: 'frete', valor: x.v, esperado: med, diferenca: r2(x.v - med),
                     motivo: x.envios >= 2 ? 'O frete deste pedido soma ' + x.envios + ' envios diferentes (pacote dividido ou reenvio): cada envio tem o seu frete e pode estar certo — confira no detalhe da venda.'
-                        : 'O frete deste pedido ficou bem acima do que este anúncio costuma pagar (' + SHC.moeda(med) + ' nos outros ' + outros.length + ' pedidos). Se o pedido teve mais de 1 unidade, pode estar certo.' },
-                    x.envios >= 2 ? { duvida: 'O frete deste pedido soma ' + x.envios + ' envios diferentes. Os ' + x.envios + ' envios foram necessários (pacote dividido ou reenvio) ou algum foi cobrado a mais?' }
-                        : { estimado: 'Nos outros ' + outros.length + ' pedidos deste anúncio no mesmo período, o frete ficou em torno de ' + SHC.moeda(med) + ' por pedido.' }));
+                        : 'Pode estar certo: o Copiloto ainda compara com o frete dos outros pedidos deste anúncio (' + SHC.moeda(med) + ' nos outros ' + outros.length
+                            + '), e o ML cobra pela faixa de preço e pelo peso da venda. Confira no detalhe da venda antes de pedir revisão.',
+                    duvida: x.envios >= 2 ? 'O frete deste pedido soma ' + x.envios + ' envios diferentes. Os ' + x.envios + ' envios foram necessários (pacote dividido ou reenvio) ou algum foi cobrado a mais?'
+                        : 'O frete deste pedido ficou acima do que este anúncio costuma pagar. O valor está certo para a faixa de preço, o peso e as unidades desta venda?' }));
             });
         });
         return out.sort((a, b) => b.diferenca - a.diferenca);
+    };
+
+    // ── v3.4 (05/10, print da dona: "por que o sistema apresenta informações diferentes?"): a regra antiga comparava a tarifa cobrada com o
+    // preço de HOJE do anúncio (bicicleta vendida a R$ 4.416,55: 16,5% = R$ 728,73, igual ao ML; o anúncio mais barato hoje → "R$ 450,61 acima").
+    // Agora o preço de hoje só ESCOLHE quais vendas conferir; a prova é o detalhe da própria venda (SHC.mlVendaDetalhe), cuja "Tarifa de venda
+    // total" = Custo por vender + Mercado Pago + parcelamento (MAPA-VENDA §3). Só aparece o que o Faturamento cobrou a mais do que a venda mostra.
+    const CODIGO_TARIFA = { VVML: 'venda', VVPRC: 'mp', VVFN: 'parc' };   // as 3 cobranças que somam a "Tarifa de venda total" do detalhe
+    /** Cobranças cruas → vendas cuja tarifa vale abrir o detalhe: [{pedido, data, itemId, titulo, cob:{venda, mp, parc}, cobrado}]. */
+    F.tarifasParaConferir = function (cobs, itensPorId) {
+        itensPorId = itensPorId || {};
+        const ped = {};
+        (cobs || []).forEach(c => {
+            if (!c || !c.orderId || !(c.valor >= 0)) return;
+            // Sem o código do ML (guardada sem id): pelo texto; o frete pago no MP (RAD) e o acréscimo do parcelamento (FONPN) nunca entram.
+            const cod = SHC.codigoCobranca(c.id), campo = CODIGO_TARIFA[cod] || (!cod && { tarifa_venda: 'venda', cobranca_mp: 'mp' }[SHC.tipoCustoFechamento(c.texto)]) || '';
+            if (!campo) return;
+            const p = ped[c.orderId] || (ped[c.orderId] = { pedido: c.orderId, data: '', itemId: '', titulo: '', cob: { venda: 0, mp: 0, parc: 0 } });
+            p.cob[campo] = r2(p.cob[campo] + (c.estorno ? -c.valor : c.valor));
+            if (campo === 'venda' && !c.estorno) { p.itemId = p.itemId || c.itemId || ''; p.titulo = p.titulo || c.titulo || ''; if (c.data && (!p.data || c.data < p.data)) p.data = c.data; }
+        });
+        return Object.keys(ped).map(k => ped[k]).filter(p => {
+            const it = itensPorId[p.itemId], v = p.cob.venda, razao = it && it.tarifa > 0 ? v / it.tarifa : 0;
+            return v > 0.01 && razao >= F.TARIFA_RAZAO && !variasUnidades(razao) && v - it.tarifa >= F.DIF_MIN;
+        }).map(p => Object.assign(p, { titulo: p.titulo || (itensPorId[p.itemId] || {}).titulo || '', cobrado: r2(p.cob.venda + p.cob.mp + p.cob.parc) }));
+    };
+    /** Venda unitária, com várias unidades, kit ou carrinho (pedido da dona 05/10: "saber separar quando é venda no kit ou unitária"). '' = não dá para saber. */
+    F.tipoVenda = function (det, titulo) {
+        const kit = /\bkits?\b/i.test(titulo || ''), u = det && det.unidades > 0 ? det.unidades : null;
+        if (det && det.pedidos > 1) return 'Carrinho com ' + det.pedidos + ' produtos';
+        if (u > 1) return (kit ? 'Kit, ' : '') + u + ' unidades';
+        return kit ? 'Kit' : u === 1 ? 'Unitária (1 unidade)' : '';
+    };
+    /**
+     * Candidata (F.tarifasParaConferir) × detalhe da venda (SHC.mlVendaDetalhe) → null (sem detalhe que sirva) |
+     * { bate:true, pedido, prova } (o Faturamento cobrou o que a venda mostra: some da tela) | item com a prova (cobrou a mais: dá para pedir a revisão).
+     */
+    F.provaTarifa = function (c, det) {
+        if (!c || !det || det.cancelada || !(det.tarifa > 0) || !(det.preco > 0)) return null;
+        const dif = r2(c.cobrado - det.tarifa), tipo = F.tipoVenda(det, c.titulo);
+        const prova = { preco: det.preco, pct: det.tarifaPct, tarifa: det.tarifa, unidades: det.unidades || null, produtos: det.pedidos || 1, recebe: det.recebe, tipo };
+        if (dif < F.DIF_MIN) return { bate: true, pedido: c.pedido, prova };
+        const ps = [['Custo por vender', c.cob.venda], ['Mercado Pago', c.cob.mp], ['parcelamento', c.cob.parc]].filter(p => p[1] > 0.004);
+        const partes = ps.map(p => p[0] + ' ' + SHC.moeda(p[1])).join(' + ');
+        return { pedido: c.pedido, data: c.data, itemId: c.itemId, titulo: c.titulo, regra: 'tarifa', prova,
+            cobranca: 'Tarifa de venda (' + ps.map(p => p[0]).join(' + ') + ')', valor: c.cobrado, esperado: det.tarifa, diferenca: dif,
+            motivo: 'No detalhe desta venda o Mercado Livre mostra tarifa de ' + SHC.moeda(det.tarifa)
+                + (det.tarifaPct ? ' (' + SHC.pctTxt(det.tarifaPct) + ' de ' + SHC.moeda(det.preco) + ')' : ' (venda de ' + SHC.moeda(det.preco) + ')') + (tipo ? ', ' + tipo.toLowerCase() : '')
+                + ', mas o Faturamento cobrou ' + SHC.moeda(c.cobrado) + ' (' + partes + '): ' + SHC.moeda(dif) + ' a mais do que a própria venda mostra.' };
+    };
+    /**
+     * Confere as candidatas no detalhe da venda. lerDetalhe(pedido) → Promise<det | null>; ant = prova:<conta> guardada (detalhe já lido não é
+     * relido). No máximo opt.max leituras novas por vez, uma de cada vez com pausa. → { ts, total, itens (cobrado a mais), batem, semDetalhe, faltam, dets }
+     */
+    F.provarTarifas = async function (cands, lerDetalhe, ant, opt) {
+        opt = opt || {};
+        const max = opt.max || 15, pausa = opt.pausa === undefined ? 600 : opt.pausa, velhos = (ant && ant.dets) || {}, dets = {};
+        let lidas = 0, faltam = 0;
+        for (const c of cands || []) {
+            if (velhos[c.pedido]) { dets[c.pedido] = velhos[c.pedido]; continue; }
+            if (lidas >= max) { faltam++; continue; }
+            lidas++;
+            const d = await Promise.resolve(lerDetalhe(c.pedido)).catch(() => null);
+            if (d) dets[c.pedido] = d;
+            if (pausa) await new Promise(ok => setTimeout(ok, pausa));
+        }
+        const itens = [];
+        let batem = 0, semDetalhe = 0;
+        (cands || []).forEach(c => { const r = F.provaTarifa(c, dets[c.pedido]); if (!r) semDetalhe++; else if (r.bate) batem++; else itens.push(r); });
+        return { ts: Date.now(), total: (cands || []).length, itens: itens.sort((a, b) => b.diferenca - a.diferenca), batem, semDetalhe, faltam, dets };
+    };
+    /** Lista para conferir (F.conferir, da tela ou do fundo) + as tarifas provadas (prova:<conta>). A regra 'tarifa' antiga (preço de hoje) sai. */
+    F.juntaConferir = (itens, prova) => (itens || []).filter(x => x && x.regra !== 'tarifa').concat((prova && prova.itens) || []).sort((a, b) => (b.diferenca || 0) - (a.diferenca || 0));
+    /** Frase do andamento da conferência das tarifas (seção "Quanto dá para recuperar"). '' = nada conferido ainda. */
+    F.fraseProva = function (prova, provando) {
+        if (provando) return 'Conferindo a tarifa de ' + SHC.qtd(provando, 'venda', 'vendas') + ' no detalhe de cada venda do ML…';
+        if (!prova || !prova.total) return '';
+        return '✓ ' + SHC.qtd(prova.total, 'tarifa conferida', 'tarifas conferidas') + ' no detalhe da venda: '
+            + [prova.batem ? prova.batem + (prova.batem === 1 ? ' bate' : ' batem') + ' com o que o ML mostra na venda (não aparece aqui)' : '',
+                prova.itens.length ? prova.itens.length + ' com cobrança a mais' : '',
+                prova.semDetalhe ? prova.semDetalhe + ' ainda sem o detalhe (abra o Mercado Livre desta conta neste Chrome)' : ''].filter(Boolean).join(' · ') + '.';
     };
 
     /**
@@ -518,24 +605,21 @@
     /** Item de uma parcela do "quanto dá para recuperar" (valor = a recuperar, cobrado = o cobrado) → o item do chamado (valor = o cobrado). */
     F.itemDoChamado = x => (x && typeof x.cobrado === 'number' ? Object.assign({}, x, { valor: x.cobrado }) : x);
     F.textoChamado = function (x) {
+        if (F.freteSemChamado(x)) return '';   // 3.3.0, trava do frete: nem dúvida nem contestação de frete
         // v3.3: na dúvida o texto só pergunta (sem "valor esperado" nem "diferença", que afirmariam erro).
         if (x.duvida) return ['Olá! Tenho uma dúvida sobre uma cobrança do meu Faturamento.', '',
             'Pedido: #' + x.pedido + (x.data ? ' (' + dataBR(x.data) + ')' : ''),
             'Anúncio: ' + (x.itemId || '—') + (x.titulo ? ' – ' + x.titulo : ''),
             'Cobrança: ' + x.cobranca,
-            'Valor cobrado: ' + SHC.moeda(x.valor),
+            'Valor cobrado: ' + SHC.moeda(x.cobrado !== undefined ? x.cobrado : x.valor),
             'Minha dúvida: ' + (typeof x.duvida === 'string' ? x.duvida : x.motivo), '',
             'Podem conferir se esta cobrança está correta? Obrigado.'].join('\n');
+        x = F.itemDoChamado(x);   // integração 3.3.0 + nuvem: no "Quanto dá para recuperar" valor = a diferença; o texto usa o valor COBRADO
         // v3.3: formato de contestação (SHC.textoContestacao) — com a regra do ML quando ela se aplica e o pedido explícito do estorno da diferença.
-        const REGRA = { frete: ['frete_tabela', 'frete_calculo'], devolucao: ['devolucao'] }, regra = REGRA[x.regra] || (/devolu/i.test(x.cobranca || '') ? ['devolucao'] : []);
-        // Esperado ESTIMADO (tarifa pelo preço de hoje, frete pela mediana dos outros pedidos; revisão 07/10/2026): pede a conferência e o
-        // estorno só se a diferença se confirmar — nunca "cobrança indevida" nem "valor devido".
-        // Item guardado por versão anterior (sem .estimado): o motivo para a dona diz "pode estar certo".
-        const est = x.estimado || (/pode estar certo/i.test(x.motivo || '') ? (x.regra === 'tarifa' ? 'Pelo preço atual do anúncio.' : 'Pelo frete dos outros pedidos deste anúncio.') : '');
-        if (est) return SHC.textoContestacao({ assunto: 'Pedido de revisão de cobrança: ' + x.cobranca, ids: [['Pedido', '#' + x.pedido], ['Anúncio', x.itemId || '']],
-            intro: 'Uma cobrança do Faturamento' + (x.data ? ' de ' + dataBR(x.data) : '') + (x.titulo ? ' (anúncio “' + x.titulo + '”)' : '') + ' ficou acima do valor que esperávamos. Gostaríamos de confirmar se ela está correta.',
-            fatos: ['Valor cobrado: ' + SHC.moeda(x.valor), 'Valor esperado (estimativa nossa): ' + SHC.moeda(x.esperado), 'Diferença: ' + SHC.moeda(x.diferenca), 'Como estimamos: ' + est],
-            regras: regra, pedido: 'a conferência desta cobrança e, se a diferença se confirmar, o estorno de ' + SHC.moeda(x.diferenca) + ' na nossa conta.' });
+        const REGRA = { devolucao: ['devolucao'] }, regra = REGRA[x.regra] || (/devolu/i.test(x.cobranca || '') ? ['devolucao'] : []);
+        // Esperado ESTIMADO (tarifa pelo preço de hoje, frete pela mediana dos outros pedidos) ou item guardado por versão anterior ("pode estar
+        // certo"): sem chamado, fica "para conferir" (regra da dona: chamado só com prova). Sem esta linha ele cairia na contestação abaixo.
+        if (x.estimado || /pode estar certo/i.test(x.motivo || '')) return '';
         return SHC.textoContestacao({ assunto: 'Contestação de cobrança indevida: ' + x.cobranca, ids: [['Pedido', '#' + x.pedido]].concat(x.pedidoFrete && x.pedidoFrete !== x.pedido ? [['Frete', '#' + x.pedidoFrete]] : [], [['Anúncio', x.itemId || '']]),
             intro: 'Identificamos uma cobrança acima do valor devido no Faturamento' + (x.data ? ' em ' + dataBR(x.data) : '') + (x.titulo ? ' (anúncio “' + x.titulo + '”)' : '') + '.',
             fatos: ['Valor cobrado: ' + SHC.moeda(x.valor), 'Valor devido: ' + SHC.moeda(x.esperado), 'Diferença: ' + SHC.moeda(x.diferenca), 'Por quê: ' + x.motivo],
@@ -602,9 +686,10 @@
         if (!lista.length) return '<p class="sub">Nenhuma cobrança fora do normal nos pedidos lidos.</p>';
         return `<div data-vm-box><div class="rola"><table class="tabela"><thead><tr><th>Pedido</th><th>Data</th><th>Cobrança</th><th class="num">Cobrado</th><th class="num">Esperado</th><th class="num">Diferença</th><th>Por quê</th><th></th></tr></thead><tbody>`
             + lista.map((x, i) => (i === 10 ? '</tbody><tbody class="vm-x">' : '') + `<tr><td>#${esc(x.pedido)}<span class="mini">${esc(x.itemId)}</span></td><td>${esc(dataBR(x.data))}</td><td class="mot">${esc(x.cobranca)}</td>`
-                + `<td class="num">${esc(SHC.moeda(x.valor))}</td>` + (x.duvida ? '<td class="num">—</td><td class="num">pode estar certo</td>'   // v3.3: dúvida não afirma diferença
+                + `<td class="num">${esc(SHC.moeda(x.valor))}</td>` + (x.duvida || F.freteSemChamado(x) ? '<td class="num">—</td><td class="num">pode estar certo</td>'   // v3.3: dúvida não afirma diferença
                     : `<td class="num">${esc(SHC.moeda(x.esperado))}</td><td class="num"><b>${esc(SHC.moeda(x.diferenca))}</b></td>`)
-                + `<td class="mot">${esc(x.motivo)}</td><td><button class="bt sec pq" data-copiar="${i}">Copiar texto do chamado</button> <a class="lnk" href="${esc(F.URL.cobranca(x.pedido))}" target="_blank" rel="noopener">Abrir a cobrança</a></td></tr>`).join('')
+                // 3.3.0 (trava do frete): o frete fora da curva não tem "Copiar texto do chamado"; só o link para conferir a cobrança no ML.
+                + `<td class="mot">${esc(x.motivo)}</td><td>${F.freteSemChamado(x) ? '' : `<button class="bt sec pq" data-copiar="${i}">Copiar texto do chamado</button> `}<a class="lnk" href="${esc(F.URL.cobranca(x.pedido))}" target="_blank" rel="noopener">Abrir a cobrança</a></td></tr>`).join('')
             + '</tbody></table></div>' + F.vmBotao(lista.length, 10) + '</div>';
     };
 
@@ -723,7 +808,7 @@
             ${F.htmlOndeFoi(a.casc, nomeCurto(mes)) ? `<section class="card" id="f-ondefoi"><h2>Para onde foi o dinheiro de ${esc(nomeCurto(mes))}</h2>${F.htmlOndeFoi(a.casc, nomeCurto(mes))}</section>` : ''}
             ${F.htmlConfFaturas(v.fat, v.fechs, v.vb, hoje)}
             ${F.htmlCustos(v.custos || F.custosTopicos(a, b, F.motivosMes(a)), mes, b.m)}
-            ${F.htmlRecuperar(v.rec || null, v.tituloDe, !!v.recLido)}
+            ${F.htmlRecuperar(v.rec || null, v.tituloDe, !!v.recLido, F.fraseProva(v.prova, v.provando))}
             ${F.htmlCustoNovo(v.fat)}
             ${visao === 'ciclo' ? `<section class="card" id="f-ciclo"><h2>Ciclo da fatura</h2>${F.htmlCiclo(ciclo, v.vb)}</section>` : ''}
             <section class="card" id="f-cascata"><h2>Da venda ao lucro</h2><p class="sub">${visao === 'ciclo' ? 'Mês do calendário, para comparar com o ciclo acima. ' : ''}Cada linha em R$ e em % das vendas brutas. "—" = ainda não lido (não é zero).</p>${F.htmlCascata(a.casc)}${a.casc.despesas === null || a.casc.despesas === undefined ? '<p class="sub" id="f-semDespesas">Aluguel, salários, sistemas: cadastre as despesas fixas em Ajustes, no painel do Copiloto, para ver a sobra no fim do mês.</p>' : ''}</section>
@@ -768,9 +853,10 @@
           <tbody>${F.custosVisiveis(t).vis.map(linha).join('')}</tbody></table></div>${F.custosVisiveis(t).zerados.length ? `<p class="sub">Sem cobrança nos 2 meses: ${esc(F.custosVisiveis(t).zerados.map(l => l.rotulo).join(', '))}.</p>` : ''}
           <p class="sub"><span class="seta sobe">▲</span> vermelho = o custo subiu · <span class="seta desce">▼</span> verde = caiu · <span class="seta igual">▲</span> cinza = mudou junto com as vendas (o peso nas vendas ficou igual) · “não lido” não é zero.</p></section>`;
     };
-    /** Seção "Quanto dá para recuperar" (estimativa). rec = F.recuperar; tituloDe(MLB) → título; lido = alguma das bases já foi lida. */
-    F.htmlRecuperar = function (rec, tituloDe, lido) {
-        const cab = '<section class="card" id="f-recuperar"><h2>Quanto dá para recuperar <small>estimativa</small></h2>';
+    /** Seção "Quanto dá para recuperar" (estimativa). rec = F.recuperar; tituloDe(MLB) → título; lido = alguma das bases já foi lida;
+     *  frase = andamento da conferência das tarifas no detalhe da venda (F.fraseProva). */
+    F.htmlRecuperar = function (rec, tituloDe, lido, frase) {
+        const cab = '<section class="card" id="f-recuperar"><h2>Quanto dá para recuperar <small>estimativa</small></h2>' + (frase ? `<p class="sub" id="f-prova">${esc(frase)}</p>` : '');
         const rod = '<p class="sub">Estimativa: quem decide o que devolve é o ML. O texto do chamado só pede a revisão. O valor devolvido ao comprador fica fora: o ML não informa se o dinheiro voltou.</p></section>';
         // v3.2: 🟡 tarifas de devolução que valem conferir: à parte, fora do total (SHC.devolucoesContestar).
         const t = id => esc((tituloDe && tituloDe(id)) || id || '');
@@ -778,17 +864,36 @@
         const blocoDc = () => (dc ? `<div class="parc devconf"><div class="pc-cab"><b><span class="pt at"></span>Tarifa de devolução: vale conferir <small>fora do total</small></b><b class="num">${esc(SHC.moeda(dc.valor))}</b></div>`
             + '<span class="mini">Sem base para dizer que volta. Confira e, se fizer sentido, peça a revisão.</span>'
             + `<div data-vm-box><ul class="rec-it">${dc.itens.slice(0, 5).map((x, i) => item({ id: 'devconf' }, x, i)).join('')}</ul>${dc.itens.length > 5 ? `<ul class="rec-it vm-x">${dc.itens.slice(5).map((x, i) => item({ id: 'devconf' }, x, i + 5)).join('')}</ul>` : ''}${F.vmBotao(dc.itens.length, 5)}</div></div>` : '');
-        if (!rec || !rec.parcelas.length) return cab + `<p class="sub">${lido ? '✓ Nada para recuperar nas cobranças, fretes e remessas lidos.' : 'Aparece depois da próxima sincronização (Faturamento, frete e Full).'}</p>` + blocoDc() + rod;
+        // 3.3.0, trava do frete (06/10): o frete à parte, fora do total e SEM botão de chamado: o valor cobrado e o motivo (F.FRETE_CONFERIR),
+        // com o link para conferir a cobrança no ML (o número em que o ML cobrou o frete, quando é outro).
+        const fq = rec && rec.freteConferir && rec.freteConferir.itens && rec.freteConferir.itens.length ? rec.freteConferir : null;
+        const itFq = x => `<li><span><b>Pedido #${esc(x.pedido)} · ${t(x.itemId)}</b><small>frete cobrado ${esc(SHC.moeda(x.cobrado))}${x.data ? ' · ' + esc(dataBR(x.data).slice(0, 5)) : ''}</small></span><b class="num">${esc(SHC.moeda(x.cobrado))}</b>`
+            + `<span class="acoes"><a class="lnk" href="${esc(F.URL.cobranca(x.pedidoFrete || x.pedido))}" target="_blank" rel="noopener">Conferir no ML</a></span></li>`;
+        const blocoFq = () => (fq ? `<div class="parc freteconf"><div class="pc-cab"><b><span class="pt at"></span>Frete: para conferir <small>fora do total</small></b><b class="num">${esc(SHC.qtd(fq.itens.length, 'pedido', 'pedidos'))}</b></div>`
+            + `<span class="mini">${esc(F.FRETE_CONFERIR)}</span>`
+            + `<div data-vm-box><ul class="rec-it">${fq.itens.slice(0, 5).map(itFq).join('')}</ul>${fq.itens.length > 5 ? `<ul class="rec-it vm-x">${fq.itens.slice(5).map(itFq).join('')}</ul>` : ''}${F.vmBotao(fq.itens.length, 5)}</div></div>` : '');
+        // 3.3.0: a remessa do Full com diferença, à parte e fora do total (F.FULL_CONFERIR), com o link da remessa no ML.
+        const fu = rec && rec.fullConferir && rec.fullConferir.itens && rec.fullConferir.itens.length ? rec.fullConferir : null;
+        const itFu = x => `<li><span><b>Remessa ${esc(x.id)}</b><small>${esc(x.motivos.join(' · '))}${x.prazo ? ' · reclamar até ' + esc(dataBR(x.prazo).slice(0, 5)) : ''}</small></span>`
+            + `<span class="acoes"><a class="lnk" href="${esc(x.link)}" target="_blank" rel="noopener">Conferir no ML</a></span></li>`;
+        const blocoFu = () => (fu ? `<div class="parc fullconf"><div class="pc-cab"><b><span class="pt at"></span>Remessas do Full com diferença: para conferir <small>fora do total</small></b><b class="num">${esc(SHC.qtd(fu.itens.length, 'remessa', 'remessas'))}</b></div>`
+            + `<span class="mini">${esc(F.FULL_CONFERIR)}</span>`
+            + `<div data-vm-box><ul class="rec-it">${fu.itens.slice(0, 5).map(itFu).join('')}</ul>${fu.itens.length > 5 ? `<ul class="rec-it vm-x">${fu.itens.slice(5).map(itFu).join('')}</ul>` : ''}${F.vmBotao(fu.itens.length, 5)}</div></div>` : '');
+        if (!rec || !rec.parcelas.length) return cab + `<p class="sub">${lido ? '✓ Nada para recuperar nas cobranças, fretes e remessas lidos.' : 'Aparece depois da próxima sincronização (Faturamento, frete e Full).'}</p>` + blocoFq() + blocoFu() + blocoDc() + rod;
         function item(p, x, i) {
-            if (p.id === 'full') return `<li><span><b>Remessa ${esc(x.id)}</b><small>${esc(x.motivos.join(' · '))}${x.prazo ? ' · reclamar até ' + esc(dataBR(x.prazo).slice(0, 5)) : ''}</small></span><b class="num">${esc(SHC.moeda(x.valor))}</b><a class="bt pq" href="${esc(x.link)}" target="_blank" rel="noopener">Reclamar no ML</a></li>`;
-            const sub = p.id === 'frete' ? 'cobrado ' + SHC.moeda(x.cobrado) + ' × ' + SHC.moeda(x.esperado) + ' do anúncio' : (p.id === 'devolucao' || p.id === 'devconf') ? x.motivo || '' : curto(x.cobranca || '', 60);
-            return `<li><span><b>Pedido #${esc(x.pedido)} · ${t(x.itemId)}</b><small>${esc(sub)}</small></span><b class="num">${esc(SHC.moeda(x.valor))}</b>`
+            // v3.4 (dona 05/10: "me mostra a diferença que está sendo cobrada e por que devo contestar"): cobrado × esperado, a venda (kit ou
+            // unitária) quando a tarifa foi conferida no detalhe, e o porquê.
+            const pv = x.prova, cobr = p.id === 'cobrancas' || p.id === 'estorno';
+            const sub = (p.id === 'devolucao' || p.id === 'devconf') ? x.motivo || ''
+                : pv ? [pv.tipo, 'venda de ' + SHC.moeda(pv.preco), 'tarifa na venda ' + SHC.moeda(x.esperado) + (pv.pct ? ' (' + SHC.pctTxt(pv.pct) + ')' : ''), 'cobrado ' + SHC.moeda(x.cobrado)].filter(Boolean).join(' · ')
+                : cobr && x.cobrado !== undefined ? curto(x.cobranca || '', 60) + ' · cobrado ' + SHC.moeda(x.cobrado) + ' × esperado ' + SHC.moeda(x.esperado) : curto(x.cobranca || '', 60);
+            return `<li><span><b>Pedido #${esc(x.pedido)} · ${t(x.itemId)}</b><small>${esc(sub)}</small>${cobr && x.motivo ? `<small><b>Por que contestar:</b> ${esc(x.motivo)}</small>` : ''}</span><b class="num">${esc(SHC.moeda(x.valor))}</b>`
                 + `<span class="acoes"><button class="bt sec pq" data-copiar-rec="${p.id}:${i}">Copiar texto do chamado</button>`
                 + (p.id === 'estorno' ? `<a class="lnk" href="${esc(SHC.POSVENDA_URL || F.URL.faturamento)}" target="_blank" rel="noopener">Ver no pós-venda</a>` : `<a class="lnk" href="${esc(F.URL.cobranca(x.pedido))}" target="_blank" rel="noopener">Abrir a cobrança</a>`) + '</span></li>';
         };
         return cab + `<p class="rec-tot"><b>${esc(SHC.moeda(rec.total))}</b> em ${esc(SHC.qtd(rec.parcelas.reduce((s, p) => s + p.itens.length, 0), 'item', 'itens'))}</p>`
             + rec.parcelas.map(p => `<div class="parc ${p.id}"><div class="pc-cab"><b>${p.id === 'devolucao' ? '<span class="pt ok"></span>' : ''}${esc(p.rotulo)}</b><b class="num">${esc(SHC.moeda(p.valor))}</b></div><span class="mini">Origem: ${esc(p.origem)}</span>`
-                + `<div data-vm-box><ul class="rec-it">${p.itens.slice(0, 5).map((x, i) => item(p, x, i)).join('')}</ul>${p.itens.length > 5 ? `<ul class="rec-it vm-x">${p.itens.slice(5).map((x, i) => item(p, x, i + 5)).join('')}</ul>` : ''}${F.vmBotao(p.itens.length, 5)}</div></div>`).join('') + blocoDc() + rod;
+                + `<div data-vm-box><ul class="rec-it">${p.itens.slice(0, 5).map((x, i) => item(p, x, i)).join('')}</ul>${p.itens.length > 5 ? `<ul class="rec-it vm-x">${p.itens.slice(5).map((x, i) => item(p, x, i + 5)).join('')}</ul>` : ''}${F.vmBotao(p.itens.length, 5)}</div></div>`).join('') + blocoFq() + blocoFu() + blocoDc() + rod;
     };
     const curto = (s, n) => (String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s));
     /** v3.1: seção "Custo novo na fatura" (SHC.custosNovos de fat:<conta>). Sem 2 faturas lidas não compara → nada; sem custo novo → 1 linha verde. */
@@ -1286,6 +1391,7 @@
         const hoje = SHC.hoje();
         F.porCss(document);
         let rec = null, mes = F.mesAntes(hoje.slice(0, 7), 1), dados = null, lidas = null, conferencia = [], msg = '', lendoMP = false, conferindo = false, lendoVb = false, querAula = location.hash === '#aula', visao = 'mes';
+        let provando = 0, confMostrada = [];   // v3.4: tarifas sendo conferidas no detalhe da venda; a lista "para conferir" que está na tela
         // A aula mostra as Faturas e as Notas: abre essas seções antes (começam recolhidas).
         const aula = () => { if (dados) { secAbertas.add('f-faturas'); secAbertas.add('f-notas'); desenha(); } if (root.SHCTour) root.SHCTour.iniciar(F.AULA); };
         const btAula = document.getElementById('verAula');
@@ -1302,7 +1408,7 @@
             const vm = {};
             Object.keys(tudo).forEach(k => { if (k.indexOf('vm|ml|') === 0) vm[k.slice(6)] = tudo[k]; });
             const temMP = chrome.permissions ? await chrome.permissions.contains({ origins: [MP + '/*'] }).catch(() => false) : false;
-            dados = { conta, tudo, itens, vm, cfg: await SHC.lerCfg(), vb: tudo['vb:' + conta] || null,
+            dados = { conta, tudo, itens, vm, prova: tudo['prova:' + conta] || null, cfg: await SHC.lerCfg(), vb: tudo['vb:' + conta] || null,
                 fat: tudo['fat:' + conta] || null, afil: tudo['afil:' + conta] || null, rep: tudo['mp:repasse:' + conta] || null, st: tudo['shc:status'] || {}, temMP };
         }
         function doMes(m) {
@@ -1319,10 +1425,12 @@
         function desenha(soSync) {
             const d = dados, a = doMes(mes), b = doMes(F.mesAntes(mes, 1));
             const fechs = {}; for (let i = 0; i < 14; i++) { const m = F.mesAntes(hoje.slice(0, 7), i); fechs[m] = d.tudo[SHC.chaveFech(d.conta, m)] || (lidas && lidas[m]) || null; }
-            // Quanto dá para recuperar: frete a mais (frete:<conta>:hist), cobranças para conferir (as lidas agora ou as da sincronização) e o Full.
+            // Quanto dá para recuperar: cobranças para conferir (as lidas agora ou as da sincronização), o Full e a devolução; o frete
+            // (frete:<conta>:hist) fica à parte, "para conferir", fora do total (trava 3.3.0).
             const fh = d.tudo['frete:' + d.conta + ':hist'], cfG = d.tudo['conferir:' + d.conta], rem = d.tudo['ml:full:remessas:' + d.conta];
             const conc = fh && fh.vendasLidas !== false ? fh.conciliacao || null : null;
-            rec = F.recuperar({ conc, conferir: lidas ? conferencia : ((cfG && cfG.itens) || []), inconformes: rem ? SHC.remessasInconformes(rem, d.tudo['remessas:' + d.conta + ':detalhe'], hoje) : [],
+            confMostrada = F.juntaConferir(conferencia, d.prova);
+            rec = F.recuperar({ conc, conferir: F.juntaConferir(lidas ? conferencia : ((cfG && cfG.itens) || []), d.prova), inconformes: rem ? SHC.remessasInconformes(rem, d.tudo['remessas:' + d.conta + ':detalhe'], hoje) : [],
                 devolucoes: F.devolucoesDe(fh, d.tudo['posvenda:' + d.conta]) });   // v3.2: tarifa de devolução × pós-venda
             const porId = {}; d.itens.forEach(i => { porId[i.itemId] = i; });
             // Lista "Ver mais (N)" aberta continua aberta quando a sincronização refaz a página (chave = seção + posição na seção).
@@ -1335,10 +1443,37 @@
                     bx.classList.add('vm-aberta');
                     const bt = bx.querySelector('[data-vm-lista]'); if (bt) { bt.textContent = 'Ver menos'; bt.setAttribute('aria-expanded', 'true'); }
                 });
-            })(F.htmlPagina({ a, b, mes, hoje, msg, lidas, conferencia, st: d.st, agora: Date.now(), temMP: d.temMP, rep: d.rep, fat: d.fat, vb: d.vb, fechs, visao, lendoMP, conferindo, lendoVb,
+            })(F.htmlPagina({ a, b, mes, hoje, msg, lidas, conferencia: confMostrada, prova: d.prova, provando, st: d.st, agora: Date.now(), temMP: d.temMP, rep: d.rep, fat: d.fat, vb: d.vb, fechs, visao, lendoMP, conferindo, lendoVb,
                 rec, recLido: !!(conc || cfG || lidas || rem || (fh && fh.devolucoes)), tituloDe: id => (porId[id] || {}).titulo || '' }));
         }
-        async function redesenha() { try { await carregar(); desenha(); if (querAula) { querAula = false; aula(); } } catch (e) { app.innerHTML = '<section class="card"><p class="msg erro">Não deu para montar a página: ' + esc((e && e.message) || e) + '</p></section>'; } }
+        // v3.4: tarifa cobrada × detalhe da venda (F.provarTarifas). cobs = as lidas agora ou as guardadas do mês atual e do anterior (as mesmas do
+        // "para conferir" do fundo). Detalhe já lido fica em prova:<conta> e não é relido; 1 GET por venda nova, com pausa.
+        const lerDetalhe = async id => {
+            for (let t = 0; t < 2; t++) {   // 2 de 32 leituras ao vivo vieram sem o estado: 1 nova tentativa (MAPA-VENDA §1)
+                const b = await buscar(BASE + '/vendas/' + encodeURIComponent(id) + '/detalhe', false).catch(() => null);
+                if (b && b.login) return null;
+                const e = b && b.html ? SHC.mlExtraiEstado(b.html) : null, det = e ? SHC.mlVendaDetalhe(e) : null;
+                if (det) return det;
+                await espera(800);
+            }
+            return null;
+        };
+        async function provar(cobs) {
+            if (provando || !dados) return;
+            const conta = dados.conta, porId = {};
+            dados.itens.forEach(i => { porId[i.itemId] = i; });
+            if (!cobs) { const t = dados.tudo, m = hoje.slice(0, 7); cobs = [].concat(((t['cob:' + conta + ':' + m] || {}).linhas) || [], ((t['cob:' + conta + ':' + F.mesAntes(m, 1)] || {}).linhas) || []); }
+            const cands = F.tarifasParaConferir(cobs, porId), ant = dados.prova, novas = cands.filter(c => !(ant && ant.dets && ant.dets[c.pedido])).length;
+            provando = novas;
+            if (novas) desenha();
+            try {
+                const r = await F.provarTarifas(cands, lerDetalhe, ant);
+                if (dados.conta === conta) { dados.prova = r; await chrome.storage.local.set({ ['prova:' + conta]: r }); }
+            } catch (e) { /* fica a conferência anterior */ }
+            provando = 0;
+            desenha();
+        }
+        async function redesenha() { try { await carregar(); desenha(); if (querAula) { querAula = false; aula(); } if (!provando && !(dados.prova && dados.prova.ts > Date.now() - 6 * 3600e3 && dados.prova.ts > ((dados.st && dados.st.cobrancasEm) || 0))) provar(null); } catch (e) { app.innerHTML = '<section class="card"><p class="msg erro">Não deu para montar a página: ' + esc((e && e.message) || e) + '</p></section>'; } }
 
         app.addEventListener('change', ev => { if (ev.target.id === 'mes') { mes = ev.target.value; app.querySelectorAll('.vm-aberta').forEach(bx => bx.classList.remove('vm-aberta')); desenha(); } });   // outro mês: listas voltam fechadas
         app.addEventListener('click', async ev => {
@@ -1384,6 +1519,7 @@
                     r.cortados.forEach(m => { delete lidas[m]; });   // mês pela metade: não vale como lido
                     const porId = {}; dados.itens.forEach(i => { porId[i.itemId] = i; });
                     conferencia = F.conferir(r.cobs, porId);
+                    provar(r.cobs);   // v3.4: a tarifa de cada venda suspeita é conferida no detalhe da venda (não espera)
                     msg = SHC.qtd(r.cobs.length, 'cobrança lida', 'cobranças lidas') + '. ' + (conferencia.length ? conferencia.length + ' para conferir.' : 'Nada fora do normal.')
                         + (r.falhou ? ' ' + F.nomeMes(meses[1]) + ' não respondeu: tente de novo em alguns minutos.' : '')
                         + r.cortados.map(m => ' ' + F.nomeMes(m) + ': lido só em parte, o mês tem cobranças demais.').join('');
@@ -1406,14 +1542,13 @@
                 const [pid, i] = bt.getAttribute('data-copiar-rec').split(':');
                 const p = pid === 'devconf' ? rec && rec.devConferir : rec && rec.parcelas.find(x => x.id === pid), x = p && p.itens[+i];   // v3.2: 🟡 da devolução
                 if (!x) return;
-                const tit = ((dados.itens.find(it => it.itemId === x.itemId)) || {}).titulo;
-                // valor da parcela = o que dá para recuperar; o texto do chamado usa o valor COBRADO (revisão 07/10/2026: saía "cobrado R$ 10 × esperado R$ 20").
-                try { await navigator.clipboard.writeText(x.texto ? x.texto : pid === 'frete' ? F.chamadoFrete(x, tit) : F.textoChamado(F.itemDoChamado(x))); bt.textContent = 'Copiado'; }
+                try { await navigator.clipboard.writeText(x.texto ? x.texto : F.textoChamado(F.itemDoChamado(x))); bt.textContent = 'Copiado'; }   // 3.3.0: o frete não tem parcela nem chamado; o texto usa o valor COBRADO
                 catch (e) { bt.textContent = 'Não copiou: selecione e copie à mão'; }
                 return;
             }
             if (bt.hasAttribute('data-copiar')) {
-                const x = conferencia[+bt.getAttribute('data-copiar')];
+                const x = confMostrada[+bt.getAttribute('data-copiar')];
+                if (!x || F.freteSemChamado(x)) return;   // 3.3.0, trava do frete: nunca copia chamado de frete (o botão nem aparece)
                 try { await navigator.clipboard.writeText(F.textoChamado(x)); bt.textContent = 'Copiado'; }
                 catch (e) { bt.textContent = 'Não copiou: selecione e copie à mão'; }
                 return;

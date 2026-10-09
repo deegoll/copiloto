@@ -91,6 +91,7 @@ async function sincronizarCobrancas(sellerId, progresso, modo) {
         await migrarFreteDevolucao(sellerId).catch(() => {});
         await migrarPorDiaTipo(sellerId).catch(() => {});
         await migrarPorFatura(sellerId).catch(() => {});
+        await migrarTiposMP(sellerId).catch(() => {});
     }
     const marca = 'ml:cobrancas:' + sellerId, antes = (await SHC.lerChave(marca)) || {}, hoje = SHC.hoje(), atual = hoje.slice(0, 7), anterior = mesAntes(atual, 1);
     const doze = SHC.janelasCobranca(hoje, true), recentes = new Set(SHC.janelasCobranca(hoje, false).map(j => j.mes));
@@ -284,7 +285,8 @@ async function gravarConferir(conta, cobs, lidosAgora, itens) {
     (itens || []).forEach(i => { if (i && i.itemId && !porId[i.itemId]) porId[i.itemId] = i; });
     const lista = SHC.fech.conferir((cobs || []).filter(c => c && meses.indexOf(String(c.data || '').slice(0, 7)) >= 0), porId);
     // v3.3: valor = só o que dá para pedir de volta (como o "Dá para recuperar"); as dúvidas ("pode estar certo") contam em qtd, sem R$.
-    const snap = { ts: Date.now(), meses, qtd: lista.length, valor: SHC.r2(lista.reduce((s, x) => s + (x.duvida ? 0 : x.diferenca || 0), 0)), itens: lista.slice(0, 100) };
+    // 3.3.0, trava do frete: todo frete de envio também (SHC.fech.freteSemChamado), como no total do Fechamento.
+    const snap = { ts: Date.now(), meses, qtd: lista.length, valor: SHC.r2(lista.reduce((s, x) => s + (x.duvida || SHC.fech.freteSemChamado(x) ? 0 : x.diferenca || 0), 0)), itens: lista.slice(0, 100) };
     await SHC.gravarChave('conferir:' + conta, snap);
     return snap;
 }
@@ -349,6 +351,23 @@ async function migrarPorFatura(conta) {
     for (const m of ((marca && marca.mesesLidos) || []).filter(m => m < atual && m >= desde)) {
         const f = await SHC.lerChave(SHC.chaveFech(conta, m));
         if (f && (!f.porFatura || f.semFatura) && (!f.porDia || Object.keys(f.porDia).length)) velhos.push(m);   // mês sem cobrança não precisa
+    }
+    if (velhos.length) await SHC.gravarChave(k, Object.assign({}, marca, { releer: [...new Set([...(marca.releer || []), ...velhos])].sort() }));
+    feitas[conta] = 1;
+    await SHC.gravarChave(kM, feitas);
+    return true;
+}
+// ── v3.3.1: migração ÚNICA por conta (shc:migra:tiposMP). CPMTP ("Taxa por uso do cartão") e CPCJP entraram na tabela de códigos; o mês lido
+// antes guardou essas cobranças como 'outro' e a linha da fatura não bate (o total bate). Relê os 3 meses fechados mais recentes que tenham
+// 'outro' na porFatura (só eles podem esconder uma CPMTP; afiliado/e-book também é 'outro', mas a releitura não muda o tipo deles).
+async function migrarTiposMP(conta) {
+    const kM = 'shc:migra:tiposMP', feitas = (await SHC.lerChave(kM)) || {};
+    if (!conta || conta === 'atual' || feitas[conta]) return false;
+    const k = 'ml:cobrancas:' + conta, marca = await SHC.lerChave(k), atual = SHC.hoje().slice(0, 7), desde = mesAntes(atual, 3), velhos = [];
+    for (const m of ((marca && marca.mesesLidos) || []).filter(m => m < atual && m >= desde)) {
+        const f = await SHC.lerChave(SHC.chaveFech(conta, m));
+        const pf = (f && f.porFatura) || {};
+        if (Object.keys(pf).some(fat => pf[fat] && pf[fat].custo && pf[fat].custo.outro)) velhos.push(m);
     }
     if (velhos.length) await SHC.gravarChave(k, Object.assign({}, marca, { releer: [...new Set([...(marca.releer || []), ...velhos])].sort() }));
     feitas[conta] = 1;

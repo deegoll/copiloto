@@ -157,6 +157,7 @@ async function lerAnunciosPorId(ids) {
 // Agenda (shc:canal:sel) com a MESMA regra da tela (SHC.canalRoboPassada) e guarda em shc:canal:plano:<canal> (o painel avisa).
 // Só GET; não cria nada no ML: quem clica "Criar" em cada transmissão é a seller.
 async function roboCanal() {
+    if (!(await SHC.mlPermitidoAgora())) return { ok: false, motivo: 'sem_consentimento' };   // 3.3.1 (C2): ML desligado → a agenda não lê nada
     const sf = await SHC.lerChave('shc:canal:sel'), k = 'shc:canal:plano:' + sf, agora = new Date();
     const salvo = sf ? await SHC.lerChave(k) : null;
     if (!sf || !SHC.canalRoboDeveRodar(await SHC.lerChave('shc:canal:robo'), salvo, agora)) return { ok: false };

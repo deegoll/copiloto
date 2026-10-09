@@ -215,25 +215,39 @@
     }
 
     /**
-     * Lucro por produto (SKU; sem SKU, pelo id do anúncio) somando os pedidos. Só entram os resultados 'ok' e 'cancelado';
-     * os outros contam em pendentes (o painel mostra "N pedidos sem custo / não lidos").
+     * Lucro por produto: SKU normalizado × canal × conta, e × mês com porMes = true (3.3.0, E4; sem SKU, pelo id do anúncio). Soma:
+     *   - os resultados do lucroPedido (por_item; o mês é o da venda);
+     *   - as linhas "mês × anúncio" do ML (adaptadores.ml.produtosDoMes: o mês é o delas; pedidos = quantidade de vendas do mês).
+     * Sem porMes, soma o período que veio, como sempre (o SHC.tt.porProduto usa assim).
+     * Só entram os 'ok' e 'cancelado'; os outros contam em pendentes (o painel mostra "N pedidos sem custo / não lidos"). Com pendentes > 0,
+     * o lucro_antes_ads é só o das linhas com conta, não o total do SKU (o SHC.familias dá null): a tela confere os pendentes antes de mostrar.
+     * As linhas do ML somam o lucro sem arredondar (lucro_antes_ads_exato) e arredondam só no SKU, como o SHC.familias (mesmo centavo).
+     * Ads "—" em alguma linha (o ML sem o Ads do anúncio na fatura) → ads e lucro_real null; o lucro_antes_ads continua.
      */
-    function lucroPorProduto(resultados) {
+    function lucroPorProduto(resultados, porMes) {
         const g = {};
         (resultados || []).forEach(r => {
-            (r.por_item || []).forEach(x => {
-                const s = g[x.sku] || (g[x.sku] = { sku: x.sku, pedidos: 0, unidades: 0, receita: 0, tarifas: 0, custo: 0, outros: 0, imposto: 0, ads: 0, lucro_real: 0, pendentes: 0, pedidos_ids: [] });
+            const doMes = !r.por_item && !!r.mes, mes = !porMes ? null : doMes ? r.mes : U.mes(r.data);
+            const itens = doMes ? [{ sku: r.sku || r.anuncio_id, qtd: r.unidades, receita: r.bruto, tarifas: U.r2((r.tarifa || 0) + (r.frete || 0)), custo: r.custo,
+                outros: r.outros || 0, imposto: r.imposto || 0, ads: r.ads, antes: r.lucro_antes_ads_exato !== undefined ? r.lucro_antes_ads_exato : r.lucro_antes_ads }] : (r.por_item || []);
+            itens.forEach(x => {
+                const k = [r.canal, r.conta, mes, U.normalizaSku(x.sku)].join('|');
+                const s = g[k] || (g[k] = { sku: x.sku, canal: r.canal || null, conta: r.conta || '', mes, pedidos: 0, unidades: 0, receita: 0, tarifas: 0, custo: 0, outros: 0,
+                    imposto: 0, ads: 0, lucro_antes_ads: 0, lucro_real: 0, pendentes: 0, pedidos_ids: [] });
                 if (r.status !== 'ok' && r.status !== 'cancelado') { s.pendentes++; return; }
-                if (s.pedidos_ids.indexOf(r.pedido_id) < 0) { s.pedidos_ids.push(r.pedido_id); s.pedidos++; }
+                if (doMes) s.pedidos += r.vendas || 0;
+                else if (s.pedidos_ids.indexOf(r.pedido_id) < 0) { s.pedidos_ids.push(r.pedido_id); s.pedidos++; }
                 if (r.status === 'ok') s.unidades += x.qtd;
-                s.receita += x.receita; s.tarifas += x.tarifas || 0; s.custo += x.custo || 0; s.outros += x.outros; s.imposto += x.imposto; s.ads += x.ads;
-                s.lucro_real += x.receita - (x.tarifas || 0) - (x.custo || 0) - x.outros - x.imposto - x.ads;
+                const antes = x.antes !== undefined ? x.antes : x.receita - (x.tarifas || 0) - (x.custo || 0) - x.outros - x.imposto;
+                s.receita += x.receita; s.tarifas += x.tarifas || 0; s.custo += x.custo || 0; s.outros += x.outros; s.imposto += x.imposto; s.lucro_antes_ads += antes;
+                if (x.ads === null || s.ads === null) { s.ads = null; s.lucro_real = null; }   // não lido nunca vira zero
+                else { s.ads += x.ads; s.lucro_real += antes - x.ads; }
             });
         });
         return Object.keys(g).map(k => {
             const s = g[k];
-            ['receita', 'tarifas', 'custo', 'outros', 'imposto', 'ads', 'lucro_real'].forEach(c => { s[c] = U.r2(s[c]); });
-            s.margem_pct = s.receita > 0 ? Math.round(s.lucro_real / s.receita * 10000) / 100 : null;
+            ['receita', 'tarifas', 'custo', 'outros', 'imposto', 'ads', 'lucro_antes_ads', 'lucro_real'].forEach(c => { s[c] = U.r2(s[c]); });
+            s.margem_pct = s.lucro_real !== null && s.receita > 0 ? Math.round(s.lucro_real / s.receita * 10000) / 100 : null;
             delete s.pedidos_ids;
             return s;
         }).sort((a, b) => b.receita - a.receita);
@@ -242,7 +256,11 @@
     /**
      * Fechamento do mês ('AAAA-MM'): pedidos + tarifas SEM pedido (fatura, Full, assinatura…) + Ads que não deu para ratear.
      * ads_rateados = true (padrão): as tarifas 'ads' sem pedido NÃO entram (o Ads já foi pelo rateio + naoRateado — não contar 2 vezes).
-     * → { mes, pedidos, receita_liquida, repasse, lucro_pedidos, sem_pedido: {porTipo, total, estornos}, ads_nao_rateado, lucro_mes, completo, pendentes }
+     * ads_nas_tarifas = false (3.3.0: canal que NÃO traz o Ads nas tarifas — só o TikTok): o Ads do mês vem de ads_mes (campo manual; 0 = "não uso").
+     *   Sem ads_mes o mês sai com aprox: true ("≈") e o motivo, e o lucro fica sem o Ads: Ads não lido nunca vira zero calado.
+     *   No ML o Ads vem na fatura (padrão, ads_nas_tarifas diferente de false): a regra não se aplica e o mês nunca ganha "≈" por isso.
+     * → { mes, pedidos, receita_liquida, repasse, lucro_pedidos, sem_pedido: {porTipo, total, estornos}, ads_nao_rateado, ads_mes, lucro_mes, completo,
+     *     pendentes, aprox, motivo }
      */
     function fechamentoMes(o) {
         o = o || {};
@@ -261,15 +279,39 @@
         const semPedido = U.soma(Object.keys(porTipo), k => porTipo[k]);
         const adsN = U.soma((o.adsNaoRateado || []).filter(a => dentro(a.dia || a.periodo_ate)), a => a.custo);
         const lucroPedidos = U.soma(conta, r => r.lucro_real);
+        const adsMes = o.ads_nas_tarifas === false ? U.num(o.ads_mes) : null, semAds = o.ads_nas_tarifas === false && adsMes === null;
         return {
             mes, pedidos: conta.length, pendentes: res.length - conta.length,
             receita_liquida: U.soma(conta, r => r.receita_liquida), repasse: U.soma(conta, r => r.repasse),
             custo: U.soma(conta, r => r.custo_rs), imposto: U.soma(conta, r => r.imposto_rs), ads_rateado: U.soma(conta, r => r.ads_rs),
-            lucro_pedidos: lucroPedidos, sem_pedido: { porTipo, total: semPedido, estornos }, ads_nao_rateado: adsN,
-            lucro_mes: U.r2(lucroPedidos - semPedido - adsN),
+            lucro_pedidos: lucroPedidos, sem_pedido: { porTipo, total: semPedido, estornos }, ads_nao_rateado: adsN, ads_mes: adsMes,
+            lucro_mes: U.r2(lucroPedidos - semPedido - adsN - (adsMes || 0)),
             completo: res.length === conta.length && !M.ehNaoLido(o.tarifas),
+            aprox: semAds, motivo: semAds ? 'Ads não informado' : '',
         };
     }
 
-    return { custoUnitario, aliquota, lucroPedido, rateioAds, lucroPorProduto, fechamentoMes };
+    // o "faltando" do mês (ids internos) no texto da tela
+    const FALTA = { vendas_brutas: 'vendas brutas', faturamento: 'faturamento', custo_produtos: 'custo dos produtos', imposto: 'imposto' };
+    /**
+     * Soma dos canais ("Todos", 3.3.0): o total e o % de cada canal numa conta só (valor ÷ total, 1 casa: o mesmo % do filtro do canal).
+     * meses = [{ canal, conta?, aprox?, motivo?, faltando?, [campo]: número | null }] (ex.: ml.mesDaCascata + o mês do TikTok); campo = 'lucro'.
+     * Canal com "≈" (aprox) põe "≈" no total. Canal sem número fica fora da soma e o total leva "≈" com o motivo. Nenhum número → total null.
+     * % só com total > 0 (prejuízo não se rateia em %).
+     * → { total, aprox, motivos:[{canal, conta, motivo}], canais:[{canal, conta, valor, pct, aprox}] }
+     */
+    function somaCanais(meses, campo) {
+        const k = campo || 'lucro', motivos = [];
+        const canais = (meses || []).filter(Boolean).map(m => {
+            const valor = U.num(m[k]), aprox = !!m.aprox || valor === null;
+            if (aprox) motivos.push({ canal: m.canal, conta: m.conta || '', motivo: m.motivo || (valor !== null ? 'valor aproximado'
+                : m.faltando && m.faltando.length ? 'falta: ' + m.faltando.map(f => FALTA[f] || f).join(', ') : 'não lido') });
+            return { canal: m.canal, conta: m.conta || '', valor, aprox };
+        });
+        const com = canais.filter(c => c.valor !== null), total = com.length ? U.soma(com, c => c.valor) : null;
+        canais.forEach(c => { c.pct = c.valor !== null && total > 0 ? Math.round(c.valor / total * 1000) / 10 + 0 : null; });   // + 0: sem −0
+        return { total, aprox: motivos.length > 0, motivos, canais };
+    }
+
+    return { custoUnitario, aliquota, lucroPedido, rateioAds, lucroPorProduto, fechamentoMes, somaCanais };
 });

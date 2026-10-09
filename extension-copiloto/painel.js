@@ -254,6 +254,36 @@
     P.contaEstoque = (ls, est) => ls.reduce((o, l) => { const e = est(l); o.todos++; o[e.semAnuncio ? 'sem' : e.faixa]++; return o; }, { todos: 0, tem: 0, zero: 0, nl: 0, sem: 0 });
     // Tem custo = o que a etiqueta usa: o do SKU, a soma do kit ou o antigo da família/anúncio (mesma conta do painel lateral).
     P.temCusto = l => !!l.custo || !!l.kitCalc || (l.antigos || []).some(a => a.custo > 0);
+    // ── 3.3.0 (E14): "Canais onde vende" e o filtro de canal na planilha (só com 2 canais ligados; com 1 canal nada disto roda). ──
+    // tt = { anuncios: tt:<loja>:anuncios | null, skumap: tt:<loja>:skumap, custos: {<sku_id>: c|tiktok|…} } → { lido, set (SKUs do TikTok, normalizados) }.
+    P.skusTt = function (tt) {
+        const an = tt && tt.anuncios, ps = (an && an.produtos) || {}, set = new Set(), n = s => SHC.normalizaSku(s);
+        Object.keys(ps).forEach(pid => { const skus = (ps[pid] || {}).skus || {}; Object.keys(skus).forEach(id => { if (skus[id] && skus[id].sku) set.add(n(skus[id].sku)); }); });
+        Object.keys((tt && tt.skumap) || {}).forEach(id => { if (tt.skumap[id]) set.add(n(tt.skumap[id])); });
+        Object.keys((tt && tt.custos) || {}).forEach(id => { const c = tt.custos[id]; if (c && c.sku) set.add(n(c.sku)); });
+        return { lido: !!an, set };
+    };
+    // Linha da planilha → { ml: 'sim'|'nao', tiktok: 'sim'|'nc'|null } | null (sem TikTok). ML pelo retrato (anúncio vivo); TikTok pelo SKU em P.skusTt.
+    // No TikTok nunca 'nao': a lista de Gerenciar produtos vem em páginas de 50 (ou de uma busca) e a captura não guarda o total, então SKU não visto
+    // é 'nc' (não conferido), nunca "não anunciado". Anúncio do ML sem SKU não dá para procurar no TikTok (null); custo próprio do TikTok (c|tiktok|) é dele.
+    P.canaisOndeVende = function (l, tt, porIdRet) {
+        if (!tt) return null;
+        const ml = (l.ids || []).some(id => !P.finalizado((porIdRet || {})[id])) ? 'sim' : 'nao';
+        if (l.tipo !== 'sku') return { ml, tiktok: l.canal === 'tiktok' ? 'sim' : null };
+        return { ml, tiktok: tt.set.has(SHC.normalizaSku(l.sku)) ? 'sim' : 'nc' };
+    };
+    // Filtro de canal: 'todos' deixa tudo; um canal mostra quem está nele ('sim'); fora = true mostra quem não está ('nao') ou não foi conferido ('nc').
+    // null (anúncio do ML sem SKU, no TikTok) não entra em nenhum dos dois: não dá para conferir.
+    P.passaCanal = (canal, fora, canaisDe) => l => { if (canal === 'todos') return true; const c = (canaisDe(l) || {})[canal]; return fora ? c === 'nao' || c === 'nc' : c === 'sim'; };
+    // Etiquetas da coluna "Canais onde vende" ([classe, texto]): "ML", "TikTok", "TikTok: não conferido"; [] = em nenhum (a célula mostra "—").
+    P.etiquetasCanais = c => [c.ml === 'sim' ? ['', 'ML'] : null, c.tiktok === 'sim' ? ['tt', 'TikTok'] : c.tiktok === 'nc' ? ['nc', 'TikTok: não conferido'] : null].filter(Boolean);
+    // SKUs que só o TikTok tem (lidos em Gerenciar produtos, Pedidos ou ligados à mão) e que a planilha do ML não tem → linhas sem custo, para o filtro
+    // de canal (e "Todos") mostrar o produto do TikTok que precisa de custo. Ficam fora do contador, dos chips e da cópia em planilha (são do TikTok).
+    P.linhasSoTt = function (tt, skus) {
+        if (!tt) return [];
+        const tem = new Set((skus || []).map(l => SHC.normalizaSku(l.sku)));
+        return Array.from(tt.set).filter(s => s && !tem.has(s)).sort().map(s => ({ tipo: 'sku', sku: s, titulo: '', ids: [], precos: [], custo: null, antigos: [], soTt: true }));
+    };
     // "Mesmo custo para todas as variações": só as que NÃO têm custo nenhum (nem do kit, nem antigo do anúncio); com trocarTodos,
     // também as que já têm → [SKU a gravar]. Mesmo critério do "N de M variações com custo" do pai.
     P.aplicaMesmoCusto = (filhos, valor, trocarTodos) => !(valor > 0) ? [] : filhos.filter(l => trocarTodos || !P.temCusto(l)).map(l => l.sku);
@@ -287,6 +317,25 @@
     let kits = { kits: [], custos: {} };   // SHC.lerKits: kits gravados + custos c|sku (para somar os itens)
     let vendasChave = {}, verTodos = false, peloGuia = false;   // vendas por SKU/anúncio na janela do guia; "Ver todos"; aberta pelo guia (#guia-custos)
     let retrato = { itens: [], familias: [], ts: 0, full: null }, porIdRet = {};   // v3.2: retrato ml:anuncios (itens + famílias) e o Full, para estoque e pai → variações
+    let canaisTt = null, filtroCanal = 'todos', canalFora = false;   // 3.3.0 (E14): P.skusTt do TikTok (null = 1 canal: a tela de hoje); filtro de canal e "ver os que não estão"
+    const canaisDe = l => P.canaisOndeVende(l, canaisTt, porIdRet), COLS = () => (canaisTt ? 7 : 6);
+    const NOME_CANAL = { ml: 'Mercado Livre', tiktok: 'TikTok Shop' };
+    // O TikTok só entra com 2 canais ligados (cfg.modulos.tiktok + a permissão do site, como no painel lateral): lê tt:conta → tt:<loja>:anuncios
+    // (Gerenciar produtos) e :skumap, mais os c|tiktok| (ligar à mão). Nenhuma chamada ao TikTok. Com 1 canal → null.
+    async function lerCanaisTt(custos) {
+        if (!SHC.canaisLigados || !SHC.CANAIS || !SHC.chaveConta) return null;
+        const c = SHC.CANAIS.find(x => x.id === 'tiktok');
+        let perm = false;
+        try { perm = !!(c && c.perm && chrome.permissions && chrome.permissions.contains && await chrome.permissions.contains(c.perm)); } catch (e) { perm = false; }
+        if (SHC.canaisLigados(cfg, { tiktok: perm }).length < 2) return null;
+        const conta = await SHC.lerChave(SHC.PREFIXO_CANAL.tiktok + ':conta');   // tt:conta (a última loja vista); o prefixo vem do registro, nunca escrito aqui (teste_chave_canal)
+        const an = conta ? await SHC.lerChave(SHC.chaveConta('anuncios', conta, 'tiktok')) : null, sm = conta ? await SHC.lerChave(SHC.chaveConta('skumap', conta, 'tiktok')) : null;
+        const ct = {}; Object.keys(custos || {}).forEach(k => { if (custos[k].canal === 'tiktok') ct[custos[k].id] = custos[k]; });
+        return P.skusTt({ anuncios: an, skumap: sm || {}, custos: ct });
+    }
+    const NC_TITULO = 'Ainda não visto em Produtos › Gerenciar produtos do TikTok Shop. O Copiloto só vê as páginas que você abre: passe por elas e, nos produtos com variações, clique em Expandir.';
+    const cnlHtml = l => P.etiquetasCanais(canaisDe(l) || {}).map(([k, t]) => `<span class="tag${k ? ' ' + k : ''}"${k === 'nc' ? ' title="' + esc(NC_TITULO) + '"' : ''}>${esc(t)}</span>`).join(' ') || '<span class="cinza">—</span>';
+    let soTt = [];   // 3.3.0 (E14): P.linhasSoTt (SKUs só do TikTok, sem custo); [] com 1 canal
     // Gravações do progresso uma de cada vez (senão uma apaga a outra).
     let filaGuia = Promise.resolve();
     const gravaGuia = patch => (filaGuia = filaGuia.then(() => SHC.salvarGuia(patch)).then(g => (guia = g), () => guia));
@@ -326,6 +375,7 @@
         const [tudo, an, promos, g, full] = await Promise.all([SHC.lerTudo(), SHC.lerAnuncios(cv), SHC.lerPromos(cv), SHC.lerGuia(),
             SHC.lerFull ? SHC.lerFull(cv).catch(() => null) : null]);
         cfg = tudo.cfg; guia = g;
+        try { canaisTt = await lerCanaisTt(tudo.custos); } catch (e) { canaisTt = null; }   // 3.3.0 (E14): só com 2 canais
         try { erpx = await SHC.lerChave('erpx:' + (cv || await SHC.contaAtual())); } catch (e) { erpx = null; }   // v3.2 cruzamento ERP × ML
         const itens = (an && an.itens) || [];
         temRetrato = itens.length > 0;
@@ -351,6 +401,8 @@
         porChave = new Map();
         modelo.skus.forEach(l => porChave.set('sku|' + l.sku, l));
         modelo.anuncios.forEach(l => porChave.set(l.canal + '|' + l.id, l));
+        soTt = P.linhasSoTt(canaisTt, modelo.skus);   // 3.3.0 (E14): com 1 canal, []
+        soTt.forEach(l => porChave.set('sku|' + l.sku, l));
     }
 
     async function carregar() {
@@ -671,7 +723,8 @@
         const busca = ($('#busca').value || '').trim().toLowerCase();
         const soSem = $('#soSem').checked;
         const falta = $('#soPrinc').checked ? new Set(principais.faltam.map(f => f.sku ? 'sku:' + SHC.normalizaSku(f.sku) : 'mlb:' + f.itemId)) : null;
-        return (l, g) => (!soSem || !temCusto(l) || soAntigo(l)) && (!falta || falta.has(chaveGuia(l))) && (filtroEst === 'todos' || est(l).faixa === filtroEst) &&
+        const canal = P.passaCanal(canaisTt ? filtroCanal : 'todos', canalFora, canaisDe);   // 3.3.0 (E14)
+        return (l, g) => (!soSem || !temCusto(l) || soAntigo(l)) && (!falta || falta.has(chaveGuia(l))) && (filtroEst === 'todos' || est(l).faixa === filtroEst) && canal(l) &&
             (!busca || [l.titulo, l.sku, l.id, l.nomeVar, g && g.titulo].concat(l.ids).join(' ').toLowerCase().indexOf(busca) >= 0);
     }
     // Estoque por linha (cache por desenho; P.estoqueLinha) e o que fica aberto (pai e opções de compra), lembrado neste Chrome.
@@ -710,14 +763,15 @@
         if (l.custo && P.custoSuspeito(SHC.num(c.custo), l.precos)) dica = `<span class="dica alerta">Custo maior que o preço de venda (${esc(SHC.moeda(Math.max.apply(null, l.precos)))}). Confira se não sobrou um zero.</span>` + dica;
         const origem = l.custo ? ((c.origem === 'erp' && SHC.tinyDigitado(c) ? 'digitado' : ORIGEM(c)) ||(l.tipo === 'sku' ? 'digitado' : 'por anúncio')) + (c.atualizado ? ' · ' + dataBR(c.atualizado) : '') : l.kitCalc ? 'kit · soma ' + SHC.moeda(l.kitCalc.custo) : '—';   // sem custo ou só o antigo: o campo e a dica já dizem (não repete na Origem)
         const e = est(l), cls = [o.cls, e.faixa === 'zero' ? 'zerada' : '', o.achou ? 'achou' : ''].filter(Boolean).join(' ');
-        const nome = o.nome ? `<b title="${esc(l.titulo || '')}"><span class="var">${esc(o.nome)}</span></b>` : `<b title="${esc(l.titulo || '')}">${esc(l.titulo || '(sem título)')}</b>`;
+        const nome = o.nome ? `<b title="${esc(l.titulo || '')}"><span class="var">${esc(o.nome)}</span></b>` : `<b title="${esc(l.titulo || '')}">${esc(l.titulo || (l.soTt ? 'Produto do TikTok Shop' : '(sem título)'))}</b>`;   // soTt: 3.3.0 (E14)
         const semCusto = !temCusto(l), rot = esc(o.nome || l.sku || l.titulo || l.id);
         let html = `<tr data-k="${esc(k)}"${cls ? ' class="' + cls + '"' : ''}${o.de ? ' data-de="' + esc(o.de) + '"' : ''}>
   <td class="tit">${nome}<span>${l.tipo === 'anuncio' ? '<span class="tag' + (l.canal === 'sp' ? ' sp' : '') + '"' + (l.skuNaoLido ? ' title="' + esc(P.EXPLICA_SKU_NAO_LIDO) + '"' : '') + '>' + esc(P.etiquetaAnuncio(l)) + '</span> ' : ''}${sub}</span></td>
   <td class="estq">${seloHtml(e, l)}</td>
   <td data-r="Custo (R$)"><input class="inp${semCusto ? ' falta' : ''}" data-f="custo" inputmode="decimal" value="${esc(nfr(c.custo))}" placeholder="${semCusto ? 'falta o custo' : vs.length === 1 ? esc(nfr(vs[0])) : l.kitCalc ? esc(nfr(l.kitCalc.custo)) : ''}" aria-label="Custo de ${rot}">${dica}</td>
   <td data-r="Embalagem/outros"><input class="inp" data-f="outros" inputmode="decimal" value="${esc(nfr(c.outros))}" placeholder="0,00" aria-label="Embalagem e outros de ${rot}"></td>
-  <td data-r="Origem" style="color:#64748B;font-size:12px;white-space:nowrap">${esc(origem)}</td>
+  <td data-r="Origem" style="color:#64748B;font-size:12px;white-space:nowrap">${esc(origem)}</td>${canaisTt ? `
+  <td class="cnl" data-r="Canais onde vende">${cnlHtml(l)}</td>` : ''}
   <td>${l.custo ? '<button class="x" data-rm="1" title="Apagar este custo">×</button>' : ''}</td></tr>`;
         if (opAberta) html += vivos.map((id, i) => {
             const it = porIdRet[id] || {}, a = P.idsQuePrevalecem(l).indexOf(id) >= 0 && l.antigos.find(x => String(x.id) === id);
@@ -727,7 +781,7 @@
             return `<tr class="${o.de ? 'neto' : 'fil opcl'}${i === vivos.length - 1 ? ' ult' : ''}" data-de="${esc(chOp)}">
   <td class="tit"><b>${esc(id + (tipo ? ' · ' + tipo : ''))}</b>${tipo ? '' : '<span><span class="tag opc">opção de compra</span></span>'}</td>
   <td class="estq"></td>
-  <td colspan="3" class="cpai">${usa}</td><td class="vaz"></td></tr>`;
+  <td colspan="3" class="cpai">${usa}</td>${canaisTt ? '<td class="cnl"></td>' : ''}<td class="vaz"></td></tr>`;
         }).join('');
         return html;
     }
@@ -754,7 +808,7 @@
   <td class="tit"><div class="cab"><button class="tog" type="button" aria-expanded="${aberto}" aria-label="${aberto ? 'Recolher' : 'Abrir'} variações" data-tog="${esc(g.chave)}">${aberto ? '▾' : '▸'}</button><div>
     <b title="${esc(g.titulo)}">${esc(g.titulo || '(sem título)')}</b><span><span class="tag fam">${todos} variações</span> ${esc(SHC.qtd(anuncios.size, 'anúncio', 'anúncios'))}${g.filhos.length < todos ? ' · mostrando ' + g.filhos.length + ' de ' + todos : ''}</span></div></div></td>
   <td class="estq">${selo}${dicaEst}</td>
-  <td class="cpai" colspan="3" data-r="Custo"><span class="resumo"${com < fs.length || ant ? ' style="color:var(--ambar);font-weight:600"' : ''}>${com} de ${fs.length} variações com custo${ant ? ` · <button class="lnk" type="button" data-ver-antigo="${esc(g.chave)}">${ant === 1 ? '1 custo antigo' : ant + ' custos antigos'}</button>` : com === fs.length ? ' ✓' : ''}</span>${mesmo}</td>
+  <td class="cpai" colspan="3" data-r="Custo"><span class="resumo"${com < fs.length || ant ? ' style="color:var(--ambar);font-weight:600"' : ''}>${com} de ${fs.length} variações com custo${ant ? ` · <button class="lnk" type="button" data-ver-antigo="${esc(g.chave)}">${ant === 1 ? '1 custo antigo' : ant + ' custos antigos'}</button>` : com === fs.length ? ' ✓' : ''}</span>${mesmo}</td>${canaisTt ? '<td class="cnl"></td>' : ''}
   <td class="vaz"></td></tr>`;
     }
     // Um grupo (pai + filhos abertos, ou a linha simples) em HTML. busca = o texto procurado (abre o pai e pinta a variação achada).
@@ -864,13 +918,32 @@
         $('#estInfo').textContent = temRetrato ? (temPausa ? 'Zerado = ativo e sem estoque · Pausado sem estoque = parado porque o estoque acabou. ' : '') + P.textoLeituraEstoque(retrato.ts) : '';
         const busca = ($('#busca').value || '').trim().toLowerCase(), passa = filtroLinha();
         // Pai → variações (P.agrupa) e o filtro olhando cada variação; anúncio sem SKU fica no grupo de sempre.
-        let gs = P.filtraGrupos(P.agrupa(modelo.skus.filter(vivas), retrato.itens, retrato.familias, retrato.full), passa);
+        let gs = P.filtraGrupos(P.agrupa(modelo.skus.filter(vivas).concat(soTt), retrato.itens, retrato.familias, retrato.full), passa);   // soTt: 3.3.0 (E14), [] com 1 canal
         let ans = P.filtraGrupos(modelo.anuncios.filter(vivas).map(l => ({ tipo: 'solo', chave: 'a:' + l.canal + '|' + l.id, filhos: [l] })), passa);
         const corpo = $('#corpo'), MAX = 400, vendasDe = l => vendasChave[chaveGuia(l)];
         // Sem busca nem filtro: só os 10 que mais vendem (o grupo vale 1, com as vendas somadas), com "Ver mais (N)". A busca e os
         // filtros continuam procurando em todos. Depois: com estoque → não lido → zerados.
         // Qualquer filtro (inclusive o chip de estoque) abre os pais: a variação que bateu (ex.: a zerada) aparece sem precisar abrir.
-        const abreTudo = !!busca || $('#soSem').checked || $('#soPrinc').checked || filtroEst !== 'todos';
+        // 3.3.0 (E14): chips do canal e a coluna "Canais onde vende" só com 2 canais; o rodapé do canal diz quantos não estão nele (e deixa ver quais).
+        const fc = $('#fCanal'), thC = $('#thCanais'), ci = $('#canalInfo');
+        if (fc) fc.hidden = !canaisTt;
+        if (thC) thC.hidden = !canaisTt;
+        if (!canaisTt) { filtroCanal = 'todos'; canalFora = false; if (ci) ci.textContent = ''; }
+        else {
+            if (fc) fc.innerHTML = [['todos', 'Todos'], ['ml', NOME_CANAL.ml], ['tiktok', NOME_CANAL.tiktok]].map(([k, t]) => `<button type="button" data-canal="${k}" class="${filtroCanal === k ? 'on' : ''}" aria-pressed="${filtroCanal === k}">${t}</button>`).join('');
+            if (ci) {
+                // Quem não está ('nao') e quem não foi conferido ('nc') contam à parte; null (anúncio do ML sem SKU, no TikTok) não conta em nenhum.
+                const cs = filtroCanal === 'todos' ? [] : todas.filter(vivas).concat(soTt).map(l => (canaisDe(l) || {})[filtroCanal]), nome = esc(NOME_CANAL[filtroCanal]);
+                const nao = cs.filter(x => x === 'nao').length, nc = cs.filter(x => x === 'nc').length, semSku = cs.filter(x => x === null).length;
+                const partes = [nao ? SHC.qtd(nao, 'produto', 'produtos') + (canalFora ? ' que' : '') + ' não ' + (nao === 1 ? 'está' : 'estão') + ' no ' + nome : '',
+                    nc ? SHC.qtd(nc, 'produto', 'produtos') + ' ainda não ' + (nc === 1 ? 'conferido' : 'conferidos') + ' no ' + nome + ' (o Copiloto só vê o que você abre em Produtos › Gerenciar produtos)' : ''].filter(Boolean);
+                ci.innerHTML = filtroCanal === 'todos' ? (canaisTt.lido ? '' : 'Abra Produtos › Gerenciar produtos no TikTok Shop para o Copiloto saber o que está anunciado lá.')
+                    : (!partes.length ? 'Todos os produtos' + (semSku ? ' com SKU' : '') + ' estão no ' + nome
+                        : (canalFora ? 'Mostrando ' : '') + partes.join(' · ') + ' · <button class="lnk" type="button" data-canal-fora="1">' + (canalFora ? 'voltar aos que estão' : 'ver quais') + '</button>')
+                    + (semSku ? ' · ' + esc(SHC.qtd(semSku, 'anúncio sem SKU', 'anúncios sem SKU')) + ': não dá para conferir no ' + nome : '') + (partes.length ? '' : '.');
+            }
+        }
+        const abreTudo = !!busca || $('#soSem').checked || $('#soPrinc').checked || filtroEst !== 'todos' || (canaisTt && filtroCanal !== 'todos');
         const filtrando = abreTudo;
         let escondidas = 0;
         if (!filtrando && !verTodos) {
@@ -880,19 +953,19 @@
         }
         gs = P.ordenaGrupos(gs, est, vendasDe); ans = P.ordenaGrupos(ans, est, vendasDe);
         if (!gs.length && !ans.length) {
-            corpo.innerHTML = `<tr><td colspan="6" class="vazio">${todas.length ? 'Nada encontrado com esse filtro.'
+            corpo.innerHTML = `<tr><td colspan="${COLS()}" class="vazio">${todas.length ? 'Nada encontrado com esse filtro.'
                 : 'Nenhum produto ainda. Abra a lista de Anúncios do Mercado Livre neste Chrome: o Copiloto lê seus SKUs sozinho.'}</td></tr>`;
             $('#rodape').textContent = '';
             return;
         }
         let html = '', faixaZero = false;
         gs.slice(0, MAX).forEach(g => {
-            if (!faixaZero && temRetrato && P.faixaGrupo(g, est) === 'zero') { faixaZero = true; html += '<tr class="grp"><td colspan="6">Zerados · no fim da lista</td></tr>'; }
+            if (!faixaZero && temRetrato && P.faixaGrupo(g, est) === 'zero') { faixaZero = true; html += '<tr class="grp"><td colspan="' + COLS() + '">Zerados · no fim da lista</td></tr>'; }
             html += grupoHtml(g, abreTudo, busca);
         });
-        if (ans.length) html += '<tr class="grp"><td colspan="6">' + esc(P.tituloGrupoAnuncios(P.contaAnuncios(ans.map(g => g.filhos[0])))) + ' · o custo fica gravado no próprio anúncio</td></tr>' + ans.slice(0, MAX).map(g => grupoHtml(g, abreTudo, busca)).join('');
-        if (escondidas) html += `<tr><td colspan="6" style="text-align:center"><button class="bt sec" type="button" data-ver-todos="1" aria-expanded="false">Ver mais (${escondidas})</button></td></tr>`;
-        else if (verTodos && !filtrando && gs.length + ans.length > 10) html += `<tr><td colspan="6" style="text-align:center"><button class="bt sec" type="button" data-ver-todos="1" aria-expanded="true">Ver menos</button></td></tr>`;
+        if (ans.length) html += '<tr class="grp"><td colspan="' + COLS() + '">' + esc(P.tituloGrupoAnuncios(P.contaAnuncios(ans.map(g => g.filhos[0])))) + ' · o custo fica gravado no próprio anúncio</td></tr>' + ans.slice(0, MAX).map(g => grupoHtml(g, abreTudo, busca)).join('');
+        if (escondidas) html += `<tr><td colspan="${COLS()}" style="text-align:center"><button class="bt sec" type="button" data-ver-todos="1" aria-expanded="false">Ver mais (${escondidas})</button></td></tr>`;
+        else if (verTodos && !filtrando && gs.length + ans.length > 10) html += `<tr><td colspan="${COLS()}" style="text-align:center"><button class="bt sec" type="button" data-ver-todos="1" aria-expanded="true">Ver menos</button></td></tr>`;
         corpo.innerHTML = html;
         const cortou = gs.length > MAX || ans.length > MAX;
         $('#rodape').textContent = (escondidas ? 'Mostrando os ' + (gs.length + ans.length) + ' que mais vendem · ' : '') + SHC.qtd(modelo.skus.filter(vivas).length, 'SKU', 'SKUs') + P.rodapeAnuncios(P.contaAnuncios(modelo.anuncios.filter(vivas)))
@@ -976,6 +1049,14 @@
         filtroEst = b.getAttribute('data-est');
         desenhaTabela();
     });
+    // 3.3.0 (E14): filtro de canal (só com 2 canais) e "ver quais" não estão no canal escolhido.
+    if ($('#fCanal')) $('#fCanal').addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('[data-canal]');
+        if (!b) return;
+        filtroCanal = b.getAttribute('data-canal'); canalFora = false;
+        desenhaTabela();
+    });
+    if ($('#canalInfo')) $('#canalInfo').addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-canal-fora]')) { canalFora = !canalFora; desenhaTabela(); } });
     function msgTabela(txt, bom) { const m = $('#msgTab'); m.className = bom ? 'ok' : 'msg erro'; m.textContent = txt; }
 
     function falhaTabela(el) { if (el) avisa(el, '#B91C1C', FALHA); msgTabela(FALHA); }
@@ -1276,7 +1357,7 @@
     $('#omieEsquecer').addEventListener('click', async () => {
         await esquecerErp(SHC.OMIE_CHAVE, OMIE);
         tinyMsg('Chaves esquecidas. Os custos que já vieram do Omie continuam na tabela.');
-        desenhaOmie();
+        await desenhaOmie();   // 3.3.0: o clique só termina com o cartão redesenhado (o esquecerErp da nuvem lê a empresa antes)
     });
     desenhaOmie();
     // ── Bling (v3.1, bling.js): OAuth 2.0 com o aplicativo do PRÓPRIO seller (o Copiloto não tem servidor nem segredo embutido).
@@ -1363,7 +1444,7 @@
     $('#blingEsquecer').addEventListener('click', async () => {
         await esquecerErp(SHC.BLING_CHAVE, BLING);
         tinyMsg('Bling desconectado. Os custos que já vieram do Bling continuam na tabela.');
-        desenhaBling();
+        await desenhaBling();   // 3.3.0: idem
     });
     desenhaBling();
     $('#tinyConectar').addEventListener('click', () => {
@@ -1379,7 +1460,7 @@
     $('#tinyEsquecer').addEventListener('click', async () => {
         await esquecerErp(SHC.TINY_CHAVE, TINY);
         tinyMsg('Token esquecido. Os custos que já vieram do Tiny continuam na tabela.');
-        desenhaTiny();
+        await desenhaTiny();   // 3.3.0: idem
     });
     desenhaTiny();
 
@@ -1393,7 +1474,7 @@
         // v3.3: ml:conta (o ML abriu outra conta, talvez de outra empresa): relê custos, cfg e as contas do seletor.
         const relevante = Object.keys(mud).some(k => /^(c\||vm\||ml:anuncios|ml:promos|cfg$|shc:guia$|ml:conta$)/.test(k));
         if (Object.keys(mud).some(k => /^erpx:/.test(k))) (async () => { erpx = await SHC.lerChave('erpx:' + (contaVer || await SHC.contaAtual())); desenhaErpx(); })().catch(() => {});
-        if (!relevante) return;
+        if (!relevante && !(canaisTt && Object.keys(mud).some(k => /^tt[:@].+:(anuncios|skumap)$/.test(k)))) return;   // 3.3.0 (E14): com 2 canais, Gerenciar produtos e Pedidos do TikTok também
         if (mud['ml:conta'] || mud.cfg) contasMudou = true;
         clearTimeout(espera);
         espera = setTimeout(async () => {

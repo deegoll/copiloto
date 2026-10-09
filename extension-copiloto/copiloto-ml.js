@@ -9,8 +9,16 @@
     const SHC = globalThis.SHC;
     if (!SHC || !SHC.mlExtraiEstado) return;
 
+    // 3.3.1 (C2): sem o "Concordo e ligar" do Mercado Livre (cfg.consentimento_ml) esta aba não lê, não busca e não manda
+    // nada — nem o que a tela já recebeu, nem o plano B do fundo. O onChanged acompanha a chave de Ajustes na hora: ligou,
+    // a leitura começa sem recarregar a página; desligou, as próximas ações já não rodam (o que estiver no ar termina).
+    let mlOk = false;
+    const consentDe = c => !!(c && c.consentimento_ml);
+    try { SHC.mlConsentido(ok => { mlOk = !!ok; inicia(); }); } catch (e) { /* sem storage: fica desligado */ }
+    try { chrome.storage.onChanged.addListener((m, area) => { if (area !== 'local' || !m.cfg) return; const era = mlOk; mlOk = consentDe(m.cfg.newValue); if (mlOk && !era) inicia(); }); } catch (e) { /* idem */ }
+
     function enviaPaginaAtual() {
-        if (!/\/anuncios\/lista\/promos/.test(location.pathname)) return;
+        if (!mlOk || !/\/anuncios\/lista\/promos/.test(location.pathname)) return;
         const s = document.getElementById('__NORDIC_RENDERING_CTX__');
         const estado = s ? SHC.mlExtraiEstado(s.textContent || '') : null;
         if (!estado) return;
@@ -22,6 +30,7 @@
 
     // v3.3: experiência de compra que a tela trouxer no estado (o "Analisar desempenho" do anúncio) → o fundo guarda em exp:<conta> (conta conferida).
     function enviaExperiencia() {
+        if (!mlOk) return;   // 3.3.1 (C2)
         const s = document.getElementById('__NORDIC_RENDERING_CTX__');
         const estado = s ? SHC.mlExtraiEstado(s.textContent || '') : null;
         const lista = estado && SHC.mlExperienciasDoEstado ? SHC.mlExperienciasDoEstado(estado) : [];
@@ -41,6 +50,7 @@
         ler_pagina_anuncios: { rota: /^\/anuncios(\/lista)?$/, ler: e => SHC.mlPaginaAnuncios(e) },
     };
     chrome.runtime.onMessage.addListener((msg, sender, responder) => {
+        if (!mlOk) return false;   // 3.3.1 (C2): ML desligado — o plano B e os GETs com a sessão desta aba não respondem
         const leitor = msg && LEITORES[msg.acao];
         let u = null;
         try { u = new URL(String(msg && msg.url)); } catch (e) { /* url inválida */ }
@@ -80,6 +90,7 @@
     // MESMOS GETs que a página usa (lista plana + variações), uma chamada de cada vez, e manda ao fundo (editor:<conta>). Nunca PUT /response,
     // save-* nem .../cells (gravam no ML); não troca aba de colunas (grava preferência). 1 leitura completa a cada 6 h por conta.
     async function lerEditor() {
+        if (!mlOk) return;   // 3.3.1 (C2)
         const s = SHC.editorSessao && SHC.editorSessao(location.href);
         if (!s || !s.conta) return;
         // Auditoria 01/10/2026: leitura parcial também espera (1 h desde a última TENTATIVA), e uma 2ª aba do Editor não lê junto.
@@ -101,7 +112,12 @@
         try { chrome.runtime.sendMessage({ acao: 'editor_anuncios', conta: { sellerId: s.conta }, dados: d }); } catch (e) { /* extensão recarregada */ }
     }
 
-    enviaPaginaAtual();
-    try { enviaExperiencia(); } catch (e) { /* tela desconhecida: nada a enviar */ }
-    lerEditor().catch(() => {});
+    // 3.3.1 (C2): o 1º envio sai da leitura da cfg lá em cima (e do onChanged quando a chave liga com a página aberta):
+    // a página já carregada não perde a leitura por 1 get, e sem o "Concordo e ligar" nada roda.
+    function inicia() {
+        if (!mlOk) return;
+        enviaPaginaAtual();
+        try { enviaExperiencia(); } catch (e) { /* tela desconhecida: nada a enviar */ }
+        lerEditor().catch(() => {});
+    }
 })();

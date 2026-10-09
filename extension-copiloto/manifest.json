@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Copiloto: lucro no Mercado Livre",
+  "name": "Copiloto: lucro real nos marketplaces",
   "short_name": "Copiloto",
   "version": "3.3.0",
-  "description": "Lucro real de cada anúncio, promoção, frete, Ads e Full no Mercado Livre, com os números do próprio ML. Você só informa o custo.",
+  "description": "Lucro real de cada venda no Mercado Livre e no TikTok Shop, com os números do próprio canal. Você só informa o custo.",
   "homepage_url": "https://especialistaemmarketplace.com.br/sellerhub/",
   "minimum_chrome_version": "116",
   "permissions": [
@@ -18,7 +18,8 @@
   ],
   "optional_permissions": [
     "background",
-    "identity"
+    "identity",
+    "scripting"
   ],
   "optional_host_permissions": [
     "https://api.tiny.com.br/*",
@@ -27,7 +28,8 @@
     "https://produto.mercadolivre.com.br/*",
     "https://app.omie.com.br/*",
     "https://www.bling.com.br/*",
-    "https://api.bling.com.br/*"
+    "https://api.bling.com.br/*",
+    "https://seller-br.tiktok.com/*"
   ],
   "background": {
     "service_worker": "background.js"
