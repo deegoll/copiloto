@@ -51,9 +51,9 @@
 // mensagens licenca_* respondem { ok: false, erro: 'desligado' } e o alarme shc-licenca é tirado. Religar = voltar o arquivo nesta lista.
 importScripts('calc.js', 'store.js', 'segredo.js', 'ml-extrator.js', 'tiny.js', 'omie.js', 'bling.js', 'erp-cruzar.js', 'fechamento.js', 'agenda-canal.js');
 // v3.2: TikTok Shop — núcleo (cópia de copiloto-nucleo/src) + tiktok.js. Só LÊ a resposta que a tela aberta pela seller recebeu:
-// nenhum fetch, nenhum alarme para o TikTok. Mensagens 'tiktok_captura' e 'tiktok_ligar' e o registro dos scripts: SHC.tt.instalarFundo.
+// nenhum fetch, nenhum alarme para o TikTok. Mensagens 'tiktok_captura', 'tiktok_ligar' e 'tiktok_etiqueta' e o registro dos scripts: SHC.tt.instalarFundo.
 importScripts('nucleo/util.js', 'nucleo/modelo.js', 'nucleo/tarifas.js', 'nucleo/motor.js', 'nucleo/conciliacao.js', 'nucleo/adaptador.js', 'nucleo/adaptadores/tiktok.js', 'tiktok.js');
-// 3.3.0 (E8): TikTok destravado. 'scripting' e o site só como permissões OPCIONAIS (pedidas no clique em Ajustes); os 2 scripts da tela
+// 3.3.0 (E8): TikTok destravado. 'scripting' e o site só como permissões OPCIONAIS (pedidas no clique em Ajustes); os 3 scripts da tela
 // só são registrados com as 2 concedidas E cfg.modulos.tiktok === true (SHC.tt.sincronizarScripts). Nenhum content_script fixo no TikTok.
 SHC.tt.instalarFundo();
 

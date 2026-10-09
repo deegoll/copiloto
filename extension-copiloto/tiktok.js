@@ -372,6 +372,38 @@
         return (await area().get(ch))[ch] || null;
     };
 
+    /**
+     * Anúncios, custos e cfg para as etiquetas (3.3.1, tiktok-etiqueta.js), lidos da empresa DONA da loja (areaDaLoja): a etiqueta
+     * na aba do Seller Center não pode ver o custo nem o imposto de outra empresa, mesmo com outra conta do ML aberta no Chrome.
+     * Só o que o chip usa (anuncios + skumap da loja + os custos c|), nunca os pedidos. → { conta, anuncios, skumap, custos, cfg } | null.
+     */
+    TT.lerParaEtiqueta = async function (loja) {
+        if (!TT.contaValida(loja)) return null;
+        const emp = await empresaDaLoja(loja), a = SHC.areaEmpresa ? SHC.areaEmpresa(emp) : crua();
+        const ks = (await chavesEm(a, ['c|sku', 'c|tiktok|'])).concat([k(loja, 'anuncios'), k(loja, 'skumap')]);
+        const t = await a.get(ks), d = { conta: loja, anuncios: null, skumap: {}, custos: {}, cfg: null };
+        Object.keys(t).forEach(x => {
+            if (x.indexOf('c|') === 0) d.custos[x] = t[x];
+            else if (x === k(loja, 'anuncios')) d.anuncios = t[x];
+            else if (x === k(loja, 'skumap')) d.skumap = t[x] || {};
+        });
+        // cfg da empresa dona da loja (o imposto e a margem dela; nunca os da conta do ML aberta). A mesma regra do SHC.lerCfg.
+        const c = (await crua().get('cfg')).cfg || {};
+        if (emp && SHC.CAMPOS_EMPRESA) {
+            const meu = (c.porConta && c.porConta[emp]) || {}, proprio = {};
+            SHC.CAMPOS_EMPRESA.forEach(campo => { proprio[campo] = campo in meu ? meu[campo] : campo === 'configurado' ? false : (SHC.PADRAO || {})[campo]; });
+            d.cfg = Object.assign({}, SHC.PADRAO || {}, c, proprio, { empresa: emp });
+        } else d.cfg = Object.assign({}, SHC.PADRAO || {}, c);
+        return d;
+    };
+    /** A mensagem tiktok_etiqueta (da aba de Gerenciar produtos) → { ok, loja, etiquetas, lido_em (a leitura mais nova dos anúncios) }. */
+    TT.paraEtiqueta = async function (loja) {
+        const d = await TT.lerParaEtiqueta(loja);
+        if (!d) return { ok: false, motivo: 'loja' };
+        const lidos = valores((d.anuncios && d.anuncios.produtos) || {}).map(p => p.lido_em || 0);
+        return { ok: true, loja: d.conta, etiquetas: TT.etiquetas(d.anuncios, d.custos, d.cfg), lido_em: lidos.length ? Math.max.apply(null, lidos) : 0 };
+    };
+
     // ── Lucro pelo motor do núcleo ────────────────────────────────────────────────────────────────────────────
     function skuDoItem(skuId, ctx) {
         const lig = (skuId && ctx.custos['c|tiktok|' + skuId]) || null;
@@ -635,11 +667,62 @@
     /** "E se eu vender a R$ X?" no TikTok (tabela com vigência do núcleo). */
     TT.simular = (preco, ctx, cfg) => CN.tarifas.simular('tiktok', preco, Object.assign({ imposto_pct: num((cfg || {}).imposto_pct), margem_alvo_pct: num((cfg || {}).margem_alvo_pct) }, ctx || {}));
 
+    // ── Etiqueta de preço no Seller Center (tiktok-etiqueta.js, em Gerenciar produtos; 3.3.1) ─────────────────────────
+    // Mesmas palavras da etiqueta do ML (ml-tela.js, SHC.telaChip): "Dá lucro" · "Abaixo da meta" · "Prejuízo" · "＋ Informar custo".
+    // pctTxt copiada do ml-extrator.js (SHC.pctTxt): o módulo do TikTok não carrega o ml-extrator.
+    const pctTxt = SHC.pctTxt || function (v) {
+        const a = Math.abs(v), casas = a < 1 ? 2 : 1;
+        const t = (Math.round(a * Math.pow(10, casas)) / Math.pow(10, casas)).toLocaleString('pt-BR', { maximumFractionDigits: casas });
+        return (v < 0 && t !== '0' ? '−' : '') + t + '%';
+    };
+    /**
+     * Chip de UMA variação anunciada. info = { sku_id, sku, preco, comissao_pct (a de AFILIADO do produto, commission_plan_info) };
+     * custos = o mapa c|… da empresa dona da loja; cfg = o do painel (imposto, margem). A ligação digitada na aba (c|tiktok|<sku_id>:
+     * o SKU ligado e/ou o custo digitado) ganha do seller_sku; sem ela, o custo vem pelo SKU (SHC.custoDeAnuncio).
+     * → { cls: luc|ate|pre|sem, st, vl, dica } | null (sem preço ou sem tabela do dia: a tela não desenha nada).
+     */
+    TT.chipPreco = function (info, custos, cfg) {
+        if (!info || !(num(info.preco) > 0)) return null;
+        const lig = (info.sku_id && custos) ? custos['c|tiktok|' + info.sku_id] : null;
+        const sku = normSku((lig && lig.sku) || info.sku || '');
+        let custo = null;
+        if (lig && num(lig.custo) > 0) custo = { custo: num(lig.custo), outros: num(lig.outros) || 0 };
+        else if (sku && SHC.custoDeAnuncio) {
+            const r = SHC.custoDeAnuncio(custos || {}, { sku });
+            custo = r ? { custo: num(r.dados.custo), outros: num(r.dados.outros) || 0 } : null;
+        }
+        const ctx = { qtd: 1, custo: custo ? custo.custo : null, outros: custo ? custo.outros : 0 }, af = num(info.comissao_pct);
+        if (af > 0) ctx.afiliado_pct = af;   // a comissão de afiliado do produto entra na conta (tarifas.js)
+        const s = TT.simular(num(info.preco), ctx, cfg);
+        if (!s || M.ehNaoLido(s)) return null;
+        // O que entra na conta, dito na dica da etiqueta. O frete da entrega NÃO entra: o TikTok mede o peso depois da entrega.
+        const dica = 'Comissão do TikTok + programa de frete (SFP) pela tabela de hoje' + (af > 0 ? ' + afiliado de ' + String(af).replace('.', ',') + '%' : '')
+            + '; o custo e o imposto são seus. O frete da entrega não entra: o TikTok só mostra depois da entrega.';
+        if (s.classe === 'sem_custo' || s.lucro === null || s.lucro === undefined) return { cls: 'sem', st: '＋ Informar custo', vl: '', dica: 'Com o custo, o Copiloto mostra se este preço dá lucro. ' + dica };
+        const cls = s.classe === 'prejuizo' || s.lucro < 0 ? 'pre' : (s.classe === 'apertado' ? 'ate' : 'luc');
+        return { cls, st: cls === 'pre' ? 'Prejuízo' : cls === 'ate' ? 'Abaixo da meta' : 'Dá lucro',
+            vl: (s.lucro < 0 ? '−' : '') + SHC.moeda(Math.abs(s.lucro)) + ' · ' + pctTxt(s.margem_pct), dica };
+    };
+    /** Todas as variações lidas da loja (tt:<loja>:anuncios) → [{ sku_id, sku, preco, comissao_pct, chip }] (o chip já com a conta). */
+    TT.etiquetas = function (anuncios, custos, cfg) {
+        const out = [], ps = (anuncios && anuncios.produtos) || {};
+        Object.keys(ps).forEach(pid => {
+            const p = ps[pid] || {}, skus = p.skus || {};
+            Object.keys(skus).forEach(sid => {
+                const s = skus[sid] || {}, chip = TT.chipPreco({ sku_id: sid, sku: s.sku, preco: s.preco, comissao_pct: p.comissao_pct }, custos, cfg);
+                if (chip) out.push({ sku_id: sid, sku: normSku(s.sku || ''), preco: num(s.preco), comissao_pct: num(p.comissao_pct), chip });
+            });
+        });
+        return out;
+    };
+
     // ── Fundo (background.js): mensagens e registro dos scripts de captura ─────────────────────────────────────────
     // world: 'MAIN' no registerContentScripts pede o Chrome 102+ (o mínimo do manifest continua 116).
     TT.SCRIPTS = [
         { id: 'copiloto-tt-pagina', matches: [TT.ORIGEM], js: ['tiktok-pagina.js'], runAt: 'document_start', world: 'MAIN', persistAcrossSessions: true },
         { id: 'copiloto-tt-tela', matches: [TT.ORIGEM], js: ['tiktok-tela.js'], runAt: 'document_start', persistAcrossSessions: true },
+        // 3.3.1: as etiquetas de preço em Gerenciar produtos (mundo isolado; obedece ao mesmo portão: canal ligado + consentimento + permissões)
+        { id: 'copiloto-tt-etiqueta', matches: [TT.ORIGEM], js: ['tiktok-etiqueta.js'], runAt: 'document_idle', persistAcrossSessions: true },
     ];
     /**
      * As 2 permissões OPCIONAIS do TikTok, pedidas juntas no mesmo clique em Ajustes e devolvidas juntas ao desligar:
@@ -700,6 +783,13 @@
             if (msg.acao === 'tiktok_ligar' || msg.acao === 'tiktok_desligar') {   // o painel pede/devolve as permissões no clique; aqui só registra/tira
                 if (!daExtensao(sender)) return false;
                 (msg.acao === 'tiktok_ligar' ? TT.sincronizarScripts() : TT.desligarLeitura()).then(responder, () => responder({ ok: false }));
+                return true;
+            }
+            if (msg.acao === 'tiktok_etiqueta') {   // 3.3.1: da aba de Gerenciar produtos ({loja}) → os chips de preço das variações lidas
+                if (!TT.daAbaDoTikTok(sender)) return false;
+                // O mesmo portão da captura: canal ligado e salvo em Ajustes, consentimento gravado e as 2 permissões presentes.
+                area().get('cfg').then(async o => (moduloLigado((o && o.cfg) || {}) && await ch.permissions.contains(TT.PERM) ? TT.paraEtiqueta(msg.loja) : { ok: false, motivo: 'desligado' }))
+                    .then(responder, () => responder({ ok: false }));
                 return true;
             }
             return false;
