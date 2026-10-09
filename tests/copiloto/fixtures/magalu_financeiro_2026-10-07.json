@@ -1,0 +1,928 @@
+{
+  "canal": "magalu",
+  "tela": "financeiro",
+  "lido_em": "2026-10-07",
+  "origem": "HAR do Chrome, anonimizado por deploy/retrato-har.js",
+  "respostas": [
+    {
+      "metodo": "GET",
+      "url": "https://magalu-sellers.magalu.com/ps-financial/api/v1/seller/financial-infos",
+      "parametros": [],
+      "status": 200,
+      "corpo": {
+        "bank_account": {
+          "bank_code": "[omitido]",
+          "bank_agency": "[omitido]",
+          "bank_agency_digit": "[omitido]",
+          "account": "[omitido]",
+          "account_digit": "[omitido]",
+          "metadata": null,
+          "custom_fields": []
+        },
+        "transfer_data": {
+          "days": [
+            17
+          ],
+          "interval": "monthly",
+          "auto_anticipate": false,
+          "arrangements": null,
+          "metadata": null,
+          "custom_fields": []
+        },
+        "metadata": {},
+        "custom_fields": [],
+        "channel": "marketplace-magalu",
+        "org_id": "[omitido]",
+        "org": {
+          "org_id": "[omitido]",
+          "name": "[omitido]",
+          "trade_name": "[omitido]",
+          "status": "ACTIVE",
+          "type": "PJ",
+          "document": "[omitido]",
+          "sells_to_company": true,
+          "financial_email": "[omitido]"
+        },
+        "source": "marketplace-magalu",
+        "agreements": [
+          {
+            "name": "commission",
+            "fees_type": [
+              {
+                "level": "category",
+                "type": "percentage",
+                "fees": [
+                  {
+                    "name": "Produto 2",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "134"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 2",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "134"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 3",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 3",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 4",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 4",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 5",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "134"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 5",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "134"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 6",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 6",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 7",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 7",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 8",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 8",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 9",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 9",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 10",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 10",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 11",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 11",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 12",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 12",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 13",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 13",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 14",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 14",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 15",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "134"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 15",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "134"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 16",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "134"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 16",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "134"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 17",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 13,
+                      "min_installment_amount": "224"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 17",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 13,
+                      "min_installment_amount": "224"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 18",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 18",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 19",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "134"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 19",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "134"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 20",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 20",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 21",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 21",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 22",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 22",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 23",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 23",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 24",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 24",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 25",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 25",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 26",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "134"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 26",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "134"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 27",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 27",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 28",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 28",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 29",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "1119"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 29",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "1119"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 30",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 30",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 31",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 31",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 32",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 32",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 33",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 33",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 34",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 34",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 35",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "1119"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 35",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "1119"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 36",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 36",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 37",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 37",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 38",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 38",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 39",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 39",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 40",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 40",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 41",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 41",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 42",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 42",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 43",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "201"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 43",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "201"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 44",
+                    "value": "12",
+                    "auto_anticipate": false,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  },
+                  {
+                    "name": "Produto 44",
+                    "value": "15,89",
+                    "auto_anticipate": true,
+                    "metadata": {
+                      "max_installment": 11,
+                      "min_installment_amount": "78"
+                    },
+                    "custom_fields": []
+                  }
+                ],
+                "metadata": {
+                  "max_installment": 11,
+                  "min_installment_amount": "134"
+                },
+                "custom_fields": []
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

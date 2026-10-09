@@ -116,3 +116,33 @@ test('adaptador: lê tarifas/repasses/pedidos pela API do servidor e diz o que a
     assert.ok(a.hostLido('seller.shopee.com.br'));
     assert.ok(a.tarifa.length > 0 && a.tarifa.every(l => l.canal === 'shopee'));
 });
+
+// N-K · a renda de cada pedido como a "Minha Renda" recebe (retrato anonimizado da local, 08/10/2026: valores × fator, proporções reais).
+const RENDA = require('path').join(__dirname, '../../tests/copiloto/fixtures/shopee_renda_pedido_2026-10-08.json');
+test('N-K: renda do pedido da Shopee → líquido, itens, recarga do Ads, afiliado e reembolso (7 pedidos do retrato)', () => {
+    const rs = JSON.parse(require('fs').readFileSync(RENDA, 'utf8')).respostas.map(r => CN.adaptadores.shopee.rendaDoPedido(r.corpo));
+    assert.equal(rs.length, 7);
+    rs.forEach(r => assert.ok(!M.ehNaoLido(r) && r.pedido_id && r.itens.length === 1 && r.liquido >= 0));
+    const [a, , c, d] = rs;
+    assert.equal(a.preco_produtos, 81.51); assert.equal(a.liquido, 56.9); assert.equal(a.recarga_ads, 0);
+    // a recarga automática do Ads é 2% do preço (o que a local viu em 5 de 10 pedidos)
+    assert.equal(d.recarga_ads, 1.76); assert.equal(Math.round(d.recarga_ads / d.preco_produtos * 1000) / 10, 2);
+    assert.equal(c.afiliado, 0.59);
+    assert.equal(rs[4].reembolso, rs[4].preco_produtos);
+    // a soma das linhas de 1º nível fecha na renda do pedido
+    rs.forEach(r => { const top = r.linhas.filter(l => !l.pai && l.campo !== 'ESCROW_AMOUNT').reduce((s, l) => s + l.valor, 0); assert.ok(Math.abs(top - r.linhas.find(l => l.campo === 'ESCROW_AMOUNT').valor) < 0.02, r.pedido_id); });
+});
+
+test('N-K: sobra do pedido = líquido + recarga do Ads − custo × unidades − imposto; sem custo e reembolsado não inventam número', () => {
+    const E = CN.etiqueta, ped = { pedido_id: 'X', itens: [{ sku: 'A', qtd: 2, devolvidos: 0 }], preco_produtos: 100, liquido: 70, recarga_ads: 2, reembolso: 0 };
+    const e = E.doPedido('shopee', ped, () => ({ custo: 20 }), { imposto_pct: 4, margem_alvo_pct: 15 });
+    assert.equal(e.sobra, 70 + 2 - 40 - 4); assert.equal(e.margem_pct, 28); assert.equal(e.classe, 'lucrativo');
+    assert.match(e.texto, /^Sobra R\$ 28,00 · margem 28% · antes de Ads$/);
+    assert.ok(e.avisos.some(a => /recarga do Ads/.test(a)));
+    assert.equal(E.doPedido('shopee', ped, () => null, {}).classe, 'sem_custo');
+    assert.equal(E.doPedido('shopee', Object.assign({}, ped, { reembolso: 100 }), () => ({ custo: 20 }), {}).classe, 'reembolsado');
+    assert.equal(E.doPedido('shopee', M.naoLido('x'), () => ({ custo: 20 }), {}).classe, 'nao_lido');
+    // unidade devolvida não conta custo
+    assert.equal(E.doPedido('shopee', Object.assign({}, ped, { itens: [{ sku: 'A', qtd: 2, devolvidos: 1 }] }), () => ({ custo: 20 }), {}).sobra, 70 + 2 - 20);
+    assert.equal(E.doPedido('shopee', Object.assign({}, ped, { liquido: 10 }), () => ({ custo: 20 }), {}).classe, 'prejuizo');
+});
