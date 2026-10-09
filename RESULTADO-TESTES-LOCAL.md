@@ -1,4 +1,1 @@
-﻿# Resultado dos testes (local, automatico) - 08/10/2026 21:26 
-- origin/nuvem/handoff-ti-db1 @ 8c814ae: suite do GitHub OK Ô£ö devolu├º├úo com frete reverso e ajuste da carteira; escrow que n├úo fecha vira aviso; falha vira naoLido (nunca zero) (1.0478ms) | TUDO OK ┬À 7 arquivos de teste passaram + a su├¡te do copiloto-nucleo.
-- origin/nuvem2/etiquetas-340 @ e9b3567: suite do GitHub OK Ô£ö devolu├º├úo com frete reverso e ajuste da carteira; escrow que n├úo fecha vira aviso; falha vira naoLido (nunca zero) (0.8396ms) | TUDO OK ┬À 14 arquivos de teste passaram + a su├¡te do copiloto-nucleo.
-- origin/nuvem2/etiquetas-juntas @ c8e164a: suite do GitHub OK Ô£ö devolu├º├úo com frete reverso e ajuste da carteira; escrow que n├úo fecha vira aviso; falha vira naoLido (nunca zero) (1.2214ms) | TUDO OK ┬À 24 arquivos de teste passaram + a su├¡te do copiloto-nucleo.
+﻿# Resultado dos testes (local, automatico) - 08/10/2026 22:26 
