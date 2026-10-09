@@ -2847,8 +2847,9 @@
     // O TikTok só com cfg.modulos.tiktok E a permissão do site (SHC.canaisLigados), senão "desligado". est = { ligados, lidoEm: {id: ms|null},
     // pendentes: marcados e com permissão mas ainda sem Salvar, gravados: ids com cfg.modulos[id] === true,
     // canalDesligado: 2 canais e a aba Canal desligada em "Abas que aparecem", comDados: ids com dado guardado neste Chrome
-    // (SHC.temDadosMl / SHC.tt.temDados) }. 3.3.1 (pedido do Diego 09/10): o botão "Apagar dados do <canal>" sai para TODO canal
-    // ligado, gravado ou com dado guardado — a mesma regra para todos, nunca de um só (era só do TikTok até a 3.3.0). ──
+    // (SHC.temDadosMl / SHC.tt.temDados) }. 3.3.1 (pedido do Diego 09/10, revisado à noite): UM botão "Apagar dados de todos os
+    // canais" sai quando pelo menos 1 canal com função de apagar (hoje: ML e TikTok) está ligado, gravado ou com dado guardado —
+    // nunca um botão por canal ("se for para apagar, tem que ser para todos os canais conectados"). ──
     P.CANAIS_FORA = { tiktok: 'O chat de Mensagens do cliente e os Anúncios da loja ainda não são lidos.' };   // o que falta, numa frase só, à vista
     P.canaisHtml = function (canais, est) {
         est = est || {};
@@ -2864,9 +2865,11 @@
         });
         return linhas.join('')
             + (est.canalDesligado && lig.length > 1 ? '<p class="det">A comparação entre canais fica na aba Canal, que está desligada em Abas que aparecem.</p>' : '')
-            // 3.3.1 (pedido do Diego 09/10): "Apagar dados" de TODO canal — ligado, gravado ou com dado guardado — nunca de um só.
-            + (canais || []).filter(c => [grav, lig, dados].some(l => l.indexOf(c.id) >= 0))
-                .map(c => `<button type="button" class="bt leve aj-apagar" data-apagar-canal="${escF(c.id)}">${escF('Apagar dados do ' + (c.nome === 'TikTok Shop' ? 'TikTok' : c.nome))}</button>`).join('');
+            // 3.3.1 (revisão do Diego, 09/10 à noite): UM botão para TODOS os canais de uma vez — ligado, gravado ou com dado
+            // guardado — nunca um por canal ("se for para apagar, tem que ser para todos os canais conectados"). Os canais sem
+            // leitura (Shopee, Magalu…) não têm o que apagar: o botão cobre os que têm função de apagar (hoje: ML e TikTok).
+            + ((canais || []).some(c => (c.id === 'ml' || c.id === 'tiktok') && [grav, lig, dados].some(l => l.indexOf(c.id) >= 0))
+                ? '<button type="button" class="bt leve aj-apagar" data-apagar-canal="todos">Apagar dados de todos os canais</button>' : '');
     };
     // 3.3.0 (C1, Política de Dados do Usuário da Chrome Web Store): o quadro que abre ao ligar o TikTok, ANTES de qualquer permissão.
     // Só o "Concordo e ligar" pede as permissões e grava cfg.consentimento_tiktok; "Agora não" (ou Esc) fecha sem gravar nada.
@@ -2875,7 +2878,7 @@
         + `<p><b>O que o Copiloto lê:</b> as telas do Seller Center que você abrir: ${escF(c.telas.join(', '))}.</p>`
         + '<p><b>Para quê:</b> mostrar no Copiloto o lucro, o repasse, as devoluções e a saúde da sua loja.</p>'
         + '<p><b>Como:</b> copia a resposta que a tela já recebeu. Não usa robô e não faz chamadas próprias ao TikTok. Dado de comprador só passa pela memória e não é guardado. Nada sai do seu Chrome.</p>'
-        + '<p><b>Para parar:</b> desligue o TikTok Shop aqui em Canais de venda. Para apagar o que foi guardado, toque em “Apagar dados do TikTok”.</p>'
+        + '<p><b>Para parar:</b> desligue o TikTok Shop aqui em Canais de venda. Para apagar o que foi guardado, toque em “Apagar dados de todos os canais”.</p>'
         + '<p class="qt-aviso">Os termos do vendedor do TikTok Shop podem não permitir ferramentas de terceiros que leem a sua loja; ao ligar, você decide usar o Copiloto assim.</p></div>'
         + `<p><a class="lnk" href="${P.URL_PRIVACIDADE}" target="_blank" rel="noopener">Política de privacidade do Copiloto ↗</a></p>`
         + '<div class="dois"><button type="button" class="bt leve" data-tt-quadro="nao" autofocus>Agora não</button><button type="button" class="bt verde" data-tt-quadro="sim">Concordo e ligar</button></div>';
@@ -2885,7 +2888,7 @@
         + `<p><b>O que o Copiloto lê:</b> as telas do painel do vendedor: ${escF(c.telas.join(', '))}.</p>`
         + '<p><b>Para quê:</b> mostrar no Copiloto o lucro real de cada venda, a conciliação das cobranças e a saúde da sua loja.</p>'
         + '<p><b>Como:</b> lê as páginas do painel com a sua sessão e copia as respostas que a tela já recebeu. Não clica, não preenche e não envia nada ao Mercado Livre. Dado de comprador só passa pela memória e não é guardado. Nada sai do seu Chrome.</p>'
-        + '<p><b>Para parar:</b> desligue o Mercado Livre aqui em Canais de venda. O que já foi lido fica guardado neste computador e volta a aparecer ao religar; para apagar, toque em “Apagar dados do Mercado Livre”.</p>'
+        + '<p><b>Para parar:</b> desligue o Mercado Livre aqui em Canais de venda. O que já foi lido fica guardado neste computador e volta a aparecer ao religar; para apagar, toque em “Apagar dados de todos os canais”.</p>'
         + '<p class="qt-aviso">Os termos do vendedor do Mercado Livre podem não permitir ferramentas de terceiros que leem a sua loja; ao ligar, você decide usar o Copiloto assim.</p></div>'
         + `<p><a class="lnk" href="${P.URL_PRIVACIDADE}" target="_blank" rel="noopener">Política de privacidade do Copiloto ↗</a></p>`
         + '<div class="dois"><button type="button" class="bt leve" data-ml-quadro="nao" autofocus>Agora não</button><button type="button" class="bt verde" data-ml-quadro="sim">Concordo e ligar</button></div>';
@@ -5436,8 +5439,8 @@
         const ttOn = lig.indexOf('tiktok') >= 0, cardAds = $('#cardAdsTT');
         if (cardAds) cardAds.hidden = !ttOn;
         const eu = ++ttGerAj;
-        // 3.3.1 (pedido do Diego 09/10): o "Apagar dados" fica em TODO canal desligado mas com dado guardado neste Chrome
-        // (privacidade.html manda apagar por aqui) — nunca só no TikTok. Canal ligado/gravado já mostra o botão no 1º desenho.
+        // 3.3.1 (pedido do Diego 09/10, revisado à noite): canal desligado mas com dado guardado neste Chrome também mantém
+        // o botão "Apagar dados de todos os canais" à vista (privacidade.html manda apagar por aqui). Canal ligado/gravado já mostra no 1º desenho.
         {   const faltam = SHC.CANAIS.map(c => c.id).filter(id => [lig, pendentes, gravados].every(l => l.indexOf(id) < 0));
             const temDadosDe = id => id === 'ml' ? (SHC.temDadosMl ? SHC.temDadosMl() : Promise.resolve(false))
                 : (id === 'tiktok' && SHC.tt && SHC.tt.temDados ? SHC.tt.temDados() : Promise.resolve(false));   // canal novo sem leitura: sem botão
@@ -7883,21 +7886,21 @@
             if (apagar && SHC.tt && SHC.tt.apagarDados) SHC.tt.apagarDados().then(n => avisa(n ? '✓ Dados do TikTok apagados.' : 'Não havia dados do TikTok guardados.', 4000), falhaGravar);
         }).catch(() => {});
     });
-    // 3.3.1 (pedido do Diego 09/10): "Apagar dados" de TODO canal, com a mesma regra e a pergunta antes — nunca de um só.
-    // ML: SHC.apagarDadosMl (store.js). TikTok: SHC.tt.apagarDados (tt:* e os custos c|tiktok|*).
+    // 3.3.1 (revisão do Diego 09/10 à noite): UM botão "Apagar dados de todos os canais" — se for para apagar, é de todos os
+    // canais conectados de uma vez, nunca de um só. Cada canal apaga o seu: ML = SHC.apagarDadosMl (store.js), TikTok =
+    // SHC.tt.apagarDados (tt:* e os custos c|tiktok|*). A pergunta antes lista o que sai de cada um. Ficam: custos por SKU,
+    // ajustes (os canais continuam ligados) e o ERP.
     $('#listaCanais').addEventListener('click', e => {
         const bt = e.target && e.target.closest && e.target.closest('[data-apagar-canal]');
-        if (!bt) return;
-        const canal = bt.getAttribute('data-apagar-canal'), ehMl = canal === 'ml';
-        const fn = ehMl ? SHC.apagarDadosMl : (SHC.tt && SHC.tt.apagarDados);
-        if (!fn) return;
-        const nome = ehMl ? 'Mercado Livre' : 'TikTok';
-        const oQue = ehMl ? 'anúncios, vendas, faturamento, conciliações e o Ads' : 'pedidos, repasses, custos e o Ads digitado';
+        if (!bt || bt.getAttribute('data-apagar-canal') !== 'todos') return;
         let apagar = false;
-        try { apagar = window.confirm('Apagar os dados do ' + nome + ' guardados neste computador (' + oQue + ')?'); } catch (x) { apagar = false; }
-        if (apagar) Promise.resolve(fn()).then(n => {
-            avisa(n ? '✓ Dados do ' + nome + ' apagados.' : 'Não havia dados do ' + nome + ' guardados.', 4000);
-            if (ehMl) recarregar(); else desenhaCanais();   // o ML recarrega tudo (as abas ficaram vazias); o TikTok só redesenha o cartão
+        try { apagar = window.confirm('Apagar os dados de TODOS os canais guardados neste computador?\n\n— Mercado Livre: anúncios, vendas, faturamento, conciliações e o Ads.\n— TikTok: pedidos, repasses, ligações de custo e o Ads digitado.\n\nFicam guardados: os custos por SKU, os ajustes (os canais continuam ligados) e o ERP.'); } catch (x) { apagar = false; }
+        if (!apagar) return;
+        const fns = [SHC.apagarDadosMl, SHC.tt && SHC.tt.apagarDados].filter(f => typeof f === 'function');
+        Promise.all(fns.map(f => Promise.resolve(f()).catch(() => 0))).then(ns => {
+            const n = ns.reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
+            avisa(n ? '✓ Dados de todos os canais apagados.' : 'Não havia dados guardados.', 4000);
+            recarregar();   // o ML quase sempre tinha dado — recarrega tudo (as abas ficaram vazias)
         }, falhaGravar);
     });
     // Salvar canais: junta com o que já está em cfg.modulos (as abas de "Abas que aparecem" ficam como estão; o salvarCfg faz junção rasa).

@@ -34,7 +34,7 @@
     // 3.3.0 (junção, multi-empresa): tt:* passa pela camada da empresa (store.js): a leitura é da empresa da conta do ML aberta e o lucro usa
     // os custos dela. A gravação vai para a empresa DONA da loja (areaDaLoja). Com 1 empresa, as mesmas chaves de sempre.
     const crua = () => root.chrome.storage.local, area = () => (SHC.areaEmpresa ? SHC.areaEmpresa() : crua());
-    const DE_TODAS = ['tt:', 'tt@', 'c|tiktok|'];   // "Apagar dados do TikTok": de todas as empresas
+    const DE_TODAS = ['tt:', 'tt@', 'c|tiktok|'];   // a parte do TikTok do "Apagar dados de todos os canais": de todas as empresas
     const TT = SHC.tt = {};
 
     TT.ORIGEM = 'https://seller-br.tiktok.com/*';
@@ -757,7 +757,7 @@
         if (ja.length) await ch.scripting.unregisterContentScripts({ ids: ja });
         return { ok: true, ligado: false };
     });
-    /** "Apagar dados do TikTok": tudo o que o Copiloto guardou do TikTok neste Chrome (tt:*, tt@<empresa>:* e os custos c|tiktok|*). → quantas chaves saíram */
+    /** A parte do TikTok do "Apagar dados de todos os canais": tudo o que o Copiloto guardou do TikTok neste Chrome (tt:*, tt@<empresa>:* e os custos c|tiktok|*). → quantas chaves saíram */
     TT.apagarDados = () => emFila(async () => {
         const ks = await chavesEm(crua(), DE_TODAS);
         if (ks.length) await crua().remove(ks);

@@ -601,7 +601,7 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         mem['ml:conta'] = A; await espera();
         const dA = await TT.ler();
         ok(dA && dA.conta === LA && dA.custos['c|sku|KIT-01'].custo === 10 && !Object.keys(dA.custos).some(x => /@/.test(x)), 'de volta à principal: a loja dela, com os custos dela (KIT-01 = R$ 10)');
-        ok(await TT.apagarDados() >= 4 && !Object.keys(mem).some(k => /^tt[:@]/.test(k)), '"Apagar dados do TikTok" apaga a loja das 2 empresas');
+        ok(await TT.apagarDados() >= 4 && !Object.keys(mem).some(k => /^tt[:@]/.test(k)), 'a parte do TikTok do "Apagar dados de todos os canais" apaga a loja das 2 empresas');
         console.log('l) bloqueio 5: "Todas as contas" nunca soma o faturamento de empresas diferentes');
         require(path.join(EXT, 'ml-extrator.js')); require(path.join(EXT, 'painel-lateral.js'));
         const C3 = '900000003', P = Object.assign({ contasJuntasGrupos: () => [], contaOpcao: () => '' }, S.pl), vbDe = v => ({ dias: { '2026-09-01': { bruto: v, unidades: 1, vendas: 1, cancelado: 0, devolvido: 0 } }, mesesLidos: ['2026-09'] });

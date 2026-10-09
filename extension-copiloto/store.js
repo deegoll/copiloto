@@ -287,10 +287,10 @@
     // chrome.permissions.contains(canal.perm)). Travado = [] (sem o ML: 0 ou 1 canal — o filtro some, P.canalValido devolve 'ml').
     SHC.canaisLigados = (cfg, perms) => SHC.CANAIS.filter(c => c.id === 'ml' ? SHC.mlLigado(cfg) : (!c.perm || (SHC.MODULOS_TRAVADOS.indexOf(c.id) < 0
         && !!(cfg && cfg.modulos && cfg.modulos[c.id] === true) && !!(perms && perms[c.id] === true)))).map(c => c.id);
-    // ── 3.3.1 (pedido do Diego 09/10: "ou tem de todos ou de nenhum — ele tem que trabalhar para todos de uma vez"): TODO canal tem o
-    //   seu "Apagar dados" em Ajustes › Canais de venda, com a MESMA regra. O do TikTok é o TT.apagarDados (tiktok.js: as chaves tt:*).
-    //   O do ML fica aqui e é ao contrário: a família do ML é a chave SEM prefixo de canal, então apaga tudo MENOS o que não é dado
-    //   lido do Mercado Livre. Ficam guardados (nunca se apagam aqui):
+    // ── 3.3.1 (pedido do Diego 09/10, revisado à noite: "se for para apagar, tem que ser para todos os canais conectados"):
+    //   UM botão "Apagar dados de todos os canais" em Ajustes › Canais de venda chama a função de apagar de CADA canal de uma vez.
+    //   A do TikTok é o TT.apagarDados (tiktok.js: as chaves tt:*). A do ML fica aqui e é ao contrário: a família do ML é a chave
+    //   SEM prefixo de canal, então apaga tudo MENOS o que não é dado lido do Mercado Livre. Ficam guardados (nunca se apagam aqui):
     //     · cfg (ajustes, consentimentos, apelidos, empresas) e ui:abertos (as telas abertas no painel);
     //     · os custos por SKU (c|sku|…, valem para todos os canais) e o ERP (erp: / erp@ — credencial criptografada e produtos);
     //     · shc:* (a chave da criptografia shc:segredo:v1, os marcadores de migração e os planos do Canal de transmissão),
@@ -302,10 +302,10 @@
         const p = SHC.PREFIXO_CANAL[id];
         return (p && (k.indexOf(p + ':') === 0 || k.indexOf(p + '@') === 0)) || k.indexOf('c|' + id + '|') === 0 || k.indexOf('v|' + id + '|') === 0;
     });
-    /** A chave NÃO é dado lido do Mercado Livre (fica guardada no "Apagar dados do Mercado Livre")? A lista acima, na mesma ordem. */
+    /** A chave NÃO é dado lido do Mercado Livre (fica guardada no "Apagar dados de todos os canais")? A lista acima, na mesma ordem. */
     SHC.mlRetemChave = k => k === 'cfg' || k === 'ui:abertos' || /^erp[:@]/.test(k) || /^c\|sku[|@]/.test(k)
         || (k.indexOf('shc:') === 0 && !/^shc:(status|anomalias)/.test(k)) || deOutroCanal(k);
-    /** "Apagar dados do Mercado Livre": anúncios, vendas, faturamento, conciliações, Ads, vistos, status e alertas → quantas chaves saíram. */
+    /** A parte do Mercado Livre do "Apagar dados de todos os canais": anúncios, vendas, faturamento, conciliações, Ads, vistos, status e alertas → quantas chaves saíram. */
     SHC.apagarDadosMl = async () => {
         const ks = (await listarChaves(crua())).filter(k => !SHC.mlRetemChave(k));
         if (ks.length) await crua().remove(ks);
