@@ -380,6 +380,23 @@
     <div class="acoes"><button class="bt" id="salvarCfg">Salvar meus números</button><span class="ok" id="okCfg"></span><button class="lnk" id="rever">Rever boas-vindas</button></div>
   </section>
 
+  <section class="card" id="escolha">
+    <h2>Escolha com quais canais quer trabalhar</h2>
+    <p class="sub">O Mercado Livre já faz parte do Copiloto. Os outros canais começam desligados: para ligar um, leia os termos dele e marque "Li e concordo". Sem isso, o Copiloto não lê nada do canal.</p>
+    <div class="grade" id="escolhaCanais"></div>
+  </section>
+
+  <section class="card" id="etiquetas">
+    <h2>Etiquetas de ganho nos outros canais</h2>
+    <p class="sub">A etiqueta "Sobra R$ X · margem Y%" aparece na lista de produtos dos canais que você ligou acima. O Copiloto lê só o preço e o SKU que a própria lista mostra, usa o custo que você já informou e nada sai do seu computador.</p>
+    <div class="grade" id="etqCanais"></div>
+    <form class="grade" id="fetq" autocomplete="off">
+      <div class="campo"><label for="magalu_comissao_pct">Comissão da Magalu (%)</label><input class="inp" id="magalu_comissao_pct" inputmode="decimal"><small>A Magalu não tem tabela única: sem este número a etiqueta da Magalu não mostra valor</small></div>
+      <div class="campo"><label for="magalu_taxa_fixa">Tarifa fixa da Magalu por item (R$)</label><input class="inp" id="magalu_taxa_fixa" inputmode="decimal"><small>Opcional. Vazio = a etiqueta avisa "tarifa fixa não informada"</small></div>
+    </form>
+    <div class="acoes"><button class="bt" id="salvarEtq">Salvar a Magalu</button><span class="ok" id="okEtq"></span></div>
+  </section>
+
   <section class="card" id="custos">
     <h2>Custo dos produtos que mais vendem</h2>
     <p class="sub">Sem o custo, o Copiloto não sabe se o produto dá lucro. Comece pelos 10 que mais vendem.</p>
@@ -563,5 +580,7 @@
 <script src="erp-cruzar.js"></script>
 <script src="bling.js"></script>
 <script src="painel.js"></script>
+<script src="termos-canais.js"></script>
+<script src="etiqueta-ajustes.js"></script>
 </body>
 </html>
