@@ -189,5 +189,14 @@ console.log('j) N-M: o visual de cada lista (tokens dos design-*.md da local, 08
     ok(T('ml') === null && T('') === null, 'canal sem tema (ML e outros): o visual de antes');
 }
 
+console.log('k) Magalu: visitas de 7 dias pelo retrato de product-metrics (M3, 07/10)');
+{
+    const MG = global.CopilotoNucleo.adaptadores.magalu;
+    const vs = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'magalu_metricas_2026-10-07.json'), 'utf8')).respostas.map(r => MG.visitasDasMetricas(r.corpo));
+    ok(vs.length === 10 && vs.filter(v => v === null).length === 5, 'sem visitas no período: null (nunca 0 inventado): ' + vs.filter(v => v === null).length + ' de ' + vs.length);
+    ok(vs.filter(Boolean).every(v => v.dias === 7 && v.visitas > 0) && vs.some(v => v && v.variacao_pct === null) && vs.some(v => v && v.variacao_pct < 0) && vs.some(v => v && v.variacao_pct > 0),
+        'com visitas: quantidade dos 7 dias e a variação (sobe, cai ou sem base para comparar)');
+}
+
 console.log(f ? '\n' + f + ' FALHA(S)' : '\nTUDO OK');
 process.exit(f ? 1 : 0);
