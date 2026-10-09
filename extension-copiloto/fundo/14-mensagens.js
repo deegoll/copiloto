@@ -55,7 +55,7 @@ function despacha(msg, sender, responder) {
     if (msg.acao === 'sincronizar_custos') {   // botão "Sincronizar custos" das telas da extensão (3.2.1: a aba do ML não pede); erp: 'tiny' (padrão) | 'omie' | 'bling'
         if (!daExtensao(sender)) return false;
         // Sem erp (painel lateral sem Tiny/Omie guardado): o Tiny, ou o Bling se só ele estiver conectado.
-        const escolhe = async () => (['tiny', 'omie', 'bling'].indexOf(msg.erp) >= 0 ? msg.erp : (!((await SHC.lerChave(SHC.TINY_CHAVE)) || {}).token && ERPS.bling.cred(await SHC.lerChave(SHC.BLING_CHAVE)) ? 'bling' : 'tiny'));
+        const escolhe = async () => (['tiny', 'omie', 'bling'].indexOf(msg.erp) >= 0 ? msg.erp : (!((await SHC.erpLer(SHC.TINY_CHAVE)) || {}).token && ERPS.bling.cred(await SHC.erpLer(SHC.BLING_CHAVE)) ? 'bling' : 'tiny'));
         // v3.3 multi-empresa: a empresa da conta aberta NO CLIQUE (empresaDoPedido) — trocar a conta do ML durante a leitura não muda o destino.
         Promise.all([escolhe(), empresaDoPedido(msg)]).then(([erp, emp]) => sincronizarCustos(erp, 0, emp).then(responder, () => responder({ ok: false, erp, msg: 'Não consegui falar com o ' + ERPS[erp].nome + '. Tente de novo em alguns minutos.' })));
         return true;

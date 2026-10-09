@@ -183,10 +183,10 @@ function cargaTardia(partes) {
         // revisão da junção (07/10): a conferência da conta depois de cada etapa e no fim do histórico é sem o guardado de 60 s (era 1983b6d8…)
         // 3.3.1 (C2, 09/10): o portão do consentimento do ML — a entrada da sincronizar, cada etapa, os Anúncios e o histórico só leem com cfg.consentimento_ml (era 251591fc…)
         '08-sincronizacao.js': ['8258da426638b2f700966bb6a5a9c6c038882ae59bc4a1da6f27aaaf566b663b', MOTIVO_NUVEM + '; conferência sem o guardado depois de cada etapa' + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login' + '; 3.3.1 (C2): portão cfg.consentimento_ml na sincronização e no histórico'],
-        '09-custos-erp.js': ['8d321ea6750a5572baf8bc3dba44515d8eaff3fffab88124eecd88856faf7c3c', MOTIVO_NUVEM],
-        '10-status-saude-posvenda.js': ['b27d61e3022abb22d68de480341dcfab261c601b65e13cb16b2b1192620532e3', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
+        '09-custos-erp.js': ['a88d5eb56e84d183ea848b1bda95ce795d9d99312ed13a099390103c15d0033e', MOTIVO_NUVEM + '; 3.3.1 (SI 09/10): chaves dos ERPs cifradas (AES-256-GCM, segredo.js) — erpLer/erpGravar (era 8d321ea6…)'],
+        '10-status-saude-posvenda.js': ['a2b7eb03857ae7cf3712bc06411453fdf2a68a6e4f3250bfb37962db95fc04f8', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login' + '; 3.3.1 (SI 09/10): credencial do ERP lida e regravada cifrada (erpLer/erpGravar; era b27d61e3…)'],
         '13-aba-do-ml-e-canal.js': ['4db2b6ee741495c4d151812a106bdcdcb41a412bdc85308dc5325fccbe0fc6f6', MOTIVO_NUVEM + '; 3.3.1 (C2): roboCanal só lê com cfg.consentimento_ml (era 66e8e6f2…)'],
-        '14-mensagens.js': ['48e5cda0e575319fdbb8299b90677bb2c53e29dd54c1273e36a201fc966ffb67', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login' + '; 3.3.1 (C2): o listener virou o portão do consentimento (LEEM_ML → despacha; era 118eb958…)']
+        '14-mensagens.js': ['e7cb1477dbe2ae1960d291905980dbca6f626a82dc340923706de33b19ca2cc0', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login' + '; 3.3.1 (C2): o listener virou o portão do consentimento (LEEM_ML → despacha; era 118eb958…)' + '; 3.3.1 (SI 09/10): escolha do ERP lê a credencial decifrada (erpLer; era 48e5cda0…)']
     };
     const sha = b => require('crypto').createHash('sha256').update(b).digest('hex');
     const mudou = guardadas.filter((f, i) => { const a = path.join(FUNDO, f); if (f === LIVRE) return false; if (!fs.existsSync(a)) return true;
@@ -225,7 +225,9 @@ function cargaTardia(partes) {
     const funcoes = f => Object.keys(f.ctx).filter(k => typeof f.ctx[k] === 'function').sort().join();
     const comNovas = f => funcoes(f).split(',').concat(f === velho ? Object.keys(NOVAS) : []).sort().join();
     ok(comNovas(novo) === comNovas(velho) && funcoes(novo).split(',').length > 100, 'mesmas funções de topo no fundo, mais as novas listadas (' + funcoes(novo).split(',').length + ')');
-    ok(Object.keys(novo.ctx.SHC).sort().join() === Object.keys(velho.ctx.SHC).sort().join(), 'mesmo SHC (' + Object.keys(novo.ctx.SHC).length + ' nomes, com o Object.assign do robô)');
+    const SHC_NOVOS = ['ERP_SEGREDOS', 'erpGravar', 'erpLer', 'segredoCifra', 'segredoDecifra', 'segredoEh'];   // 3.3.1: segredo.js (chaves de ERP cifradas no storage)
+    ok(Object.keys(novo.ctx.SHC).filter(k => SHC_NOVOS.indexOf(k) < 0).sort().join() === Object.keys(velho.ctx.SHC).sort().join() && SHC_NOVOS.every(k => novo.ctx.SHC[k] !== undefined),
+        'mesmo SHC (' + Object.keys(novo.ctx.SHC).length + ' nomes, com o Object.assign do robô e os 6 do segredo.js)');
     for (const motivo of ['install', 'update']) { velho.instala(motivo); novo.instala(motivo); }
     velho.alarme('shc-resumo'); novo.alarme('shc-resumo');
     await Promise.all([velho.tique(40), novo.tique(40)]);

@@ -8,7 +8,7 @@ if (Test-Path $testes) {
     node $testes > $null
     if ($LASTEXITCODE -ne 0) { throw "Há teste falhando: rode 'node tests\copiloto\rodar_todos.js' e corrija antes de empacotar." }
 }
-$dentro = @('manifest.json', 'background.js', 'calc.js', 'store.js', 'xls.js', 'tiny.js', 'omie.js', 'bling.js', 'erp-cruzar.js', 'ml-extrator.js',
+$dentro = @('manifest.json', 'background.js', 'calc.js', 'store.js', 'segredo.js', 'xls.js', 'tiny.js', 'omie.js', 'bling.js', 'erp-cruzar.js', 'ml-extrator.js',
     'copiloto-ml.js', 'ml-tela.js', 'ml-tela.css', 'ml-canal.js', 'agenda-canal.html', 'agenda-canal.js',
     'painel.html', 'painel.js', 'painel-lateral.html', 'painel-lateral.js', 'tiktok-aba.js', 'ads.html', 'ads.js',
     'fechamento.html', 'fechamento.js', 'apresentacao.html', 'apresentacao.js', 'tour.js', 'icons',

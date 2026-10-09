@@ -287,6 +287,32 @@
     // chrome.permissions.contains(canal.perm)). Travado = [] (sem o ML: 0 ou 1 canal — o filtro some, P.canalValido devolve 'ml').
     SHC.canaisLigados = (cfg, perms) => SHC.CANAIS.filter(c => c.id === 'ml' ? SHC.mlLigado(cfg) : (!c.perm || (SHC.MODULOS_TRAVADOS.indexOf(c.id) < 0
         && !!(cfg && cfg.modulos && cfg.modulos[c.id] === true) && !!(perms && perms[c.id] === true)))).map(c => c.id);
+    // ── 3.3.1 (pedido do Diego 09/10: "ou tem de todos ou de nenhum — ele tem que trabalhar para todos de uma vez"): TODO canal tem o
+    //   seu "Apagar dados" em Ajustes › Canais de venda, com a MESMA regra. O do TikTok é o TT.apagarDados (tiktok.js: as chaves tt:*).
+    //   O do ML fica aqui e é ao contrário: a família do ML é a chave SEM prefixo de canal, então apaga tudo MENOS o que não é dado
+    //   lido do Mercado Livre. Ficam guardados (nunca se apagam aqui):
+    //     · cfg (ajustes, consentimentos, apelidos, empresas) e ui:abertos (as telas abertas no painel);
+    //     · os custos por SKU (c|sku|…, valem para todos os canais) e o ERP (erp: / erp@ — credencial criptografada e produtos);
+    //     · shc:* (a chave da criptografia shc:segredo:v1, os marcadores de migração e os planos do Canal de transmissão),
+    //       MENOS shc:status e shc:anomalias (o andamento e os alertas do ML: esses saem);
+    //     · o que é dos OUTROS canais (tt:*, tt@…, c|tiktok|…, v|tiktok|… — e idem para os canais ainda sem leitura).
+    const listarChaves = async a => (typeof a.getKeys === 'function' ? await a.getKeys() : Object.keys(await a.get(null)));   // getKeys só no Chrome 130+; o mínimo do manifest é 116
+    const deOutroCanal = k => Object.keys(SHC.PREFIXO_CANAL).some(id => {
+        if (id === 'ml') return false;
+        const p = SHC.PREFIXO_CANAL[id];
+        return (p && (k.indexOf(p + ':') === 0 || k.indexOf(p + '@') === 0)) || k.indexOf('c|' + id + '|') === 0 || k.indexOf('v|' + id + '|') === 0;
+    });
+    /** A chave NÃO é dado lido do Mercado Livre (fica guardada no "Apagar dados do Mercado Livre")? A lista acima, na mesma ordem. */
+    SHC.mlRetemChave = k => k === 'cfg' || k === 'ui:abertos' || /^erp[:@]/.test(k) || /^c\|sku[|@]/.test(k)
+        || (k.indexOf('shc:') === 0 && !/^shc:(status|anomalias)/.test(k)) || deOutroCanal(k);
+    /** "Apagar dados do Mercado Livre": anúncios, vendas, faturamento, conciliações, Ads, vistos, status e alertas → quantas chaves saíram. */
+    SHC.apagarDadosMl = async () => {
+        const ks = (await listarChaves(crua())).filter(k => !SHC.mlRetemChave(k));
+        if (ks.length) await crua().remove(ks);
+        return ks.length;
+    };
+    /** Há dado lido do ML guardado neste Chrome? (Só a lista de chaves, sem ler o armazenamento inteiro quando há getKeys.) */
+    SHC.temDadosMl = async () => (await listarChaves(crua())).some(k => !SHC.mlRetemChave(k));
     SHC.chaveConta = function (familia, conta, canal, resto) {
         const p = SHC.PREFIXO_CANAL[canal || 'ml'], fim = resto ? ':' + resto : '';
         if (typeof p !== 'string') throw new Error('SHC.chaveConta: canal desconhecido (' + canal + ')');   // canal errado nunca cai na chave do ML

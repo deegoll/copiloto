@@ -29,8 +29,8 @@ function sincronizarCustos(erp, intervaloMs, empresa) {
     if (custosAndando) return custosAndando.catch(() => {}).then(() => sincronizarCustos(erp, intervaloMs, empresa));
     custosAndando = (async () => {
         const e0 = typeof empresa === 'string' ? empresa : await SHC.empresaSeparada(), A = SHC.areaEmpresa(e0);
-        const ler = async k => (await A.get(k))[k] || null, gravar = (k, v) => A.set({ [k]: v });
-        const t = await ler(E.chave()), cred = E.cred(t);
+        const gravar = (k, v) => A.set({ [k]: v });
+        const t = await SHC.erpLer(E.chave(), A), cred = E.cred(t);
         if (!cred) return { semToken: true, erp };
         let pode = false;
         try { pode = !!(chrome.permissions && await chrome.permissions.contains({ origins: [].concat(E.origem()) })); } catch (e) { /* sem permissão */ }
@@ -48,8 +48,8 @@ function sincronizarCustos(erp, intervaloMs, empresa) {
             // SKUs sem custo e cruzamento ERP × ML: só com a mesma empresa aberta (são da conta aberta; a outra empresa tem o ERP dela).
             const mesma = (await SHC.empresaSeparada()) === e0;
             r.faltam = mesma ? await skusSemCusto() : null;
-            const agora = await ler(E.chave());   // desconectou no meio: não volta a guardar a credencial
-            if (E.mesma(E.cred(agora), cred)) await gravar(E.chave(), Object.assign({}, agora, { ultima: Object.assign({ ts: Date.now() }, r) }));
+            const agora = await SHC.erpLer(E.chave(), A);   // desconectou no meio: não volta a guardar a credencial
+            if (E.mesma(E.cred(agora), cred)) await SHC.erpGravar(E.chave(), Object.assign({}, agora, { ultima: Object.assign({ ts: Date.now() }, r) }), A);
             // Cruzamento ERP × ML em todas as contas. 1ª importação depois de conectar (sem "ultima" antes): o painel abre a janela do resumo.
             if (mesma) await erpConferirTodas({ avisar: !(t && t.ultima) }).catch(() => {});
             if (r.atualizados && mesma) await atualizarAlertas().catch(() => {});

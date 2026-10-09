@@ -15,16 +15,16 @@ const ERPS = {
 // Grava tokens novos do Bling só se o seller não desconectou/trocou de aplicativo no meio. tk = null → apaga os tokens (refresh vencido: "Conecte de novo").
 // empresa (v3.3): a do começo da leitura — o token renovado no meio volta para o erp:bling da MESMA empresa, mesmo se o ML trocou de conta.
 async function salvarBling(cred, tk, empresa) {
-    const A = SHC.areaEmpresa(typeof empresa === 'string' ? empresa : undefined), agora = (await A.get(SHC.BLING_CHAVE))[SHC.BLING_CHAVE] || null;
+    const A = SHC.areaEmpresa(typeof empresa === 'string' ? empresa : undefined), agora = await SHC.erpLer(SHC.BLING_CHAVE, A);
     if (!agora || agora.clientId !== cred.clientId || agora.clientSecret !== cred.clientSecret) return;
     const x = Object.assign({}, agora, tk || { reconectar: true });
     if (!tk) ['access', 'refresh', 'expira', 'renovado'].forEach(k => delete x[k]); else delete x.reconectar;
-    await A.set({ [SHC.BLING_CHAVE]: x });
+    await SHC.erpGravar(SHC.BLING_CHAVE, x, A);
 }
 // {acao:'bling_conectar', code}: o painel fez o launchWebAuthFlow (state conferido lá) e já guardou Client ID/Secret; aqui o code vira tokens
 // (só em erp:bling) e os custos são importados na hora. → a resposta de sincronizarCustos('bling') | {ok:false, msg}.
 async function conectarBling(code, empresa) {
-    const e0 = typeof empresa === 'string' ? empresa : await SHC.empresaSeparada(), t = (await SHC.areaEmpresa(e0).get(SHC.BLING_CHAVE))[SHC.BLING_CHAVE] || null;   // v3.3: a empresa do clique
+    const e0 = typeof empresa === 'string' ? empresa : await SHC.empresaSeparada(), t = await SHC.erpLer(SHC.BLING_CHAVE, SHC.areaEmpresa(e0));   // v3.3: a empresa do clique
     if (!t || !t.clientId || !t.clientSecret) return { ok: false, erp: 'bling', msg: 'Cole o Client ID e o Client Secret do seu aplicativo do Bling.' };
     try {
         const tk = await SHC.blingTrocarCodigo(t, code, { fetch: (u, i) => fetch(u, comTempo(i)) });
@@ -49,7 +49,7 @@ async function erpConferir(conta, opc) {
     let melhor = null;
     for (const e of Object.keys(ERPS)) {
         const ret = await SHC.lerChave('erp:produtos:' + e);
-        if (ret && Array.isArray(ret.itens) && ERPS[e].cred(await SHC.lerChave(ERPS[e].chave())) && (!melhor || (ret.ts || 0) > (melhor.ret.ts || 0))) melhor = { e, ret };
+        if (ret && Array.isArray(ret.itens) && ERPS[e].cred(await SHC.erpLer(ERPS[e].chave())) && (!melhor || (ret.ts || 0) > (melhor.ret.ts || 0))) melhor = { e, ret };
     }
     const k = 'erpx:' + conta;
     if (!melhor) { if (await SHC.lerChave(k)) await chrome.storage.local.remove(k); return null; }

@@ -1265,7 +1265,7 @@
     $('#impVerFaltam').addEventListener('click', () => { $('#soSem').checked = true; $('#soPrinc').checked = false; $('#busca').value = ''; desenhaTabela(); $('#lista').scrollIntoView({ behavior: 'smooth' }); });
     $('#suporteZap').href = SHC.SUPORTE_WHATSAPP;
     async function desenhaTiny() {
-        const t = await SHC.lerChave(SHC.TINY_CHAVE), com = !!(t && t.token);
+        const t = await SHC.erpLer(SHC.TINY_CHAVE), com = !!(t && t.token);
         $('#tinySem').hidden = com;
         $('#tinyCom').hidden = !com;
         $('#tinyMasc').textContent = com ? SHC.tinyMascara(t.token) : '';
@@ -1289,8 +1289,8 @@
                 progresso: (p, n) => { tinyMsg('Lendo os produtos do Tiny… página ' + p + ' de ' + n); tinyBarra(p, n); },
             });
             const r = await SHC.tinyGravar(produtos, 'tiny', { empresa: e0 });
-            const antes = (await A.get(SHC.TINY_CHAVE))[SHC.TINY_CHAVE] || null;
-            await A.set({ [SHC.TINY_CHAVE]: { token, ultima: Object.assign({ ts: Date.now() }, r) } });   // token só é guardado depois que o Tiny aceitou
+            const antes = await SHC.erpLer(SHC.TINY_CHAVE, A);
+            await SHC.erpGravar(SHC.TINY_CHAVE, { token, ultima: Object.assign({ ts: Date.now() }, r) }, A);   // token só é guardado depois que o Tiny aceitou
             if (SHC.erpRetratoDaTela) await SHC.erpRetratoDaTela('tiny', produtos, !(antes && antes.ultima), e0);   // v3.2: cruzamento ERP × ML
             $('#tinyToken').value = '';
             await lerDados();
@@ -1311,7 +1311,7 @@
     const OMIE = { origins: [SHC.OMIE_ORIGEM] };
     let omieRodando = false;
     async function desenhaOmie() {
-        const o = await SHC.lerChave(SHC.OMIE_CHAVE), com = !!(o && o.appKey && o.appSecret);
+        const o = await SHC.erpLer(SHC.OMIE_CHAVE), com = !!(o && o.appKey && o.appSecret);
         $('#omieSem').hidden = com;
         $('#omieCom').hidden = !com;
         $('#omieMasc').textContent = com ? (SHC.omieMascara || SHC.tinyMascara)(o.appKey) : '';
@@ -1329,7 +1329,7 @@
         try {
             const e0 = await SHC.empresaSeparada();
             A = SHC.areaEmpresa(e0);
-            if (chaves) await A.set({ [SHC.OMIE_CHAVE]: chaves });
+            if (chaves) await SHC.erpGravar(SHC.OMIE_CHAVE, chaves, A);
             const r = await chrome.runtime.sendMessage({ acao: 'sincronizar_custos', erp: 'omie', empresa: e0 });
             if (!r || !r.ok) throw Object.assign(new Error('omie'), { msg: (r && r.msg) || 'Não consegui ler o Omie agora. Tente de novo em alguns minutos.' });
             $('#omieKey').value = ''; $('#omieSecret').value = '';
@@ -1367,7 +1367,7 @@
     let blingRodando = false, blingSalvo = null;   // blingSalvo: o guardado (o clique decide sem esperar o armazenamento)
     const blingBotoes = off => ['#blingConectar', '#blingAtualizar', '#blingEsquecer'].forEach(s => { $(s).disabled = off; });
     async function desenhaBling() {
-        const b = (await SHC.lerChave(SHC.BLING_CHAVE)) || {}, com = !!(b.clientId && b.refresh);
+        const b = (await SHC.erpLer(SHC.BLING_CHAVE)) || {}, com = !!(b.clientId && b.refresh);
         blingSalvo = b.clientId && b.clientSecret ? b : null;
         $('#blingSem').hidden = com;
         $('#blingCom').hidden = !com;
@@ -1390,8 +1390,8 @@
             A = SHC.areaEmpresa(e0);
             let r;
             if (cred) {
-                antes = (await A.get(SHC.BLING_CHAVE))[SHC.BLING_CHAVE] || {};
-                await A.set({ [SHC.BLING_CHAVE]: antes.clientId === cred.clientId && antes.clientSecret === cred.clientSecret ? Object.assign({}, antes, cred) : cred });
+                antes = (await SHC.erpLer(SHC.BLING_CHAVE, A)) || {};
+                await SHC.erpGravar(SHC.BLING_CHAVE, antes.clientId === cred.clientId && antes.clientSecret === cred.clientSecret ? Object.assign({}, antes, cred) : cred, A);
                 tinyMsg('Entre no Bling na janela que abriu e clique em “Autorizar”…');
                 const state = SHC.blingEstado();
                 let volta = '';
@@ -1417,8 +1417,8 @@
             // Entrada que não deu certo (e não chegou a conectar): volta o que estava guardado antes (Client ID/Secret e tokens);
             // só apaga quando não havia nada antes.
             if (cred && antes && A) {
-                const b = await A.get(SHC.BLING_CHAVE).then(o => o[SHC.BLING_CHAVE] || null, () => null);
-                if (b && !b.refresh) await (antes.clientId ? A.set({ [SHC.BLING_CHAVE]: antes }) : A.remove(SHC.BLING_CHAVE)).catch(() => {});
+                const b = await SHC.erpLer(SHC.BLING_CHAVE, A).catch(() => null);
+                if (b && !b.refresh) await (antes.clientId ? SHC.erpGravar(SHC.BLING_CHAVE, antes, A) : A.remove(SHC.BLING_CHAVE)).catch(() => {});
             }
             tinyMsg((e && e.msg) || FALHA, true);
         } finally {
@@ -1455,7 +1455,7 @@
     $('#tinyToken').addEventListener('keydown', e => { if (e.key === 'Enter') $('#tinyConectar').click(); });
     $('#tinyAtualizar').addEventListener('click', () => {
         const pedido = chrome.permissions.request(TINY);
-        SHC.lerChave(SHC.TINY_CHAVE).then(t => (t && t.token ? puxarTiny(pedido, t.token) : desenhaTiny()));
+        SHC.erpLer(SHC.TINY_CHAVE).then(t => (t && t.token ? puxarTiny(pedido, t.token) : desenhaTiny()));
     });
     $('#tinyEsquecer').addEventListener('click', async () => {
         await esquecerErp(SHC.TINY_CHAVE, TINY);

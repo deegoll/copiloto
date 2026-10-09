@@ -38,7 +38,8 @@ module.exports = function montaFundo(op) {
     // teste que monta datas relativas ("hoje" − N dias) não depender do dia do mês em que roda de verdade.
     let relogio = {};
     if (op.hoje) { const t0 = Date.parse(op.hoje + 'T12:00:00'); class Relogio extends Date { constructor(...a) { super(...(a.length ? a : [t0])); } static now() { return t0; } } relogio = { Date: Relogio }; }
-    const ctx = vm.createContext(Object.assign({ chrome: chromeF, fetch: fetchF, console, URL, setTimeout: f => setImmediate(f), setInterval: () => 0, clearInterval() {} }, relogio));
+    const webc = require('crypto').webcrypto;   // 3.3.1 (segredo.js): a criptografia dos ERPs roda de verdade dentro do fundo de mentira
+    const ctx = vm.createContext(Object.assign({ chrome: chromeF, fetch: fetchF, console, URL, setTimeout: f => setImmediate(f), setInterval: () => 0, clearInterval() {}, crypto: webc, btoa, atob, TextEncoder, TextDecoder }, relogio));
     // op.faltam (opcional, ['licenca.js', …]): arquivos que NÃO estão no pacote da loja; importScripts deles quebra como no Chrome.
     ctx.importScripts = (...arqs) => arqs.forEach(a => {
         if ((op.faltam || []).indexOf(a) >= 0) throw new Error("importScripts: '" + a + "' não está no pacote");

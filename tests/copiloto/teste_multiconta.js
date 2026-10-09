@@ -494,6 +494,7 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         }, onChanged: { addListener: f => ouvStore.push(f) } }, runtime: { sendMessage: async () => ({}) } };
         const S = require(path.join(EXT, 'calc.js'));
         require(path.join(EXT, 'store.js'));
+        require(path.join(EXT, 'segredo.js'));   // 3.3.1: puxarTiny/puxarOmie gravam o ERP cifrado (erpLer/erpGravar)
         // O cache da empresa (1,5 s) sai quando ml:conta ou cfg mudam (store.js ouve o chrome.storage.onChanged): o teste avisa a mudança.
         const espera = async () => { await new Promise(r => setImmediate(r)); ouvStore.forEach(f => f({ 'ml:conta': {}, cfg: {} }, 'local')); };
         mem['ml:conta'] = A;
@@ -626,6 +627,16 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         ok(!um.variasEmpresas && um.total && um.total.vendasBrutas === 8000 && P.contasJuntasGrupos(um, 'todas').length === 1 && P.contasJuntasGrupos(um, 'todas')[0].titulo === '',
             'sem conta separada (uma empresa só): o total de todas as contas continua (8.000)');
 
+        // 3.3.1 (trava do Catálogo, pedido do Diego 09/10: "tem que pegar os dados somente da conta que está logando… não pode misturar"):
+        // o "Entre as suas contas" do Catálogo cruza só contas da MESMA empresa da conta aberta e só mostra grupo com a logada.
+        ok(P.mesmaEmpresa(C3, A, { [OUTRA]: true }) === true && P.mesmaEmpresa(OUTRA, A, { [OUTRA]: true }) === false
+            && P.mesmaEmpresa(OUTRA, OUTRA, { [OUTRA]: true }) === true && P.mesmaEmpresa(C3, OUTRA, { [OUTRA]: true }) === false,
+            'P.mesmaEmpresa bate com SHC.contasDaEmpresa (provada acima): a principal vê as principais; a separada vê só ela');
+        {   const srcP = require('fs').readFileSync(require('path').join(__dirname, '../../extension-copiloto', 'painel-lateral.js'), 'utf8');
+            ok(/P\.mesmaEmpresa\(id, ct, \(c && c\.empresaSeparada\)/.test(srcP) && /contasCompetindo\(retratos, nomesContas\(\)[\s\S]{0,200}?\.filter\(g => g\.itens\.some\(x => String\(x\.conta\) === String\(ct\)\)\)/.test(srcP),
+                'no painel de verdade: os retratos do Catálogo filtram por mesma empresa e os grupos, pela conta logada');
+        }
+
         console.log('m) bloqueio 5: painel lateral, "Tiny · Puxar custos agora" — a empresa do clique e o token dela');
         {   // O código de verdade do painel-lateral.js (do "let tinyToken" ao listener do botão), com um DOM mínimo.
             const fs = require('fs'), src = fs.readFileSync(path.join(EXT, 'painel-lateral.js'), 'utf8');
@@ -642,7 +653,7 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
             tira(); mem['erp:tiny'] = { token: 'TOKEN-A' }; mem['erp@' + OUTRA + ':tiny'] = { token: 'TOKEN-B' };
             mem['ml:conta'] = OUTRA; await espera();
             T.usa('TOKEN-A'); await clica();
-            ok(lidos[lidos.length - 1] === 'TOKEN-B' && mem['c|sku@' + OUTRA + '|PECA-01'].custo === 22 && !mem['c|sku|PECA-01'] && mem['erp@' + OUTRA + ':tiny'].token === 'TOKEN-B' && mem['erp:tiny'].token === 'TOKEN-A',
+            ok(lidos[lidos.length - 1] === 'TOKEN-B' && mem['c|sku@' + OUTRA + '|PECA-01'].custo === 22 && !mem['c|sku|PECA-01'] && (await S.segredoDecifra(mem['erp@' + OUTRA + ':tiny'].token)) === 'TOKEN-B' && (await S.segredoDecifra(mem['erp:tiny'].token)) === 'TOKEN-A',
                 'clique com a OUTRA aberta: lê o Tiny DELA (token relido da empresa), grava na OUTRA e não sobrescreve o token de ninguém');
             // (2) o clique foi com a A aberta; o ML troca para a OUTRA enquanto o Chrome pergunta a permissão → tudo vai para a empresa do clique.
             tira(); mem['erp:tiny'] = { token: 'TOKEN-A' }; mem['erp@' + OUTRA + ':tiny'] = { token: 'TOKEN-B' };
@@ -651,7 +662,7 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
             const p2 = T.abrirTiny();
             mem['ml:conta'] = OUTRA; await espera();
             liberar(true); await p2;
-            ok(mem['c|sku|PECA-01'] && mem['c|sku|PECA-01'].custo === 11 && !mem['c|sku@' + OUTRA + '|PECA-01'] && mem['erp@' + OUTRA + ':tiny'].token === 'TOKEN-B',
+            ok(mem['c|sku|PECA-01'] && mem['c|sku|PECA-01'].custo === 11 && !mem['c|sku@' + OUTRA + '|PECA-01'] && (await S.segredoDecifra(mem['erp@' + OUTRA + ':tiny'].token)) === 'TOKEN-B',
                 'a conta trocou durante o pedido de permissão: custos e token ficam na empresa do clique (a A)');
             // (3) a empresa aberta não tem Tiny: não usa o token da outra; pede o token dela.
             tira(); mem['erp:tiny'] = { token: 'TOKEN-A' };
@@ -675,7 +686,7 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
             mem['erp:tiny'] = { token: 'TOKEN-A' }; mem['erp@' + OUTRA + ':tiny'] = { token: 'TOKEN-B' };
             mem['ml:conta'] = OUTRA; await espera();
             await esquecer('erp:tiny', { origins: ['https://api.tiny.com.br/*'] });
-            ok(mem['erp:tiny'] && mem['erp:tiny'].token === 'TOKEN-A' && !mem['erp@' + OUTRA + ':tiny'] && !removidas.length, 'painel.js "Esquecer" com a OUTRA aberta: some só o Tiny dela; o da A e a permissão do Chrome ficam');
+            ok(mem['erp:tiny'] && (await S.segredoDecifra(mem['erp:tiny'].token)) === 'TOKEN-A' && !mem['erp@' + OUTRA + ':tiny'] && !removidas.length, 'painel.js "Esquecer" com a OUTRA aberta: some só o Tiny dela; o da A e a permissão do Chrome ficam');
             mem['ml:conta'] = A; await espera();
             await esquecer('erp:tiny', { origins: ['https://api.tiny.com.br/*'] });
             ok(!mem['erp:tiny'] && removidas.length === 1, 'e com a A aberta (nenhuma outra empresa com o Tiny): a credencial e a permissão saem');
@@ -734,7 +745,7 @@ const ABA = { tab: { id: 3 }, url: B + '/faturacion/certificado' };
         I.ctx.SHC.blingTrocarCodigo = async () => ({ access: 'AC-A', refresh: 'RF-A', expira: Date.now() + 3600e3 });
         I.ctx.SHC.blingPuxar = async () => [{ sku: 'BL-01', custo: 5 }];
         const rb = await I.envia({ acao: 'bling_conectar', code: 'CODE-0001', empresa: '' });
-        ok(rb && rb.ok && fd['erp:bling'].refresh === 'RF-A' && fd['c|sku|BL-01'] && !fd['erp@' + OUTRA + ':bling'] && !fd['c|sku@' + OUTRA + '|BL-01'],
+        ok(rb && rb.ok && (await I.ctx.SHC.segredoDecifra(fd['erp:bling'].refresh)) === 'RF-A' && fd['c|sku|BL-01'] && !fd['erp@' + OUTRA + ':bling'] && !fd['c|sku@' + OUTRA + '|BL-01'],
             'Bling conectado na empresa do clique (a principal) com a OUTRA aberta: tokens e custos vão para a principal');
     }
 

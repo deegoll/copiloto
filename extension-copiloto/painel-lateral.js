@@ -1223,6 +1223,14 @@
         const dif = seuPreco > 0 && v.preco > 0 ? SHC.r2(seuPreco - v.preco) : null;
         return { rotulo: conc.vencedor ? 'Quem está ganhando' : 'Menor preço no catálogo', v, dif, difPct: dif !== null ? dif / v.preco * 100 : null, ofertas: conc.ofertas.slice(0, 5) };
     };
+    // 3.3.1 (trava, pedido do Diego 09/10: "tem que pegar os dados somente da conta que está logando… não pode misturar"):
+    // o Catálogo só cruza contas da MESMA empresa da conta aberta (cfg.empresaSeparada). A conta aberta marcada como outra
+    // empresa = só ela entra; fora isso, entram as contas não marcadas. (A mesma regra de SHC.contasDaEmpresa, sem ler nada.)
+    P.mesmaEmpresa = function (id, contaAtual, sep) {
+        sep = sep || {};
+        const ct = String(contaAtual || '');
+        return sep[ct] === true ? String(id) === ct : sep[String(id)] !== true;
+    };
     // Mesmo produto em contas diferentes deste Chrome: retratos = {sellerId: itens}. Agrupa por catálogo ("Sincronizado
     // com #…", quando o ML mostra o número), SKU, EAN (planilha do ERP: eanDe(sku)) e título normalizado; só fica o grupo
     // com anúncios de 2+ contas. Grupo contido num já mostrado (nessa ordem) não se repete.
@@ -2837,9 +2845,10 @@
     // quantas telas ele lê (a lista no balão) e a chave "Mostrar nas telas". 3.3.1 (C2): o ML também tem chave — ligar abre o quadro
     // "Antes de ligar o Mercado Livre" (P.quadroMlHtml) e desligar tira o consentimento (cfg.consentimento_ml): sem ele NADA do ML é lido.
     // O TikTok só com cfg.modulos.tiktok E a permissão do site (SHC.canaisLigados), senão "desligado". est = { ligados, lidoEm: {id: ms|null},
-    // pendentes: marcados e com permissão mas ainda sem Salvar, gravados: ids com cfg.modulos[id] === true (mostra "Apagar dados"),
+    // pendentes: marcados e com permissão mas ainda sem Salvar, gravados: ids com cfg.modulos[id] === true,
     // canalDesligado: 2 canais e a aba Canal desligada em "Abas que aparecem", comDados: ids com dado guardado neste Chrome
-    // (SHC.tt.temDados): o "Apagar dados" fica mesmo com o canal desligado e salvo }. ──
+    // (SHC.temDadosMl / SHC.tt.temDados) }. 3.3.1 (pedido do Diego 09/10): o botão "Apagar dados do <canal>" sai para TODO canal
+    // ligado, gravado ou com dado guardado — a mesma regra para todos, nunca de um só (era só do TikTok até a 3.3.0). ──
     P.CANAIS_FORA = { tiktok: 'O chat de Mensagens do cliente e os Anúncios da loja ainda não são lidos.' };   // o que falta, numa frase só, à vista
     P.canaisHtml = function (canais, est) {
         est = est || {};
@@ -2855,7 +2864,9 @@
         });
         return linhas.join('')
             + (est.canalDesligado && lig.length > 1 ? '<p class="det">A comparação entre canais fica na aba Canal, que está desligada em Abas que aparecem.</p>' : '')
-            + ([grav, lig, dados].some(l => l.indexOf('tiktok') >= 0) ? '<button type="button" class="bt leve" id="ttApagar">Apagar dados do TikTok</button>' : '');
+            // 3.3.1 (pedido do Diego 09/10): "Apagar dados" de TODO canal — ligado, gravado ou com dado guardado — nunca de um só.
+            + (canais || []).filter(c => [grav, lig, dados].some(l => l.indexOf(c.id) >= 0))
+                .map(c => `<button type="button" class="bt leve aj-apagar" data-apagar-canal="${escF(c.id)}">${escF('Apagar dados do ' + (c.nome === 'TikTok Shop' ? 'TikTok' : c.nome))}</button>`).join('');
     };
     // 3.3.0 (C1, Política de Dados do Usuário da Chrome Web Store): o quadro que abre ao ligar o TikTok, ANTES de qualquer permissão.
     // Só o "Concordo e ligar" pede as permissões e grava cfg.consentimento_tiktok; "Agora não" (ou Esc) fecha sem gravar nada.
@@ -2874,7 +2885,7 @@
         + `<p><b>O que o Copiloto lê:</b> as telas do painel do vendedor: ${escF(c.telas.join(', '))}.</p>`
         + '<p><b>Para quê:</b> mostrar no Copiloto o lucro real de cada venda, a conciliação das cobranças e a saúde da sua loja.</p>'
         + '<p><b>Como:</b> lê as páginas do painel com a sua sessão e copia as respostas que a tela já recebeu. Não clica, não preenche e não envia nada ao Mercado Livre. Dado de comprador só passa pela memória e não é guardado. Nada sai do seu Chrome.</p>'
-        + '<p><b>Para parar:</b> desligue o Mercado Livre aqui em Canais de venda. O que já foi lido fica guardado neste computador e volta a aparecer ao religar.</p>'
+        + '<p><b>Para parar:</b> desligue o Mercado Livre aqui em Canais de venda. O que já foi lido fica guardado neste computador e volta a aparecer ao religar; para apagar, toque em “Apagar dados do Mercado Livre”.</p>'
         + '<p class="qt-aviso">Os termos do vendedor do Mercado Livre podem não permitir ferramentas de terceiros que leem a sua loja; ao ligar, você decide usar o Copiloto assim.</p></div>'
         + `<p><a class="lnk" href="${P.URL_PRIVACIDADE}" target="_blank" rel="noopener">Política de privacidade do Copiloto ↗</a></p>`
         + '<div class="dois"><button type="button" class="bt leve" data-ml-quadro="nao" autofocus>Agora não</button><button type="button" class="bt verde" data-ml-quadro="sim">Concordo e ligar</button></div>';
@@ -2930,7 +2941,7 @@
     let adsFiltro = 'acima', adsDet = null, semTodos = false;   // adsDet = MLB aberto no detalhe da aba Ads; c|sku|… (medidas, fullMinUn), ads:<conta>, fech:<conta>:<mês>, {sellerId: itens}
     let full = null, vm = {}, fullDias = 30, fullClasse = '';    // ml:full:<sellerId>, vm|ml|MLB = {'AAAA-MM': unidades}
     let remessas = null, custosMsg = '';   // ml:full:remessas:<sellerId>; resposta de "Sincronizar custos" (Catálogo)
-    let mesesLidos = [], entreContas = [];   // meses lidos inteiros no Faturamento; mesmo produto entre contas (calculado 1 vez por carga)
+    let mesesLidos = [], entreContas = [], contasEmpresa = [];   // meses lidos inteiros no Faturamento; mesmo produto entre contas e as contas da mesma empresa (calculados 1 vez por carga)
     // Saúde dos anúncios: fiscal:/fotos:/visitas:/robo:<conta>; permissão de www (fotos); filtros e mensagens da aba
     let fiscal = null, fotos = null, visitas = null, robo = null, permWww = false, saudeMsg = '', roboMsg = '', fotoFaixa = '', radarBusca = '';
     let medidas = null, medSku = '', medMsg = '', medTxt = -1;   // medidas:<conta>; SKU aberto; resposta do "Conferir agora"/"Copiar"; texto do chamado à mostra
@@ -3118,7 +3129,8 @@
         // F2: o custo de TODAS as variações (antes só o 1º SKU entrava e o lucro saía inflado).
         const skusDe = it => SHC.skusDoAnuncio(it).map(SHC.chaveSku).filter(Boolean);
         const skus = [...new Set([].concat(...its.map(skusDe)))];
-        const outras = Object.keys(cts || {}).filter(id => id !== String(ct));
+        // 3.3.1 (trava, pedido do Diego 09/10): só as outras contas da MESMA empresa entram no cruzamento — outra empresa nunca.
+        const outras = Object.keys(cts || {}).filter(id => id !== String(ct) && P.mesmaEmpresa(id, ct, (c && c.empresaSeparada) || {}));
         const [fr, vd, ad, fch, rts, fu] = await Promise.all([
             ids.length ? SHC.lerFretes(ids) : {}, ids.length ? SHC.lerVendas(ids) : {},
             // Ads por anúncio (API do Mercado Ads) e Ads da conta no mês (Faturamento): chaves da camada de dados (V8).
@@ -3142,8 +3154,8 @@
         let ic = false;
         try { const u = chrome.action && chrome.action.getUserSettings && await chrome.action.getUserSettings(); ic = !!(u && u.isOnToolbar); } catch (e) { ic = false; }
         const foco = await SHC.lerChave('shc:foco');
-        const tk = SHC.TINY_CHAVE ? await SHC.lerChave(SHC.TINY_CHAVE) : null;
-        let blg = null; try { blg = await SHC.lerChave(SHC.BLING_CHAVE || 'erp:bling'); } catch (e) { blg = null; }   // bling.js não é carregado aqui: a chave é 'erp:bling'
+        const tk = SHC.TINY_CHAVE ? await SHC.erpLer(SHC.TINY_CHAVE) : null;
+        let blg = null; try { blg = await SHC.erpLer(SHC.BLING_CHAVE || 'erp:bling'); } catch (e) { blg = null; }   // bling.js não é carregado aqui: a chave é 'erp:bling'
         // Competição: histórico diário (comp:<conta>) e o que "Ver quem está ganhando" já leu (conc:<conta>:<MLB>).
         const idsComp = its.filter(it => it.competicao && it.competicao !== 'ganhando').map(it => it.itemId);
         const [ch, cc, kc] = await Promise.all([SHC.lerChave('comp:' + (ct || 'atual')), idsComp.length ? chrome.storage.local.get(idsComp.map(id => 'conc:' + ct + ':' + id)) : {}, SHC.lerChave('catcomp:' + (ct || 'atual'))]);
@@ -3181,7 +3193,10 @@
         tinyToken = tinyRecusado ? '' : (tk && tk.token) || '';   // token recusado pelo Tiny: pede outro (o velho fica guardado até o novo ser aceito)
         fretes = fr; vendas = vd; icone = ic; cadSku = cad; adsSnap = P.adsLigaCatalogo(ad, its) || null; fechMes = fch || null; vm = vms; full = fu || null; remessas = rem || null; mesesLidos = lidos || []; custosMl = cml || {};   // F8: catálogo ligado
         retratos = {}; if (ct) retratos[ct] = its; outras.forEach((id, i) => { if (rts[i]) retratos[id] = rts[i].itens || []; });
-        entreContas = P.contasCompetindo(retratos, nomesContas(), sku => (cadSku[SHC.chaveSku(sku)] || {}).ean || '');   // nome = apelido de Ajustes ou "Conta …1234", nunca o do ML
+        contasEmpresa = (ct ? [String(ct)] : []).concat(outras);   // 3.3.1 (trava): o conjunto do "Entre as suas contas" — só a mesma empresa
+        // 3.3.1 (trava): e só entra no "Entre as suas contas" o grupo em que a conta LOGADA participa — nunca um grupo entre duas outras.
+        entreContas = P.contasCompetindo(retratos, nomesContas(), sku => (cadSku[SHC.chaveSku(sku)] || {}).ean || '')
+            .filter(g => g.itens.some(x => String(x.conta) === String(ct)));   // nome = apelido de Ajustes ou "Conta …1234", nunca o do ML
 
         // Etiqueta no ML → "ver no Copiloto": shc:foco = {aba, itemId}. Vai direto e apaga o foco.
         if (foco) {
@@ -4552,7 +4567,9 @@
     }
     function cardCompeticao() {
         const rc = P.resumoCompeticao(itens), entre = entreContas;
-        const nContas = Object.keys(contas).length, semRetrato = Object.keys(contas).filter(id => !retratos[id]);
+        // 3.3.1 (trava, pedido do Diego 09/10): o "Entre as suas contas" conta e cobra retrato só das contas da MESMA empresa — outra empresa nunca aparece aqui.
+        const listaEmp = contasEmpresa.length ? contasEmpresa : Object.keys(contas).filter(id => id === String(conta));
+        const nContas = listaEmp.length, semRetrato = listaEmp.filter(id => !retratos[id]);
         const filtros = rc.temDado ? P.GRUPOS_COMP.filter(([k]) => rc.grupos[k].length || k !== 'outros').map(([k, rot, cor]) => `<button class="${cor}${compGrupo === k ? ' on' : ''}" data-cgrupo="${k}">${rc.grupos[k].length} ${esc(rot.toLowerCase())}</button>`).join('') : '<span class="n">sem dado ainda</span>';
         let html = `<div class="card"><button class="lnk" data-comp style="display:flex;width:100%;color:var(--tinta)"><b style="font-size:13px;flex:1">Competição</b><span style="color:var(--azul)">${compAberto ? 'fechar' : 'ver'}</span></button>
           <div class="canais" style="margin-top:6px">${filtros}${entre.length ? `<span class="p">${entre.length} entre suas contas</span>` : ''}</div>`;
@@ -4571,7 +4588,9 @@
         }
         html += `<button class="bt leve" data-abrir-competindo style="margin-top:8px">Abrir “Competindo” no ML</button>`;
         html += '<p style="margin:10px 0 2px;font-weight:650;font-size:12.5px">Entre as suas contas</p>';
-        if (nContas < 2) html += '<p class="det">Só 1 conta do Mercado Livre conectada neste Chrome. Entre na outra conta do ML neste Chrome e sincronize para comparar.</p>';
+        if (nContas < 2) html += Object.keys(contas).length > nContas
+            ? '<p class="det">As contas marcadas como outra empresa em Ajustes nunca entram aqui: cada empresa compara só consigo mesma.</p>'
+            : '<p class="det">Só 1 conta do Mercado Livre conectada neste Chrome. Entre na outra conta do ML neste Chrome e sincronize para comparar.</p>';
         else {
             if (semRetrato.length) html += `<p class="det">Ainda sem anúncios lidos de: ${esc(semRetrato.map(id => SHC.nomeConta(id, cfg, contas)).join(', '))}. Entre nessa conta do ML neste Chrome e sincronize.</p>`;
             html += entre.length ? vmLista('cat:entre', entre, 5)[0].map(g => `<div class="linha-comp"><b>${esc(g.titulo)}</b><small>Suas contas competem entre si neste produto (${g.tipo === 'titulo' ? 'mesmo título' : ({ catalogo: 'catálogo #', sku: 'SKU ', ean: 'EAN ' }[g.tipo] || '') + esc(g.valor)}):</small>
@@ -5417,14 +5436,21 @@
         const ttOn = lig.indexOf('tiktok') >= 0, cardAds = $('#cardAdsTT');
         if (cardAds) cardAds.hidden = !ttOn;
         const eu = ++ttGerAj;
-        if (!ttOn || !SHC.tt) {
-            ttLojaAj = null;
-            // desligado (e salvo) com dados guardados: o "Apagar dados do TikTok" continua (privacidade.html manda apagar por aqui)
-            if (SHC.tt && SHC.tt.temDados && aba === 'ajustes') SHC.tt.temDados().then(tem => {
-                if (!tem || eu !== ttGerAj || aba !== 'ajustes') return;
-                const h = P.canaisHtml(SHC.CANAIS, Object.assign(est, { comDados: ['tiktok'] }));
+        // 3.3.1 (pedido do Diego 09/10): o "Apagar dados" fica em TODO canal desligado mas com dado guardado neste Chrome
+        // (privacidade.html manda apagar por aqui) — nunca só no TikTok. Canal ligado/gravado já mostra o botão no 1º desenho.
+        {   const faltam = SHC.CANAIS.map(c => c.id).filter(id => [lig, pendentes, gravados].every(l => l.indexOf(id) < 0));
+            const temDadosDe = id => id === 'ml' ? (SHC.temDadosMl ? SHC.temDadosMl() : Promise.resolve(false))
+                : (id === 'tiktok' && SHC.tt && SHC.tt.temDados ? SHC.tt.temDados() : Promise.resolve(false));   // canal novo sem leitura: sem botão
+            if (faltam.length && aba === 'ajustes') Promise.all(faltam.map(id => Promise.resolve(temDadosDe(id)).catch(() => false))).then(tems => {
+                if (eu !== ttGerAj || aba !== 'ajustes') return;
+                const comDados = faltam.filter((id, i) => tems[i]);
+                if (!comDados.length) return;
+                const h = P.canaisHtml(SHC.CANAIS, Object.assign(est, { comDados }));
                 if (h !== el.innerHTML) el.innerHTML = h;
             }).catch(() => {});
+        }
+        if (!ttOn || !SHC.tt) {
+            ttLojaAj = null;
             return;
         }
         SHC.tt.ler().then(d => {
@@ -7614,9 +7640,9 @@
             // do outro; nenhum → o fundo responde {semToken}.
             const erps = [], e0 = await SHC.empresaSeparada().catch(() => undefined);   // v3.3: todos os ERPs vão para a empresa do clique
             let blingVenceu = false;
-            try { if (((await SHC.lerChave(SHC.TINY_CHAVE)) || {}).token) erps.push('tiny'); } catch (e) { /* sem chave */ }
-            try { const o = await SHC.lerChave(SHC.OMIE_CHAVE); if (o && o.appKey && o.appSecret) erps.push('omie'); } catch (e) { /* sem chave */ }
-            try { const b = await SHC.lerChave(SHC.BLING_CHAVE || 'erp:bling'); if (b && b.clientId && b.clientSecret && b.refresh) erps.push('bling'); else blingVenceu = !!(b && b.reconectar); } catch (e) { /* sem chave */ }
+            try { if (((await SHC.erpLer(SHC.TINY_CHAVE)) || {}).token) erps.push('tiny'); } catch (e) { /* sem chave */ }
+            try { const o = await SHC.erpLer(SHC.OMIE_CHAVE); if (o && o.appKey && o.appSecret) erps.push('omie'); } catch (e) { /* sem chave */ }
+            try { const b = await SHC.erpLer(SHC.BLING_CHAVE || 'erp:bling'); if (b && b.clientId && b.clientSecret && b.refresh) erps.push('bling'); else blingVenceu = !!(b && b.reconectar); } catch (e) { /* sem chave */ }
             const partes = [];
             for (const erp of erps.length ? erps : [null]) {
                 let r = null;
@@ -7857,12 +7883,22 @@
             if (apagar && SHC.tt && SHC.tt.apagarDados) SHC.tt.apagarDados().then(n => avisa(n ? '✓ Dados do TikTok apagados.' : 'Não havia dados do TikTok guardados.', 4000), falhaGravar);
         }).catch(() => {});
     });
-    // "Apagar dados do TikTok" (SHC.tt.apagarDados: tt:* e os custos c|tiktok|*), com a pergunta antes.
+    // 3.3.1 (pedido do Diego 09/10): "Apagar dados" de TODO canal, com a mesma regra e a pergunta antes — nunca de um só.
+    // ML: SHC.apagarDadosMl (store.js). TikTok: SHC.tt.apagarDados (tt:* e os custos c|tiktok|*).
     $('#listaCanais').addEventListener('click', e => {
-        if (!(e.target && e.target.closest && e.target.closest('#ttApagar'))) return;
+        const bt = e.target && e.target.closest && e.target.closest('[data-apagar-canal]');
+        if (!bt) return;
+        const canal = bt.getAttribute('data-apagar-canal'), ehMl = canal === 'ml';
+        const fn = ehMl ? SHC.apagarDadosMl : (SHC.tt && SHC.tt.apagarDados);
+        if (!fn) return;
+        const nome = ehMl ? 'Mercado Livre' : 'TikTok';
+        const oQue = ehMl ? 'anúncios, vendas, faturamento, conciliações e o Ads' : 'pedidos, repasses, custos e o Ads digitado';
         let apagar = false;
-        try { apagar = window.confirm('Apagar os dados do TikTok guardados neste computador (pedidos, repasses, custos e o Ads digitado)?'); } catch (x) { apagar = false; }
-        if (apagar && SHC.tt && SHC.tt.apagarDados) SHC.tt.apagarDados().then(n => { avisa(n ? '✓ Dados do TikTok apagados.' : 'Não havia dados do TikTok guardados.', 4000); desenhaCanais(); }, falhaGravar);
+        try { apagar = window.confirm('Apagar os dados do ' + nome + ' guardados neste computador (' + oQue + ')?'); } catch (x) { apagar = false; }
+        if (apagar) Promise.resolve(fn()).then(n => {
+            avisa(n ? '✓ Dados do ' + nome + ' apagados.' : 'Não havia dados do ' + nome + ' guardados.', 4000);
+            if (ehMl) recarregar(); else desenhaCanais();   // o ML recarrega tudo (as abas ficaram vazias); o TikTok só redesenha o cartão
+        }, falhaGravar);
     });
     // Salvar canais: junta com o que já está em cfg.modulos (as abas de "Abas que aparecem" ficam como estão; o salvarCfg faz junção rasa).
     // Canal opcional desmarcado grava false, marcado grava true (SHC.moduloLigado só liga opcional com true).
@@ -7942,7 +7978,7 @@
         // v3.3 multi-empresa (revisão 07/10/2026): tudo vai para a empresa da conta aberta NO CLIQUE, mesmo se o ML trocar de conta durante a leitura.
         try {
             const e0 = await (empresa || SHC.empresaSeparada()), A = SHC.areaEmpresa(e0);
-            const antes = (await A.get(SHC.TINY_CHAVE))[SHC.TINY_CHAVE] || null;
+            const antes = await SHC.erpLer(SHC.TINY_CHAVE, A);
             if (!token) token = (antes && antes.token) || '';
             if (!token) {   // a empresa do clique não tem o Tiny: pede o token DELA (nunca usa o de outra empresa)
                 tinyToken = ''; $('#abrirTiny').textContent = 'Tiny · Conectar em 1 minuto'; $('#tinyBox').hidden = false;
@@ -7951,7 +7987,7 @@
             const produtos = await SHC.tinyPuxar(token, { fetch: (u, i) => fetch(u, i), espera: ms => new Promise(r => setTimeout(r, ms)),
                 progresso: (pg, n) => { const pc = n ? Math.round(pg / n * 100) : 0; $('#tinyBarra').style.width = pc + '%'; $('#tinyPct').textContent = pc + '% · ' + pg + ' de ' + n + (n === 1 ? ' página' : ' páginas'); } });
             const r = await SHC.tinyGravar(produtos, 'tiny', { empresa: e0 });
-            await A.set({ [SHC.TINY_CHAVE]: { token, ultima: Object.assign({ ts: Date.now() }, r) } });
+            await SHC.erpGravar(SHC.TINY_CHAVE, { token, ultima: Object.assign({ ts: Date.now() }, r) }, A);
             if (SHC.erpRetratoDaTela) await SHC.erpRetratoDaTela('tiny', produtos, !(antes && antes.ultima), e0);   // v3.2: cruzamento ERP × ML
             tinyToken = token; tinyRecusado = false; $('#tinyToken').value = ''; $('#tinyBox').hidden = true;
             tinyMsg('✓ ' + SHC.tinyResumo(r) + '.');
