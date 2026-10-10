@@ -12,7 +12,10 @@
     const BASE = 'https://vendedores.mercadolivre.com.br';
     const MP = 'https://www.mercadopago.com.br';
     F.URL = {
-        cobranca: pedido => BASE + '/billing/cnc/detail/charges?searchText=' + encodeURIComponent(pedido),   // a confirmar ao vivo
+        // A página de lista do Faturamento, validada ao vivo em 24/09/2026 (MAPEAMENTO-ML.md). O searchText na URL da
+        // página segue o nome que o próprio front usa na API da lista; a confirmar ao vivo que o filtro aplica — se o ML
+        // o ignorar, o pior caso é a lista completa abrir (a página certa), e o pedido vai no texto do alerta.
+        cobranca: pedido => BASE + '/billing/cnc/charges-summary?searchText=' + encodeURIComponent(pedido),
         faturamento: BASE + '/billing/resume',
     };
     // Limiares da conferência

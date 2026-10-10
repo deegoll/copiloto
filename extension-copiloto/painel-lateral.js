@@ -1317,7 +1317,8 @@
         const pad = (max - min) * 0.12; min -= pad; max += pad;
         const Y = v => y1 - (v - min) / (max - min) * (y1 - y0);
         const f = n => Math.round(n * 10) / 10;
-        const eixo = [max - pad, (max + min) / 2, min + pad].map(v => `<text x="${x0 - 5}" y="${f(Y(v)) + 3}" text-anchor="end">${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</text><line x1="${x0}" x2="${x1}" y1="${f(Y(v))}" y2="${f(Y(v))}" stroke="#E2E8F0"/>`).join('');
+        const moedaEixo = v => String(SHC.moeda(v)).replace('R$ ', '');   // o centavo sai igual ao resto da extensão; o "R$" do eixo já está no canto
+        const eixo = [max - pad, (max + min) / 2, min + pad].map(v => `<text x="${x0 - 5}" y="${f(Y(v)) + 3}" text-anchor="end">${moedaEixo(v)}</text><line x1="${x0}" x2="${x1}" y1="${f(Y(v))}" y2="${f(Y(v))}" stroke="#E2E8F0"/>`).join('');
         let d = '', pen = false;   // degraus: o trecho antes do 1º dado fica sem linha
         seq.forEach((dia, i) => { const v = vals[i]; if (v === null) return; d += pen ? ' H' + f(X(i)) + ' V' + f(Y(v)) : 'M' + f(X(i)) + ' ' + f(Y(v)); pen = true; });
         const iSub = subida && subida.desde ? seq.indexOf(subida.desde) : -1;   // o dia da subida dentro da janela
@@ -1326,7 +1327,7 @@
         const rotIs = [...new Set([0, Math.floor((seq.length - 1) / 2), seq.length - 1])];
         const rot = rotIs.map(i => `<text x="${f(X(i))}" y="${H - 14}" text-anchor="middle"${i === seq.length - 1 ? ' font-weight="700" fill="#0F172A"' : ''}>${seq[i].slice(8, 10)}/${seq[i].slice(5, 7)}</text>`).join('');
         const nDias = comDado.filter(x => x >= d0).length;
-        const aria = `Frete dia a dia: ${nDias} dias com venda nos últimos ${seq.length} dias` + (iSub >= 0 ? `; subiu em ${subida.desde.slice(8, 10)}/${subida.desde.slice(5, 7)}` : '');
+        const aria = `Frete dia a dia: ${nDias} ${nDias === 1 ? 'dia' : 'dias'} com dado de frete nos últimos ${seq.length} dias; ${iVenda.length} ${iVenda.length === 1 ? 'dia' : 'dias'} com venda` + (iSub >= 0 ? `; subiu em ${subida.desde.slice(8, 10)}/${subida.desde.slice(5, 7)}` : '');
         return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${aria}" font-family="Segoe UI,Arial,sans-serif" font-size="9" fill="#64748B">`
             + eixo + `<text x="4" y="12">R$</text>` + marcaSub
             + (d ? `<path d="${d}" fill="none" stroke="#DC2626" stroke-width="2"/>` : '') + ptsV
@@ -3421,6 +3422,9 @@
     // Os alertas só deste módulo vão para o fim da aba (#fa-<aba>), recolhidos, com o MESMO número da bolinha da aba (P.nAlerta).
     let alertasAgora = null;
     const prejAutoAberto = new Set();
+    // Estilos inline compartilhados (devolutiva da revisão pós-3.3.1): o link pequeno dos alertas e o título de cartão
+    // da linha do tempo do frete. O valor é o MESMO de antes — a linha 6640 acha o título pelo texto literal.
+    const STL_LINK_PQ = 'font-size:11.5px', STL_TIT_CARD = 'font-size:13px';
     function desenhaTopoAba() {
         desenhaContadores();   // v3.1: contador de cada aba, sino e "Todas"
         const el = $('#ta-' + aba);
@@ -3438,8 +3442,8 @@
         if (lista.some(i => i.tipo === 'prejuizo') && !prejAutoAberto.has(k)) { prejAutoAberto.add(k); verAberto.add(k); }
         fim.innerHTML = lista.length ? `<div class="card alab"><div class="gb-l"><i class="dot ${urg ? 'ruim' : 'atencao'}"></i><b>Alertas desta aba</b><span class="gb-v">${esc(SHC.qtd(n, 'alerta', 'alertas'))}</span>${btVer(k, `Ver mais (${n})`)}</div>`
             + (aberto(k) ? '<div class="gb-c">' + lista.map(i => `<div class="linha-comp"><b>${esc(i.rot)}${i.titulo ? ' · ' + esc(i.titulo) : ''}</b><small>${esc(i.texto)}</small>`
-                + (i.link && /^https:\/\/([a-z]+\.)*mercadolivre\.com\.br\//.test(i.link) ? `<a class="lnk" href="${esc(i.link)}" target="_blank" rel="noopener" style="font-size:11.5px">${esc(i.linkTxt || 'Abrir Gestão de envios Full')}</a>` : '')
-                + (i.tipo === 'frete' && i.itemId ? ` <button class="lnk" data-frete-det="${esc(i.itemId)}" style="font-size:11.5px">Ver a linha do tempo</button>` : '') + '</div>').join('') + '</div>' : '')
+                + (i.link && /^https:\/\/([a-z]+\.)*mercadolivre\.com\.br\//.test(i.link) ? `<a class="lnk" href="${esc(i.link)}" target="_blank" rel="noopener" style="${STL_LINK_PQ}">${esc(i.linkTxt || 'Abrir Gestão de envios Full')}</a>` : '')
+                + (i.tipo === 'frete' && i.itemId ? ` <button class="lnk" data-frete-det="${esc(i.itemId)}" style="${STL_LINK_PQ}">Ver a linha do tempo</button>` : '') + '</div>').join('') + '</div>' : '')
             + '</div>' : '';
     }
     const curtoTxt = (t, n) => { const s = String(t || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
@@ -4246,7 +4250,7 @@
         // "mostrar o anúncio e a venda e o período como uma linha do tempo"). lTl = a mesma linha de P.linhasFrete (subiu = lista ou cobrado).
         const lTl = { it, h, fa, comprador: false, subiu: !!(h && h.anterior !== null && h.atual > h.anterior) || !!(fa && fa.subiu && !P.freteMultiplo(fa.ult30 && fa.ult30.medio, it.frete)) };
         const subTl = P.subidaFrete(lTl, vd, SHC.hoje()), svgDia = P.svgFreteDia(fa, P.pedidosFrete(vd).lista, subTl, SHC.hoje());
-        if (svgDia) html += dobra(`<div class="card"><b style="font-size:13px">Linha do tempo do frete (dia a dia)</b>${svgDia}<p class="det">Frete médio cobrado por dia nos pedidos deste anúncio (Faturamento do ML), últimos 60 dias. Cada bolinha é um dia com venda — em vermelho, frete acima do normal do anúncio.${subTl && subTl.desde ? ` A linha tracejada é o dia em que o frete subiu (${esc(P.dataBr(subTl.desde))}, de ${SHC.moeda(subTl.de)} para ${SHC.moeda(subTl.para)}).` : ''} Dia sem venda repete o valor do dia anterior.</p></div>`, 'frete:detdia', esc(subTl && subTl.desde ? 'subiu em ' + P.dataBr(subTl.desde).slice(0, 5) : 'dia a dia'));
+        if (svgDia) html += dobra(`<div class="card"><b style="${STL_TIT_CARD}">Linha do tempo do frete (dia a dia)</b>${svgDia}<p class="det">Frete médio cobrado por dia nos pedidos deste anúncio (Faturamento do ML), últimos 60 dias. Cada bolinha é um dia com venda — em vermelho, frete acima do normal do anúncio.${subTl && subTl.desde ? ` A linha tracejada é o dia em que o frete subiu (${esc(P.dataBr(subTl.desde))}, de ${SHC.moeda(subTl.de)} para ${SHC.moeda(subTl.para)}).` : ''} Dia sem venda repete o valor do dia anterior.</p></div>`, 'frete:detdia', esc(subTl && subTl.desde ? 'subiu em ' + P.dataBr(subTl.desde).slice(0, 5) : 'dia a dia'));
         // Frete por mês: TODOS os meses com venda (e os do histórico diário), do primeiro ao último, com a tabela.
         const meses = P.mesesFrete(h, porMes), pt = P.pagoAMaisPorMes(vd), espera = temVd ? '' : P.esperaVendas(status, Date.now());
         const resMes = temVd && pt.linhas.length ? (pt.total > 0 ? `${SHC.moeda(pt.total)} a mais em ${SHC.qtd(pt.linhas.length, 'mês', 'meses')}` : `${SHC.qtd(pt.linhas.length, 'mês', 'meses')} · sem frete a mais`) : '';
