@@ -21,6 +21,17 @@
     SHC.ttTelaLoja = function (url) {
         try { const v = new URL(url).searchParams.get('oec_seller_id'); return v && /^\d{5,25}$/.test(v) ? v : null; } catch (e) { return null; }
     };
+    /**
+     * A loja quando a URL da página NÃO traz o oec_seller_id (o Seller Center atual navega sem ele): o parâmetro vai nas
+     * chamadas de API que a própria página faz — é assim que o tiktok-pagina.js aprende a conta. nomes = as URLs de recurso
+     * que a página já carregou, da MAIS NOVA para a mais velha. → os dígitos | null. Como a loja vem da sessão aberta na
+     * aba, 2 lojas da mesma seller nunca se misturam.
+     */
+    SHC.ttTelaLojaDaPagina = function (nomes) {
+        const lista = nomes || [];
+        for (let i = 0; i < lista.length; i++) { const v = SHC.ttTelaLoja(lista[i]); if (v) return v; }
+        return null;
+    };
     /** "R$ 1.234,56" num texto → 1234.56 | null. */
     SHC.ttTelaPreco = function (txt) {
         const m = /R\$\s*([\d.]+,\d{2})/.exec(String(txt == null ? '' : txt));
@@ -114,7 +125,7 @@
         pre: 'background:#FEF2F2;color:#991B1B;border:1px solid #FECACA',
         sem: 'background:#F1F5F9;color:#475569;border:1px dashed #94A3B8',
     };
-    let dados = null, urlVista = '', pendente = 0;
+    let dados = null, urlVista = '', pendente = 0, tentativas = 0;
 
     function desenha(elSku, linha, et) {
         const ass = SHC.ttTelaAssinatura(et), velha = linha.querySelector ? linha.querySelector('.shc-tt-tag') : null;
@@ -143,25 +154,41 @@
         });
     }
 
-    function pede() {
-        const loja = SHC.ttTelaLoja(location.href);
-        if (!loja) { dados = null; return; }
-        let p;
-        try { p = chrome.runtime.sendMessage({ acao: 'tiktok_etiqueta', loja }); } catch (x) { return; }   // extensão recarregada: para quieto
-        Promise.resolve(p).then(r => { if (r && r.ok && SHC.ttTelaLoja(location.href) === r.loja) { dados = r; varre(); } }, () => {});
+    /** A loja desta aba: a da URL; sem ela, a das chamadas de API que a própria página já fez (da mais nova para a mais velha). */
+    function lojaDaAba() {
+        const direta = SHC.ttTelaLoja(location.href);
+        if (direta) return direta;
+        try {
+            const ents = (root.performance && root.performance.getEntriesByType) ? root.performance.getEntriesByType('resource') : [];
+            const nomes = [];
+            for (let i = ents.length - 1; i >= 0; i--) nomes.push(String((ents[i] || {}).name || ''));
+            return SHC.ttTelaLojaDaPagina(nomes);
+        } catch (x) { return null; }
     }
 
-    // O Seller Center troca de tela sem recarregar (SPA): a troca de URL pede os chips de novo; as mutações só redesenham.
+    function pede() {
+        const loja = lojaDaAba();
+        if (!loja) { dados = null; return; }
+        tentativas++;
+        let p;
+        try { p = chrome.runtime.sendMessage({ acao: 'tiktok_etiqueta', loja }); } catch (x) { return; }   // extensão recarregada: para quieto
+        Promise.resolve(p).then(r => { if (r && r.ok && lojaDaAba() === r.loja) { dados = r; tentativas = 0; varre(); } }, () => {});
+    }
+
+    // O Seller Center troca de tela sem recarregar (SPA): a troca de URL pede os chips de novo; as mutações redesenham —
+    // ou tentam de novo (com teto) quando a 1ª leitura veio antes de a página chamar a API que revela a loja.
     function agenda() {
         if (pendente) return;
         pendente = setTimeout(() => {
             pendente = 0;
             if (location.href !== urlVista) {
                 urlVista = location.href;
+                tentativas = 0;
                 if (SHC.ttTelaDe(urlVista) === 'produtos') pede(); else dados = null;
                 return;
             }
-            varre();
+            if (dados) varre();
+            else if (tentativas < 10 && SHC.ttTelaDe(location.href) === 'produtos') pede();
         }, 600);
     }
 
