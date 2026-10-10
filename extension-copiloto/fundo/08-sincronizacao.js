@@ -120,6 +120,65 @@ const O_QUE_FAZER = {
     // 3.3.1 (C2): o canal foi desligado em Ajustes no meio da leitura — o que faltava não é lido.
     sem_consentimento: 'O Mercado Livre foi desligado em Ajustes › Canais de venda. Ligue de novo para o Copiloto ler.',
 };
+// ── 3.3.1: fonte única das etapas — o que cada uma roda (FN), o resumo que grava (RESUMO) e o campo de erro dela no status
+// (ERRO_CAMPO). A sincronização cheia e a leitura de 1 parte ("Tentar de novo esta parte") usam os mesmos mapas: um texto ou uma
+// regra nova vale para as duas. Os mapas ficam dentro de uma FUNÇÃO (não const de topo): os nomes das outras partes do fundo
+// (resumoPosVenda, sincronizarAds…) só são resolvidos quando uma leitura chama mapaEtapa() — nem na carga do 08 (as partes carregam
+// em ordem) nem no ciclo de quem lê (TDZ).
+const codigo = falha => (falha === 'login' ? 'sem_sessao' : falha === 'sem_consentimento' || /^ads_/.test(falha) || falha === 'outra_conta' ? falha : 'ml_indisponivel');   // 3.3.1 (C2): sem_consentimento chega ao status com a frase dele
+const mpErro = x => (x === 'sem_sessao' ? 'sem_login_mp' : x);   // o repasse é do Mercado Pago: "sessão" lá é o login do MP
+let MAPA_ETAPA = null;
+function mapaEtapa() {
+    if (MAPA_ETAPA) return MAPA_ETAPA;
+    // O que a etapa roda: (conta, progresso). A cheia passa a conta que os anúncios descobriram; a leitura de 1 parte confere a sessão antes.
+    const FN = {
+        anuncios: (conta, progresso) => sincronizarAnuncios(progresso),   // descobre a conta pela sessão aberta (a conferência depois é a trava)
+        vendasBrutas: (conta, progresso) => sincronizarVendasBrutas(conta, progresso),
+        faturamento: (conta, progresso) => sincronizarCobrancas(conta, progresso, 'recentes'),
+        full: (conta, progresso) => sincronizarFullERemessas(conta, progresso),
+        ads: (conta, progresso) => sincronizarAds(conta, progresso),
+        posvenda: conta => sincronizarPosVenda(conta),
+        vendasAnuncio: (conta, progresso) => sincronizarVendasAnuncio(conta, progresso, 'recentes'),
+        promos: (conta, progresso) => sincronizarPromos(conta, progresso),
+        afiliados: (conta, progresso) => sincronizarAfiliados(conta, progresso),
+        saude: (conta, progresso) => fiscalCompartilhado(conta, progresso),
+        faturas: async (conta, progresso) => {   // v2.8: + NF-e das vendas; falha dela não derruba as faturas (o erro fica em nfe:<conta>:<mês>)
+            const r = await sincronizarFaturas(conta, progresso);
+            let nf = null;
+            try { nf = await sincronizarNfe(conta, progresso, 'recentes'); } catch (x) { nf = null; }
+            return r && r.falha ? r : Object.assign({}, r, { nfeVendas: nf });
+        },
+        repasse: (conta, progresso) => sincronizarRepasse(conta, progresso),
+        alertas: async (conta, progresso) => {   // v2.7/v3.2: radar e prejuízo são derivados — falha deles nunca derruba os alertas
+            try { await sincronizarRadar(conta, progresso); } catch (x) { /* derivado */ }
+            try { await sincronizarVendasPrejuizo(conta, progresso); } catch (x) { /* derivado */ }
+            return atualizarAlertas(conta);
+        },
+    };
+    // O resumo gravado no status (shc:status.etapas[id].resumo) — o painel mostra este texto na linha da etapa.
+    const RESUMO = {
+        anuncios: r => SHC.resumoLeituraAnuncios(r.snap),
+        vendasBrutas: r => resumoVendasBrutas(r),
+        faturamento: r => resumoFaturamento(r),
+        full: r => resumoFull(r),
+        ads: r => (r.semAba ? ADS_SEM_ABA : r.temAds ? (r.campanhasCompleto === false && r.totalCampanhas ? (r.campanhas || []).length + ' de ' + r.totalCampanhas + ' campanhas (leitura parcial)' : SHC.qtd((r.campanhas || []).length, 'campanha', 'campanhas')) + ' · ' + SHC.qtd((r.anuncios || []).length, 'anúncio', 'anúncios')
+            + (r.completo === false && r.totalAnuncios ? ' de ' + r.totalAnuncios + ' (leitura parcial)' : '') : 'Nenhuma campanha no Mercado Ads'),   // #24: parcial não passa por completo
+        posvenda: r => resumoPosVenda(r),
+        vendasAnuncio: r => resumoVendasAnuncio(r),
+        promos: r => (r.vazio ? 'Nenhuma promoção disponível' : SHC.qtd(r.propostas, 'proposta', 'propostas') + ' em ' + SHC.qtd(r.familias, 'produto', 'produtos')),
+        afiliados: r => SHC.afilResumo(r),
+        saude: r => resumoSaude(r),
+        faturas: r => SHC.qtd((r.faturas || []).length, 'fatura', 'faturas') + (r.notasFiscais ? ' · ' + SHC.qtd(r.notasFiscais, 'nota fiscal', 'notas fiscais') : '')
+            + (r.nfeVendas && r.nfeVendas.notas ? ' · ' + SHC.qtd(r.nfeVendas.notas, 'nota de venda', 'notas de venda') : ''),
+        repasse: r => (r.semPermissao ? 'Mercado Pago não conectado' : r.semItens ? 'Nenhuma venda nova no Mercado Pago' : SHC.qtd(r.meses, 'mês', 'meses') + ' de repasse'),
+        alertas: r => (r.anomalias && r.anomalias.total ? SHC.qtd(r.anomalias.total, 'ponto de atenção', 'pontos de atenção') : 'Nada pede sua atenção agora'),
+    };
+    // Campo do shc:status com o erro da etapa (anuncios → st.erro global; alertas → nenhum: é derivado das outras leituras).
+    const ERRO_CAMPO = { vendasBrutas: 'erroVendasBrutas', faturamento: 'erroCobrancas', full: 'erroFull', ads: 'erroAds', posvenda: 'erroPosVenda',
+        vendasAnuncio: 'erroVendasAnuncio', promos: 'erroPromos', afiliados: 'erroAfiliados', saude: 'erroSaude', faturas: 'erroFaturas', repasse: 'erroRepasse' };
+    MAPA_ETAPA = { FN, RESUMO, ERRO_CAMPO };
+    return MAPA_ETAPA;
+}
 async function sincronizar(origem) {
     if (emAndamento) return emAndamento;
     // 3.3.1 (C2): sem o "Concordo e ligar" do Mercado Livre (cfg.consentimento_ml) NADA é lido — nem o status mexe.
@@ -233,7 +292,7 @@ async function sincronizar(origem) {
         ciclo = cic;
         if (cic) await salvaCiclo();
         const feita = id => !!(cic && cic.feitas[id]);
-        const codigo = falha => (falha === 'login' ? 'sem_sessao' : falha === 'sem_consentimento' || /^ads_/.test(falha) || falha === 'outra_conta' ? falha : 'ml_indisponivel');   // 3.3.1 (C2): sem_consentimento chega ao status com a frase dele
+        // codigo/mpErro e os resumos das etapas: mapas do topo do arquivo (3.3.1) — valem para a cheia e para a leitura de 1 parte.
         // Cada etapa depois dos anúncios falha sozinha: o que ela tinha gravado antes fica, e o status ganha erro<Etapa>.
         // resumo(r) = texto curto do que foi lido; r.semPermissao = etapa pulada (não é erro).
         // v2.10: etapa já feita neste ciclo não roda de novo (os campos do status dela voltam do ciclo no fim).
@@ -284,7 +343,6 @@ async function sincronizar(origem) {
             }
             return e;
         };
-        const Q = SHC.qtd, mpErro = x => (x === 'sem_sessao' ? 'sem_login_mp' : x);
         let erro = null, erroPromos = null, erroCobrancas = null, erroFull = null, erroAds = null, erroFaturas = null, erroVendasBrutas = null, erroRepasse = null, erroAfiliados = null, erroSaude = null;
         let an = null, pr = null, co = null, fu = null, ad = null, rp = null, af = null, al = null, pv = null, erroPosVenda = null, fiscalCedo = null, erroVendasAnuncio = null;
         try {
@@ -319,26 +377,24 @@ async function sincronizar(origem) {
                 } catch (x) { fiscalCedo = null; }
                 // v2.11: ordem por prioridade — o que as telas usam primeiro (vendas, Fechamento, Full, Ads, pós-venda, famílias) e as etapas
                 // leves antes das pesadas (promoções, fiscal, faturas + NF-e). Os meses antigos ficam para o histórico (lerHistorico).
-                let e = await etapa('vendasBrutas', () => sincronizarVendasBrutas(conta, progresso), resumoVendasBrutas);   // antes das cobranças: o fechamento soma os dias
+                let e = await etapa('vendasBrutas', () => mapaEtapa().FN.vendasBrutas(conta, progresso), mapaEtapa().RESUMO.vendasBrutas);   // antes das cobranças: o fechamento soma os dias
                 erroVendasBrutas = e.erro || null;
-                e = await etapa('faturamento', () => sincronizarCobrancas(conta, progresso, 'recentes'), resumoFaturamento);
+                e = await etapa('faturamento', () => mapaEtapa().FN.faturamento(conta, progresso), mapaEtapa().RESUMO.faturamento);
                 co = e.r || null; erroCobrancas = e.erro || null;
-                e = await etapa('full', () => sincronizarFullERemessas(conta, progresso), resumoFull);
+                e = await etapa('full', () => mapaEtapa().FN.full(conta, progresso), mapaEtapa().RESUMO.full);
                 fu = e.r || null; erroFull = e.erro || null;
-                e = await etapa('ads', () => sincronizarAds(conta, progresso),
-                    r => (r.semAba ? ADS_SEM_ABA : r.temAds ? (r.campanhasCompleto === false && r.totalCampanhas ? (r.campanhas || []).length + ' de ' + r.totalCampanhas + ' campanhas (leitura parcial)' : Q((r.campanhas || []).length, 'campanha', 'campanhas')) + ' · ' + Q((r.anuncios || []).length, 'anúncio', 'anúncios')
-                        + (r.completo === false && r.totalAnuncios ? ' de ' + r.totalAnuncios + ' (leitura parcial)' : '') : 'Nenhuma campanha no Mercado Ads'));   // #24: parcial não passa por completo
+                e = await etapa('ads', () => mapaEtapa().FN.ads(conta, progresso), mapaEtapa().RESUMO.ads);
                 ad = e.r || null; erroAds = e.erro || null;
-                e = await etapa('posvenda', () => sincronizarPosVenda(conta), resumoPosVenda);
+                e = await etapa('posvenda', () => mapaEtapa().FN.posvenda(conta), mapaEtapa().RESUMO.posvenda);
                 pv = e.r || null; erroPosVenda = e.erro || null;
-                e = await etapa('vendasAnuncio', () => sincronizarVendasAnuncio(conta, progresso, 'recentes'), resumoVendasAnuncio);   // v2.6: famílias
+                e = await etapa('vendasAnuncio', () => mapaEtapa().FN.vendasAnuncio(conta, progresso), mapaEtapa().RESUMO.vendasAnuncio);   // v2.6: famílias
                 erroVendasAnuncio = e.erro || null;
                 try { await completarSkusRetrato(conta); } catch (x) { /* só completa SKU: falha não para a sincronização */ }
-                e = await etapa('promos', () => sincronizarPromos(conta, progresso),   // anúncios lidos: a sincronização vale
-                    r => (r.vazio ? 'Nenhuma promoção disponível' : Q(r.propostas, 'proposta', 'propostas') + ' em ' + Q(r.familias, 'produto', 'produtos')));
+                e = await etapa('promos', () => mapaEtapa().FN.promos(conta, progresso),   // anúncios lidos: a sincronização vale
+                    mapaEtapa().RESUMO.promos);
                 pr = e.r || null; erroPromos = e.erro || null;
                 // v2.9: Afiliados logo depois das promoções (1 página + poucos GETs).
-                e = await etapa('afiliados', () => sincronizarAfiliados(conta, progresso), SHC.afilResumo);
+                e = await etapa('afiliados', () => mapaEtapa().FN.afiliados(conta, progresso), mapaEtapa().RESUMO.afiliados);
                 af = e.r || null; erroAfiliados = e.erro || null;
                 e = await etapa('saude', async () => {
                     const cedo = fiscalCedo ? await fiscalCedo.catch(() => null) : null;
@@ -348,28 +404,18 @@ async function sincronizar(origem) {
                     // v2.10: lida já neste ciclo (a parte fiscal que começou cedo, antes de o worker cair) → não lê de novo.
                     const f = cic ? await SHC.lerChave('fiscal:' + conta) : null;
                     return f && f.ts >= cic.inicio ? f : fiscalCompartilhado(conta, progresso);
-                }, resumoSaude);
+                }, mapaEtapa().RESUMO.saude);
                 erroSaude = e.erro || null;
                 // v2.8: + NF-e das vendas (sincronizarNfe): falha dela não derruba as faturas (o erro fica em nfe:<conta>:<mês>).
-                e = await etapa('faturas', async () => {
-                    const r = await sincronizarFaturas(conta, progresso);
-                    let nf = null;
-                    try { nf = await sincronizarNfe(conta, progresso, 'recentes'); } catch (x) { nf = null; }
-                    return r && r.falha ? r : Object.assign({}, r, { nfeVendas: nf });
-                }, r => Q((r.faturas || []).length, 'fatura', 'faturas') + (r.notasFiscais ? ' · ' + Q(r.notasFiscais, 'nota fiscal', 'notas fiscais') : '')
-                    + (r.nfeVendas && r.nfeVendas.notas ? ' · ' + Q(r.nfeVendas.notas, 'nota de venda', 'notas de venda') : ''));
+                e = await etapa('faturas', () => mapaEtapa().FN.faturas(conta, progresso), mapaEtapa().RESUMO.faturas);
                 erroFaturas = e.erro || null;
                 try { await gravarRateio(conta); } catch (x) { /* rateio é derivado: sem ele a página só não mostra a conferência */ }
-                e = await etapa('repasse', () => sincronizarRepasse(conta, progresso),
-                    r => (r.semPermissao ? 'Mercado Pago não conectado' : r.semItens ? 'Nenhuma venda nova no Mercado Pago' : Q(r.meses, 'mês', 'meses') + ' de repasse'), mpErro);
+                e = await etapa('repasse', () => mapaEtapa().FN.repasse(conta, progresso), mapaEtapa().RESUMO.repasse, mpErro);
                 rp = e.r || null;
                 erroRepasse = e.erro ? mpErro(e.erro) : null;   // sem permissão não é erro: "conecte para comparar"
                 // v2.7: radar leve (Resumo, perguntas, reputação: 3 GETs) antes de contar as anomalias; se falhar, o anterior fica e a etapa continua.
                 // v3.2: + 1 GET da lista de Vendas (venda nova no prejuízo → prejuizo:<conta>); se falhar, fica o de antes.
-                e = await etapa('alertas', async () => { try { await sincronizarRadar(conta, progresso); } catch (x) { /* radar é derivado */ }
-                    try { await sincronizarVendasPrejuizo(conta, progresso); } catch (x) { /* derivado: nunca derruba os alertas */ }
-                    return atualizarAlertas(conta); },
-                    r => (r.anomalias && r.anomalias.total ? SHC.qtd(r.anomalias.total, 'ponto de atenção', 'pontos de atenção') : 'Nada pede sua atenção agora'));
+                e = await etapa('alertas', () => mapaEtapa().FN.alertas(conta, progresso), mapaEtapa().RESUMO.alertas);
                 al = e.r || null;
                 // v3.3 multi-empresa: no fim, 1 conferência SEM o guardado (a troca entre duas conferências não passa sem ser vista).
                 await conferirConta(true);
@@ -432,6 +478,119 @@ async function sincronizar(origem) {
         const iv = origem === 'manual' ? 10 * 60e3 : 6 * 3600e3;
         sincronizarCustos('tiny', iv).catch(() => {}).then(() => sincronizarCustos('omie', iv).catch(() => {})).then(() => sincronizarCustos('bling', iv).catch(() => {}));
     }
+}
+
+// ── 3.3.1: RELER UMA PARTE ("Tentar de novo esta parte", botão da etapa com erro na lista do painel; pedido do Diego 09/10).
+// Roda só a etapa pedida, com as mesmas travas da cheia: 1 leitura por vez (emAndamento), canal ligado, o histórico dá a vez,
+// diário + sessão da mesma conta conferida antes e depois (troca no meio → o gravado é desfeito e os meses voltam para a fila).
+// O status mostra a parte lendo ("Etapa N de 13", a linha dela acesa); no fim só o erro dela sai — as outras partes ficam como
+// estavam. Responde { ok, iniciou } depois da 1ª gravação; o andamento chega por shc:status e a corrida segue em emAndamento.
+async function sincronizarEtapa(id) {
+    const ETAPAS = SHC.SYNC_ETAPAS || [], k = ETAPAS.findIndex(e => e.id === id);
+    if (k < 0 || !mapaEtapa().FN[id]) return { ok: false, motivo: 'etapa' };
+    if (emAndamento) return { ok: false, motivo: 'em_curso' };   // cheia ou outra parte rodando: 1 leitura por vez
+    if (!(await SHC.mlPermitidoAgora())) return { ok: false, motivo: 'sem_consentimento' };
+    let gravou = false, bateu = null;
+    const iniciou = new Promise(r => { bateu = r; });
+    const corrida = (async () => {
+        try {
+            histParar = true;   // o histórico em segundo plano dá a vez (nunca dois leitores ao mesmo tempo)
+            if (historicoEm) await historicoEm.catch(() => {});
+            const anterior = await SHC.lerStatus(), agora = Date.now();
+            const etapas = Object.assign({}, anterior.etapas || {});
+            etapas[id] = Object.assign({}, etapas[id] || {}, { estado: 'lendo', erro: null, inicio: agora, fim: null });
+            const st = Object.assign({}, anterior, { estado: 'sincronizando', sincronizando: true, batimento: agora, origem: 'etapa', etapas, interrompidaEm: null, retomaEm: null,
+                progresso: { etapa: id, indice: k + 1, total: ETAPAS.length, rotulo: ETAPAS[k].rotulo, feito: null, de: null, unidade: null,
+                    pct: SHC.progressoPct(k + 1, 0, 0, ETAPAS.length), inicio: agora, inicioEtapa: agora, restanteSeg: null, so: true } });
+            let gravado = 0;
+            const salvar = () => { Object.assign(st, andamentos); return emFilaStatus(() => SHC.salvarStatus(st)); };
+            const gravar = async forca => {
+                const p = st.progresso, t = Date.now();
+                st.batimento = t;
+                if (p) {
+                    p.pct = Math.max(p.pct || 0, SHC.progressoPct(p.indice, p.feito, p.de, p.total));
+                    p.restanteSeg = p.de > 0 ? SHC.estimaMeses(p.inicioEtapa, p.feito || 0, p.de, t) : null;   // o tempo é só desta parte, pelo ritmo dela
+                }
+                if (forca || t - gravado >= 1000) { gravado = t; await salvar(); return; }
+                if (chrome.runtime.getPlatformInfo) await chrome.runtime.getPlatformInfo().catch(() => {});   // mantém o worker acordado
+            };
+            const progresso = async (patch, conta) => {
+                Object.assign(st, patch || {});
+                if (conta && st.progresso) {
+                    const c = Object.assign({}, conta), meses = c.meses;
+                    delete c.meses;
+                    Object.assign(st.progresso, c); Object.assign(etapas[id], c);
+                    if (meses) etapas[id].meses = juntaMeses(etapas[id].meses, meses);   // diagnóstico por mês junta com o que a etapa já tinha
+                }
+                await gravar();
+            };
+            await gravar(true);
+            gravou = true; bateu();   // o painel solta o clique aqui; o andamento chega por shc:status
+            let r = null, cod = null, conta = null;
+            const diario = abreDiario();
+            try {
+                if (id === 'anuncios') {
+                    // Os anúncios descobrem a conta pela sessão aberta; a conferência forçada depois é a trava multi-empresa (bloqueio 5).
+                    r = await mapaEtapa().FN.anuncios(null, progresso);
+                    if (r && (r.falha === 'outra_conta' || (!r.falha && r.sellerId && r.sellerId !== 'atual' && !(await contaSegue(r.sellerId, true))))) {
+                        await desfazDiario(diario).catch(() => {});
+                        r = { falha: 'outra_conta' };
+                    }
+                    conta = r && !r.falha ? r.sellerId : null;
+                } else {
+                    conta = anterior.conta || await SHC.contaAtual();
+                    if (!conta || conta === 'atual') cod = 'sem_sessao';   // conta nunca lida: a cheia ("Sincronizar agora") é o caminho
+                    else {
+                        // Antes: a sessão do ML aberta agora é desta conta (1 GET). Login/caída/outra conta: erro sem pedir mais nada.
+                        const sessao = await confereSessao(conta);
+                        if (sessao === 'outra_conta') cod = 'outra_conta';
+                        else if (sessao === 'login') cod = 'sem_sessao';
+                        else if (sessao === 'indisponivel') cod = 'ml_indisponivel';
+                        else r = await mapaEtapa().FN[id](conta, progresso);
+                        // Depois (bloqueio 5): 1 conferência SEM o guardado — a troca de conta no meio da parte não fica gravada.
+                        if (!cod && r && !r.falha && !(await contaSegue(conta, true))) {
+                            await desfazDiario(diario).catch(() => {});
+                            await marcaReler(conta, agora).catch(() => {});
+                            r = { falha: 'outra_conta' };
+                        }
+                    }
+                }
+            } catch (x) { r = null; if (!cod) cod = 'ml_indisponivel'; }
+            fechaDiario(diario);
+            if (!cod && r && r.falha) cod = codigo(r.falha);
+            if (!cod && !r) cod = 'ml_indisponivel';
+            if (cod && id === 'repasse') cod = mpErro(cod);   // "sessão" do repasse é o login do Mercado Pago
+            const fim = Date.now(), e = etapas[id];
+            if (cod) Object.assign(e, { estado: 'erro', erro: O_QUE_FAZER[cod] || O_QUE_FAZER.ml_indisponivel, resumo: null, fim });
+            else {
+                const pulou = r.semPermissao || r.pulado;
+                Object.assign(e, { estado: pulou ? 'pulado' : 'ok', resumo: mapaEtapa().RESUMO[id](r), erro: null, fim });
+                if (e.de && !pulou) e.feito = e.de;   // contagem fechada
+                const patch = PATCH_ETAPA[id] ? PATCH_ETAPA[id](r) : null;   // os PATCH tratam pulado/semPermissao (como na cheia)
+                if (patch) Object.assign(st, patch);
+                if (id === 'faturas' && conta) await gravarRateio(conta).catch(() => {});   // rateio é derivado
+            }
+            st.progresso = null;
+            const campo = mapaEtapa().ERRO_CAMPO[id];
+            if (campo) st[campo] = cod || null;
+            // O selo geral: erro dos anúncios ou da sessão derruba tudo (sem eles nada lê); erro de outra parte fica na linha
+            // dela, como na cheia. Deu certo: a parte está em dia → selo verde (a linha das outras partes com erro continua lá).
+            if (cod) {
+                if (id === 'anuncios' || cod === 'outra_conta' || cod === 'sem_sessao') { st.erro = cod; st.estado = 'erro'; }
+            } else { st.erro = null; st.estado = 'ok'; st.ultimaOk = fim; }
+            Object.assign(st, { sincronizando: false, batimento: Date.now(), fim,
+                duracoes: Object.assign({}, anterior.duracoes || {}, { [id]: e.inicio && e.fim ? Math.max(0, e.fim - e.inicio) : 0 }) });
+            await salvar();
+            seloAgora().catch(() => {});   // o ícone acompanha (alertas e anomalias recalculados)
+            return st;
+        } finally {
+            bateu();   // morreu antes da 1ª gravação: o painel não fica esperando (responde erro)
+        }
+    })();
+    emAndamento = corrida;
+    corrida.then(() => {}, () => {}).then(() => { if (emAndamento === corrida) emAndamento = null; histParar = false; });
+    await iniciou;
+    return gravou ? { ok: true, iniciou: true, etapa: id } : { ok: false, motivo: 'erro' };
 }
 
 // ── v2.11: HISTÓRICO EM SEGUNDO PLANO. A sincronização lê só o que as telas usam agora (mês atual e anterior); os 11 meses mais antigos do

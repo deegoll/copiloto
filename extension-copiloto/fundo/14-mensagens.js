@@ -2,12 +2,12 @@ const daExtensao = s => !!(s && s.id === chrome.runtime.id && /^chrome-extension
 // 3.3.1 (C2): ações que LEEM o Mercado Livre — as que recebem o que a aba aberta leu (o content script também confere antes de
 // mandar; aqui é a última porta) e as que as telas da extensão disparam com GET ao ML/MP. Sem o "Concordo e ligar" do canal
 // (cfg.consentimento_ml) nenhuma roda: o listener no fim do arquivo responde { ok:false, motivo:'sem_consentimento' } sem tocar em nada.
-const LEEM_ML = { concorrentes: 1, sincronizar: 1, fiscal_agora: 1, certificado: 1, vendas_brutas_mes: 1, promos_pagina: 1, anuncios_pagina: 1,
+const LEEM_ML = { concorrentes: 1, sincronizar: 1, sincronizar_etapa: 1, fiscal_agora: 1, certificado: 1, vendas_brutas_mes: 1, promos_pagina: 1, anuncios_pagina: 1,
     atacado_degraus: 1, editor_anuncios: 1, experiencia_anuncios: 1, canal_ler_anuncios: 1, sincronizar_repasse: 1, simulador: 1, saude_agora: 1,
     medidas_agora: 1, catalogo_agora: 1, robo_rodar_agora: 1, robo_desfazer: 1 };
 // Dono de cada ação da lista: as telas da extensão (daExtensao) ou a aba do ML (daAbaDoML). O despacho confere de novo; aqui é só
 // para o fora-da-lista receber o MESMO silêncio de antes (return false, porta fechada) em vez de uma resposta que ele nunca teve.
-const SO_EXTENSAO = { concorrentes: 1, sincronizar: 1, fiscal_agora: 1, vendas_brutas_mes: 1, canal_ler_anuncios: 1, sincronizar_repasse: 1,
+const SO_EXTENSAO = { concorrentes: 1, sincronizar: 1, sincronizar_etapa: 1, fiscal_agora: 1, vendas_brutas_mes: 1, canal_ler_anuncios: 1, sincronizar_repasse: 1,
     simulador: 1, saude_agora: 1, medidas_agora: 1, catalogo_agora: 1, robo_rodar_agora: 1, robo_desfazer: 1 };
 
 function despacha(msg, sender, responder) {
@@ -21,6 +21,13 @@ function despacha(msg, sender, responder) {
     if (msg.acao === 'sincronizar') {
         if (!daExtensao(sender)) return false;   // 3.2.1: só as telas da extensão pedem a leitura
         (msg.esperar ? sincronizar('manual') : iniciarSync('manual')).then(responder, () => responder({ ok: false, motivo: 'erro' }));
+        return true;
+    }
+    // 3.3.1: {acao:'sincronizar_etapa', etapa} → "Tentar de novo esta parte" (lista do painel): relê SÓ aquela parte, com as
+    // mesmas travas da cheia (fundo/08: sincronizarEtapa). Responde {ok, iniciou} depois da 1ª gravação; o andamento vem por shc:status.
+    if (msg.acao === 'sincronizar_etapa') {
+        if (!daExtensao(sender)) return false;
+        sincronizarEtapa(String(msg.etapa || '')).then(responder, () => responder({ ok: false, motivo: 'erro' }));
         return true;
     }
     // v2.5.3 (D6): {acao:'fiscal_agora'} → só a parte fiscal, agora (fiscalAgora).

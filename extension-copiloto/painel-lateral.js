@@ -1980,7 +1980,8 @@
             const fila = (SHC.SYNC_ETAPAS || []).filter(x => x.id !== p.etapa && (!es[x.id] || !es[x.id].estado || es[x.id].estado === 'fila')).map(x => rotCurto(x.id));
             // v2.10: retomada → "Continuando | de onde parou: etapa 6 de 13 · Lendo: …" (as etapas lidas antes da queda não voltam para a fila).
             const cont = p.continua ? 'de onde parou: etapa ' + (p.indice || 1) + ' de ' + (p.total || (SHC.SYNC_ETAPAS || []).length) : '';
-            return { estado: 'lendo', cor: 'lendo', rotulo: cont ? 'Continuando' : 'Sincronizando', pct: s.pct, fila,
+            // 3.3.1 (pedido do Diego, 09/10): o rótulo diz em qual etapa a leitura está ("Sincronizando · etapa 3 de 13").
+            return { estado: 'lendo', cor: 'lendo', rotulo: cont ? 'Continuando' : 'Sincronizando' + (p.indice ? ' · etapa ' + p.indice + ' de ' + (p.total || (SHC.SYNC_ETAPAS || []).length) : ''), pct: s.pct, fila,
                 texto: [cont, 'Lendo: ' + (p.etapa ? rotCurto(p.etapa) + mes : 'a sua conta'), k, s.restante].filter(Boolean).join(' · ') };
         }
         // v2.10: parou no meio e já está continuando sozinho (um instante): âmbar, sem "não sincronizou".
@@ -7306,6 +7307,27 @@
         avisa('O Copiloto não respondeu. Clique em Tentar de novo.');
         desenhaStatus(); desenhaGuia();
     }
+    // 3.3.1 (pedido do Diego, 09/10): "Tentar de novo esta parte" (lista de etapas) — o fundo relê SÓ aquela parte, com as mesmas
+    // travas da leitura inteira. A tela marca a parte lendo na hora; se o fundo não iniciou, a marca volta e o motivo vira aviso.
+    function sincronizarEtapa(id) {
+        if (!id) return;
+        if (!SHC.mlLigado(cfg)) { abreAba('ajustes'); avisa('Ligue o Mercado Livre em Canais de venda para o Copiloto ler.', 6000); return; }
+        const antes = status, clique = Date.now();
+        const etapas = Object.assign({}, status.etapas || {});
+        etapas[id] = Object.assign({}, etapas[id] || {}, { estado: 'lendo', erro: null, inicio: clique, fim: null });
+        status = Object.assign({}, status, { estado: 'sincronizando', sincronizando: true, batimento: clique, etapas });
+        desenhaStatus();
+        let p;
+        try { p = chrome.runtime.sendMessage({ acao: 'sincronizar_etapa', etapa: id }); } catch (e) { p = null; }
+        Promise.resolve(p).then(r => {
+            if (r && r.ok) return;   // iniciou: o andamento e o fim chegam pelo shc:status
+            if (status.batimento === clique) { status = antes; desenhaStatus(); }   // nada novo do fundo: volta ao status de antes
+            const m = r && r.motivo;
+            if (m === 'sem_consentimento') abreAba('ajustes');
+            avisa(m === 'em_curso' ? 'A leitura já está em andamento.' : m === 'sem_consentimento' ? 'Ligue o Mercado Livre em Canais de venda para o Copiloto ler.'
+                : m === 'etapa' ? 'Esta parte não existe mais. Clique em Sincronizar agora.' : 'O Copiloto não respondeu. Tente de novo.', 6000);
+        }, () => { if (status.batimento === clique) { status = antes; desenhaStatus(); } avisa('O Copiloto não respondeu. Tente de novo.', 6000); });
+    }
     // shc:status lido do armazenamento. Batida (ou fim) depois do clique = o fundo está lendo ou já terminou: a espera e o aviso acabam.
     // Sem batida nova durante a espera, a tela continua com a marca "sincronizando" do clique.
     function statusDoFundo(st) {
@@ -7534,6 +7556,8 @@
         if (gp) { await pularGuia(gp.dataset.guiaPular); return; }
         if (t.closest('[data-guia-lista]')) { alterna('guia:lista'); desenhaGuia(); return; }
         if (t.closest('[data-sync-lista]')) { syncAberta = /fechada/.test($('#syncLista').className); desenhaStatus(); return; }
+        const bse = t.closest('[data-sync-etapa]');   // 3.3.1: "Tentar de novo esta parte" — o fundo relê só aquela etapa
+        if (bse) { sincronizarEtapa(String(bse.dataset.syncEtapa || '')); return; }
         if (t.closest('[data-sync]')) { sincronizar(); return; }
         const kpi = t.closest('[data-filtro]');
         if (kpi && kpi.closest('#promo')) { filtro = filtro === kpi.dataset.filtro ? '' : kpi.dataset.filtro; if (filtro && !aberto('promo:lista')) alterna('promo:lista'); desenhaPromo(); return; }

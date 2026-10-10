@@ -729,8 +729,10 @@
             const c = contagem(x);
             // v2.10: retomada (p.continua): as etapas já lidas no ciclo não voltam; a barra começa na etapa em que parou.
             const cont = p && p.continua ? 'Continuando de onde parou: etapa ' + (p.indice || 1) + ' de ' + (p.total || syncEtapas().length) : '';
+            // 3.3.1 (pedido do Diego, 09/10): a linha diz em qual das 13 etapas a leitura está ("Etapa 3 de 13 · Lendo o Faturamento · …").
+            const guiado = p && p.indice ? 'Etapa ' + p.indice + ' de ' + (p.total || syncEtapas().length) + ' · ' : '';
             return { estado: 'sincronizando', cor: 'azul', texto: (cont || 'Sincronizando') + ' · ' + pct + '%', pct, continua: !!cont,
-                etapa: 'Lendo ' + (NOME_ETAPA[id] || 'a sua conta') + (c ? ' · ' + c : ''), restante: restanteTxt(s) };
+                etapa: guiado + 'Lendo ' + (NOME_ETAPA[id] || 'a sua conta') + (c ? ' · ' + c : ''), restante: restanteTxt(s) };
         }
         const parou = (st.estado === 'sincronizando' || st.sincronizando === true);
         // v2.5.3: 'interrompida' = o fundo reiniciou no meio (extensão recarregada, Chrome fechado) e já agendou uma nova leitura (retomaEm).
@@ -785,7 +787,10 @@
         + '.shs-vermelho .shs-selo{background:#FEF2F2;color:#B91C1C}.shs-cinza .shs-selo{background:#F1F5F9;color:#475569}'
         + '.shs-barra{height:10px;background:#E2E8F0;border-radius:99px;overflow:hidden;margin:8px 0 4px}.shs-barra i{display:block;height:100%;background:#0284C7;border-radius:99px;transition:width .4s}'
         + '.shs-barra.shs-sem i{width:35%!important;animation:shs-vai 1.4s ease-in-out infinite}@keyframes shs-vai{0%{margin-left:-35%}100%{margin-left:100%}}'
-        + '@media (prefers-reduced-motion:reduce){.shs-barra.shs-sem i{animation:none;width:100%!important;opacity:.35}}'
+        // 3.3.1 (pedido do Diego, 09/10): a etapa lendo gira o ⟳ e ganha fundo azul-claro — a lista "guia" a pessoa (reduzir movimento: parado).
+        + '.shs-lendo .shs-ic{display:inline-block;animation:shs-gira 1.1s linear infinite}@keyframes shs-gira{to{transform:rotate(360deg)}}'
+        + '.shs-lista li.shs-lendo{background:#F0F9FF;border-radius:8px;margin:0 -6px;padding:5px 6px}'
+        + '@media (prefers-reduced-motion:reduce){.shs-barra.shs-sem i{animation:none;width:100%!important;opacity:.35}.shs-lendo .shs-ic{animation:none}}'
         + '.shs-lin{color:#475569;font-size:12.5px}.shs-lista{border:1px solid #E2E8F0;border-radius:12px;padding:10px 12px;margin-top:10px;background:#fff}'
         + '.shs-cab{margin:0 0 6px;font-weight:700;font-size:13px}.shs-lista ul{list-style:none;margin:0;padding:0}.shs-lista li{display:grid;grid-template-columns:22px 1fr;gap:2px 6px;padding:5px 0;border-top:1px solid #F1F5F9}'
         + '.shs-lista li:first-child{border-top:0}.shs-ic{font-weight:800;text-align:center}.shs-ok .shs-ic{color:#047857}.shs-lendo .shs-ic{color:#0284C7}.shs-fila .shs-ic,.shs-pulado .shs-ic{color:#94A3B8}'
@@ -855,7 +860,7 @@
 
     /**
      * Componente: selo colorido + (sincronizando) barra com etapa, % e tempo que falta + (opts.lista) "O que o Copiloto já leu"
-     * com as 10 etapas. Botões "Tentar de novo" têm data-sync (a página decide o que fazer no clique).
+     * com as 13 etapas. 3.3.1: "Tentar de novo esta parte" (etapa com erro) tem data-sync-etapa="<id>" — a página relê só ela.
      */
     SHC.htmlSync = function (st, agoraMs, opts) {
         st = st || {};
@@ -884,7 +889,7 @@
                 let ic = '○', det = s.estado === 'sincronizando' ? 'Na fila' : 'Ainda não lido', extra = '';
                 if (est === 'ok') { ic = '✓'; det = (e.resumo || 'Lido') + (e.jaLida && e.fim ? ' · lido às ' + hhmm(e.fim) + ', antes de parar' : ''); }
                 else if (est === 'lendo') { ic = '⟳'; det = (e.mesAgora ? SHC.textoLendoMes({ mes: e.mesAgora, feito: e.feito, de: e.de, cobrancas: e.cobrancas, restanteSeg: restanteEtapa(st, e, agora) }) : contagem(e)) || 'Lendo agora…'; extra = barra(e.de > 0 ? Math.min(100, Math.round((e.feito || 0) / e.de * 100)) : null, true); }
-                else if (est === 'erro') { ic = '⚠'; det = (e.erro || 'Não deu para ler agora.') + (e.resumoAnterior ? ' Última leitura: ' + e.resumoAnterior + '.' : ''); extra = s.estado === 'sincronizando' ? '' : '<button type="button" data-sync>Tentar de novo</button>'; }
+                else if (est === 'erro') { ic = '⚠'; det = (e.erro || 'Não deu para ler agora.') + (e.resumoAnterior ? ' Última leitura: ' + e.resumoAnterior + '.' : ''); extra = s.estado === 'sincronizando' ? '' : '<button type="button" data-sync-etapa="' + x.id + '">Tentar de novo esta parte</button>'; }
                 else if (est === 'pulado') { ic = '—'; det = e.resumo || 'Pulado'; }
                 else if (e.resumoAnterior && s.estado !== 'sincronizando') det = 'Última leitura: ' + e.resumoAnterior;
                 const diag = SHC.textosMeses(e.meses).map(t => '<small>' + escH(t) + '</small>').join('');

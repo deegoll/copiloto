@@ -21,6 +21,8 @@ const NOVAS = {
     empresaDoPedido: 'v3.3 multi-empresa: a empresa do clique que a tela manda com a importação do ERP, conferida (fundo/09)',
     migrarTiposMP: 'v3.3.1 (ao vivo 08/10): CPMTP/CPCJP entram na tabela de códigos; relê os 3 meses com "outro" na porFatura (fundo/03)',
     despacha: '3.3.1 (C2, 09/10): o listener do 14 virou o portão do consentimento do ML (LEEM_ML); o despacho de sempre ficou nesta função (fundo/14)',
+    mapaEtapa: '3.3.1 (Diego 09/10): mapa FN/RESUMO/ERRO_CAMPO das 13 etapas, montado só na 1ª leitura — fora da carga do 08 (fundo/08)',
+    sincronizarEtapa: '3.3.1 (Diego 09/10): "Tentar de novo esta parte" relê 1 etapa com as travas da cheia (fundo/08)',
 };
 let falhas = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) falhas++; };
@@ -182,11 +184,11 @@ function cargaTardia(partes) {
         '07-alertas-promocoes-full.js': ['f61279d58e8ca504972e6f45c39b78a2c00ee536ff6dfda74266c250b5794d58', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login; junção local 07/10: o selo devolve a promessa e a etapa Alertas espera o ícone'],
         // revisão da junção (07/10): a conferência da conta depois de cada etapa e no fim do histórico é sem o guardado de 60 s (era 1983b6d8…)
         // 3.3.1 (C2, 09/10): o portão do consentimento do ML — a entrada da sincronizar, cada etapa, os Anúncios e o histórico só leem com cfg.consentimento_ml (era 251591fc…)
-        '08-sincronizacao.js': ['8258da426638b2f700966bb6a5a9c6c038882ae59bc4a1da6f27aaaf566b663b', MOTIVO_NUVEM + '; conferência sem o guardado depois de cada etapa' + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login' + '; 3.3.1 (C2): portão cfg.consentimento_ml na sincronização e no histórico'],
+        '08-sincronizacao.js': ['4a6d6d80573a557932ddc0625a695c433fbb596df5be01360d764488f85e1c66', MOTIVO_NUVEM + '; conferência sem o guardado depois de cada etapa' + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login' + '; 3.3.1 (C2): portão cfg.consentimento_ml na sincronização e no histórico' + '; 3.3.1 (Diego 09/10): "Tentar de novo esta parte" — mapaEtapa (FN/RESUMO/ERRO_CAMPO) e sincronizarEtapa (era 8258da42…)'],
         '09-custos-erp.js': ['a88d5eb56e84d183ea848b1bda95ce795d9d99312ed13a099390103c15d0033e', MOTIVO_NUVEM + '; 3.3.1 (SI 09/10): chaves dos ERPs cifradas (AES-256-GCM, segredo.js) — erpLer/erpGravar (era 8d321ea6…)'],
         '10-status-saude-posvenda.js': ['a2b7eb03857ae7cf3712bc06411453fdf2a68a6e4f3250bfb37962db95fc04f8', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login' + '; 3.3.1 (SI 09/10): credencial do ERP lida e regravada cifrada (erpLer/erpGravar; era b27d61e3…)'],
         '13-aba-do-ml-e-canal.js': ['4db2b6ee741495c4d151812a106bdcdcb41a412bdc85308dc5325fccbe0fc6f6', MOTIVO_NUVEM + '; 3.3.1 (C2): roboCanal só lê com cfg.consentimento_ml (era 66e8e6f2…)'],
-        '14-mensagens.js': ['e7cb1477dbe2ae1960d291905980dbca6f626a82dc340923706de33b19ca2cc0', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login' + '; 3.3.1 (C2): o listener virou o portão do consentimento (LEEM_ML → despacha; era 118eb958…)' + '; 3.3.1 (SI 09/10): escolha do ERP lê a credencial decifrada (erpLer; era 48e5cda0…)']
+        '14-mensagens.js': ['06fca5a89459f2de9c0948ad7ad0c73d271d624aafc02de9b0fcab1f9e892d62', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login' + '; 3.3.1 (C2): o listener virou o portão do consentimento (LEEM_ML → despacha; era 118eb958…)' + '; 3.3.1 (SI 09/10): escolha do ERP lê a credencial decifrada (erpLer; era 48e5cda0…)' + '; 3.3.1 (Diego 09/10): rota sincronizar_etapa (era e7cb1477…)']
     };
     const sha = b => require('crypto').createHash('sha256').update(b).digest('hex');
     const mudou = guardadas.filter((f, i) => { const a = path.join(FUNDO, f); if (f === LIVRE) return false; if (!fs.existsSync(a)) return true;

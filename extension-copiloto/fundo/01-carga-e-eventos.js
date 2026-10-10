@@ -49,6 +49,8 @@
 // (lerHistorico + alarme 'shc-historico', shc:status.historico = "7 de 12 meses"), sem travar a sincronização.
 // 02/10: a licença (licenca.js, F1 "Entrar com o SellerHub") está DESLIGADA e fora do pacote (empacotar.ps1, $fora). Sem ela, as
 // mensagens licenca_* respondem { ok: false, erro: 'desligado' } e o alarme shc-licenca é tirado. Religar = voltar o arquivo nesta lista.
+// 3.3.1: "Tentar de novo esta parte" — {acao:'sincronizar_etapa', etapa} relê SÓ uma etapa (sincronizarEtapa, 08), com as mesmas
+// travas da cheia; FN_ETAPA/RESUMO_ETAPA/ERRO_CAMPO_ETAPA (08) são a fonte única das duas. A linha da leitura diz "Etapa N de 13".
 importScripts('calc.js', 'store.js', 'segredo.js', 'ml-extrator.js', 'tiny.js', 'omie.js', 'bling.js', 'erp-cruzar.js', 'fechamento.js', 'agenda-canal.js');
 // v3.2: TikTok Shop — núcleo (cópia de copiloto-nucleo/src) + tiktok.js. Só LÊ a resposta que a tela aberta pela seller recebeu:
 // nenhum fetch, nenhum alarme para o TikTok. Mensagens 'tiktok_captura', 'tiktok_ligar' e 'tiktok_etiqueta' e o registro dos scripts: SHC.tt.instalarFundo.
