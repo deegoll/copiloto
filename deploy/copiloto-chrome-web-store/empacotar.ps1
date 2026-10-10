@@ -8,16 +8,16 @@ if (Test-Path $testes) {
     node $testes > $null
     if ($LASTEXITCODE -ne 0) { throw "Há teste falhando: rode 'node tests\copiloto\rodar_todos.js' e corrija antes de empacotar." }
 }
-$dentro = @('manifest.json', 'background.js', 'calc.js', 'store.js', 'xls.js', 'tiny.js', 'omie.js', 'bling.js', 'erp-cruzar.js', 'ml-extrator.js',
+$dentro = @('manifest.json', 'background.js', 'calc.js', 'store.js', 'segredo.js', 'xls.js', 'tiny.js', 'omie.js', 'bling.js', 'erp-cruzar.js', 'ml-extrator.js',
     'copiloto-ml.js', 'ml-tela.js', 'ml-tela.css', 'ml-canal.js', 'agenda-canal.html', 'agenda-canal.js',
     'painel.html', 'painel.js', 'painel-lateral.html', 'painel-lateral.js', 'tiktok-aba.js', 'ads.html', 'ads.js',
     'fechamento.html', 'fechamento.js', 'apresentacao.html', 'apresentacao.js', 'tour.js', 'icons',
-    'tiktok.js', 'tiktok-pagina.js', 'tiktok-tela.js', 'nucleo', 'fundo')   # v3.2 TikTok: nucleo/ = cópia de copiloto-nucleo/src (teste_tiktok_nucleo.js confere)
+    'tiktok.js', 'tiktok-pagina.js', 'tiktok-tela.js', 'tiktok-etiqueta.js', 'nucleo', 'fundo')   # v3.2 TikTok: nucleo/ = cópia de copiloto-nucleo/src (teste_tiktok_nucleo.js confere)
 # 02/10: fundo/ = o background.js dividido por assunto (o background.js ficou só o carregador; teste_fundo_dividido.js confere).
 # 02/10: licenca.js e licenca-tela.js ("Entrar com o SellerHub") desligados e fora do pacote até o servidor entrar no ar.
 # Religar: voltar os 2 para $dentro e devolver as referências (importScripts do fundo/01-carga-e-eventos.js e <script> do painel-lateral.html;
 # o teste_pacote_licenca.js trava enquanto não for ajustado junto).
-$fora = @('copiloto.js', 'popup.html', 'popup.js', 'MAPEAMENTO-ML.md', 'LOGISTICA-ML.md', '_teste', 'licenca.js', 'licenca-tela.js')
+$fora = @('copiloto.js', 'popup.html', 'popup.js', 'MAPEAMENTO-ML.md', 'LOGISTICA-ML.md', '_teste', 'licenca.js', 'licenca-tela.js', 'ESTADO-CANAIS-2026-10-09.md')
 
 $faltam = $dentro | Where-Object { -not (Test-Path (Join-Path $ext $_)) }
 if ($faltam) { throw "Faltam na extensão: $($faltam -join ', ')" }

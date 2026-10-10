@@ -254,6 +254,36 @@
     P.contaEstoque = (ls, est) => ls.reduce((o, l) => { const e = est(l); o.todos++; o[e.semAnuncio ? 'sem' : e.faixa]++; return o; }, { todos: 0, tem: 0, zero: 0, nl: 0, sem: 0 });
     // Tem custo = o que a etiqueta usa: o do SKU, a soma do kit ou o antigo da família/anúncio (mesma conta do painel lateral).
     P.temCusto = l => !!l.custo || !!l.kitCalc || (l.antigos || []).some(a => a.custo > 0);
+    // ── 3.3.0 (E14): "Canais onde vende" e o filtro de canal na planilha (só com 2 canais ligados; com 1 canal nada disto roda). ──
+    // tt = { anuncios: tt:<loja>:anuncios | null, skumap: tt:<loja>:skumap, custos: {<sku_id>: c|tiktok|…} } → { lido, set (SKUs do TikTok, normalizados) }.
+    P.skusTt = function (tt) {
+        const an = tt && tt.anuncios, ps = (an && an.produtos) || {}, set = new Set(), n = s => SHC.normalizaSku(s);
+        Object.keys(ps).forEach(pid => { const skus = (ps[pid] || {}).skus || {}; Object.keys(skus).forEach(id => { if (skus[id] && skus[id].sku) set.add(n(skus[id].sku)); }); });
+        Object.keys((tt && tt.skumap) || {}).forEach(id => { if (tt.skumap[id]) set.add(n(tt.skumap[id])); });
+        Object.keys((tt && tt.custos) || {}).forEach(id => { const c = tt.custos[id]; if (c && c.sku) set.add(n(c.sku)); });
+        return { lido: !!an, set };
+    };
+    // Linha da planilha → { ml: 'sim'|'nao', tiktok: 'sim'|'nc'|null } | null (sem TikTok). ML pelo retrato (anúncio vivo); TikTok pelo SKU em P.skusTt.
+    // No TikTok nunca 'nao': a lista de Gerenciar produtos vem em páginas de 50 (ou de uma busca) e a captura não guarda o total, então SKU não visto
+    // é 'nc' (não conferido), nunca "não anunciado". Anúncio do ML sem SKU não dá para procurar no TikTok (null); custo próprio do TikTok (c|tiktok|) é dele.
+    P.canaisOndeVende = function (l, tt, porIdRet) {
+        if (!tt) return null;
+        const ml = (l.ids || []).some(id => !P.finalizado((porIdRet || {})[id])) ? 'sim' : 'nao';
+        if (l.tipo !== 'sku') return { ml, tiktok: l.canal === 'tiktok' ? 'sim' : null };
+        return { ml, tiktok: tt.set.has(SHC.normalizaSku(l.sku)) ? 'sim' : 'nc' };
+    };
+    // Filtro de canal: 'todos' deixa tudo; um canal mostra quem está nele ('sim'); fora = true mostra quem não está ('nao') ou não foi conferido ('nc').
+    // null (anúncio do ML sem SKU, no TikTok) não entra em nenhum dos dois: não dá para conferir.
+    P.passaCanal = (canal, fora, canaisDe) => l => { if (canal === 'todos') return true; const c = (canaisDe(l) || {})[canal]; return fora ? c === 'nao' || c === 'nc' : c === 'sim'; };
+    // Etiquetas da coluna "Canais onde vende" ([classe, texto]): "ML", "TikTok", "TikTok: não conferido"; [] = em nenhum (a célula mostra "—").
+    P.etiquetasCanais = c => [c.ml === 'sim' ? ['', 'ML'] : null, c.tiktok === 'sim' ? ['tt', 'TikTok'] : c.tiktok === 'nc' ? ['nc', 'TikTok: não conferido'] : null].filter(Boolean);
+    // SKUs que só o TikTok tem (lidos em Gerenciar produtos, Pedidos ou ligados à mão) e que a planilha do ML não tem → linhas sem custo, para o filtro
+    // de canal (e "Todos") mostrar o produto do TikTok que precisa de custo. Ficam fora do contador, dos chips e da cópia em planilha (são do TikTok).
+    P.linhasSoTt = function (tt, skus) {
+        if (!tt) return [];
+        const tem = new Set((skus || []).map(l => SHC.normalizaSku(l.sku)));
+        return Array.from(tt.set).filter(s => s && !tem.has(s)).sort().map(s => ({ tipo: 'sku', sku: s, titulo: '', ids: [], precos: [], custo: null, antigos: [], soTt: true }));
+    };
     // "Mesmo custo para todas as variações": só as que NÃO têm custo nenhum (nem do kit, nem antigo do anúncio); com trocarTodos,
     // também as que já têm → [SKU a gravar]. Mesmo critério do "N de M variações com custo" do pai.
     P.aplicaMesmoCusto = (filhos, valor, trocarTodos) => !(valor > 0) ? [] : filhos.filter(l => trocarTodos || !P.temCusto(l)).map(l => l.sku);
@@ -287,6 +317,25 @@
     let kits = { kits: [], custos: {} };   // SHC.lerKits: kits gravados + custos c|sku (para somar os itens)
     let vendasChave = {}, verTodos = false, peloGuia = false;   // vendas por SKU/anúncio na janela do guia; "Ver todos"; aberta pelo guia (#guia-custos)
     let retrato = { itens: [], familias: [], ts: 0, full: null }, porIdRet = {};   // v3.2: retrato ml:anuncios (itens + famílias) e o Full, para estoque e pai → variações
+    let canaisTt = null, filtroCanal = 'todos', canalFora = false;   // 3.3.0 (E14): P.skusTt do TikTok (null = 1 canal: a tela de hoje); filtro de canal e "ver os que não estão"
+    const canaisDe = l => P.canaisOndeVende(l, canaisTt, porIdRet), COLS = () => (canaisTt ? 7 : 6);
+    const NOME_CANAL = { ml: 'Mercado Livre', tiktok: 'TikTok Shop' };
+    // O TikTok só entra com 2 canais ligados (cfg.modulos.tiktok + a permissão do site, como no painel lateral): lê tt:conta → tt:<loja>:anuncios
+    // (Gerenciar produtos) e :skumap, mais os c|tiktok| (ligar à mão). Nenhuma chamada ao TikTok. Com 1 canal → null.
+    async function lerCanaisTt(custos) {
+        if (!SHC.canaisLigados || !SHC.CANAIS || !SHC.chaveConta) return null;
+        const c = SHC.CANAIS.find(x => x.id === 'tiktok');
+        let perm = false;
+        try { perm = !!(c && c.perm && chrome.permissions && chrome.permissions.contains && await chrome.permissions.contains(c.perm)); } catch (e) { perm = false; }
+        if (SHC.canaisLigados(cfg, { tiktok: perm }).length < 2) return null;
+        const conta = await SHC.lerChave(SHC.PREFIXO_CANAL.tiktok + ':conta');   // tt:conta (a última loja vista); o prefixo vem do registro, nunca escrito aqui (teste_chave_canal)
+        const an = conta ? await SHC.lerChave(SHC.chaveConta('anuncios', conta, 'tiktok')) : null, sm = conta ? await SHC.lerChave(SHC.chaveConta('skumap', conta, 'tiktok')) : null;
+        const ct = {}; Object.keys(custos || {}).forEach(k => { if (custos[k].canal === 'tiktok') ct[custos[k].id] = custos[k]; });
+        return P.skusTt({ anuncios: an, skumap: sm || {}, custos: ct });
+    }
+    const NC_TITULO = 'Ainda não visto em Produtos › Gerenciar produtos do TikTok Shop. O Copiloto só vê as páginas que você abre: passe por elas e, nos produtos com variações, clique em Expandir.';
+    const cnlHtml = l => P.etiquetasCanais(canaisDe(l) || {}).map(([k, t]) => `<span class="tag${k ? ' ' + k : ''}"${k === 'nc' ? ' title="' + esc(NC_TITULO) + '"' : ''}>${esc(t)}</span>`).join(' ') || '<span class="cinza">—</span>';
+    let soTt = [];   // 3.3.0 (E14): P.linhasSoTt (SKUs só do TikTok, sem custo); [] com 1 canal
     // Gravações do progresso uma de cada vez (senão uma apaga a outra).
     let filaGuia = Promise.resolve();
     const gravaGuia = patch => (filaGuia = filaGuia.then(() => SHC.salvarGuia(patch)).then(g => (guia = g), () => guia));
@@ -302,22 +351,31 @@
 
     // F16 (auditoria 30/09): a tabela mostra os anúncios de UMA conta — diz qual, e com 2+ contas deixa escolher (o custo do SKU vale para todas).
     let contaVer = '';   // '' = a conta aberta agora no ML
+    // v3.3 multi-empresa (revisão 07/10/2026): só as contas da MESMA empresa da conta aberta. Os custos por SKU da tabela são os da empresa
+    // aberta: a conta de outra empresa mostraria os anúncios dela com os custos desta (e gravaria nesta o que fosse digitado).
+    const contasTab = async () => (SHC.contasDaEmpresa ? SHC.contasDaEmpresa() : SHC.contas ? SHC.contas() : []);
     async function desenhaContaTab() {
-        const box = $('#contaTab'), sel = $('#contaEsc');
+        const box = $('#contaTab'), sel = $('#contaEsc'), nota = $('#contaTabNota');
         if (!box || !sel) return;
-        let cs = [];
-        try { cs = SHC.contas ? await SHC.contas() : []; } catch (e) { cs = []; }
+        let cs = [], todas = 0;
+        try { cs = await contasTab(); todas = SHC.contas ? (await SHC.contas()).length : cs.length; } catch (e) { cs = []; }
         box.hidden = !cs.length;
         if (!cs.length) return;
         const atual = contaVer || (cs.find(c => c.atual) || cs[0]).sellerId;
         sel.innerHTML = cs.map(c => `<option value="${esc(c.sellerId)}"${c.sellerId === atual ? ' selected' : ''}>${esc(c.nome)}${c.atual ? ' (aberta agora)' : ''}</option>`).join('');
         sel.disabled = cs.length < 2;
+        if (nota) nota.textContent = todas > cs.length
+            ? 'O custo do SKU vale para as contas desta empresa. As contas de outra empresa têm os custos delas: abra o Mercado Livre nelas para ver e editar.'
+            : 'O custo do SKU vale para todas as contas.';
     }
     async function lerDados() {
+        // Conta escolhida que deixou de ser desta empresa (marcada em Ajustes, ou o ML abriu outra conta): volta para a aberta.
+        if (contaVer && !(await contasTab().catch(() => [])).some(c => c.sellerId === contaVer)) contaVer = '';
         const cv = contaVer || undefined;
         const [tudo, an, promos, g, full] = await Promise.all([SHC.lerTudo(), SHC.lerAnuncios(cv), SHC.lerPromos(cv), SHC.lerGuia(),
             SHC.lerFull ? SHC.lerFull(cv).catch(() => null) : null]);
         cfg = tudo.cfg; guia = g;
+        try { canaisTt = await lerCanaisTt(tudo.custos); } catch (e) { canaisTt = null; }   // 3.3.0 (E14): só com 2 canais
         try { erpx = await SHC.lerChave('erpx:' + (cv || await SHC.contaAtual())); } catch (e) { erpx = null; }   // v3.2 cruzamento ERP × ML
         const itens = (an && an.itens) || [];
         temRetrato = itens.length > 0;
@@ -343,6 +401,8 @@
         porChave = new Map();
         modelo.skus.forEach(l => porChave.set('sku|' + l.sku, l));
         modelo.anuncios.forEach(l => porChave.set(l.canal + '|' + l.id, l));
+        soTt = P.linhasSoTt(canaisTt, modelo.skus);   // 3.3.0 (E14): com 1 canal, []
+        soTt.forEach(l => porChave.set('sku|' + l.sku, l));
     }
 
     async function carregar() {
@@ -627,11 +687,14 @@
     async function desenhaContas() {
         let cs = [];
         try { cs = SHC.contas ? await SHC.contas() : []; } catch (e) { cs = []; }
-        const el = $('#listaContas'), ap = cfg.apelidos || {};
+        const el = $('#listaContas'), ap = cfg.apelidos || {}, sep = cfg.empresaSeparada || {};
         if (!el) return;
         el.innerHTML = cs.length ? cs.map(c => {
             const nomeAp = ap[c.sellerId];
-            return `<div class="campo" style="background:#F8FAFC;border:1px solid var(--linha);border-left:3px solid ${c.atual ? 'var(--verde)' : '#D0D5DD'};border-radius:10px;padding:9px 10px 10px"><div class="conta-linha"><b>${esc(c.nome)}</b><span class="contatag">ID …${esc(c.sellerId.slice(-4))}</span>${c.atual ? '<span class="contatag agora">aberta agora</span>' : ''}</div><label for="ap-${esc(c.sellerId)}" style="font-weight:500;color:var(--suave)">Apelido próprio (opcional; no lugar do nome do ML)</label><input class="inp" id="ap-${esc(c.sellerId)}" data-apelido="${esc(c.sellerId)}" maxlength="40" placeholder="Ex.: Loja 1" value="${esc(nomeAp || '')}"></div>`;
+            return `<div class="campo" style="background:#F8FAFC;border:1px solid var(--linha);border-left:3px solid ${c.atual ? 'var(--verde)' : '#D0D5DD'};border-radius:10px;padding:9px 10px 10px"><div class="conta-linha"><b>${esc(c.nome)}</b><span class="contatag">ID …${esc(c.sellerId.slice(-4))}</span>${c.atual ? '<span class="contatag agora">aberta agora</span>' : ''}</div><label for="ap-${esc(c.sellerId)}" style="font-weight:500;color:var(--suave)">Apelido próprio (opcional; no lugar do nome do ML)</label><input class="inp" id="ap-${esc(c.sellerId)}" data-apelido="${esc(c.sellerId)}" maxlength="40" placeholder="Ex.: Loja 1" value="${esc(nomeAp || '')}">`
+                // v3.3 multi-empresa: conta de outra empresa tem custos por SKU, imposto, margem, despesas e ERP só dela (store.js, SHC.empresaSeparada).
+                + (cs.length > 1 ? `<label style="display:flex;gap:6px;align-items:flex-start;margin-top:8px;font-weight:500"><input type="checkbox" data-empresa="${esc(c.sellerId)}"${sep[c.sellerId] === true ? ' checked' : ''}>`
+                    + `<span>Outra empresa: custos por SKU, imposto, margem, despesas fixas e ERP só desta conta</span></label>` : '') + '</div>';
         }).join('')
             : '<p class="sub">Entre no Mercado Livre e sincronize pelo Copiloto: cada conta em que você entrar neste Chrome aparece aqui.</p>';
         $('#salvarApelidos').hidden = !cs.length;
@@ -639,7 +702,9 @@
     $('#salvarApelidos').addEventListener('click', async () => {
         const ok = $('#okApelidos'), txt = {};
         document.querySelectorAll('[data-apelido]').forEach(i => { txt[i.dataset.apelido] = i.value; });
-        try { cfg = await SHC.salvarCfg({ apelidos: SHC.apelidosLimpos(txt) }); } catch (e) { ok.className = 'msg erro'; ok.textContent = FALHA; return; }
+        const sep = {}, temCaixa = !!document.querySelector('[data-empresa]');   // v3.3: contas de outra empresa (só com 2+ contas)
+        document.querySelectorAll('[data-empresa]').forEach(i => { if (i.checked && /^\d{6,15}$/.test(i.dataset.empresa)) sep[i.dataset.empresa] = true; });
+        try { cfg = await SHC.salvarCfg(Object.assign({ apelidos: SHC.apelidosLimpos(txt) }, temCaixa ? { empresaSeparada: sep } : {}), { semMarcar: true }); } catch (e) { ok.className = 'msg erro'; ok.textContent = FALHA; return; }   // apelido e empresa não são "imposto informado"
         ok.className = 'ok'; ok.textContent = '✓ Salvo';
         setTimeout(() => { ok.textContent = ''; }, 4000);
     });
@@ -658,7 +723,8 @@
         const busca = ($('#busca').value || '').trim().toLowerCase();
         const soSem = $('#soSem').checked;
         const falta = $('#soPrinc').checked ? new Set(principais.faltam.map(f => f.sku ? 'sku:' + SHC.normalizaSku(f.sku) : 'mlb:' + f.itemId)) : null;
-        return (l, g) => (!soSem || !temCusto(l) || soAntigo(l)) && (!falta || falta.has(chaveGuia(l))) && (filtroEst === 'todos' || est(l).faixa === filtroEst) &&
+        const canal = P.passaCanal(canaisTt ? filtroCanal : 'todos', canalFora, canaisDe);   // 3.3.0 (E14)
+        return (l, g) => (!soSem || !temCusto(l) || soAntigo(l)) && (!falta || falta.has(chaveGuia(l))) && (filtroEst === 'todos' || est(l).faixa === filtroEst) && canal(l) &&
             (!busca || [l.titulo, l.sku, l.id, l.nomeVar, g && g.titulo].concat(l.ids).join(' ').toLowerCase().indexOf(busca) >= 0);
     }
     // Estoque por linha (cache por desenho; P.estoqueLinha) e o que fica aberto (pai e opções de compra), lembrado neste Chrome.
@@ -697,14 +763,15 @@
         if (l.custo && P.custoSuspeito(SHC.num(c.custo), l.precos)) dica = `<span class="dica alerta">Custo maior que o preço de venda (${esc(SHC.moeda(Math.max.apply(null, l.precos)))}). Confira se não sobrou um zero.</span>` + dica;
         const origem = l.custo ? ((c.origem === 'erp' && SHC.tinyDigitado(c) ? 'digitado' : ORIGEM(c)) ||(l.tipo === 'sku' ? 'digitado' : 'por anúncio')) + (c.atualizado ? ' · ' + dataBR(c.atualizado) : '') : l.kitCalc ? 'kit · soma ' + SHC.moeda(l.kitCalc.custo) : '—';   // sem custo ou só o antigo: o campo e a dica já dizem (não repete na Origem)
         const e = est(l), cls = [o.cls, e.faixa === 'zero' ? 'zerada' : '', o.achou ? 'achou' : ''].filter(Boolean).join(' ');
-        const nome = o.nome ? `<b title="${esc(l.titulo || '')}"><span class="var">${esc(o.nome)}</span></b>` : `<b title="${esc(l.titulo || '')}">${esc(l.titulo || '(sem título)')}</b>`;
+        const nome = o.nome ? `<b title="${esc(l.titulo || '')}"><span class="var">${esc(o.nome)}</span></b>` : `<b title="${esc(l.titulo || '')}">${esc(l.titulo || (l.soTt ? 'Produto do TikTok Shop' : '(sem título)'))}</b>`;   // soTt: 3.3.0 (E14)
         const semCusto = !temCusto(l), rot = esc(o.nome || l.sku || l.titulo || l.id);
         let html = `<tr data-k="${esc(k)}"${cls ? ' class="' + cls + '"' : ''}${o.de ? ' data-de="' + esc(o.de) + '"' : ''}>
   <td class="tit">${nome}<span>${l.tipo === 'anuncio' ? '<span class="tag' + (l.canal === 'sp' ? ' sp' : '') + '"' + (l.skuNaoLido ? ' title="' + esc(P.EXPLICA_SKU_NAO_LIDO) + '"' : '') + '>' + esc(P.etiquetaAnuncio(l)) + '</span> ' : ''}${sub}</span></td>
   <td class="estq">${seloHtml(e, l)}</td>
   <td data-r="Custo (R$)"><input class="inp${semCusto ? ' falta' : ''}" data-f="custo" inputmode="decimal" value="${esc(nfr(c.custo))}" placeholder="${semCusto ? 'falta o custo' : vs.length === 1 ? esc(nfr(vs[0])) : l.kitCalc ? esc(nfr(l.kitCalc.custo)) : ''}" aria-label="Custo de ${rot}">${dica}</td>
   <td data-r="Embalagem/outros"><input class="inp" data-f="outros" inputmode="decimal" value="${esc(nfr(c.outros))}" placeholder="0,00" aria-label="Embalagem e outros de ${rot}"></td>
-  <td data-r="Origem" style="color:#64748B;font-size:12px;white-space:nowrap">${esc(origem)}</td>
+  <td data-r="Origem" style="color:#64748B;font-size:12px;white-space:nowrap">${esc(origem)}</td>${canaisTt ? `
+  <td class="cnl" data-r="Canais onde vende">${cnlHtml(l)}</td>` : ''}
   <td>${l.custo ? '<button class="x" data-rm="1" title="Apagar este custo">×</button>' : ''}</td></tr>`;
         if (opAberta) html += vivos.map((id, i) => {
             const it = porIdRet[id] || {}, a = P.idsQuePrevalecem(l).indexOf(id) >= 0 && l.antigos.find(x => String(x.id) === id);
@@ -714,7 +781,7 @@
             return `<tr class="${o.de ? 'neto' : 'fil opcl'}${i === vivos.length - 1 ? ' ult' : ''}" data-de="${esc(chOp)}">
   <td class="tit"><b>${esc(id + (tipo ? ' · ' + tipo : ''))}</b>${tipo ? '' : '<span><span class="tag opc">opção de compra</span></span>'}</td>
   <td class="estq"></td>
-  <td colspan="3" class="cpai">${usa}</td><td class="vaz"></td></tr>`;
+  <td colspan="3" class="cpai">${usa}</td>${canaisTt ? '<td class="cnl"></td>' : ''}<td class="vaz"></td></tr>`;
         }).join('');
         return html;
     }
@@ -741,7 +808,7 @@
   <td class="tit"><div class="cab"><button class="tog" type="button" aria-expanded="${aberto}" aria-label="${aberto ? 'Recolher' : 'Abrir'} variações" data-tog="${esc(g.chave)}">${aberto ? '▾' : '▸'}</button><div>
     <b title="${esc(g.titulo)}">${esc(g.titulo || '(sem título)')}</b><span><span class="tag fam">${todos} variações</span> ${esc(SHC.qtd(anuncios.size, 'anúncio', 'anúncios'))}${g.filhos.length < todos ? ' · mostrando ' + g.filhos.length + ' de ' + todos : ''}</span></div></div></td>
   <td class="estq">${selo}${dicaEst}</td>
-  <td class="cpai" colspan="3" data-r="Custo"><span class="resumo"${com < fs.length || ant ? ' style="color:var(--ambar);font-weight:600"' : ''}>${com} de ${fs.length} variações com custo${ant ? ` · <button class="lnk" type="button" data-ver-antigo="${esc(g.chave)}">${ant === 1 ? '1 custo antigo' : ant + ' custos antigos'}</button>` : com === fs.length ? ' ✓' : ''}</span>${mesmo}</td>
+  <td class="cpai" colspan="3" data-r="Custo"><span class="resumo"${com < fs.length || ant ? ' style="color:var(--ambar);font-weight:600"' : ''}>${com} de ${fs.length} variações com custo${ant ? ` · <button class="lnk" type="button" data-ver-antigo="${esc(g.chave)}">${ant === 1 ? '1 custo antigo' : ant + ' custos antigos'}</button>` : com === fs.length ? ' ✓' : ''}</span>${mesmo}</td>${canaisTt ? '<td class="cnl"></td>' : ''}
   <td class="vaz"></td></tr>`;
     }
     // Um grupo (pai + filhos abertos, ou a linha simples) em HTML. busca = o texto procurado (abre o pai e pinta a variação achada).
@@ -851,13 +918,32 @@
         $('#estInfo').textContent = temRetrato ? (temPausa ? 'Zerado = ativo e sem estoque · Pausado sem estoque = parado porque o estoque acabou. ' : '') + P.textoLeituraEstoque(retrato.ts) : '';
         const busca = ($('#busca').value || '').trim().toLowerCase(), passa = filtroLinha();
         // Pai → variações (P.agrupa) e o filtro olhando cada variação; anúncio sem SKU fica no grupo de sempre.
-        let gs = P.filtraGrupos(P.agrupa(modelo.skus.filter(vivas), retrato.itens, retrato.familias, retrato.full), passa);
+        let gs = P.filtraGrupos(P.agrupa(modelo.skus.filter(vivas).concat(soTt), retrato.itens, retrato.familias, retrato.full), passa);   // soTt: 3.3.0 (E14), [] com 1 canal
         let ans = P.filtraGrupos(modelo.anuncios.filter(vivas).map(l => ({ tipo: 'solo', chave: 'a:' + l.canal + '|' + l.id, filhos: [l] })), passa);
         const corpo = $('#corpo'), MAX = 400, vendasDe = l => vendasChave[chaveGuia(l)];
         // Sem busca nem filtro: só os 10 que mais vendem (o grupo vale 1, com as vendas somadas), com "Ver mais (N)". A busca e os
         // filtros continuam procurando em todos. Depois: com estoque → não lido → zerados.
         // Qualquer filtro (inclusive o chip de estoque) abre os pais: a variação que bateu (ex.: a zerada) aparece sem precisar abrir.
-        const abreTudo = !!busca || $('#soSem').checked || $('#soPrinc').checked || filtroEst !== 'todos';
+        // 3.3.0 (E14): chips do canal e a coluna "Canais onde vende" só com 2 canais; o rodapé do canal diz quantos não estão nele (e deixa ver quais).
+        const fc = $('#fCanal'), thC = $('#thCanais'), ci = $('#canalInfo');
+        if (fc) fc.hidden = !canaisTt;
+        if (thC) thC.hidden = !canaisTt;
+        if (!canaisTt) { filtroCanal = 'todos'; canalFora = false; if (ci) ci.textContent = ''; }
+        else {
+            if (fc) fc.innerHTML = [['todos', 'Todos'], ['ml', NOME_CANAL.ml], ['tiktok', NOME_CANAL.tiktok]].map(([k, t]) => `<button type="button" data-canal="${k}" class="${filtroCanal === k ? 'on' : ''}" aria-pressed="${filtroCanal === k}">${t}</button>`).join('');
+            if (ci) {
+                // Quem não está ('nao') e quem não foi conferido ('nc') contam à parte; null (anúncio do ML sem SKU, no TikTok) não conta em nenhum.
+                const cs = filtroCanal === 'todos' ? [] : todas.filter(vivas).concat(soTt).map(l => (canaisDe(l) || {})[filtroCanal]), nome = esc(NOME_CANAL[filtroCanal]);
+                const nao = cs.filter(x => x === 'nao').length, nc = cs.filter(x => x === 'nc').length, semSku = cs.filter(x => x === null).length;
+                const partes = [nao ? SHC.qtd(nao, 'produto', 'produtos') + (canalFora ? ' que' : '') + ' não ' + (nao === 1 ? 'está' : 'estão') + ' no ' + nome : '',
+                    nc ? SHC.qtd(nc, 'produto', 'produtos') + ' ainda não ' + (nc === 1 ? 'conferido' : 'conferidos') + ' no ' + nome + ' (o Copiloto só vê o que você abre em Produtos › Gerenciar produtos)' : ''].filter(Boolean);
+                ci.innerHTML = filtroCanal === 'todos' ? (canaisTt.lido ? '' : 'Abra Produtos › Gerenciar produtos no TikTok Shop para o Copiloto saber o que está anunciado lá.')
+                    : (!partes.length ? 'Todos os produtos' + (semSku ? ' com SKU' : '') + ' estão no ' + nome
+                        : (canalFora ? 'Mostrando ' : '') + partes.join(' · ') + ' · <button class="lnk" type="button" data-canal-fora="1">' + (canalFora ? 'voltar aos que estão' : 'ver quais') + '</button>')
+                    + (semSku ? ' · ' + esc(SHC.qtd(semSku, 'anúncio sem SKU', 'anúncios sem SKU')) + ': não dá para conferir no ' + nome : '') + (partes.length ? '' : '.');
+            }
+        }
+        const abreTudo = !!busca || $('#soSem').checked || $('#soPrinc').checked || filtroEst !== 'todos' || (canaisTt && filtroCanal !== 'todos');
         const filtrando = abreTudo;
         let escondidas = 0;
         if (!filtrando && !verTodos) {
@@ -867,19 +953,19 @@
         }
         gs = P.ordenaGrupos(gs, est, vendasDe); ans = P.ordenaGrupos(ans, est, vendasDe);
         if (!gs.length && !ans.length) {
-            corpo.innerHTML = `<tr><td colspan="6" class="vazio">${todas.length ? 'Nada encontrado com esse filtro.'
+            corpo.innerHTML = `<tr><td colspan="${COLS()}" class="vazio">${todas.length ? 'Nada encontrado com esse filtro.'
                 : 'Nenhum produto ainda. Abra a lista de Anúncios do Mercado Livre neste Chrome: o Copiloto lê seus SKUs sozinho.'}</td></tr>`;
             $('#rodape').textContent = '';
             return;
         }
         let html = '', faixaZero = false;
         gs.slice(0, MAX).forEach(g => {
-            if (!faixaZero && temRetrato && P.faixaGrupo(g, est) === 'zero') { faixaZero = true; html += '<tr class="grp"><td colspan="6">Zerados · no fim da lista</td></tr>'; }
+            if (!faixaZero && temRetrato && P.faixaGrupo(g, est) === 'zero') { faixaZero = true; html += '<tr class="grp"><td colspan="' + COLS() + '">Zerados · no fim da lista</td></tr>'; }
             html += grupoHtml(g, abreTudo, busca);
         });
-        if (ans.length) html += '<tr class="grp"><td colspan="6">' + esc(P.tituloGrupoAnuncios(P.contaAnuncios(ans.map(g => g.filhos[0])))) + ' · o custo fica gravado no próprio anúncio</td></tr>' + ans.slice(0, MAX).map(g => grupoHtml(g, abreTudo, busca)).join('');
-        if (escondidas) html += `<tr><td colspan="6" style="text-align:center"><button class="bt sec" type="button" data-ver-todos="1" aria-expanded="false">Ver mais (${escondidas})</button></td></tr>`;
-        else if (verTodos && !filtrando && gs.length + ans.length > 10) html += `<tr><td colspan="6" style="text-align:center"><button class="bt sec" type="button" data-ver-todos="1" aria-expanded="true">Ver menos</button></td></tr>`;
+        if (ans.length) html += '<tr class="grp"><td colspan="' + COLS() + '">' + esc(P.tituloGrupoAnuncios(P.contaAnuncios(ans.map(g => g.filhos[0])))) + ' · o custo fica gravado no próprio anúncio</td></tr>' + ans.slice(0, MAX).map(g => grupoHtml(g, abreTudo, busca)).join('');
+        if (escondidas) html += `<tr><td colspan="${COLS()}" style="text-align:center"><button class="bt sec" type="button" data-ver-todos="1" aria-expanded="false">Ver mais (${escondidas})</button></td></tr>`;
+        else if (verTodos && !filtrando && gs.length + ans.length > 10) html += `<tr><td colspan="${COLS()}" style="text-align:center"><button class="bt sec" type="button" data-ver-todos="1" aria-expanded="true">Ver menos</button></td></tr>`;
         corpo.innerHTML = html;
         const cortou = gs.length > MAX || ans.length > MAX;
         $('#rodape').textContent = (escondidas ? 'Mostrando os ' + (gs.length + ans.length) + ' que mais vendem · ' : '') + SHC.qtd(modelo.skus.filter(vivas).length, 'SKU', 'SKUs') + P.rodapeAnuncios(P.contaAnuncios(modelo.anuncios.filter(vivas)))
@@ -963,6 +1049,14 @@
         filtroEst = b.getAttribute('data-est');
         desenhaTabela();
     });
+    // 3.3.0 (E14): filtro de canal (só com 2 canais) e "ver quais" não estão no canal escolhido.
+    if ($('#fCanal')) $('#fCanal').addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('[data-canal]');
+        if (!b) return;
+        filtroCanal = b.getAttribute('data-canal'); canalFora = false;
+        desenhaTabela();
+    });
+    if ($('#canalInfo')) $('#canalInfo').addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-canal-fora]')) { canalFora = !canalFora; desenhaTabela(); } });
     function msgTabela(txt, bom) { const m = $('#msgTab'); m.className = bom ? 'ok' : 'msg erro'; m.textContent = txt; }
 
     function falhaTabela(el) { if (el) avisa(el, '#B91C1C', FALHA); msgTabela(FALHA); }
@@ -1141,6 +1235,13 @@
 
     // ── Tiny (API v2 por token, tiny.js): só lê os custos; grava origem 'erp' sem trocar o que o seller digitou ──
     const TINY = { origins: [SHC.TINY_ORIGEM] };
+    // v3.3 multi-empresa (revisão 07/10/2026): "Esquecer" apaga só a credencial da empresa da conta aberta (SHC.areaEmpresa), e a permissão
+    // do Chrome para o site do ERP (uma só para todas) só sai quando nenhuma outra empresa usa esse ERP.
+    async function esquecerErp(chave, perm) {
+        await SHC.areaEmpresa().remove(chave);
+        if (await SHC.erpEmOutraEmpresa(chave).catch(() => true)) return;
+        try { await chrome.permissions.remove(perm); } catch (e) { /* ok */ }
+    }
     let tinyRodando = false;
     // A mensagem fica na seção "Custos do ERP" (v3.2.0: saiu a faixa rápida da tabela, que repetia conectar/importar).
     const tinyMsg = (t, erro) => { const m = $('#tinyMsg'); m.className = 'msg' + (erro ? ' erro' : (/^✓/.test(t || '') ? ' ok' : '')); m.textContent = t || ''; };
@@ -1164,7 +1265,7 @@
     $('#impVerFaltam').addEventListener('click', () => { $('#soSem').checked = true; $('#soPrinc').checked = false; $('#busca').value = ''; desenhaTabela(); $('#lista').scrollIntoView({ behavior: 'smooth' }); });
     $('#suporteZap').href = SHC.SUPORTE_WHATSAPP;
     async function desenhaTiny() {
-        const t = await SHC.lerChave(SHC.TINY_CHAVE), com = !!(t && t.token);
+        const t = await SHC.erpLer(SHC.TINY_CHAVE), com = !!(t && t.token);
         $('#tinySem').hidden = com;
         $('#tinyCom').hidden = !com;
         $('#tinyMasc').textContent = com ? SHC.tinyMascara(t.token) : '';
@@ -1179,15 +1280,18 @@
         tinyRodando = true;
         tinyBotoes(true);
         tinyMsg('Lendo os produtos do Tiny…');
+        // v3.3 multi-empresa (revisão 07/10/2026): o token é da empresa da conta aberta NO CLIQUE. A leitura leva minutos: se o ML abrir a conta
+        // de outra empresa no meio, custos, token e retrato vão mesmo assim para a empresa do clique (SHC.areaEmpresa(e0)).
         try {
+            const e0 = await SHC.empresaSeparada(), A = SHC.areaEmpresa(e0);
             const produtos = await SHC.tinyPuxar(token, {
                 fetch: (u, i) => fetch(u, i), espera: ms => new Promise(r => setTimeout(r, ms)),
                 progresso: (p, n) => { tinyMsg('Lendo os produtos do Tiny… página ' + p + ' de ' + n); tinyBarra(p, n); },
             });
-            const r = await SHC.tinyGravar(produtos, 'tiny');
-            const antes = await SHC.lerChave(SHC.TINY_CHAVE);
-            await SHC.gravarChave(SHC.TINY_CHAVE, { token, ultima: Object.assign({ ts: Date.now() }, r) });   // token só é guardado depois que o Tiny aceitou
-            if (SHC.erpRetratoDaTela) await SHC.erpRetratoDaTela('tiny', produtos, !(antes && antes.ultima));   // v3.2: cruzamento ERP × ML
+            const r = await SHC.tinyGravar(produtos, 'tiny', { empresa: e0 });
+            const antes = await SHC.erpLer(SHC.TINY_CHAVE, A);
+            await SHC.erpGravar(SHC.TINY_CHAVE, { token, ultima: Object.assign({ ts: Date.now() }, r) }, A);   // token só é guardado depois que o Tiny aceitou
+            if (SHC.erpRetratoDaTela) await SHC.erpRetratoDaTela('tiny', produtos, !(antes && antes.ultima), e0);   // v3.2: cruzamento ERP × ML
             $('#tinyToken').value = '';
             await lerDados();
             desenhaTabela();
@@ -1207,7 +1311,7 @@
     const OMIE = { origins: [SHC.OMIE_ORIGEM] };
     let omieRodando = false;
     async function desenhaOmie() {
-        const o = await SHC.lerChave(SHC.OMIE_CHAVE), com = !!(o && o.appKey && o.appSecret);
+        const o = await SHC.erpLer(SHC.OMIE_CHAVE), com = !!(o && o.appKey && o.appSecret);
         $('#omieSem').hidden = com;
         $('#omieCom').hidden = !com;
         $('#omieMasc').textContent = com ? (SHC.omieMascara || SHC.tinyMascara)(o.appKey) : '';
@@ -1221,9 +1325,12 @@
         ['#omieConectar', '#omieAtualizar', '#omieEsquecer'].forEach(s => { $(s).disabled = true; });
         tinyMsg('Lendo os produtos do Omie…');
         impBarra({ erp: 'omie' });
+        let A = null;   // v3.3: a empresa do clique — gravar, ler e limpar sempre nela (a conta do ML pode mudar durante a leitura)
         try {
-            if (chaves) await SHC.gravarChave(SHC.OMIE_CHAVE, chaves);
-            const r = await chrome.runtime.sendMessage({ acao: 'sincronizar_custos', erp: 'omie' });
+            const e0 = await SHC.empresaSeparada();
+            A = SHC.areaEmpresa(e0);
+            if (chaves) await SHC.erpGravar(SHC.OMIE_CHAVE, chaves, A);
+            const r = await chrome.runtime.sendMessage({ acao: 'sincronizar_custos', erp: 'omie', empresa: e0 });
             if (!r || !r.ok) throw Object.assign(new Error('omie'), { msg: (r && r.msg) || 'Não consegui ler o Omie agora. Tente de novo em alguns minutos.' });
             $('#omieKey').value = ''; $('#omieSecret').value = '';
             await lerDados();
@@ -1231,7 +1338,7 @@
             tinyMsg('✓ Custos do Omie importados.' + (txtPrincipais() ? ' Agora: ' + txtPrincipais() + '.' : ''));
             impResumo(r, 'Omie');
         } catch (e) {
-            if (chaves) await chrome.storage.local.remove(SHC.OMIE_CHAVE).catch(() => {});   // chave que o Omie recusou não fica guardada
+            if (chaves && A) await A.remove(SHC.OMIE_CHAVE).catch(() => {});   // chave que o Omie recusou não fica guardada (v3.3: só a da empresa do clique)
             tinyMsg((e && e.msg) || FALHA, true);
         } finally {
             omieRodando = false;
@@ -1248,10 +1355,9 @@
     $('#omieSecret').addEventListener('keydown', e => { if (e.key === 'Enter') $('#omieConectar').click(); });
     $('#omieAtualizar').addEventListener('click', () => puxarOmie(chrome.permissions.request(OMIE), null));
     $('#omieEsquecer').addEventListener('click', async () => {
-        await chrome.storage.local.remove(SHC.OMIE_CHAVE);
-        try { await chrome.permissions.remove(OMIE); } catch (e) { /* ok */ }
+        await esquecerErp(SHC.OMIE_CHAVE, OMIE);
         tinyMsg('Chaves esquecidas. Os custos que já vieram do Omie continuam na tabela.');
-        desenhaOmie();
+        await desenhaOmie();   // 3.3.0: o clique só termina com o cartão redesenhado (o esquecerErp da nuvem lê a empresa antes)
     });
     desenhaOmie();
     // ── Bling (v3.1, bling.js): OAuth 2.0 com o aplicativo do PRÓPRIO seller (o Copiloto não tem servidor nem segredo embutido).
@@ -1261,7 +1367,7 @@
     let blingRodando = false, blingSalvo = null;   // blingSalvo: o guardado (o clique decide sem esperar o armazenamento)
     const blingBotoes = off => ['#blingConectar', '#blingAtualizar', '#blingEsquecer'].forEach(s => { $(s).disabled = off; });
     async function desenhaBling() {
-        const b = (await SHC.lerChave(SHC.BLING_CHAVE)) || {}, com = !!(b.clientId && b.refresh);
+        const b = (await SHC.erpLer(SHC.BLING_CHAVE)) || {}, com = !!(b.clientId && b.refresh);
         blingSalvo = b.clientId && b.clientSecret ? b : null;
         $('#blingSem').hidden = com;
         $('#blingCom').hidden = !com;
@@ -1278,12 +1384,14 @@
         if (blingRodando) return;
         blingRodando = true;
         blingBotoes(true);
-        let antes = null;
+        let antes = null, A = null, e0 = '';   // v3.3: a empresa do clique — gravar, ler, voltar o de antes e importar sempre nela
         try {
+            e0 = await SHC.empresaSeparada();
+            A = SHC.areaEmpresa(e0);
             let r;
             if (cred) {
-                antes = (await SHC.lerChave(SHC.BLING_CHAVE)) || {};
-                await SHC.gravarChave(SHC.BLING_CHAVE, antes.clientId === cred.clientId && antes.clientSecret === cred.clientSecret ? Object.assign({}, antes, cred) : cred);
+                antes = (await SHC.erpLer(SHC.BLING_CHAVE, A)) || {};
+                await SHC.erpGravar(SHC.BLING_CHAVE, antes.clientId === cred.clientId && antes.clientSecret === cred.clientSecret ? Object.assign({}, antes, cred) : cred, A);
                 tinyMsg('Entre no Bling na janela que abriu e clique em “Autorizar”…');
                 const state = SHC.blingEstado();
                 let volta = '';
@@ -1293,11 +1401,11 @@
                 if (!v.ok) throw { msg: v.msg };
                 tinyMsg('Lendo os produtos do Bling…');
                 impBarra({ erp: 'bling' });
-                r = await chrome.runtime.sendMessage({ acao: 'bling_conectar', code: v.code });
+                r = await chrome.runtime.sendMessage({ acao: 'bling_conectar', code: v.code, empresa: e0 });
             } else {
                 tinyMsg('Lendo os produtos do Bling…');
                 impBarra({ erp: 'bling' });
-                r = await chrome.runtime.sendMessage({ acao: 'sincronizar_custos', erp: 'bling' });
+                r = await chrome.runtime.sendMessage({ acao: 'sincronizar_custos', erp: 'bling', empresa: e0 });
             }
             if (!r || !r.ok) throw { msg: (r && r.msg) || 'Não consegui ler o Bling agora. Tente de novo em alguns minutos.' };
             $('#blingId').value = ''; $('#blingSecret').value = '';
@@ -1308,9 +1416,9 @@
         } catch (e) {
             // Entrada que não deu certo (e não chegou a conectar): volta o que estava guardado antes (Client ID/Secret e tokens);
             // só apaga quando não havia nada antes.
-            if (cred && antes) {
-                const b = await SHC.lerChave(SHC.BLING_CHAVE).catch(() => null);
-                if (b && !b.refresh) await (antes.clientId ? SHC.gravarChave(SHC.BLING_CHAVE, antes) : chrome.storage.local.remove(SHC.BLING_CHAVE)).catch(() => {});
+            if (cred && antes && A) {
+                const b = await SHC.erpLer(SHC.BLING_CHAVE, A).catch(() => null);
+                if (b && !b.refresh) await (antes.clientId ? SHC.erpGravar(SHC.BLING_CHAVE, antes, A) : A.remove(SHC.BLING_CHAVE)).catch(() => {});
             }
             tinyMsg((e && e.msg) || FALHA, true);
         } finally {
@@ -1334,10 +1442,9 @@
         Promise.resolve(navigator.clipboard && navigator.clipboard.writeText(t)).then(() => tinyMsg('Endereço copiado. Cole em “URL de redirecionamento” no aplicativo do Bling.'), () => tinyMsg('Selecione o endereço e copie com Ctrl+C.'));
     });
     $('#blingEsquecer').addEventListener('click', async () => {
-        await chrome.storage.local.remove(SHC.BLING_CHAVE);
-        try { await chrome.permissions.remove(BLING); } catch (e) { /* ok */ }
+        await esquecerErp(SHC.BLING_CHAVE, BLING);
         tinyMsg('Bling desconectado. Os custos que já vieram do Bling continuam na tabela.');
-        desenhaBling();
+        await desenhaBling();   // 3.3.0: idem
     });
     desenhaBling();
     $('#tinyConectar').addEventListener('click', () => {
@@ -1348,29 +1455,32 @@
     $('#tinyToken').addEventListener('keydown', e => { if (e.key === 'Enter') $('#tinyConectar').click(); });
     $('#tinyAtualizar').addEventListener('click', () => {
         const pedido = chrome.permissions.request(TINY);
-        SHC.lerChave(SHC.TINY_CHAVE).then(t => (t && t.token ? puxarTiny(pedido, t.token) : desenhaTiny()));
+        SHC.erpLer(SHC.TINY_CHAVE).then(t => (t && t.token ? puxarTiny(pedido, t.token) : desenhaTiny()));
     });
     $('#tinyEsquecer').addEventListener('click', async () => {
-        await chrome.storage.local.remove(SHC.TINY_CHAVE);
-        try { await chrome.permissions.remove(TINY); } catch (e) { /* ok */ }
+        await esquecerErp(SHC.TINY_CHAVE, TINY);
         tinyMsg('Token esquecido. Os custos que já vieram do Tiny continuam na tabela.');
-        desenhaTiny();
+        await desenhaTiny();   // 3.3.0: idem
     });
     desenhaTiny();
 
     // Mudou algo no armazenamento (etiqueta no ML, painel lateral, sincronização): relê.
-    let espera = null;
+    let espera = null, contasMudou = false;
     chrome.storage.onChanged.addListener((mud, area) => {
         if (area !== 'local') return;
         if (mud['shc:status'] && mud['shc:status'].newValue && passo === 3 && !$('#guia').hidden) mostraConta(mud['shc:status'].newValue);
         // Importação pelo fundo (Omie, ou o Tiny a cada sincronização): a barra acompanha shc:status.custosProgresso.
         if (mud['shc:status'] && !tinyRodando) impBarra((mud['shc:status'].newValue || {}).custosProgresso);
-        const relevante = Object.keys(mud).some(k => /^(c\||vm\||ml:anuncios|ml:promos|cfg$|shc:guia$)/.test(k));
+        // v3.3: ml:conta (o ML abriu outra conta, talvez de outra empresa): relê custos, cfg e as contas do seletor.
+        const relevante = Object.keys(mud).some(k => /^(c\||vm\||ml:anuncios|ml:promos|cfg$|shc:guia$|ml:conta$)/.test(k));
         if (Object.keys(mud).some(k => /^erpx:/.test(k))) (async () => { erpx = await SHC.lerChave('erpx:' + (contaVer || await SHC.contaAtual())); desenhaErpx(); })().catch(() => {});
-        if (!relevante) return;
+        if (!relevante && !(canaisTt && Object.keys(mud).some(k => /^tt[:@].+:(anuncios|skumap)$/.test(k)))) return;   // 3.3.0 (E14): com 2 canais, Gerenciar produtos e Pedidos do TikTok também
+        if (mud['ml:conta'] || mud.cfg) contasMudou = true;
         clearTimeout(espera);
         espera = setTimeout(async () => {
             await lerDados();
+            // A empresa aberta mudou: os cartões do ERP mostram a conexão DELA (senão "Esquecer" agiria numa e o cartão mostraria a outra).
+            if (contasMudou) { contasMudou = false; desenhaContaTab().catch(() => {}); [desenhaTiny, desenhaOmie, desenhaBling].forEach(f => { try { Promise.resolve(f()).catch(() => {}); } catch (e) { /* ok */ } }); }
             if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#corpo')) { redesenharDepois = true; return; }
             desenhaTabela();
         }, 300);

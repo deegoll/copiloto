@@ -1,6 +1,8 @@
 // Copiloto — aba "TikTok" do painel lateral (v3.2). Só DESENHA: a conta vem de SHC.tt.resumo(SHC.tt.ler()) (tiktok.js + nucleo),
 // que lê o que a captura passiva gravou (tt:<loja>:*). Nenhuma chamada ao TikTok, nenhum alarme, nada de navegar sozinho.
 // Função pura (roda em teste): SHC.ttAba.html(vm, {hoje, abertos}). O painel-lateral.js só busca os dados e põe o HTML na tela.
+// 3.3.0 (E21): a aba saiu do topo (E8) e o painel não chama mais o T.html. O arquivo fica até a 3.3.1 porque as abas usam
+// T.alertas, T.linhaPedido, T.ROT_AFIL, T.lidoTxt, T.pede e T.VAZIO (dividir por aba fica para a 3.3.1).
 (function (root) {
     'use strict';
     const SHC = root.SHC || (root.SHC = {});
@@ -49,9 +51,10 @@
     T.alertas = function (vm, hoje) {
         const desde = menosDias(hoje, 29), mes = (vm.pedidos || []).filter(r => r.dia && r.dia >= desde && r.dia <= hoje), al = [];
         const pr = mes.filter(r => r.classe === 'prejuizo'), nf = T.extratos(vm).filter(e => e.naoFecha), sc = T.semCusto(vm);
-        if (pr.length) al.push({ c: 'pr', tit: qtd(pr.length, 'pedido no prejuízo', 'pedidos no prejuízo') + ' em 30 dias', sub: 'Veja a conta de cada um em Pedidos.' });
-        if (nf.length) al.push({ c: 'pr', tit: qtd(nf.length, 'extrato não fecha', 'extratos não fecham'), sub: 'O valor pago não bate com a soma. Veja em Repasse.' });
-        if (sc.size) al.push({ c: 'at', tit: qtd(sc.size, 'produto sem custo', 'produtos sem custo'), sub: 'Informe o custo em Produtos para ver o lucro.' });
+        // 3.3.0 (revisão): a aba TikTok saiu do topo; o "Ver" da Geral abre a Conciliação (pedidos e demonstrativos) e o Catálogo (custo)
+        if (pr.length) al.push({ c: 'pr', tit: qtd(pr.length, 'pedido no prejuízo', 'pedidos no prejuízo') + ' em 30 dias', sub: 'Veja a conta de cada um na Conciliação.' });
+        if (nf.length) al.push({ c: 'pr', tit: qtd(nf.length, 'extrato não fecha', 'extratos não fecham'), sub: 'O valor pago não bate com a soma. Veja na Conciliação.' });
+        if (sc.size) al.push({ c: 'at', tit: qtd(sc.size, 'produto sem custo', 'produtos sem custo'), sub: 'Informe o custo no Catálogo para ver o lucro.' });
         const ar = vm.repasse && vm.repasse.a_receber, dev = ar ? ((ar.motivos || []).find(m => motivo(m) === 'devolucao') || {}).valor : null;
         if (dev > 0) al.push({ c: 'at', tit: moeda(dev) + ' parados em devolução', sub: 'Só libera quando a devolução ou o reembolso terminar.' });
         const s = vm.saude || {};
@@ -74,6 +77,7 @@
     const COR = { lucrativo: 'ok', apertado: 'at', prejuizo: 'pr' };
     const card = (titulo, fonte, corpo) => `<div class="card"><div class="ch"><h3>${esc(titulo)}</h3></div>${corpo}${fonte ? `<p class="det tt-lido">${esc(fonte)}</p>` : ''}</div>`;
     const pede = tela => `<p class="det">Abra ${esc(tela)} do TikTok Shop para o Copiloto ler.</p>`;
+    T.lidoTxt = lidoTxt; T.pede = pede;   // 3.3.0 (E16): peças que a aba Afiliados usa no filtro TikTok (painel-lateral.js, P.afilTikTok)
     const sobraCls = r => (COR[r.classe] ? r.classe : 'sem_custo');
     const sobraTxt = r => r.status === 'nao_lido' ? 'não lido' : r.lucro_real === null || r.lucro_real === undefined ? 'sem custo'
         : (r.lucro_real < 0 ? 'Prejuízo ' + moeda(-r.lucro_real) : 'Lucro ' + moeda(r.lucro_real)) + (n(r.margem_pct) !== null ? ' (' + pct(r.margem_pct) + ')' : '');
@@ -88,7 +92,7 @@
         Object.keys(pt).filter(k => pt[k]).forEach(k => { h += cl(T.ROT_TARIFA[k] || k, menos(pt[k]), '', est); });
         if (!Object.keys(pt).length && r.status === 'nao_lido') h += `<div class="cl fora"><span>Tarifas: abra o pedido no Financeiro do TikTok</span><b>—</b></div>`;
         h += cl('Repasse do TikTok', moeda(r.repasse), 'tot', !!r.estimado);
-        h += r.custo_rs === null || r.custo_rs === undefined ? `<div class="cl fora"><span>Custo do produto: informe em Produtos</span><b>—</b></div>` : cl('Custo do produto', menos(r.custo_rs));
+        h += r.custo_rs === null || r.custo_rs === undefined ? `<div class="cl fora"><span>Custo do produto: informe no Catálogo</span><b>—</b></div>` : cl('Custo do produto', menos(r.custo_rs));
         if (r.outros_rs) h += cl('Embalagem e outros', menos(r.outros_rs));
         if (r.imposto_rs) h += cl('Imposto (' + String(r.imposto_pct).replace('.', ',') + '%)', menos(r.imposto_rs));
         if (n(r.lucro_real) !== null) h += cl(r.lucro_real < 0 ? 'Prejuízo' : 'Lucro', moeda(r.lucro_real), 'tot' + (r.lucro_real < 0 ? ' mais' : ' est'));
@@ -100,6 +104,7 @@
         return `<details class="tt-ped" data-k="ped:${esc(r.pedido_id)}"><summary><span class="rlt"><b>${esc(it.titulo || 'Pedido')}</b><span class="sobra ${sobraCls(r)}">${esc(sobraTxt(r))}</span></span>`
             + `<small>${esc(sub)} · nº ${esc(String(r.pedido_id || '').slice(-6))}</small></summary>${contaHtml(r)}</details>`;
     }
+    T.linhaPedido = linhaPedido;   // 3.3.0 (revisão): o lucro de cada pedido na Conciliação do filtro TikTok (painel-lateral.js, concTtHtml)
     function linhaProduto(p, sem) {
         const cs = Object.keys(p.canais || {}).map(c => canal(c) + ' ' + p.canais[c]).join(', '), falta = sem.has(p.sku);
         const sub = [p.sku_vendedor ? 'SKU ' + p.sku_vendedor : 'sem SKU ligado'].concat(p.pedidos ? [qtd(p.unidades || 0, 'unidade', 'unidades'), 'receita ' + moeda(p.receita), 'repasse ' + moeda(p.repasse),

@@ -12,7 +12,7 @@ let falhas = [];
 for (const f of arquivos) {
     process.stdout.write('── ' + f + ' ──\n');
     try {
-        const out = execFileSync('node', [path.join(dir, f)], { encoding: 'utf8' });
+        const out = execFileSync(process.execPath, [path.join(dir, f)], { encoding: 'utf8' });
         process.stdout.write(out);
         if (!/TUDO OK\s*$/.test(out)) falhas.push(f + ' (saiu com 0 sem terminar em TUDO OK)');
     } catch (e) {

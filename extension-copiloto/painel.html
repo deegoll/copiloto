@@ -48,6 +48,7 @@
   .dica.alerta { color: var(--ambar); font-weight: 600; }
   .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; background: #F1F5F9; color: var(--suave); }
   .tag.sp { background: #FFEDD5; color: #9A3412; }
+  .tag.tt { background: #CCFBF1; color: #0F766E; } .tag.nc { background: #FEF3C7; color: #92400E; } td.cnl { white-space: nowrap; }   /* 3.3.0 (E14): "Canais onde vende" (só com 2 canais) */
   .x { border: 0; background: none; cursor: pointer; color: #94A3B8; font-size: 16px; } .x:hover { color: var(--verm); }
   /* v3.2 custos: estoque e pai → variações → opções de compra (prévia aprovada em tests/copiloto/previa-custos-variacoes). O contêiner dos chips é .chips.fe — .est é só o selo. */
   .chips.fe { margin: 0 0 6px; } .chips.fe button b { font-weight: 800; margin-left: 6px; }
@@ -89,7 +90,7 @@
     .tabela.hier thead { display: none; }
     .tabela.hier tr { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--linha); }
     .tabela.hier td { border: 0; padding: 3px 6px; background: none !important; }
-    .tabela.hier td.tit, .tabela.hier td.estq, .tabela.hier td.cpai, .tabela.hier td[colspan] { grid-column: 1 / -1; max-width: none; }
+    .tabela.hier td.tit, .tabela.hier td.estq, .tabela.hier td.cpai, .tabela.hier td.cnl, .tabela.hier td[colspan] { grid-column: 1 / -1; max-width: none; }
     .tabela.hier td[data-r]::before { content: attr(data-r); display: block; font-size: 11px; color: var(--suave); font-weight: 700; }
     .tabela.hier td.cpai[data-r]::before { display: none; }
     .tabela.hier td .inp { max-width: none; }
@@ -298,7 +299,7 @@
       <p class="sub">Assim ele fica sempre a um clique. Não é obrigatório: pode continuar agora e fixar depois.</p>
       <div class="fx" id="gFix" aria-label="Como fixar o ícone em 3 passos">
         <div class="fx-q on" data-q="1"><p class="fx-t"><i>1</i>No alto do Chrome, clique na peça de quebra-cabeça</p><div class="cb"><span class="cb-n">←</span><span class="cb-n">→</span><span class="cb-n">↻</span><span class="cb-url">vendedores.mercadolivre.com.br/anuncios</span><span class="cb-n">☆</span><span class="cb-ic cb-alvo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a2 2 0 0 1 4 0v1h4a1 1 0 0 1 1 1v4h-1a2 2 0 0 0 0 4h1v4a1 1 0 0 1-1 1h-4v-1a2 2 0 0 0-4 0v1H6a1 1 0 0 1-1-1v-4h1a2 2 0 0 0 0-4H5V6a1 1 0 0 1 1-1h4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="cb-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 5v14" stroke="currentColor" stroke-width="1.8"/></svg></span><span class="cb-av">D</span><span class="cb-n">⋮</span></div><p class="fx-seta">↑ fica à direita da barra de endereço</p></div>
-        <div class="fx-q" data-q="2"><p class="fx-t"><i>2</i>Na lista que abre, clique no alfinete ao lado de Copiloto</p><div class="cb"><span class="cb-n">←</span><span class="cb-n">→</span><span class="cb-n">↻</span><span class="cb-url">vendedores.mercadolivre.com.br/anuncios</span><span class="cb-n">☆</span><span class="cb-ic cb-alvo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a2 2 0 0 1 4 0v1h4a1 1 0 0 1 1 1v4h-1a2 2 0 0 0 0 4h1v4a1 1 0 0 1-1 1h-4v-1a2 2 0 0 0-4 0v1H6a1 1 0 0 1-1-1v-4h1a2 2 0 0 0 0-4H5V6a1 1 0 0 1 1-1h4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="cb-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 5v14" stroke="currentColor" stroke-width="1.8"/></svg></span><span class="cb-av">D</span><span class="cb-n">⋮</span></div><div class="cm"><div class="cm-top"><span>Extensões</span><span aria-hidden="true">×</span></div><div class="cm-sub">Acesso total</div><div class="cm-lin"><span class="rs">R$</span><span class="nm">Copiloto: lucro no Mercado Livre</span><span class="cb-ic cb-alvo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3 3v2h-4v6l-1 1-1-1v-6H7v-2l3-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="cb-n">⋮</span></div><hr><div class="cm-ger">⚙ Gerenciar extensões</div></div></div>
+        <div class="fx-q" data-q="2"><p class="fx-t"><i>2</i>Na lista que abre, clique no alfinete ao lado de Copiloto</p><div class="cb"><span class="cb-n">←</span><span class="cb-n">→</span><span class="cb-n">↻</span><span class="cb-url">vendedores.mercadolivre.com.br/anuncios</span><span class="cb-n">☆</span><span class="cb-ic cb-alvo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a2 2 0 0 1 4 0v1h4a1 1 0 0 1 1 1v4h-1a2 2 0 0 0 0 4h1v4a1 1 0 0 1-1 1h-4v-1a2 2 0 0 0-4 0v1H6a1 1 0 0 1-1-1v-4h1a2 2 0 0 0 0-4H5V6a1 1 0 0 1 1-1h4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="cb-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 5v14" stroke="currentColor" stroke-width="1.8"/></svg></span><span class="cb-av">D</span><span class="cb-n">⋮</span></div><div class="cm"><div class="cm-top"><span>Extensões</span><span aria-hidden="true">×</span></div><div class="cm-sub">Acesso total</div><div class="cm-lin"><span class="rs">R$</span><span class="nm">Copiloto: lucro real nos marketplaces</span><span class="cb-ic cb-alvo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3 3v2h-4v6l-1 1-1-1v-6H7v-2l3-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="cb-n">⋮</span></div><hr><div class="cm-ger">⚙ Gerenciar extensões</div></div></div>
         <div class="fx-q" data-q="3"><p class="fx-t"><i>3</i>Pronto: o ícone R$ do Copiloto fica fixo na barra. Um clique abre o painel</p><div class="cb"><span class="cb-n">←</span><span class="cb-n">→</span><span class="cb-n">↻</span><span class="cb-url">vendedores.mercadolivre.com.br/anuncios</span><span class="cb-n">☆</span><span class="rs cb-alvo">R$</span><span class="cb-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a2 2 0 0 1 4 0v1h4a1 1 0 0 1 1 1v4h-1a2 2 0 0 0 0 4h1v4a1 1 0 0 1-1 1h-4v-1a2 2 0 0 0-4 0v1H6a1 1 0 0 1-1-1v-4h1a2 2 0 0 0 0-4H5V6a1 1 0 0 1 1-1h4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="cb-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 5v14" stroke="currentColor" stroke-width="1.8"/></svg></span><span class="cb-av">D</span><span class="cb-n">⋮</span></div><p class="fx-ok">O Copiloto detecta sozinho quando o ícone está fixado. Não quer fixar agora? Clique em Continuar.</p></div>
         <div class="fx-dots"><button type="button" data-q="1" class="on" aria-label="Quadro 1">1</button><button type="button" data-q="2" aria-label="Quadro 2">2</button><button type="button" data-q="3" aria-label="Quadro 3">3</button></div>
       </div>
@@ -395,7 +396,7 @@
   <section class="card" id="lista">
     <h2>Custos por SKU</h2>
     <p class="sub">Um custo por SKU vale para todos os anúncios desse SKU. Edite direto na tabela: salva sozinho.</p>
-    <div class="barra" id="contaTab" hidden><label for="contaEsc" style="font-weight:650">Conta dos anúncios:</label> <select class="inp" id="contaEsc" style="max-width:280px"></select><span class="sub" style="margin:0">O custo do SKU vale para todas as contas.</span></div>
+    <div class="barra" id="contaTab" hidden><label for="contaEsc" style="font-weight:650">Conta dos anúncios:</label> <select class="inp" id="contaEsc" style="max-width:280px"></select><span class="sub" id="contaTabNota" style="margin:0">O custo do SKU vale para todas as contas.</span></div>
     <div class="contador"><b id="contador">—</b><div class="prog grossa"><i id="contProg" style="width:0"></i></div><b id="contPct"></b><button class="bt sec" id="usarAntigos" type="button" hidden></button></div>
     <!-- v3.2.0 polimento: conectar o ERP e importar planilha ficam só em "Custos do ERP"; aqui fica arrastar a planilha e o aviso dela -->
     <p class="mais" style="margin:0 0 8px">Tem a planilha do Tiny ou do Bling? Arraste o arquivo (.xls ou .csv) para cima da tabela.</p>
@@ -407,13 +408,16 @@
       <label class="chk"><input type="checkbox" id="soPrinc"> Só os que mais vendem e falta o custo</label>
       <label class="chk" id="finLbl" hidden><input type="checkbox" id="verFin"> Mostrar finalizados <span id="finN"></span></label>
     </div>
+    <!-- 3.3.0 (E14): filtro de canal e "N não estão no canal": só aparecem com 2 canais ligados (com 1 canal a tela é a de hoje) -->
+    <div class="chips" id="fCanal" role="group" aria-label="Filtrar por canal de venda" hidden></div>
     <div class="chips fe" id="fEst" role="group" aria-label="Filtrar por estoque" hidden></div>
     <p class="ordem" id="estInfo"></p>
+    <p class="ordem" id="canalInfo"></p>
     <div class="soltar" id="soltar">
       <div class="solte" aria-hidden="true">Solte a planilha aqui</div>
       <div style="overflow-x:auto">
         <table class="tabela hier">
-          <thead><tr><th>Produto</th><th>Estoque</th><th>Custo (R$)</th><th>Embalagem/outros</th><th>Origem</th><th></th></tr></thead>
+          <thead><tr><th>Produto</th><th>Estoque</th><th>Custo (R$)</th><th>Embalagem/outros</th><th>Origem</th><th id="thCanais" hidden>Canais onde vende</th><th></th></tr></thead>
           <tbody id="corpo"></tbody>
         </table>
       </div>
@@ -538,8 +542,9 @@
   <section class="card" id="contas">
     <h2>Suas contas</h2>
     <p class="sub">O Copiloto já mostra o nome de cada conta do Mercado Livre que você usa neste Chrome, junto com o ID. Se preferir, dê um apelido só seu (ex.: Loja 1) no lugar do nome do ML.</p>
+    <p class="sub">Contas da mesma empresa dividem os custos por SKU, o imposto e o ERP. Conta de <b>outra empresa</b>: marque “Outra empresa” e ela passa a ter tudo isso só dela (os custos já cadastrados ficam com as contas não marcadas: marque a que ainda não tem custos aqui). Para separar 100%, inclusive o login do ML, use um perfil do Chrome para cada empresa.</p>
     <div id="listaContas"></div>
-    <div class="acoes"><button class="bt" id="salvarApelidos">Salvar apelidos</button><span class="ok" id="okApelidos"></span></div>
+    <div class="acoes"><button class="bt" id="salvarApelidos">Salvar contas</button><span class="ok" id="okApelidos"></span></div>
   </section>
 
   <section class="card" id="ajuda">
@@ -551,6 +556,7 @@
 
 <script src="calc.js"></script>
 <script src="store.js"></script>
+<script src="segredo.js"></script>
 <script src="ml-extrator.js"></script>
 <script src="xls.js"></script>
 <script src="tiny.js"></script>

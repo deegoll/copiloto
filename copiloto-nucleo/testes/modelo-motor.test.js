@@ -169,3 +169,27 @@ test('adaptador: definição errada é erro de programação; ler() separa rejei
     const reg = A.registrar({}, a);
     assert.equal(reg.magalu, a);
 });
+
+test('somaCanais ("Todos"): total = soma dos canais ao centavo, % numa conta só, "≈" do canal pendente e do canal sem número', () => {
+    const s = MO.somaCanais([{ canal: 'ml', conta: '123', lucro: 810.1 }, { canal: 'tiktok', conta: '765', lucro: 189.2 }]);
+    assert.equal(s.total, 999.3);
+    assert.deepEqual(s.canais.map(c => [c.canal, c.valor, c.pct, c.aprox]), [['ml', 810.1, 81.1, false], ['tiktok', 189.2, 18.9, false]]);
+    assert.equal(s.aprox, false);
+    assert.equal(MO.somaCanais([{ canal: 'ml', lucro: 0.1 }, { canal: 'tiktok', lucro: 0.2 }]).total, 0.3, 'centavo exato (0,1 + 0,2 não vira 0,30000000000000004)');
+    const tres = MO.somaCanais(['ml', 'tiktok', 'shopee'].map(canal => ({ canal, lucro: 10 })));
+    assert.deepEqual(tres.canais.map(c => c.pct), [33.3, 33.3, 33.3], 'valor ÷ total com 1 casa: a coluna pode somar 99,9%');
+    // Canal com "≈" entra na soma e põe "≈" no total; canal sem número fica fora, com o motivo.
+    const p = MO.somaCanais([{ canal: 'ml', lucro: 500 }, { canal: 'magalu', lucro: 50.55, aprox: true, motivo: 'devoluções ainda não lidas' },
+        { canal: 'tiktok', conta: '765', lucro: null, faltando: ['custo_produtos'] }, { canal: 'shopee', lucro: null }]);
+    assert.equal(p.total, 550.55);
+    assert.equal(p.aprox, true);
+    assert.deepEqual(p.motivos, [{ canal: 'magalu', conta: '', motivo: 'devoluções ainda não lidas' }, { canal: 'tiktok', conta: '765', motivo: 'falta: custo dos produtos' },
+        { canal: 'shopee', conta: '', motivo: 'não lido' }]);
+    assert.equal(MO.somaCanais([{ canal: 'tiktok', lucro: 10, aprox: true }]).motivos[0].motivo, 'valor aproximado', 'com número e "≈" sem motivo: nunca "não lido"');
+    assert.deepEqual(p.canais.map(c => [c.canal, c.pct, c.aprox]), [['ml', 90.8, false], ['magalu', 9.2, true], ['tiktok', null, true], ['shopee', null, true]]);
+    const nada = MO.somaCanais([{ canal: 'ml', lucro: null }]);
+    assert.ok(nada.total === null && nada.aprox, 'nenhum número: total "—", nunca 0');
+    const prej = MO.somaCanais([{ canal: 'ml', lucro: 100 }, { canal: 'tiktok', lucro: -300 }]);
+    assert.ok(prej.total === -200 && prej.canais.every(c => c.pct === null), 'prejuízo no total: sem %');
+    assert.equal(MO.somaCanais([{ canal: 'ml', bruto: 9300, lucro: 1 }, { canal: 'tiktok', bruto: 700, lucro: 2 }], 'bruto').total, 10000, 'outro campo (vendas brutas)');
+});

@@ -1,0 +1,4 @@
+# Nenhuma conversão de fim de linha, em nenhuma máquina (inclusive Windows com core.autocrlf): cada arquivo fica byte a byte
+# como está no repositório. O zip do empacotar.ps1 tem de ser igual à pasta extension-copiloto/ e aos zips publicados
+# (a maioria em LF; alguns, como agenda-canal.html, em CRLF desde a 3.0.0).
+* -text

@@ -7,16 +7,20 @@ const copia = v => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)))
 module.exports = function montaFundo(op) {
     op = op || {};
     const dados = op.dados || {}, envios = [], ouvintes = [], instalados = [], iniciados = [], alarmesOuvintes = [], historico = [], pedidos = [], selos = [], titulos = [], cores = [], alarmes = [];
+    // 3.3.1 (C2): o fundo só lê o ML com cfg.consentimento_ml. Os testes simulam uma instalação que já concordou (o padrão aqui);
+    // o que testa o portão passa op.semConsentimento (ou confere a cfg exata e põe a chave do jeito que quiser em dados.cfg).
+    if (!op.semConsentimento && !(dados.cfg && 'consentimento_ml' in dados.cfg)) dados.cfg = Object.assign({ consentimento_ml: { versao: '3.3.1', em: '2026-10-09T00:00:00.000Z' } }, dados.cfg);
+    const permDadas = [], permTiradas = [], mudancas = [];   // 3.3.0 (E8): ouvintes de permissão e do storage (só o TikTok usa no fundo)
     const chromeF = {
         storage: { local: {
             get: async k => { const o = {}; (k === null ? Object.keys(dados) : [].concat(k)).forEach(x => { if (x in dados) o[x] = copia(dados[x]); }); return o; },
             set: async o => { Object.keys(o).forEach(k => { dados[k] = copia(o[k]); if (k === 'shc:status') historico.push(copia(o[k])); }); },
             remove: async k => { [].concat(k).forEach(x => delete dados[x]); },
-        } },
+        }, onChanged: { addListener: f => mudancas.push(f) } },
         runtime: { id: 'ext', onInstalled: { addListener: f => instalados.push(f) }, onStartup: { addListener: f => iniciados.push(f) }, onMessage: { addListener: f => ouvintes.push(f) },
             getURL: p => p, openOptionsPage() {}, getPlatformInfo: async () => ({}) },
         alarms: { create: (nome, o) => { alarmes.push({ nome, o }); }, onAlarm: { addListener: f => alarmesOuvintes.push(f) } },
-        permissions: { contains: async () => false },
+        permissions: { contains: async () => false, onAdded: { addListener: f => permDadas.push(f) }, onRemoved: { addListener: f => permTiradas.push(f) } },
         tabs: { create() {}, query: async () => op.abas || [], sendMessage: async () => undefined },
         sidePanel: { setPanelBehavior: async () => {}, open: async () => {} },
         action: { setBadgeText: async o => { selos.push(o.text); }, setBadgeBackgroundColor: async o => { cores.push(o.color); }, setTitle: async o => { titulos.push(o.title); } },
@@ -34,7 +38,8 @@ module.exports = function montaFundo(op) {
     // teste que monta datas relativas ("hoje" − N dias) não depender do dia do mês em que roda de verdade.
     let relogio = {};
     if (op.hoje) { const t0 = Date.parse(op.hoje + 'T12:00:00'); class Relogio extends Date { constructor(...a) { super(...(a.length ? a : [t0])); } static now() { return t0; } } relogio = { Date: Relogio }; }
-    const ctx = vm.createContext(Object.assign({ chrome: chromeF, fetch: fetchF, console, URL, setTimeout: f => setImmediate(f), setInterval: () => 0, clearInterval() {} }, relogio));
+    const webc = require('crypto').webcrypto;   // 3.3.1 (segredo.js): a criptografia dos ERPs roda de verdade dentro do fundo de mentira
+    const ctx = vm.createContext(Object.assign({ chrome: chromeF, fetch: fetchF, console, URL, setTimeout: f => setImmediate(f), setInterval: () => 0, clearInterval() {}, crypto: webc, btoa, atob, TextEncoder, TextDecoder }, relogio));
     // op.faltam (opcional, ['licenca.js', …]): arquivos que NÃO estão no pacote da loja; importScripts deles quebra como no Chrome.
     ctx.importScripts = (...arqs) => arqs.forEach(a => {
         if ((op.faltam || []).indexOf(a) >= 0) throw new Error("importScripts: '" + a + "' não está no pacote");
@@ -49,7 +54,8 @@ module.exports = function montaFundo(op) {
     const alarme = nome => alarmesOuvintes.forEach(f => f({ name: nome }));
     const instala = motivo => instalados.forEach(f => f({ reason: motivo }));
     const tique = n => new Promise(r => { let k = 0; const f = () => (++k >= (n || 1) ? r() : setImmediate(f)); setImmediate(f); });
-    const registros = { onMessage: ouvintes, onInstalled: instalados, onStartup: iniciados, onAlarm: alarmesOuvintes };   // listeners registrados
+    const registros = { onMessage: ouvintes, onInstalled: instalados, onStartup: iniciados, onAlarm: alarmesOuvintes,   // listeners registrados
+        'permissions.onAdded': permDadas, 'permissions.onRemoved': permTiradas, 'storage.onChanged': mudancas };
     return { dados, envios, envia, pedidos, historico, selos, titulos, cores, alarmes, alarme, instala, tique, ctx, EXT, registros };
 };
 // Texto do fundo inteiro: o background.js (carregador) + as partes de fundo/ na ordem do importScripts dele. Para os testes que

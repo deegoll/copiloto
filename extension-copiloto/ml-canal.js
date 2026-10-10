@@ -19,6 +19,7 @@
     // Plano B da Agenda: a aba do ML busca uma página do próprio canal (mesma origem, só leitura).
     chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         if (!msg || msg.acao !== 'canal_ler' || sender.id !== chrome.runtime.id) return false;
+        if (!canalOn) return false;   // 3.3.1 (C2): ML desligado — nem o plano B do canal responde
         let u;
         try { u = new URL(msg.url); } catch (e) { return false; }
         if (u.origin !== BASE || !/^\/marketing\/canal(-de-transmissao)?\//.test(u.pathname + '/')) return false;
@@ -187,8 +188,21 @@
         try { chrome.storage.onChanged.removeListener(aoMudar); } catch (e) { /* extensão recarregada */ }
         try { esconde(); } catch (e) { /* ok */ }
     }
-    try { chrome.storage.onChanged.addListener(aoMudar); } catch (e) { /* ok */ }
-    addEventListener('popstate', () => agenda(0));
-    if (document.body) obs.observe(document.body, { childList: true, subtree: true });
-    agenda(300);
+    // 3.3.1 (C2): sem o "Concordo e ligar" do Mercado Livre (cfg.consentimento_ml) o ajudante do Canal não roda: não lê a
+    // página, não pré-preenche e não responde ao plano B (canal_ler, lá em cima). Desligou com a página aberta: para e some
+    // com a barra. Ligou: a próxima navegação já inicia.
+    let canalOn = false;
+    const iniciaCanal = () => {
+        if (canalOn || parado) return;
+        canalOn = true;
+        try { chrome.storage.onChanged.addListener(aoMudar); } catch (e) { /* ok */ }
+        addEventListener('popstate', () => agenda(0));
+        if (document.body) obs.observe(document.body, { childList: true, subtree: true });
+        agenda(300);
+    };
+    try { SHC.mlConsentido(ok => { if (ok) iniciaCanal(); }); } catch (e) { /* sem storage: não inicia */ }
+    try { chrome.storage.onChanged.addListener((m, area) => {
+        if (area !== 'local' || !m.cfg || !canalOn || parado) return;
+        if (!(m.cfg.newValue && m.cfg.newValue.consentimento_ml)) parar();   // desligou em Ajustes: a barra some na hora
+    }); } catch (e) { /* ok */ }
 })();

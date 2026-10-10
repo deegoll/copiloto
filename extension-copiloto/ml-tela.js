@@ -398,6 +398,15 @@
         const cx = r.left + r.width / 2, x = Math.max(m, Math.min(cx - w / 2, vw - w - m));
         return { x: Math.round(x), y: Math.round(y), lado: baixo ? 'baixo' : 'cima', seta: Math.round(Math.max(14, Math.min(cx - x, w - 14))) };
     };
+    /**
+     * v3.3 multi-empresa: de quem é a página aberta (estado do ML, r) × a conta aberta no Copiloto (ml:conta). → '' (a mesma, a página não diz
+     * o dono ou o Copiloto ainda não leu conta nenhuma) | o id da OUTRA conta. A etiqueta confere ao montar a página E na hora de gravar.
+     */
+    SHC.telaOutraConta = async function (r) {
+        let id = '', atual = '';
+        try { const c = SHC.mlContaDoEstado(r); id = String((c && typeof c === 'object' ? c.sellerId : c) || ''); atual = String(await SHC.contaAtual()); } catch (e) { return ''; }
+        return /^\d{6,15}$/.test(id) && atual && atual !== 'atual' && id !== atual ? id : '';
+    };
     /** Grava feitos.lucro (etapa "Ver o lucro nos seus anúncios") só se ainda não estiver gravado. */
     SHC.telaMarcaLucro = async function () {
         const g = await SHC.lerGuia();
@@ -468,35 +477,7 @@
         return out;
     };
 
-    // ── v3.3: detalhe da venda (/vendas/<pedido>/detalhe; mapa em tests/copiloto/_vendas_etiqueta/MAPA-VENDA.md) ──
-    // Lê SÓ os grupos de valores (account_rows-*) e o rótulo "Venda por publicidade" do produto. buyer_*, address_*, billing_*, notes e
-    // account_title (nº do pagamento) nunca são lidos.
-    const rsSinal = t => { const s = txtF(t), n = SHC.valorRS(s); return n === null ? null : (/^\s*[-−]/.test(s) ? -n : n); };
-    /** Estado do detalhe → { preco, tarifa, tarifaPct, acrescimo, frete, fretePagoComprador, cancelada, recebe, ads, pedidos } | null. */
-    SHC.mlVendaDetalhe = function (r) {
-        const pp = r && r.appProps && r.appProps.pageProps, resp = (pp && pp.response) || (r && r.response);
-        if (!resp || typeof resp !== 'object') return null;
-        const g = k => { const b = resp[k]; return b && typeof b === 'object' ? (b.data || b) : null; };
-        const rows = b => (b && Array.isArray(b.rows) ? b.rows : []);
-        const prod = g('account_rows-PRODUCT'), ch = g('account_rows-CHARGES'), su = g('account_rows-SURCHARGE'), sh = g('account_rows-SHIPMENT'), tot = g('account_rows-TOTAL');
-        if (!prod || !tot) return null;
-        const preco = rsSinal(prod.subTotal) !== null ? rsSinal(prod.subTotal) : r2(rows(prod).reduce((t, x) => t + (rsSinal(x.price) || 0), 0));
-        const recebe = rows(tot).length ? rsSinal(rows(tot)[0].price) : rsSinal(tot.subTotal);
-        if (!(preco > 0) || recebe === null) return null;
-        const pctM = /(\d+(?:,\d+)?)\s*%/.exec(rows(ch).map(x => txtF(x.label)).join(' '));
-        const acr = rows(su).find(x => /acr[eé]scimo/i.test(txtF(x.label)));
-        const pagoC = rows(sh).find(x => /comprador/i.test(txtF(x.label)) && rsSinal(x.price) > 0);
-        const ids = new Set(), ads = Object.keys(resp).some(k => {
-            const m = /^product_(\d+)_title_description$/.exec(k);
-            if (!m) return false;
-            ids.add(m[1]);
-            return !!txtF((g(k) || {}).advertisingLabel).trim();
-        });
-        Object.keys(resp).forEach(k => { const m = /^product_(\d+)_/.exec(k); if (m) ids.add(m[1]); });
-        return { preco, tarifa: ch ? -(rsSinal(ch.subTotal) || 0) : 0, tarifaPct: pctM ? parseFloat(pctM[1].replace(',', '.')) : null,
-            acrescimo: acr ? Math.abs(rsSinal(acr.price) || 0) : 0, frete: sh ? -(rsSinal(sh.subTotal) || 0) : 0, fretePagoComprador: pagoC ? rsSinal(pagoC.price) : 0,
-            cancelada: !!g('account_rows-CANCELLATION'), recebe, ads, pedidos: ids.size };
-    };
+    // v3.4: SHC.mlVendaDetalhe (detalhe da venda) foi para o ml-extrator.js: o Fechamento e o painel também conferem a tarifa nele.
     /** Linhas cob (Faturamento › cobranças) → { orderId: { venda (CVVML), mp (CVVPRC), parc (CVVFN) } }, estornos (B…) descontados. */
     SHC.cobPorPedido = function (linhas) {
         const out = {}, campo = { VVML: 'venda', VVPRC: 'mp', VVFN: 'parc' };
@@ -794,7 +775,9 @@
       .tour .balao b{font-size:13px}.tour .balao p{margin:6px 0 10px}
       .tour .balao .acoes{display:flex;justify-content:space-between;align-items:center}
       .pausa{position:fixed;right:16px;bottom:16px;display:none;max-width:330px;background:#0F172A;color:#E2E8F0;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.45;box-shadow:0 10px 30px rgba(0,0,0,.35)}
-      .pausa button{margin-top:8px;background:#fff;color:#0F172A;border-color:#fff}`;
+      .pausa button{margin-top:8px;background:#fff;color:#0F172A;border-color:#fff}
+      .outra{position:fixed;right:16px;bottom:16px;display:none;max-width:340px;background:#7C2D12;color:#FFF7ED;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.45;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+      .outra button{margin-top:8px;background:#fff;color:#7C2D12;border-color:#fff}`;
 
     function host() {
         if (H && H.isConnected) return SR;
@@ -810,7 +793,8 @@
             + '<div class="acoes"><button type="button" class="pri" data-a="ir"></button><button type="button" class="lnk" data-a="depois">depois</button></div></div>'
             + '<div class="tour"><div class="buraco"></div><div class="balao" role="dialog"><i class="seta"></i><div><span class="n"></span><b class="t"></b></div><p class="x"></p>'
             + '<div class="acoes"><button type="button" class="sec" data-a="pular">Pular tour</button><button type="button" class="pri" data-a="proximo">Próximo</button></div></div></div>'
-            + '<div class="pausa" role="status"><div>Copiloto pausado nesta tela — o Mercado Livre mudou a página. Os números continuam no painel do Copiloto.</div><button type="button" data-a="tentar">Tentar de novo</button></div>';
+            + '<div class="pausa" role="status"><div>Copiloto pausado nesta tela — o Mercado Livre mudou a página. Os números continuam no painel do Copiloto.</div><button type="button" data-a="tentar">Tentar de novo</button></div>'
+            + '<div class="outra" role="status"><div class="t"></div><button type="button" data-a="outra-ok">Entendi</button></div>';
         tipEl = SR.querySelector('.tip');
         // Teclas e cliques dentro do host não vazam para os atalhos do ML.
         // 3.2.1: input/beforeinput também (o e.data do custo digitado não sobe para a página na fase de bolha; a captura a página ainda vê).
@@ -824,6 +808,7 @@
             else if (acao === 'pular') fimTour('pulou');
             else if (acao === 'proximo') passoTour(tour.i + 1);
             else if (acao === 'tentar') retomar();
+            else if (acao === 'outra-ok') SR.querySelector('.outra').style.display = 'none';
             else if (acao === 'ir' && /^https:\/\/vendedores\.mercadolivre\.com\.br\//.test(a.dataset.url || '')) location.assign(a.dataset.url);
             else if (acao === 'depois') { cartao.atual = null; desenhaCartao(); try { SHC.salvarGuia({ cartaoAte: Date.now() + 864e5 }).catch(() => {}); } catch (e) { /* extensão recarregada */ } }
         });
@@ -898,6 +883,10 @@
         if (!(v > 0)) { err.textContent = 'Digite um valor maior que zero. Ex.: 250,00'; return; }
         bt.disabled = true;
         try {
+            // v3.3 multi-empresa (bloqueio 5): a conta da página é conferida de novo na hora de gravar — a conta do Copiloto pode ter trocado com
+            // esta página aberta, e o custo iria para a empresa da conta nova (SHC.salvarCustoSku grava na empresa de ml:conta).
+            const r = estado && estado.url === location.href ? estado.r : location.href === hrefCarga ? estadoDoScript() : null;
+            if (r && await SHC.telaOutraConta(r)) { err.textContent = 'Esta página é de outra conta do Mercado Livre: o custo não foi salvo, para não misturar as empresas. Sincronize com esta conta aberta.'; return; }
             const titulo = popItem.titulo;
             // V12: digitado na etiqueta = 'manual' (o Tiny e a planilha nunca trocam por cima)
             if (popItem.sku) await SHC.salvarCustoSku(popItem.sku, SHC.telaCustoDigitado(v, titulo));
@@ -1556,13 +1545,36 @@
         }
     }
     async function garanteEstado(tela) {
-        if (estado && estado.url === location.href && estado.tela === tela) return true;
+        if (estado && estado.url === location.href && estado.tela === tela) {
+            if (!estado.reconferir) return true;
+            if (!(await mesmaConta(estado.r))) return false;   // a conta do Copiloto trocou e a página é de outra: sem etiqueta, com o aviso
+            estado.reconferir = false;
+            return true;
+        }
         let r = location.href === hrefCarga ? estadoDoScript() : null, lidoEm;
         if (r) lidoEm = Math.round((typeof performance !== 'undefined' && performance.timeOrigin) || cargaEm);
         else r = await buscaEstado();
         if (!r) return false;
+        if (!(await mesmaConta(r))) return false;   // v3.3: página de outra empresa não ganha os números desta
         usaEstado(tela, r, lidoEm);
         return true;
+    }
+    // v3.3 (multi-empresa, auditoria 07/10/2026): com o login do ML trocado, a página era de uma empresa e as etiquetas (custo, lucro, frete,
+    // alertas) eram de outra. Página de OUTRA conta (o dono que ela diz ≠ ml:conta) não ganha etiqueta nenhuma e avisa 1 vez por página.
+    // Página que não diz o dono, ou Copiloto que ainda não leu conta nenhuma: segue como antes.
+    // Bloqueio 5: a conta conferida vale até a conta do Copiloto (ml:conta) mudar (aoMudarStorage zera o estado) e o aviso some quando volta a bater.
+    let avisoConta = '';
+    async function mesmaConta(r) {
+        const id = await SHC.telaOutraConta(r);
+        if (!id) { if (SR) SR.querySelector('.outra').style.display = 'none'; return true; }
+        if (avisoConta !== location.href) {
+            avisoConta = location.href;
+            const sr = host(), el = sr.querySelector('.outra'), atual = String(await SHC.contaAtual());
+            el.querySelector('.t').textContent = 'Esta página é de outra conta do Mercado Livre (final ' + id.slice(-4) + '). Os números do Copiloto são da conta final '
+                + atual.slice(-4) + ': não mostro aqui para não misturar as empresas. Sincronize com esta conta aberta para ver os números dela.';
+            el.style.display = 'block';
+        }
+        return false;
     }
     // A tela mostra MLB que não está nos dados (troca de página/busca sem recarregar) → busca de novo.
     const semSolucao = new Set();              // URL em que buscar de novo não trouxe os MLB da tela
@@ -1573,7 +1585,7 @@
         const r = await buscaEstado();
         if (SHC.telaDe(location.href) !== 'anuncios' || location.href !== url) return;
         if (r === null) { semSolucao.add(url); return agenda(0); }   // buscou e não veio: as linhas faltando ganham a faixa só da tela
-        if (!r) return;
+        if (!r || !(await mesmaConta(r))) return;
         usaEstado('anuncios', r);
         if (mlbFaltando().length) semSolucao.add(url);   // não insiste: no máx. 1 busca extra por URL
         agenda(0);
@@ -1873,7 +1885,7 @@
         itens.forEach(i => { if (i.sku) chaves.add(SHC.chaveSku(i.sku)); if (i.familia) chaves.add(SHC.chave('ml', i.familia)); if (i.itemId) chaves.add(SHC.chave('ml', i.itemId)); });
         chaves.delete('');
         const ids = [...new Set(itens.map(i => i.itemId).filter(Boolean))];
-        const [custos, vm] = await Promise.all([chaves.size ? chrome.storage.local.get([...chaves]) : {}, ids.length ? SHC.lerVendasMes(ids) : {}]);
+        const [custos, vm] = await Promise.all([chaves.size ? SHC.areaEmpresa().get([...chaves]) : {}, ids.length ? SHC.lerVendasMes(ids) : {}]);   // v3.3: custos da empresa da conta
         // icone: a página do ML não sabe se o ícone está fixado; SHC.telaCartaoGuia não deixa essa etapa opcional travar o cartão.
         return { cfg, guia, status, anuncios, custos, vm, temFull: full ? full.temFull : undefined,
             temPromos: promos && promos.vazio ? false : undefined, icone: null, hoje: SHC.hoje() };   // mesmo ctx do painel lateral
@@ -1960,6 +1972,9 @@
         if (!vivo()) return parar();
         const ks = Object.keys(mud);
         if (ks.some(k => CHAVES_GUIA.test(k))) agendaCartao();
+        // v3.3 multi-empresa (bloqueio 5): a conta do Copiloto trocou com esta página aberta → a conta da página é conferida de novo (o estado foi
+        // conferido com a conta de antes) e as etiquetas, os custos e o imposto da empresa de antes saem.
+        if (ks.indexOf('ml:conta') >= 0) { if (estado) estado.reconferir = true; avisoConta = ''; limpaPagina(); invalida('tudo'); return agenda(100); }
         let o = null;
         if (ks.some(k => k === 'cfg' || k.indexOf('c|') === 0)) o = 'custos';
         if (ks.some(k => k.indexOf('ml:anuncios:') === 0)) o = o ? 'tudo' : 'sku';
@@ -1988,14 +2003,26 @@
         try { limpaPagina(); if (H) H.remove(); } catch (e) { /* ok */ }
     }
 
-    document.addEventListener('mouseover', sobre, { capture: true, passive: true });
-    document.addEventListener('mouseout', fora, { capture: true, passive: true });
-    document.addEventListener('focusin', sobre, { capture: true, passive: true });
-    document.addEventListener('focusout', fora, { capture: true, passive: true });
-    addEventListener('popstate', aoNavegar);
-    try { chrome.storage.onChanged.addListener(aoMudarStorage); } catch (e) { /* ok */ }
-    if (document.body) obs.observe(document.body, { childList: true, subtree: true });
-    agenda(0);
-    agendaCartao(1500);
-    agendaCert();
+    // 3.3.1 (C2): sem o "Concordo e ligar" do Mercado Livre (cfg.consentimento_ml) nenhuma etiqueta entra na página e nada é
+    // lido dela. Desligou com a página aberta: para tudo e limpa o que estava na tela (parar). Ligou: a próxima navegação inicia.
+    let telaOn = false;
+    const iniciaTela = () => {
+        if (telaOn || parado) return;
+        telaOn = true;
+        document.addEventListener('mouseover', sobre, { capture: true, passive: true });
+        document.addEventListener('mouseout', fora, { capture: true, passive: true });
+        document.addEventListener('focusin', sobre, { capture: true, passive: true });
+        document.addEventListener('focusout', fora, { capture: true, passive: true });
+        addEventListener('popstate', aoNavegar);
+        try { chrome.storage.onChanged.addListener(aoMudarStorage); } catch (e) { /* ok */ }
+        if (document.body) obs.observe(document.body, { childList: true, subtree: true });
+        agenda(0);
+        agendaCartao(1500);
+        agendaCert();
+    };
+    try { SHC.mlConsentido(ok => { if (ok) iniciaTela(); }); } catch (e) { /* sem storage: não inicia */ }
+    try { chrome.storage.onChanged.addListener((m, area) => {
+        if (area !== 'local' || !m.cfg || !telaOn || parado) return;
+        if (!(m.cfg.newValue && m.cfg.newValue.consentimento_ml)) parar();   // desligou em Ajustes: as etiquetas saem na hora
+    }); } catch (e) { /* ok */ }
 })(typeof globalThis !== 'undefined' ? globalThis : this);

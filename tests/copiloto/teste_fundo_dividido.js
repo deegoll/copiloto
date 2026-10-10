@@ -1,7 +1,8 @@
 // 02/10: o background.js virou só o carregador e o código foi para fundo/ (partes por assunto, cortadas em instrução de topo).
-// (a) a junção das partes, na ordem, é IGUAL byte a byte ao background.js do commit 7f7f312 (do git; sem git, da cópia guardada em
-// _referencia_divisao/background.js.orig); (b) o carregador só tem o importScripts das partes, na ordem; (c) o fundo sobe no ambiente de
-// mentira e registra os mesmos listeners, funções e alarmes que o background.js inteiro de antes; (d) nada que roda na carga usa nome de
+// (a) a junção das 14 partes do commit 8eefe81, guardadas em _referencia_divisao/fundo-8eefe81/, é IGUAL byte a byte ao background.js
+// do commit 7f7f312 (cópia em _referencia_divisao/background.js.orig); com git, cada cópia também é conferida com o próprio commit. Assim
+// a prova vale sem git; o fundo/ de hoje só pode mudar na 01-carga-e-eventos.js, as outras 13 = cópia guardada (3.3.0, E0); (b) o carregador só tem o importScripts das partes, na ordem;
+// (c) o fundo sobe no ambiente de mentira e registra os mesmos listeners (3.3.0, E8: mais só os do TikTok), funções e alarmes que o background.js inteiro de antes; (d) nada que roda na carga usa nome de
 // topo (função, const) de parte POSTERIOR — num arquivo só, a função declarada no fim já existe no começo (içamento); dividido, não.
 // Rodar: node tests/copiloto/teste_fundo_dividido.js
 'use strict';
@@ -9,6 +10,20 @@ const fs = require('fs'), path = require('path'), vm = require('vm'), { execFile
 const montaFundo = require('./fundo_falso');
 const EXT = path.join(__dirname, '../../extension-copiloto'), FUNDO = path.join(EXT, 'fundo');
 const COMMIT = '7f7f312', REF = path.join(__dirname, '_referencia_divisao', 'background.js.orig');
+const DIVISAO = '8eefe81', REF_PARTES = path.join(__dirname, '_referencia_divisao', 'fundo-' + DIVISAO);
+// Funções de topo NOVAS no fundo depois da divisão (o resto continua igual ao background.js de 7f7f312). Função nova no fundo entra aqui,
+// com a versão: assim o teste ainda pega função perdida ou criada por engano, e a divisão (a) continua provada pela cópia de referência.
+const NOVAS = {
+    contaSegue: 'v3.3 multi-empresa: a sessão do ML ainda é da conta da sincronização (fundo/10)',
+    marcaReler: 'v3.3 multi-empresa: meses lidos depois de uma troca de conta voltam para a fila (fundo/10)',
+    experienciaNaFaixa: 'v3.3 experiência de compra vinda da aba: tipos e tamanhos conferidos (fundo/13)',
+    juntarExperiencia: 'v3.3 experiência de compra: grava exp:<conta> com a nota anterior (fundo/13)',
+    empresaDoPedido: 'v3.3 multi-empresa: a empresa do clique que a tela manda com a importação do ERP, conferida (fundo/09)',
+    migrarTiposMP: 'v3.3.1 (ao vivo 08/10): CPMTP/CPCJP entram na tabela de códigos; relê os 3 meses com "outro" na porFatura (fundo/03)',
+    despacha: '3.3.1 (C2, 09/10): o listener do 14 virou o portão do consentimento do ML (LEEM_ML); o despacho de sempre ficou nesta função (fundo/14)',
+    mapaEtapa: '3.3.1 (Diego 09/10): mapa FN/RESUMO/ERRO_CAMPO das 13 etapas, montado só na 1ª leitura — fora da carga do 08 (fundo/08)',
+    sincronizarEtapa: '3.3.1 (Diego 09/10): "Tentar de novo esta parte" relê 1 etapa com as travas da cheia (fundo/08)',
+};
 let falhas = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) falhas++; };
 
@@ -139,16 +154,53 @@ function cargaTardia(partes) {
 }
 
 (async () => {
-    console.log('a) junção das partes = background.js do commit ' + COMMIT);
+    console.log('a) junção das partes guardadas do ' + DIVISAO + ' = background.js do commit ' + COMMIT);
     const ref = fs.readFileSync(REF);
-    let orig = null;
-    try { orig = execFileSync('git', ['show', COMMIT + ':extension-copiloto/background.js'], { cwd: path.join(__dirname, '../..'), stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1 << 24 }); } catch (e) { orig = null; }
+    const gitShow = alvo => { try { return execFileSync('git', ['show', alvo], { cwd: path.join(__dirname, '../..'), stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1 << 24 }); } catch (e) { return null; } };
+    let orig = gitShow(COMMIT + ':extension-copiloto/background.js');
+    const comGit = !!orig;
     if (orig) ok(orig.equals(ref), 'a cópia de referência (_referencia_divisao/background.js.orig) = git show ' + COMMIT + ' (' + orig.length + ' bytes)');
-    else { console.log('  (sem git: compara com a cópia de referência)'); orig = ref; }
+    else { console.log('  (sem git: compara com as cópias de referência)'); orig = ref; }
+    const guardadas = fs.readdirSync(REF_PARTES).sort(), tGuardadas = guardadas.map(f => fs.readFileSync(path.join(REF_PARTES, f)));
+    ok(guardadas.length === 14 && Buffer.concat(tGuardadas).equals(orig), 'junção das ' + guardadas.length + ' partes guardadas em _referencia_divisao/fundo-' + DIVISAO + '/, na ordem = background.js do ' + COMMIT + ', byte a byte');
+    if (comGit) {
+        const dif = guardadas.filter((f, i) => { const g = gitShow(DIVISAO + ':extension-copiloto/fundo/' + f); return !g || !g.equals(tGuardadas[i]); });
+        ok(!dif.length, 'cada parte guardada = git show ' + DIVISAO + ':extension-copiloto/fundo/<parte>' + (dif.length ? ' (diferente: ' + dif.join(', ') + ')' : ''));
+    }
     const partes = fs.readdirSync(FUNDO).sort(), textos = partes.map(f => fs.readFileSync(path.join(FUNDO, f)));
     ok(partes.length >= 2 && partes.every((f, i) => f.startsWith(String(i + 1).padStart(2, '0') + '-') && /^\d\d-[a-z0-9-]+\.js$/.test(f)),
         partes.length + ' partes em fundo/, numeradas 01..' + String(partes.length).padStart(2, '0') + ' e só .js');
-    ok(Buffer.concat(textos).equals(orig), 'junção das partes, na ordem = background.js do ' + COMMIT + ', byte a byte');
+    // Trava o fundo de hoje: só a 01 (carga e eventos) muda livre (E8 e E10). As outras têm conta de dinheiro (03-faturamento...).
+    // Uma parte que precisar mudar entra em MUDADAS com o sha256 da parte nova e o motivo ao lado (a 3.3.0 juntou as 8 abaixo, da nuvem).
+    const LIVRE = '01-carga-e-eventos.js', MOTIVO_NUVEM = 'v3.3 multi-empresa, Full pela saúde, experiência e contestação (sessão na nuvem de 07/10, juntada na 3.3.0)';
+    const MUDADAS = {
+        '11-certificado-fotos-robo.js': ['428be3b54fa97c84834be94de0f6d05003fefd3f22175a7f1984eeefcee14707', 'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
+        '06-repasse-afiliados-simulador.js': ['058d71f756c8c0fc609ef5da3e44cbd59c090fde55516bcd59bc466d9fd6c3c1', 'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
+        // trava do frete (07/10, achado da reconferência): o R$ de conferir:<conta> deixa de fora todo frete de envio (SHC.fech.freteSemChamado),
+        // como o total do Fechamento; as cobranças e a fatura não mudam (era 181f0bba…)
+        // v3.3.1 (ao vivo 08/10, conta de teste): CPMTP ("Taxa por uso do cartão") e CPCJP entram na tabela de códigos + migrarTiposMP (era 109498eb…)
+        '03-faturamento.js': ['ecadcfc84dfde8c9b0fa80704a53963c82889e21cdbb9ae662f1c3c9fdb2f49b', MOTIVO_NUVEM + '; trava do frete no R$ de conferir:<conta>; códigos CPMTP/CPCJP e a migração que relê os 3 meses com "outro" na porFatura'],
+        '04-notas-e-vendas.js': ['15bfd6fe31e7e61973318ee370e9a2eba9aab2f4a0f3df3581dcad0fdb428b7f', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login'],
+        '07-alertas-promocoes-full.js': ['f61279d58e8ca504972e6f45c39b78a2c00ee536ff6dfda74266c250b5794d58', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login; junção local 07/10: o selo devolve a promessa e a etapa Alertas espera o ícone'],
+        // revisão da junção (07/10): a conferência da conta depois de cada etapa e no fim do histórico é sem o guardado de 60 s (era 1983b6d8…)
+        // 3.3.1 (C2, 09/10): o portão do consentimento do ML — a entrada da sincronizar, cada etapa, os Anúncios e o histórico só leem com cfg.consentimento_ml (era 251591fc…)
+        '08-sincronizacao.js': ['4a6d6d80573a557932ddc0625a695c433fbb596df5be01360d764488f85e1c66', MOTIVO_NUVEM + '; conferência sem o guardado depois de cada etapa' + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login' + '; 3.3.1 (C2): portão cfg.consentimento_ml na sincronização e no histórico' + '; 3.3.1 (Diego 09/10): "Tentar de novo esta parte" — mapaEtapa (FN/RESUMO/ERRO_CAMPO) e sincronizarEtapa (era 8258da42…)'],
+        '09-custos-erp.js': ['a88d5eb56e84d183ea848b1bda95ce795d9d99312ed13a099390103c15d0033e', MOTIVO_NUVEM + '; 3.3.1 (SI 09/10): chaves dos ERPs cifradas (AES-256-GCM, segredo.js) — erpLer/erpGravar (era 8d321ea6…)'],
+        '10-status-saude-posvenda.js': ['a2b7eb03857ae7cf3712bc06411453fdf2a68a6e4f3250bfb37962db95fc04f8', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login' + '; 3.3.1 (SI 09/10): credencial do ERP lida e regravada cifrada (erpLer/erpGravar; era b27d61e3…)'],
+        '13-aba-do-ml-e-canal.js': ['4db2b6ee741495c4d151812a106bdcdcb41a412bdc85308dc5325fccbe0fc6f6', MOTIVO_NUVEM + '; 3.3.1 (C2): roboCanal só lê com cfg.consentimento_ml (era 66e8e6f2…)'],
+        '14-mensagens.js': ['06fca5a89459f2de9c0948ad7ad0c73d271d624aafc02de9b0fcab1f9e892d62', MOTIVO_NUVEM + '; '+'C2 da nuvem para a 3.3.0 (nuvem/bloqueios-330, a110667): conta conferida depois de cada etapa e diário que desfaz a troca de login' + '; 3.3.1 (C2): o listener virou o portão do consentimento (LEEM_ML → despacha; era 118eb958…)' + '; 3.3.1 (SI 09/10): escolha do ERP lê a credencial decifrada (erpLer; era 48e5cda0…)' + '; 3.3.1 (Diego 09/10): rota sincronizar_etapa (era e7cb1477…)']
+    };
+    const sha = b => require('crypto').createHash('sha256').update(b).digest('hex');
+    const mudou = guardadas.filter((f, i) => { const a = path.join(FUNDO, f); if (f === LIVRE) return false; if (!fs.existsSync(a)) return true;
+        const b = fs.readFileSync(a); return !(b.equals(tGuardadas[i]) || (MUDADAS[f] && sha(b) === MUDADAS[f][0])); });
+    ok(guardadas.length === 14 && !mudou.length, 'fundo/02..14 = partes guardadas do ' + DIVISAO + ' ou a versão travada em MUDADAS (sha256, com o motivo); só a ' + LIVRE + ' muda livre' + (mudou.length ? ' (mudou ou sumiu: ' + mudou.join(', ') + ')' : ''));
+    // Depois da divisão o fundo evolui: a junção é a de 7f7f312 + as funções de NOVAS (e mudanças dentro das que já existiam).
+    const junta = Buffer.concat(textos).toString('utf8'), declaradas = src => new Set((src.match(/^(?:async )?function\s+([\w$]+)/gm) || []).map(x => x.replace(/^(async )?function\s+/, '')));
+    const antes = declaradas(orig.toString('utf8')), agora = declaradas(junta);
+    const perdidas = [...antes].filter(n => !agora.has(n)), sobra = [...agora].filter(n => !antes.has(n) && !NOVAS[n]), faltam = Object.keys(NOVAS).filter(n => !agora.has(n));
+    ok(Buffer.concat(textos).equals(orig) || (!perdidas.length && !sobra.length && !faltam.length),
+        'junção das partes = background.js do ' + COMMIT + ' + ' + Object.keys(NOVAS).length + ' funções novas listadas (nenhuma antiga perdida)'
+        + (perdidas.length ? ' · perdidas: ' + perdidas.join(', ') : '') + (sobra.length ? ' · novas fora da lista: ' + sobra.join(', ') : '') + (faltam.length ? ' · listadas e não achadas: ' + faltam.join(', ') : ''));
     const compila = partes.filter((f, i) => { try { new vm.Script(textos[i].toString('utf8'), { filename: f }); return false; } catch (e) { return true; } });
     ok(!compila.length && textos.every(b => b[b.length - 1] === 10), 'cada parte compila sozinha e termina em fim de linha' + (compila.length ? ' (não compila: ' + compila.join(', ') + ')' : ''));
 
@@ -161,11 +213,23 @@ function cargaTardia(partes) {
 
     console.log('c) o fundo sobe igual ao de antes');
     const velho = montaFundo({ background: orig.toString('utf8') }), novo = montaFundo();
-    const qtd = f => Object.keys(f.registros).map(k => k + ' ' + f.registros[k].length).join(', ');
-    ok(qtd(novo) === qtd(velho) && Object.keys(novo.registros).every(k => novo.registros[k].length >= 1), 'listeners do Chrome registrados na carga: ' + qtd(novo));
+    // 3.3.0 (E8): o TikTok destravado (SHC.tt.instalarFundo, na 01) põe na carga 1 ouvinte de mensagens, os 2 de permissão e o do storage;
+    // os listeners a mais são exatamente esses (o corpo chama o TT), e fora eles o fundo registra o mesmo que o background.js de antes.
+    const doTT = f => /\bTT\.(gravarCaptura|sincronizarScripts)\(/.test(String(f));
+    // C2 (07/10): o ícone acompanha a conta aberta (ml:conta mudou → seloAgora), 1 storage.onChanged a mais na 07; fora da conta, como o do TikTok.
+    const doSelo = f => String(f).length < 200 && /m\['ml:conta'\]/.test(String(f)) && /seloAgora\(/.test(String(f));
+    const qtd = (f, ehTT) => Object.keys(f.registros).map(k => k + ' ' + f.registros[k].filter(x => !doSelo(x) && !!ehTT === doTT(x)).length).join(', ');
+    ok(novo.registros['storage.onChanged'].filter(doSelo).length === 1 && Object.keys(velho.registros).every(k => !velho.registros[k].some(doSelo)), 'o ouvinte do ícone pela conta aberta (C2) é 1 só e é novo');
+    const DE_ANTES = ['onMessage', 'onInstalled', 'onStartup', 'onAlarm'];
+    ok(qtd(novo) === qtd(velho) && DE_ANTES.every(k => novo.registros[k].filter(x => !doTT(x)).length >= 1), 'listeners do Chrome registrados na carga, fora os do TikTok: ' + qtd(novo));
+    ok(Object.keys(velho.registros).every(k => !velho.registros[k].some(doTT)) && qtd(novo, true) === 'onMessage 1, onInstalled 0, onStartup 0, onAlarm 0, permissions.onAdded 1, permissions.onRemoved 1, storage.onChanged 1',
+        'os listeners a mais são exatamente os do TikTok: ' + qtd(novo, true));
     const funcoes = f => Object.keys(f.ctx).filter(k => typeof f.ctx[k] === 'function').sort().join();
-    ok(funcoes(novo) === funcoes(velho) && funcoes(novo).split(',').length > 100, 'mesmas funções de topo no fundo (' + funcoes(novo).split(',').length + ')');
-    ok(Object.keys(novo.ctx.SHC).sort().join() === Object.keys(velho.ctx.SHC).sort().join(), 'mesmo SHC (' + Object.keys(novo.ctx.SHC).length + ' nomes, com o Object.assign do robô)');
+    const comNovas = f => funcoes(f).split(',').concat(f === velho ? Object.keys(NOVAS) : []).sort().join();
+    ok(comNovas(novo) === comNovas(velho) && funcoes(novo).split(',').length > 100, 'mesmas funções de topo no fundo, mais as novas listadas (' + funcoes(novo).split(',').length + ')');
+    const SHC_NOVOS = ['ERP_SEGREDOS', 'erpGravar', 'erpLer', 'segredoCifra', 'segredoDecifra', 'segredoEh'];   // 3.3.1: segredo.js (chaves de ERP cifradas no storage)
+    ok(Object.keys(novo.ctx.SHC).filter(k => SHC_NOVOS.indexOf(k) < 0).sort().join() === Object.keys(velho.ctx.SHC).sort().join() && SHC_NOVOS.every(k => novo.ctx.SHC[k] !== undefined),
+        'mesmo SHC (' + Object.keys(novo.ctx.SHC).length + ' nomes, com o Object.assign do robô e os 6 do segredo.js)');
     for (const motivo of ['install', 'update']) { velho.instala(motivo); novo.instala(motivo); }
     velho.alarme('shc-resumo'); novo.alarme('shc-resumo');
     await Promise.all([velho.tique(40), novo.tique(40)]);
@@ -181,7 +245,7 @@ function cargaTardia(partes) {
     ok(c(['x.addListener(() => g());', 'function g() {}']) === 0 && c(['const a = () => b();', 'function b() {}']) === 0 && c(['p.then(() => z()); setTimeout(() => z(), 0);', 'function z() {}']) === 0
         && c(['g(); function g() {}', 'function h() {}']) === 0, 'e não acusa o que só roda depois (listener, função não chamada, then/setTimeout) nem içamento dentro da mesma parte');
     const r = cargaTardia(partes.map((f, i) => [f, textos[i].toString('utf8')]));
-    const decl = (orig.toString('utf8').match(/^(async )?function\b/gm) || []).length;
+    const decl = (orig.toString('utf8').match(/^(async )?function\b/gm) || []).length + Object.keys(NOVAS).length;
     ok(r.nDecl === decl, 'achou as ' + decl + ' funções declaradas no topo (as fichas não se perderam)');
     ok(['retomarInterrompida', 'emFilaStatus'].every(x => r.chamadas.has(x)), 'viu o que roda na carga: ' + [...r.chamadas].join(', '));
     ok(!r.erros.length, 'nenhuma parte usa na carga função/const de parte posterior' + (r.erros.length ? ': ' + r.erros.join('; ') : ''));

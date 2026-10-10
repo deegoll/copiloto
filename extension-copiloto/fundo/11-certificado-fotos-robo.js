@@ -8,11 +8,13 @@ function certDaMsg(m) {
     if (dias === null && data === null && !expirou) return null;
     return { dias, data, expirou, ts: Date.now(), fonte: 'faturador' };
 }
-async function gravarCertificado(msg) {
+// conta = a já conferida pelo fundo/14 (a da página igual à aberta, ou a única conta com a sessão conferida): nunca relida aqui (ml:conta pode
+// ter mudado entre a conferência e a gravação).
+async function gravarCertificado(msg, conta) {
     // Faturador aberto e sem o aviso do certificado (renovado): {ok:true} tira o alerta; uma remessa do Full mais nova ainda pode marcar vencido.
     const c = msg && msg.semAviso === true ? { ok: true, ts: Date.now(), fonte: 'faturador' } : certDaMsg(msg || {});
     if (!c) return { ok: false, motivo: 'texto' };
-    const conta = await SHC.contaAtual();
+    if (!conta) return { ok: false, motivo: 'conta' };
     // 3.2.1: o "vencido" que veio da remessa do Full (lida pelo fundo) só sai pela própria remessa, não pela tela sem o aviso.
     const ant = c.ok ? await SHC.lerChave('cert:' + conta) : null;
     if (ant && ant.fonte === 'remessa' && ant.expirou) return { ok: true, cert: ant };

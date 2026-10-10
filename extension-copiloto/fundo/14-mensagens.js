@@ -1,6 +1,16 @@
 const daExtensao = s => !!(s && s.id === chrome.runtime.id && /^chrome-extension:\/\//.test(s.url || ''));
+// 3.3.1 (C2): ações que LEEM o Mercado Livre — as que recebem o que a aba aberta leu (o content script também confere antes de
+// mandar; aqui é a última porta) e as que as telas da extensão disparam com GET ao ML/MP. Sem o "Concordo e ligar" do canal
+// (cfg.consentimento_ml) nenhuma roda: o listener no fim do arquivo responde { ok:false, motivo:'sem_consentimento' } sem tocar em nada.
+const LEEM_ML = { concorrentes: 1, sincronizar: 1, sincronizar_etapa: 1, fiscal_agora: 1, certificado: 1, vendas_brutas_mes: 1, promos_pagina: 1, anuncios_pagina: 1,
+    atacado_degraus: 1, editor_anuncios: 1, experiencia_anuncios: 1, canal_ler_anuncios: 1, sincronizar_repasse: 1, simulador: 1, saude_agora: 1,
+    medidas_agora: 1, catalogo_agora: 1, robo_rodar_agora: 1, robo_desfazer: 1 };
+// Dono de cada ação da lista: as telas da extensão (daExtensao) ou a aba do ML (daAbaDoML). O despacho confere de novo; aqui é só
+// para o fora-da-lista receber o MESMO silêncio de antes (return false, porta fechada) em vez de uma resposta que ele nunca teve.
+const SO_EXTENSAO = { concorrentes: 1, sincronizar: 1, sincronizar_etapa: 1, fiscal_agora: 1, vendas_brutas_mes: 1, canal_ler_anuncios: 1, sincronizar_repasse: 1,
+    simulador: 1, saude_agora: 1, medidas_agora: 1, catalogo_agora: 1, robo_rodar_agora: 1, robo_desfazer: 1 };
 
-chrome.runtime.onMessage.addListener((msg, sender, responder) => {
+function despacha(msg, sender, responder) {
     if (!msg) return false;
     if (msg.acao === 'concorrentes') {
         if (!daExtensao(sender) || !/^MLB\d{6,14}$/.test(String(msg.itemId || ''))) return false;
@@ -13,6 +23,13 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         (msg.esperar ? sincronizar('manual') : iniciarSync('manual')).then(responder, () => responder({ ok: false, motivo: 'erro' }));
         return true;
     }
+    // 3.3.1: {acao:'sincronizar_etapa', etapa} → "Tentar de novo esta parte" (lista do painel): relê SÓ aquela parte, com as
+    // mesmas travas da cheia (fundo/08: sincronizarEtapa). Responde {ok, iniciou} depois da 1ª gravação; o andamento vem por shc:status.
+    if (msg.acao === 'sincronizar_etapa') {
+        if (!daExtensao(sender)) return false;
+        sincronizarEtapa(String(msg.etapa || '')).then(responder, () => responder({ ok: false, motivo: 'erro' }));
+        return true;
+    }
     // v2.5.3 (D6): {acao:'fiscal_agora'} → só a parte fiscal, agora (fiscalAgora).
     if (msg.acao === 'fiscal_agora') {
         if (!daExtensao(sender)) return false;
@@ -23,7 +40,16 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     if (msg.acao === 'certificado') {
         if (!daAbaDoML(sender)) return false;
         // semAviso APAGA o alerta: só com a conta da página e se for a aberta agora. O aviso com texto sem conta ainda vale (a CONFIRMAR AO VIVO se o Faturador traz o id).
-        (msg.conta || msg.semAviso ? daContaAtual(msg) : Promise.resolve('ok')).then(ok => (ok ? gravarCertificado(msg) : { ok: false, motivo: 'conta' }))
+        // v3.3 (multi-empresa): aviso SEM a conta da página só vale com 1 conta neste Chrome — com 2+, um Faturador de outra empresa marcaria
+        // o certificado desta como vencido. Bloqueio 5: com 1 conta, 1 GET confere que a sessão do ML ainda é dela (a 2ª empresa que ainda não
+        // sincronizou não está em ml:contas e marcaria a 1ª). Revisão 07/10/2026: a conta CONFERIDA vai para gravarCertificado (antes ele relia
+        // ml:conta e, se a sincronização da outra empresa a trocasse no meio, gravava em cert:<outra>).
+        const semConta = () => (SHC.contas ? SHC.contas() : Promise.resolve([])).then(async cs => {
+            if ((cs || []).length > 1) return '';
+            const c = await SHC.contaAtual();
+            return c === 'atual' || (await confereSessao(c)) !== 'outra_conta' ? c : '';
+        }).catch(() => '');
+        (msg.conta || msg.semAviso ? daContaAtual(msg) : semConta()).then(conta => (conta ? gravarCertificado(msg, conta) : { ok: false, motivo: 'conta' }))
             .then(responder, () => responder({ ok: false, motivo: 'erro' }));
         return true;
     }
@@ -36,8 +62,9 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     if (msg.acao === 'sincronizar_custos') {   // botão "Sincronizar custos" das telas da extensão (3.2.1: a aba do ML não pede); erp: 'tiny' (padrão) | 'omie' | 'bling'
         if (!daExtensao(sender)) return false;
         // Sem erp (painel lateral sem Tiny/Omie guardado): o Tiny, ou o Bling se só ele estiver conectado.
-        const escolhe = async () => (['tiny', 'omie', 'bling'].indexOf(msg.erp) >= 0 ? msg.erp : (!((await SHC.lerChave(SHC.TINY_CHAVE)) || {}).token && ERPS.bling.cred(await SHC.lerChave(SHC.BLING_CHAVE)) ? 'bling' : 'tiny'));
-        escolhe().then(erp => sincronizarCustos(erp, 0).then(responder, () => responder({ ok: false, erp, msg: 'Não consegui falar com o ' + ERPS[erp].nome + '. Tente de novo em alguns minutos.' })));
+        const escolhe = async () => (['tiny', 'omie', 'bling'].indexOf(msg.erp) >= 0 ? msg.erp : (!((await SHC.erpLer(SHC.TINY_CHAVE)) || {}).token && ERPS.bling.cred(await SHC.erpLer(SHC.BLING_CHAVE)) ? 'bling' : 'tiny'));
+        // v3.3 multi-empresa: a empresa da conta aberta NO CLIQUE (empresaDoPedido) — trocar a conta do ML durante a leitura não muda o destino.
+        Promise.all([escolhe(), empresaDoPedido(msg)]).then(([erp, emp]) => sincronizarCustos(erp, 0, emp).then(responder, () => responder({ ok: false, erp, msg: 'Não consegui falar com o ' + ERPS[erp].nome + '. Tente de novo em alguns minutos.' })));
         return true;
     }
     // v3.2 cruzamento ERP × ML: {acao:'erp_conferir'} ("Conferir agora") refaz erpx:<conta> com o que já está guardado (nenhuma chamada ao ML);
@@ -57,7 +84,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     }
     if (msg.acao === 'bling_conectar') {   // só o painel (a extensão): o code do launchWebAuthFlow vira tokens aqui no fundo
         if (!daExtensao(sender) || !/^[\w.~-]{4,512}$/.test(String(msg.code || ''))) return false;
-        conectarBling(String(msg.code)).then(responder, () => responder({ ok: false, erp: 'bling', msg: 'Não consegui falar com o Bling. Tente de novo.' }));
+        empresaDoPedido(msg).then(emp => conectarBling(String(msg.code), emp)).then(responder, () => responder({ ok: false, erp: 'bling', msg: 'Não consegui falar com o Bling. Tente de novo.' }));
         return true;
     }
     // F1 (licenca.js): só as telas da própria extensão. 'licenca_entrar': o painel fez o launchWebAuthFlow (state conferido lá) e manda
@@ -96,6 +123,12 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
             .then(responder, () => responder({ ok: false }));
         return true;
     }
+    if (msg.acao === 'experiencia_anuncios' && Array.isArray(msg.lista)) {   // v3.3: a tela do ML trouxe a experiência de compra de anúncios
+        if (!daAbaDoML(sender)) return false;
+        daContaAtual(msg).then(conta => (conta ? juntarExperiencia(conta, msg.lista).then(n => ({ ok: true, lidos: n })) : { ok: false, motivo: 'conta' }))
+            .then(responder, () => responder({ ok: false }));
+        return true;
+    }
     if (msg.acao === 'canal_ler_anuncios') {   // v3.1: Agenda do Canal lê os anúncios que o Copiloto ainda não tinha (só GET)
         if (!daExtensao(sender) || !Array.isArray(msg.itemIds)) return false;
         lerAnunciosPorId(msg.itemIds).then(responder, () => responder({ ok: false, lidos: [] }));
@@ -108,6 +141,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         SHC.contaAtual().then(async conta => {
             if (conta !== 'atual' && await confereSessao(conta) === 'outra_conta') return { ok: false, motivo: 'outra_conta' };   // repasse de outra conta não entra nesta
             const r = await sincronizarRepasse(conta, async () => {});
+            if (r.falha === 'outra_conta') return { ok: false, motivo: 'outra_conta' };   // a sessão trocou durante a leitura: nada gravado
             await emFilaStatus(async () => {
                 const st = await SHC.lerStatus();
                 Object.assign(st, r.falha ? { erroRepasse: r.falha === 'login' ? 'sem_login_mp' : 'ml_indisponivel' }
@@ -214,4 +248,19 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     }
     if (msg.acao === 'abrir_painel') { if (!daExtensao(sender)) return false; chrome.runtime.openOptionsPage(); responder({ ok: true }); return false; }
     return false;
+}
+// 3.3.1 (C2): a última porta das ações que leem o ML (LEEM_ML). Com o consentimento gravado, o despacho é o de sempre; sem ele,
+// { ok:false, motivo:'sem_consentimento' } na hora (o painel some com os botões e o content script nem manda; aqui pega qualquer caminho esquecido).
+chrome.runtime.onMessage.addListener((msg, sender, responder) => {
+    if (!msg) return false;
+    if (!LEEM_ML[msg.acao]) return despacha(msg, sender, responder);
+    if (SO_EXTENSAO[msg.acao] ? !daExtensao(sender) : !daAbaDoML(sender)) return false;   // o silêncio de sempre para quem não é o dono da ação
+    SHC.mlPermitidoAgora().then(ok => {
+        if (!ok) { responder({ ok: false, motivo: 'sem_consentimento' }); return; }
+        let feito = false;
+        const resp2 = v => { feito = true; responder(v); };
+        const r = despacha(msg, sender, resp2);
+        if (r === false && !feito) responder({ ok: false, motivo: 'negado' });
+    });
+    return true;
 });

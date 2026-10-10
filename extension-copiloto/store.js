@@ -6,7 +6,81 @@
 (function (root) {
     'use strict';
     const SHC = root.SHC || (root.SHC = {});
-    const area = () => chrome.storage.local;
+    // ── v3.3 Multi-empresa (pedido da dona 07/10/2026: "o sistema tem que ser assertivo para não misturar os dados") ──
+    // Conta do ML marcada em Ajustes como OUTRA EMPRESA (cfg.empresaSeparada = {sellerId: true}) tem só dela, enquanto ela é a conta aberta:
+    //   · os custos por SKU: a chave lógica 'c|sku|X' é guardada como 'c|sku@<sellerId>|X';
+    //   · o ERP (credencial e produtos lidos): 'erp:…' é guardado como 'erp@<sellerId>:…';
+    //   · 3.3.0 (junção): a loja do TikTok (o prefixo do canal, SHC.PREFIXO_CANAL.tiktok) como o ERP: é da empresa da conta do ML aberta quando a
+    //     tela do TikTok foi lida (o espaço entra depois de SHC.CANAIS, mais abaixo);
+    //   · os números da empresa (SHC.CAMPOS_EMPRESA: imposto, margem, despesas fixas, plano da Shopee) em cfg.porConta[sellerId].
+    // As contas não marcadas são a mesma empresa e dividem tudo, como sempre. O resto já é por conta (ml:anuncios:<c>, frete:<c>…) ou por
+    // anúncio (c|ml|MLB…, ids únicos no ML). Tudo passa por area(): telas e fundo continuam usando a chave lógica; a de outra empresa some.
+    const crua = () => chrome.storage.local;
+    let empCache = null;
+    SHC.empresaSeparada = async function () {
+        if (empCache && Date.now() - empCache.ts < 1500) return empCache.e;
+        const r = await crua().get(['ml:conta', 'cfg']), c = String(r['ml:conta'] || ''), sep = (r.cfg && r.cfg.empresaSeparada) || {};
+        const e = /^\d{6,15}$/.test(c) && sep[c] === true ? c : '';
+        empCache = { e, ts: Date.now() };
+        return e;
+    };
+    try { chrome.storage.onChanged.addListener(m => { if (m && (m['ml:conta'] || m.cfg)) empCache = null; }); } catch (e) { /* sem onChanged (teste) */ }
+    const ESPACOS = [['c|sku|', e => 'c|sku@' + e + '|', /^c\|sku@\d+\|/], ['erp:', e => 'erp@' + e + ':', /^erp@\d+:/]];
+    SHC.chaveFisica = (k, e) => { if (!e || typeof k !== 'string') return k; const x = ESPACOS.find(([pre]) => k.indexOf(pre) === 0); return x ? x[1](e) + k.slice(x[0].length) : k; };
+    // Física → lógica; null = é de OUTRA empresa (fica invisível para esta).
+    SHC.chaveLogica = (k, e) => {
+        for (const [pre, de, rx] of ESPACOS) {
+            if (rx.test(k)) { const p = e ? de(e) : null; return p && k.indexOf(p) === 0 ? pre + k.slice(p.length) : null; }
+            if (e && k.indexOf(pre) === 0) return null;
+        }
+        return k;
+    };
+    // forcada (revisão 07/10/2026): a empresa FIXA ('' = a das contas não separadas; sellerId = a conta separada). Quem lê do ERP por minutos
+    // passa a empresa do começo da leitura: trocar a conta do ML no meio nunca grava os custos de uma empresa na outra. Sem ela: a conta aberta.
+    const area = forcada => {
+        const emp = () => (typeof forcada === 'string' ? Promise.resolve(forcada) : SHC.empresaSeparada());
+        return areaDe(emp);
+    };
+    // Junção 3.3.0: chave fora de ESPACOS é a mesma em toda empresa, então vai direto, sem ler a empresa antes. A leitura a mais atrasava
+    // cada get/set (o status gravado saía com o batimento de depois e quebrava o "1 por segundo"; a estimativa da sincronização mudava).
+    const daEmpresa = ks => [].concat(ks).some(k => typeof k === 'string' && ESPACOS.some(([pre]) => k.indexOf(pre) === 0));
+    const areaDe = emp => ({
+        async get(ks) {
+            if (ks !== null && ks !== undefined && !daEmpresa(ks)) return crua().get(ks);
+            const e = await emp();
+            if (ks === null || ks === undefined) {
+                const t = await crua().get(null), o = {};
+                Object.keys(t).forEach(k => { const l = SHC.chaveLogica(k, e); if (l !== null) o[l] = t[k]; });
+                return o;
+            }
+            if (!e) return crua().get(ks);
+            const lista = [].concat(ks), r = await crua().get(lista.map(k => SHC.chaveFisica(k, e))), o = {};
+            lista.forEach(k => { const f = SHC.chaveFisica(k, e); if (f in r) o[k] = r[f]; });
+            return o;
+        },
+        async set(obj) {
+            if (!daEmpresa(Object.keys(obj))) return crua().set(obj);
+            const e = await emp();
+            if (!e) return crua().set(obj);
+            const o = {};
+            Object.keys(obj).forEach(k => { o[SHC.chaveFisica(k, e)] = obj[k]; });
+            return crua().set(o);
+        },
+        async remove(ks) { if (!daEmpresa(ks)) return crua().remove(ks); const e = await emp(); return crua().remove(e ? [].concat(ks).map(k => SHC.chaveFisica(k, e)) : ks); },
+        // Só as chaves desta empresa, com o nome lógico (como o get(null)). getKeys é do Chrome 130+; sem ele, o get(null).
+        async getKeys() { const e = await emp(), c = crua(), ks = typeof c.getKeys === 'function' ? await c.getKeys() : Object.keys(await c.get(null)); return ks.map(k => SHC.chaveLogica(k, e)).filter(k => k !== null); },
+    });
+    SHC.areaEmpresa = area;   // para quem grava custo em lote (tiny.js) passar pelo mesmo caminho
+    /**
+     * Alguma OUTRA empresa ainda tem este ERP guardado ('erp:tiny' → 'erp:tiny' ou 'erp@<id>:tiny', fora o da empresa aberta)?
+     * A permissão do Chrome para o site do ERP é uma só: o "Esquecer" de uma empresa só a tira quando nenhuma outra usa.
+     */
+    // Só conta a de conta AINDA marcada como outra empresa: o erp@<id> de uma conta desmarcada é sobra invisível e não segura a permissão.
+    SHC.erpEmOutraEmpresa = async function (chave) {
+        const minha = SHC.chaveFisica(chave, await SHC.empresaSeparada()), resto = String(chave).replace(/^erp:/, ''), t = await crua().get(null);
+        const sep = (t.cfg && t.cfg.empresaSeparada) || {}, dono = k => (/^erp@(\d+):/.exec(k) || [])[1];
+        return Object.keys(t).some(k => k !== minha && !!t[k] && (k === chave || (dono(k) && sep[dono(k)] === true && k.replace(/^erp@\d+:/, '') === resto)));
+    };
 
     SHC.chave = (canal, id) => 'c|' + canal + '|' + id;
 
@@ -177,11 +251,68 @@
     //   Os dados de quem usa a 3.2.1 ficam onde estão (sem migração). Canal novo SEMPRE leva o prefixo dele, antes da conta:
     //     ML           <familia>:<conta>[:<resto>]             ads:123 · fech:123:2026-09 · frete:123:hist (como sempre foi)
     //     outro canal  <prefixo>:<conta>:<familia>[:<resto>]   tt:765:afil · tt:765:ped:<pedido> (o jeito que o tiktok.js já grava)
-    //   Prefixo de cada canal em SHC.PREFIXO_CANAL (ids do copiloto-nucleo; tiktok → tt). Nenhuma família do ML começa com prefixo de
-    //   canal: o mesmo número de conta em dois canais nunca dá a mesma chave (teste_chave_canal.js confere).
+    //   Prefixo de cada canal em SHC.PREFIXO_CANAL (sai de SHC.CANAIS; ids do copiloto-nucleo; tiktok → tt). Nenhuma família do ML começa
+    //   com prefixo de canal: o mesmo número de conta em dois canais nunca dá a mesma chave (teste_chave_canal.js confere).
     //   Código NOVO monta a chave por SHC.chaveConta(familia, conta, canal, resto). As chamadas antigas do ML ('ads:' + conta …) ficam
     //   como estão: dão o mesmo nome. (SHC.chave é outra coisa: o custo c|<canal>|<id>; chave por anúncio já leva o canal.)
-    SHC.PREFIXO_CANAL = { ml: '', tiktok: 'tt', shopee: 'shopee', magalu: 'magalu', amazon: 'amazon', shein: 'shein', temu: 'temu' };
+    // v3.3 (E1): registro ÚNICO dos canais (Ajustes, filtro e prefixo da chave). Canal novo = 1 linha a mais.
+    //   telas: o que o canal lê, com os nomes de hoje de cada site (Ajustes); perm: permissões opcionais (null = nenhuma);
+    //   ads_nas_tarifas: true = o Ads vem nas cobranças (fatura do ML); false = campo manual por mês (TikTok).
+    SHC.CANAIS = [
+        { id: 'ml', nome: 'Mercado Livre', curto: 'ML', prefixo: '', cor: '#B8890A', perm: null, ads_nas_tarifas: true,
+            telas: ['Vendas', 'Faturamento', 'Anúncios', 'Pós-venda', 'Promoções', 'Mercado Ads', 'Full', 'Reputação', 'Afiliados', 'Canal de transmissão', 'Mercado Pago'] },
+        { id: 'tiktok', nome: 'TikTok Shop', curto: 'TikTok', prefixo: 'tt', cor: '#0E9488', ads_nas_tarifas: false,
+            perm: { permissions: ['scripting'], origins: ['https://seller-br.tiktok.com/*'] },   // = TT.PERM (tiktok.js)
+            // E9: só as telas que o Copiloto lê de fato (TT.TELA do tiktok.js, nomes de 03/10); o chat de Mensagens e os Anúncios da loja ficam fora
+            telas: ['Finanças › Resumo financeiro', 'Finanças › Demonstrativos', 'Finanças › Em espera', 'Finanças › detalhe do pedido', 'Pedidos', 'Gerenciar produtos',
+                'Avaliação da integridade da conta', 'Pontuação de desempenho da loja', 'Gerenciar devoluções e reembolsos', 'Afiliados', 'Campanhas', 'Lista de tarefas da Página inicial'] },
+    ];
+    // Os do registro + os canais do núcleo ainda sem leitura (prefixo = id), já reservados na chave. Mesmos nomes e valores da 3.2.1.
+    SHC.PREFIXO_CANAL = {};
+    SHC.CANAIS.forEach(c => { SHC.PREFIXO_CANAL[c.id] = c.prefixo; });
+    ['shopee', 'magalu', 'amazon', 'shein', 'temu'].forEach(id => { SHC.PREFIXO_CANAL[id] = id; });
+    // 3.3.0 (junção, multi-empresa): a loja do TikTok na camada da empresa (ver ESPACOS no começo do arquivo).
+    { const t = SHC.PREFIXO_CANAL.tiktok; ESPACOS.push([t + ':', e => t + '@' + e + ':', new RegExp('^' + t + '@[0-9]+:')]); }
+    // 3.3.1 (C2, Política de Dados do Usuário da Chrome Web Store): o Mercado Livre também só é lido depois do "Concordo e ligar"
+    // do quadro de Ajustes › Canais de venda (cfg.consentimento_ml {versao, em}). Sem ele o Copiloto não lê NADA do painel do
+    // vendedor: nem a sincronização do fundo, nem o que a tela aberta já recebeu, nem as etiquetas dentro do ML. Nada é pedido
+    // ao Chrome (as permissões do ML já vêm na instalação): o consentimento é a chave que liga e desliga a leitura.
+    SHC.mlLigado = cfg => !!(cfg && cfg.consentimento_ml);
+    /** Gate da leitura do ML em qualquer contexto (fundo, painel, tela do ML): true só com o "Concordo e ligar" gravado. */
+    SHC.mlPermitidoAgora = async () => { try { return SHC.mlLigado(await SHC.lerCfg()); } catch (e) { return false; } };
+    /** O mesmo gate com callback, para o arranque dos content scripts (que não podem fazer await no topo). Sem storage → false. */
+    SHC.mlConsentido = cb => { try { chrome.storage.local.get('cfg', r => cb(SHC.mlLigado(r && r.cfg))); } catch (e) { cb(false); } };
+    // Canais que entram no filtro. ML: só com o consentimento gravado (3.3.1, C2). Canal com permissão opcional só com as 3:
+    // cfg.modulos[id] === true, fora de SHC.MODULOS_TRAVADOS (calc.js) e perms[id] === true (o painel lê com
+    // chrome.permissions.contains(canal.perm)). Travado = [] (sem o ML: 0 ou 1 canal — o filtro some, P.canalValido devolve 'ml').
+    SHC.canaisLigados = (cfg, perms) => SHC.CANAIS.filter(c => c.id === 'ml' ? SHC.mlLigado(cfg) : (!c.perm || (SHC.MODULOS_TRAVADOS.indexOf(c.id) < 0
+        && !!(cfg && cfg.modulos && cfg.modulos[c.id] === true) && !!(perms && perms[c.id] === true)))).map(c => c.id);
+    // ── 3.3.1 (pedido do Diego 09/10, revisado à noite: "se for para apagar, tem que ser para todos os canais conectados"):
+    //   UM botão "Apagar dados de todos os canais" em Ajustes › Canais de venda chama a função de apagar de CADA canal de uma vez.
+    //   A do TikTok é o TT.apagarDados (tiktok.js: as chaves tt:*). A do ML fica aqui e é ao contrário: a família do ML é a chave
+    //   SEM prefixo de canal, então apaga tudo MENOS o que não é dado lido do Mercado Livre. Ficam guardados (nunca se apagam aqui):
+    //     · cfg (ajustes, consentimentos, apelidos, empresas) e ui:abertos (as telas abertas no painel);
+    //     · os custos por SKU (c|sku|…, valem para todos os canais) e o ERP (erp: / erp@ — credencial criptografada e produtos);
+    //     · shc:* (a chave da criptografia shc:segredo:v1, os marcadores de migração e os planos do Canal de transmissão),
+    //       MENOS shc:status e shc:anomalias (o andamento e os alertas do ML: esses saem);
+    //     · o que é dos OUTROS canais (tt:*, tt@…, c|tiktok|…, v|tiktok|… — e idem para os canais ainda sem leitura).
+    const listarChaves = async a => (typeof a.getKeys === 'function' ? await a.getKeys() : Object.keys(await a.get(null)));   // getKeys só no Chrome 130+; o mínimo do manifest é 116
+    const deOutroCanal = k => Object.keys(SHC.PREFIXO_CANAL).some(id => {
+        if (id === 'ml') return false;
+        const p = SHC.PREFIXO_CANAL[id];
+        return (p && (k.indexOf(p + ':') === 0 || k.indexOf(p + '@') === 0)) || k.indexOf('c|' + id + '|') === 0 || k.indexOf('v|' + id + '|') === 0;
+    });
+    /** A chave NÃO é dado lido do Mercado Livre (fica guardada no "Apagar dados de todos os canais")? A lista acima, na mesma ordem. */
+    SHC.mlRetemChave = k => k === 'cfg' || k === 'ui:abertos' || /^erp[:@]/.test(k) || /^c\|sku[|@]/.test(k)
+        || (k.indexOf('shc:') === 0 && !/^shc:(status|anomalias)/.test(k)) || deOutroCanal(k);
+    /** A parte do Mercado Livre do "Apagar dados de todos os canais": anúncios, vendas, faturamento, conciliações, Ads, vistos, status e alertas → quantas chaves saíram. */
+    SHC.apagarDadosMl = async () => {
+        const ks = (await listarChaves(crua())).filter(k => !SHC.mlRetemChave(k));
+        if (ks.length) await crua().remove(ks);
+        return ks.length;
+    };
+    /** Há dado lido do ML guardado neste Chrome? (Só a lista de chaves, sem ler o armazenamento inteiro quando há getKeys.) */
+    SHC.temDadosMl = async () => (await listarChaves(crua())).some(k => !SHC.mlRetemChave(k));
     SHC.chaveConta = function (familia, conta, canal, resto) {
         const p = SHC.PREFIXO_CANAL[canal || 'ml'], fim = resto ? ':' + resto : '';
         if (typeof p !== 'string') throw new Error('SHC.chaveConta: canal desconhecido (' + canal + ')');   // canal errado nunca cai na chave do ML
@@ -249,11 +380,19 @@
         return Object.keys(contas || {}).filter(id => /^\d{6,15}$/.test(id)).map(id => ({ sellerId: id, nome: SHC.nomeConta(id, cfg, contas), visto: (contas[id] || {}).visto || 0, atual: id === atual }))
             .sort((a, b) => (b.atual - a.atual) || (b.visto - a.visto));
     };
+    // v3.3 multi-empresa: as contas da MESMA empresa da conta aberta (conta separada = só ela; as outras = todas as não separadas).
+    // empresa (opcional): a de SHC.empresaSeparada guardada no começo de uma leitura longa (SHC.areaEmpresa(empresa)).
+    SHC.contasDaEmpresa = async function (empresa) {
+        const [cs, e, r] = await Promise.all([SHC.contas(), typeof empresa === 'string' ? empresa : SHC.empresaSeparada(), crua().get('cfg')]), sep = (r.cfg && r.cfg.empresaSeparada) || {};
+        return cs.filter(c => (e ? c.sellerId === e : sep[c.sellerId] !== true));
+    };
     /** Dados de cada conta para SHC.consolidado(…, mes): vb:<c>, fech:<c>:<mes> e shc:anomalias:<c> (gravado pelo fundo em atualizarAlertas). */
+    // v3.3 multi-empresa (bloqueio 5): + empresa de cada conta ('' = as não separadas; sellerId = a marcada "Outra empresa") — o consolidado
+    // nunca soma o faturamento de empresas diferentes.
     SHC.dadosContas = async function (mes) {
-        const cs = await SHC.contas(), m = mes || SHC.hoje().slice(0, 7);
+        const cs = await SHC.contas(), m = mes || SHC.hoje().slice(0, 7), sep = (((await crua().get('cfg')).cfg || {}).empresaSeparada) || {};
         const r = await area().get(cs.flatMap(c => ['vb:' + c.sellerId, SHC.chaveFech(c.sellerId, m), 'shc:anomalias:' + c.sellerId]));
-        return cs.map(c => Object.assign({}, c, { vb: r['vb:' + c.sellerId] || null, fech: r[SHC.chaveFech(c.sellerId, m)] || null, anomalias: r['shc:anomalias:' + c.sellerId] || null }));
+        return cs.map(c => Object.assign({}, c, { empresa: sep[c.sellerId] === true ? c.sellerId : '', vb: r['vb:' + c.sellerId] || null, fech: r[SHC.chaveFech(c.sellerId, m)] || null, anomalias: r['shc:anomalias:' + c.sellerId] || null }));
     };
     // v2.7 (background.js): perguntas:<conta> = SHC.mlPerguntasDoEstado + {pendentes (do Resumo quando a página não disse), link, fonte}; resumo:<conta> = SHC.mlResumoDoConteudo;
     // reputacao:<conta> = SHC.mlReputacaoDoEstado; remessas:<conta>:detalhe = {ts, porId:{id: SHC.mlRemessaDetalheDoEstado + ts}}; resumo:<conta>:semanal = {ts, semana, texto, waLink, novo}.
@@ -590,8 +729,10 @@
             const c = contagem(x);
             // v2.10: retomada (p.continua): as etapas já lidas no ciclo não voltam; a barra começa na etapa em que parou.
             const cont = p && p.continua ? 'Continuando de onde parou: etapa ' + (p.indice || 1) + ' de ' + (p.total || syncEtapas().length) : '';
+            // 3.3.1 (pedido do Diego, 09/10): a linha diz em qual das 13 etapas a leitura está ("Etapa 3 de 13 · Lendo o Faturamento · …").
+            const guiado = p && p.indice ? 'Etapa ' + p.indice + ' de ' + (p.total || syncEtapas().length) + ' · ' : '';
             return { estado: 'sincronizando', cor: 'azul', texto: (cont || 'Sincronizando') + ' · ' + pct + '%', pct, continua: !!cont,
-                etapa: 'Lendo ' + (NOME_ETAPA[id] || 'a sua conta') + (c ? ' · ' + c : ''), restante: restanteTxt(s) };
+                etapa: guiado + 'Lendo ' + (NOME_ETAPA[id] || 'a sua conta') + (c ? ' · ' + c : ''), restante: restanteTxt(s) };
         }
         const parou = (st.estado === 'sincronizando' || st.sincronizando === true);
         // v2.5.3: 'interrompida' = o fundo reiniciou no meio (extensão recarregada, Chrome fechado) e já agendou uma nova leitura (retomaEm).
@@ -604,6 +745,8 @@
         if (parou || st.estado === 'erro') {
             const fazer = parou ? 'A leitura parou no meio. Tente de novo.'
                 : st.erro === 'sem_sessao' ? 'Entre no Mercado Livre neste Chrome e tente de novo.'
+                // v3.3 multi-empresa: o login do ML mudou no meio da leitura (fundo/08: contaSegue).
+                : st.erro === 'outra_conta' ? 'O Mercado Livre mudou de conta no meio da leitura. Parei para não misturar as empresas: sincronize de novo com a conta certa aberta.'
                 : 'O Mercado Livre não respondeu. Tente de novo em alguns minutos.';
             return { estado: 'erro', cor: 'vermelho', texto: 'Não sincronizou · ' + fazer, fazer, pct: null, etapa: '', restante: '' };
         }
@@ -644,7 +787,10 @@
         + '.shs-vermelho .shs-selo{background:#FEF2F2;color:#B91C1C}.shs-cinza .shs-selo{background:#F1F5F9;color:#475569}'
         + '.shs-barra{height:10px;background:#E2E8F0;border-radius:99px;overflow:hidden;margin:8px 0 4px}.shs-barra i{display:block;height:100%;background:#0284C7;border-radius:99px;transition:width .4s}'
         + '.shs-barra.shs-sem i{width:35%!important;animation:shs-vai 1.4s ease-in-out infinite}@keyframes shs-vai{0%{margin-left:-35%}100%{margin-left:100%}}'
-        + '@media (prefers-reduced-motion:reduce){.shs-barra.shs-sem i{animation:none;width:100%!important;opacity:.35}}'
+        // 3.3.1 (pedido do Diego, 09/10): a etapa lendo gira o ⟳ e ganha fundo azul-claro — a lista "guia" a pessoa (reduzir movimento: parado).
+        + '.shs-lendo .shs-ic{display:inline-block;animation:shs-gira 1.1s linear infinite}@keyframes shs-gira{to{transform:rotate(360deg)}}'
+        + '.shs-lista li.shs-lendo{background:#F0F9FF;border-radius:8px;margin:0 -6px;padding:5px 6px}'
+        + '@media (prefers-reduced-motion:reduce){.shs-barra.shs-sem i{animation:none;width:100%!important;opacity:.35}.shs-lendo .shs-ic{animation:none}}'
         + '.shs-lin{color:#475569;font-size:12.5px}.shs-lista{border:1px solid #E2E8F0;border-radius:12px;padding:10px 12px;margin-top:10px;background:#fff}'
         + '.shs-cab{margin:0 0 6px;font-weight:700;font-size:13px}.shs-lista ul{list-style:none;margin:0;padding:0}.shs-lista li{display:grid;grid-template-columns:22px 1fr;gap:2px 6px;padding:5px 0;border-top:1px solid #F1F5F9}'
         + '.shs-lista li:first-child{border-top:0}.shs-ic{font-weight:800;text-align:center}.shs-ok .shs-ic{color:#047857}.shs-lendo .shs-ic{color:#0284C7}.shs-fila .shs-ic,.shs-pulado .shs-ic{color:#94A3B8}'
@@ -714,7 +860,7 @@
 
     /**
      * Componente: selo colorido + (sincronizando) barra com etapa, % e tempo que falta + (opts.lista) "O que o Copiloto já leu"
-     * com as 10 etapas. Botões "Tentar de novo" têm data-sync (a página decide o que fazer no clique).
+     * com as 13 etapas. 3.3.1: "Tentar de novo esta parte" (etapa com erro) tem data-sync-etapa="<id>" — a página relê só ela.
      */
     SHC.htmlSync = function (st, agoraMs, opts) {
         st = st || {};
@@ -743,7 +889,7 @@
                 let ic = '○', det = s.estado === 'sincronizando' ? 'Na fila' : 'Ainda não lido', extra = '';
                 if (est === 'ok') { ic = '✓'; det = (e.resumo || 'Lido') + (e.jaLida && e.fim ? ' · lido às ' + hhmm(e.fim) + ', antes de parar' : ''); }
                 else if (est === 'lendo') { ic = '⟳'; det = (e.mesAgora ? SHC.textoLendoMes({ mes: e.mesAgora, feito: e.feito, de: e.de, cobrancas: e.cobrancas, restanteSeg: restanteEtapa(st, e, agora) }) : contagem(e)) || 'Lendo agora…'; extra = barra(e.de > 0 ? Math.min(100, Math.round((e.feito || 0) / e.de * 100)) : null, true); }
-                else if (est === 'erro') { ic = '⚠'; det = (e.erro || 'Não deu para ler agora.') + (e.resumoAnterior ? ' Última leitura: ' + e.resumoAnterior + '.' : ''); extra = s.estado === 'sincronizando' ? '' : '<button type="button" data-sync>Tentar de novo</button>'; }
+                else if (est === 'erro') { ic = '⚠'; det = (e.erro || 'Não deu para ler agora.') + (e.resumoAnterior ? ' Última leitura: ' + e.resumoAnterior + '.' : ''); extra = s.estado === 'sincronizando' ? '' : '<button type="button" data-sync-etapa="' + x.id + '">Tentar de novo esta parte</button>'; }
                 else if (est === 'pulado') { ic = '—'; det = e.resumo || 'Pulado'; }
                 else if (e.resumoAnterior && s.estado !== 'sincronizando') det = 'Última leitura: ' + e.resumoAnterior;
                 const diag = SHC.textosMeses(e.meses).map(t => '<small>' + escH(t) + '</small>').join('');
@@ -753,15 +899,31 @@
         return h + '</div>';
     };
 
+    // v3.3 multi-empresa: números que são da EMPRESA (a conta separada tem os dela em cfg.porConta[sellerId]; sem eles, os padrões — nunca os da outra).
+    // configurado (revisão 07/10/2026) também é da empresa: a conta separada sem números próprios não pode herdar o "imposto informado" da outra
+    // (o 0% padrão viraria imposto de verdade no lucro), e salvar os números dela não marca a outra como configurada.
+    SHC.CAMPOS_EMPRESA = ['imposto_pct', 'margem_alvo_pct', 'despesas_fixas', 'sp_comissao_pct', 'sp_taxa_fixa', 'configurado'];
     SHC.lerCfg = async function () {
-        const r = await area().get('cfg');
-        return Object.assign({}, SHC.PADRAO, r.cfg || {});
+        const r = await area().get('cfg'), c = r.cfg || {}, e = await SHC.empresaSeparada();
+        if (!e) return Object.assign({}, SHC.PADRAO, c);
+        const meu = (c.porConta && c.porConta[e]) || {}, proprio = {};
+        SHC.CAMPOS_EMPRESA.forEach(k => { proprio[k] = k in meu ? meu[k] : k === 'configurado' ? false : SHC.PADRAO[k]; });
+        return Object.assign({}, SHC.PADRAO, c, proprio, { empresa: e });
     };
-    SHC.salvarCfg = async function (patch) {
-        const atual = await SHC.lerCfg();
-        const novo = Object.assign(atual, patch, { configurado: true });
-        await area().set({ cfg: novo });
-        return novo;
+    // opc.semMarcar: não marca cfg.configurado (as despesas fixas não podem inventar "imposto 0%").
+    SHC.salvarCfg = async function (patch, opc) {
+        const r = await crua().get('cfg'), base = Object.assign({}, r.cfg || {}), e = await SHC.empresaSeparada();
+        const p = Object.assign({}, patch, opc && opc.semMarcar ? {} : { configurado: true });
+        delete p.empresa; delete p.empresaSemNumeros;   // são da leitura (SHC.lerCfg; empresaSemNumeros: a da 3.3.0 em teste), não se gravam
+        delete p.porConta;   // só esta função mexe nele: um cfg lido e devolvido inteiro traria o porConta velho por cima do novo
+        if (e) {
+            const meu = Object.assign({}, (base.porConta || {})[e]);
+            SHC.CAMPOS_EMPRESA.forEach(k => { if (k in p) { meu[k] = p[k]; delete p[k]; } });
+            base.porConta = Object.assign({}, base.porConta, { [e]: meu });
+        }
+        await crua().set({ cfg: Object.assign(base, p) });
+        empCache = null;   // empresaSeparada pode ter mudado neste patch
+        return SHC.lerCfg();
     };
 
     // ── Despesas fixas do mês (pesquisa aprovada pela dona): aluguel, salários, embalagem, sistemas, contador. cfg.despesas_fixas = [{nome, valor}].
@@ -803,11 +965,11 @@
     };
     /** Grava só a lista (objeto cfg NOVO). Não marca cfg.configurado: salvar despesas não pode inventar "imposto 0%". */
     SHC.salvarDespesasFixas = async function (lista) {
-        const r = await area().get('cfg'), atual = Object.assign({}, r.cfg || {}), antes = SHC.despesasFixas(atual), mes = SHC.hoje().slice(0, 7);
+        // v3.3 multi-empresa: a conta separada guarda as despesas dela (cfg.porConta[sellerId].despesas_fixas): SHC.salvarCfg decide onde.
+        const antes = SHC.despesasFixas(await SHC.lerCfg()), mes = SHC.hoje().slice(0, 7);
         // desde: o da mesma despesa já guardada (pelo nome); despesa nova = o mês de hoje
-        atual.despesas_fixas = SHC.despesasFixas({ despesas_fixas: (lista || []).map(d => Object.assign({}, d, { desde: (d && d.desde) || ((antes.find(a => a.nome === String((d && d.nome) || '').replace(/\s+/g, ' ').trim().slice(0, 40)) || {}).desde) || mes })) });
-        await area().set({ cfg: atual });
-        return Object.assign({}, SHC.PADRAO, atual);
+        const nova = SHC.despesasFixas({ despesas_fixas: (lista || []).map(d => Object.assign({}, d, { desde: (d && d.desde) || ((antes.find(a => a.nome === String((d && d.nome) || '').replace(/\s+/g, ' ').trim().slice(0, 40)) || {}).desde) || mes })) });
+        return SHC.salvarCfg({ despesas_fixas: nova }, { semMarcar: true });
     };
 
     SHC.lerCustos = async function (chaves) {
@@ -826,7 +988,7 @@
     // Tudo (painel): separa custos, vistos e cfg.
     SHC.lerTudo = async function () {
         const todos = await area().get(null);
-        const out = { cfg: Object.assign({}, SHC.PADRAO, todos.cfg || {}), custos: {}, vistos: {} };
+        const out = { cfg: await SHC.lerCfg(), custos: {}, vistos: {} };   // v3.3: com os números da empresa da conta aberta
         for (const k in todos) {
             const p = k.split('|');
             if (p.length < 3 || (p[0] !== 'c' && p[0] !== 'v')) continue;

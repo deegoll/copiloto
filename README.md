@@ -11,9 +11,27 @@ Repositório do Copiloto preparado para a **revisão de segurança do código**.
 | Etiqueta | O que é |
 |---|---|
 | `copiloto-v3.0.0` a `copiloto-v3.2.1` | Cada versão enviada à loja. Nelas, a pasta `extension-copiloto/` é idêntica, byte a byte, ao zip publicado. O SHA-256 de cada zip está em `deploy/copiloto-chrome-web-store/VERSOES.md` |
-| `main` (último commit) | O código atual, à frente da 3.2.1 e **ainda não publicado** |
+| `main` (último commit) | O código atual: a **3.3.0**, pronta e **ainda não enviada à loja** (zip e SHA-256 no `VERSOES.md`; o que mudou em `NOVIDADES-3.3.0.md`) |
 
-O código atual muda isto em relação à 3.2.1:
+A 3.3.0 traz, em relação à 3.2.1:
+
+- **Multi-empresa:**
+  - A sincronização confere a conta da sessão antes e depois de cada etapa e no fim. Se o login trocou, ela para (`outra_conta`) e os meses lidos voltam para a fila.
+  - A tela do ML de outra conta fica sem etiqueta.
+  - "Outra empresa" em Ajustes separa custos por SKU, imposto, despesas e ERP (`store.js`, `SHC.empresaSeparada`).
+  - A importação do ERP grava sempre na empresa em que começou, e o "Esquecer" de uma empresa não apaga o ERP da outra.
+- **Full pela saúde do anúncio:**
+  - Anúncio parado não usa o ano passado, e a sazonalidade usa um índice.
+  - Não envia para anúncio fora do ar, com experiência ruim ou pausado pela experiência. Anúncio esgotado (pausado pelo ML por falta de estoque) recebe a reposição.
+  - Cautela (só 15 dias) com experiência mediana, problema na reputação, qualidade básica ou sem a Buy Box.
+  - Aviso de estoque empacado.
+- **Experiência de compra:** leitor no formato oficial do ML, alertas no sino e os avisos de exposição do próprio ML.
+- **Textos de contestação:**
+  - No modelo da dona, com a regra da Central e o pedido explícito.
+  - Novos textos: remessa do Full e exclusão de reclamação. A exclusão sai só nos casos que as regras do ML aceitam, e nunca com culpa do vendedor no motivo.
+  - Caso incerto vira "Pedido de revisão", com o estorno só se a diferença se confirmar.
+
+Também já estavam no código atual em relação à 3.2.1:
 
 - `licenca.js` e `licenca-tela.js` não vão mais no pacote. Na 3.2.1, eles carregam, mas ficam inertes: não há chave de produção, e a tela está escondida.
 - `background.js` virou só um carregador de 14 partes, na pasta `extension-copiloto/fundo/`. Juntas, as partes são idênticas ao `background.js` anterior. Quem confere é `tests/copiloto/teste_fundo_dividido.js`.
@@ -46,7 +64,7 @@ Precisa do Node 18 ou mais novo. Não há `npm install`.
 node tests/copiloto/rodar_todos.js
 ```
 
-O resultado esperado é `TUDO OK · 3 arquivos de teste passaram + a suíte do copiloto-nucleo` (30 de 30). Dentro da suíte, um teste pulado conta como falha.
+O resultado esperado é `TUDO OK · 7 arquivos de teste passaram + a suíte do copiloto-nucleo`. Dentro da suíte, um teste pulado conta como falha. Os 4 arquivos da 3.3.0 (`teste_multiconta.js`, `teste_full_saude_v33.js`, `teste_contestacao_v33.js` e `teste_sku_frete_v33.js`) usam só dados inventados no formato do ML.
 
 **Por que só esses testes:** a suíte completa tem 87 arquivos de teste e 61 testes do núcleo, todos passando internamente em 03/10/2026. A maior parte usa dados reais de contas de clientes da consultoria (vendas, tarifas e faturas), e esses dados não podem sair da empresa. Aqui ficam os testes que conferem o código sem esses dados. O teste de segurança usa um resumo de conta com a mesma estrutura do real, mas com textos, números e identificadores inventados. A suíte completa pode rodar na nossa máquina, acompanhada pelo time de TI.
 
