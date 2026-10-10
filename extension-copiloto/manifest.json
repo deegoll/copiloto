@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Copiloto: lucro real nos marketplaces",
   "short_name": "Copiloto",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "description": "Lucro real de cada venda no Mercado Livre e no TikTok Shop, com os números do próprio canal. Você só informa o custo.",
   "homepage_url": "https://especialistaemmarketplace.com.br/sellerhub/",
   "minimum_chrome_version": "116",
