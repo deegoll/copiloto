@@ -1,8 +1,8 @@
-FICHA DA LOJA - Copiloto 3.3.1 (copiar e colar, na ordem do painel)
+FICHA DA LOJA - Copiloto 3.3.2 (copiar e colar, na ordem do painel)
 (Gerado por go-live-3.3.0/gerar-colar.js a partir de go-live-3.3.0/textos-loja-3.3.0.md. Não edite aqui: edite o .md e rode o gerador.)
 
 === PACOTE ===
-Carregar: copiloto-v3.3.1.zip (nesta pasta); o SHA-256 tem de ser o da linha 3.3.1 do VERSOES.md.
+Carregar: copiloto-v3.3.2.zip (nesta pasta); o SHA-256 tem de ser o da linha 3.3.2 do VERSOES.md.
 
 === FICHA DA LOJA (Detalhes) ===
 Nome (vem do zip; só conferir): Copiloto: lucro real nos marketplaces
@@ -73,7 +73,7 @@ Capturas (imagens/): captura-1-geral.png, captura-2-lucro-no-anuncio.png, captur
 Imagem promocional pequena: imagens/banner-440x280.png
 
 === PRATICAS DE PRIVACIDADE ===
-Finalidade única, justificativas, código remoto, uso de dados e certificações: copiar de privacidade-loja.txt (ou do colar-na-loja.html). A 3.3.1 não pede permissão nova; para quem vem da 3.2.1 publicada, há 2 permissões opcionais novas (scripting e https://seller-br.tiktok.com/*), pedidas só no clique de ligar o TikTok Shop.
+Finalidade única, justificativas, código remoto, uso de dados e certificações: copiar de privacidade-loja.txt (ou do colar-na-loja.html). A 3.3.2 não pede permissão nova; para quem vem da 3.2.1 publicada, há 2 permissões opcionais novas (scripting e https://seller-br.tiktok.com/*), pedidas só no clique de ligar o TikTok Shop.
 Política de privacidade: https://especialistaemmarketplace.com.br/sellerhub/copiloto/privacidade.html (arquivo para subir: go-live-3.3.0/subir/privacidade.html, com o nome privacidade.html; subir antes de enviar para análise, só com o OK da dona).
 
 === DISTRIBUICAO ===
