@@ -3137,16 +3137,34 @@
         const pedPag = {};
         ((d.conferir && d.conferir.itens) || []).forEach(x => {
             if (!x || (x.regra === 'frete' && pedidosFrete.has(String(x.pedido)))) return;
-            const k = String(x.pedido), y = pedPag[k] || (pedPag[k] = { dif: 0, motivo: x.motivo, itemId: x.itemId });
+            const k = String(x.pedido), y = pedPag[k] || (pedPag[k] = { dif: 0, motivo: x.motivo, itemId: x.itemId,
+                titulo: String(x.titulo || '').slice(0, 60), data: /^\d{4}-\d{2}-\d{2}$/.test(x.data || '') ? x.data : '', cobranca: '', valor: null, esperado: null });
             // v3.3: dúvida ("pode estar certo") não soma R$: o pedido só com dúvidas aparece sem valor.
             // 3.3.0, trava do frete: o frete fora da curva (regra 'frete') também, mesmo o guardado antes da trava (sem a dúvida), e todo frete de envio
             // pelo tipo (SHC.fech.freteSemChamado: a repetida e a de venda cancelada) onde o fechamento.js está carregado (fundo e Fechamento).
-            if (!x.duvida && !(SHC.fech ? SHC.fech.freteSemChamado(x) : x.regra === 'frete')) y.dif = SHC.r2(y.dif + (x.diferenca || 0));
+            if (!x.duvida && !(SHC.fech ? SHC.fech.freteSemChamado(x) : x.regra === 'frete')) {
+                y.dif = SHC.r2(y.dif + (x.diferenca || 0));
+                // 3.3.1 (alerta analítico): o 1º valor da trava guarda cobrança/cobrado/esperado para o "cobrado × esperado" do texto.
+                if (y.valor === null && typeof x.valor === 'number') { y.valor = x.valor; y.esperado = typeof x.esperado === 'number' ? x.esperado : null; y.cobranca = String(x.cobranca || '').slice(0, 60); }
+            }
         });
-        Object.keys(pedPag).forEach(k => add('pagamento', 'Pedido ' + k + ': ' + (pedPag[k].dif > 0 ? SHC.moeda(pedPag[k].dif) + ' a conferir. ' : 'cobrança para conferir (pode estar certa). ') + (pedPag[k].motivo || ''), { chave: 'anom|pag|' + k, itemId: pedPag[k].itemId || '' }));
+        // 3.3.1: alerta analítico — produto, data, o que foi cobrado × o esperado e o link direto da cobrança no Faturamento do ML.
+        // A trava do frete vale: dúvida e frete fora da curva ficam sem valor e sem afirmar cobrança a mais ("pode estar certa").
+        const urlCob = k => SHC.fech && SHC.fech.URL && SHC.fech.URL.cobranca ? SHC.fech.URL.cobranca(k) : '';
+        Object.keys(pedPag).forEach(k => {
+            const y = pedPag[k], quando = y.data ? ', em ' + y.data.slice(8, 10) + '/' + y.data.slice(5, 7) : '';
+            add('pagamento', (y.titulo ? y.titulo + ' — ' : '') + 'Pedido ' + k + quando + ': ' + (y.dif > 0
+                ? (y.valor !== null ? (y.cobranca ? y.cobranca + ': ' : '') + 'cobrado ' + SHC.moeda(y.valor) + (y.esperado !== null ? ', esperado ' + SHC.moeda(y.esperado) : '') + ' — ' + SHC.moeda(y.dif) + ' a mais' : SHC.moeda(y.dif) + ' a conferir') + '. '
+                : 'cobrança para conferir (pode estar certa). ') + (y.motivo || ''),
+                { chave: 'anom|pag|' + k, itemId: y.itemId || '', link: urlCob(k), linkTxt: 'Abrir a cobrança no ML' });
+        });
         ((d.rateio && d.rateio.faturas) || []).forEach(f => {
             if (!f || f.conferido !== false || f.incompleto || !(Math.abs(SHC.num(f.diferenca) || 0) >= 1)) return;
-            add('pagamento', 'Fatura ' + (f.nome || f.fatura) + ': o total não bate com as cobranças lidas (diferença de ' + SHC.moeda(Math.abs(f.diferenca)) + ').', { chave: 'anom|fatura|' + f.fatura, link: f.linkDetalhe || '' });
+            // 3.3.1: ciclo da fatura (de/até, já calculado no rateio) no texto — a fatura não é o mês do calendário.
+            const ciclo = f.ciclo && /^\d{4}-\d{2}-\d{2}$/.test(f.ciclo.de || '') && /^\d{4}-\d{2}-\d{2}$/.test(f.ciclo.ate || '')
+                ? ' Ciclo de ' + f.ciclo.de.slice(8, 10) + '/' + f.ciclo.de.slice(5, 7) + ' a ' + f.ciclo.ate.slice(8, 10) + '/' + f.ciclo.ate.slice(5, 7) + '.' : '';
+            add('pagamento', (/^fatura/i.test(String(f.nome || '')) ? f.nome : 'Fatura ' + (f.nome || f.fatura)) + ': o total não bate com as cobranças lidas (diferença de ' + SHC.moeda(Math.abs(f.diferenca)) + ').' + ciclo,
+                { chave: 'anom|fatura|' + f.fatura, link: f.linkDetalhe || '', linkTxt: 'Abrir a fatura no ML' });
         });
         // Pós-venda: reclamações/mediações e devoluções em aberto (mensagens ficam só no resumo).
         const pv = d.posvenda || {};

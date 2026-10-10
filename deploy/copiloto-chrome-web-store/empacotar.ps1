@@ -17,7 +17,7 @@ $dentro = @('manifest.json', 'background.js', 'calc.js', 'store.js', 'segredo.js
 # 02/10: licenca.js e licenca-tela.js ("Entrar com o SellerHub") desligados e fora do pacote até o servidor entrar no ar.
 # Religar: voltar os 2 para $dentro e devolver as referências (importScripts do fundo/01-carga-e-eventos.js e <script> do painel-lateral.html;
 # o teste_pacote_licenca.js trava enquanto não for ajustado junto).
-$fora = @('copiloto.js', 'popup.html', 'popup.js', 'MAPEAMENTO-ML.md', 'LOGISTICA-ML.md', '_teste', 'licenca.js', 'licenca-tela.js')
+$fora = @('copiloto.js', 'popup.html', 'popup.js', 'MAPEAMENTO-ML.md', 'LOGISTICA-ML.md', '_teste', 'licenca.js', 'licenca-tela.js', 'ESTADO-CANAIS-2026-10-09.md')
 
 $faltam = $dentro | Where-Object { -not (Test-Path (Join-Path $ext $_)) }
 if ($faltam) { throw "Faltam na extensão: $($faltam -join ', ')" }

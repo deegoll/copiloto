@@ -1293,6 +1293,46 @@
             + `<text x="${x1}" y="12" text-anchor="end" font-size="10" font-weight="700" fill="#991B1B">${SHC.moeda(ult.v)}</text>` + rot + '</svg>';
     };
 
+    // v3.3.1: linha do tempo do frete DIA A DIA (detalhe do anúncio): degraus do frete médio cobrado por dia (fa.dias, Faturamento do ML),
+    // bolinha em cada dia com venda (vermelho = frete acima do normal do anúncio) e o dia em que o frete subiu (subida.desde, o mesmo do
+    // chamado). Janela: do 1º dia com dado até hoje, no máximo 60 dias; dia sem venda repete o valor anterior (degrau). → '' sem o que mostrar.
+    P.svgFreteDia = function (fa, vendasLista, subida, hoje) {
+        const dias = (fa && fa.dias) || {}, fim = /^\d{4}-\d{2}-\d{2}$/.test(hoje || '') ? hoje : SHC.hoje();
+        const comDado = Object.keys(dias).filter(d => typeof dias[d] === 'number').sort();
+        const ini60 = new Date(Date.parse(fim + 'T12:00:00Z') - 59 * 864e5).toISOString().slice(0, 10);
+        const d0 = comDado.length && comDado[0] > ini60 ? comDado[0] : ini60;
+        const seq = [];
+        for (let t = Date.parse(d0 + 'T12:00:00Z'), tf = Date.parse(fim + 'T12:00:00Z'); t <= tf; t += 864e5) seq.push(new Date(t).toISOString().slice(0, 10));
+        let ult = null;
+        const vals = seq.map(d => { if (typeof dias[d] === 'number') ult = dias[d]; return ult; });
+        const vdDia = {};
+        (vendasLista || []).forEach(p => { if (p && p.d >= d0 && p.d <= fim && !p.comprador) { const e = vdDia[p.d] || (vdDia[p.d] = { n: 0, acima: false }); e.n++; if (p.acima) e.acima = true; } });
+        const iVenda = seq.map((d, i) => vdDia[d] ? Object.assign({ i }, vdDia[d]) : null).filter(Boolean);
+        const vs = vals.filter(v => v !== null);
+        if (seq.length < 2 || (comDado.filter(x => x >= d0).length < 2 && !iVenda.length)) return '';   // ≥ 2 dias com dado ou alguma venda na janela
+        const W = 320, H = 150, x0 = 38, x1 = 300, y0 = 22, y1 = 118;
+        const X = i => seq.length === 1 ? (x0 + x1) / 2 : x0 + (x1 - x0) * i / (seq.length - 1);
+        let min = vs.length ? Math.min(...vs) : 0, max = vs.length ? Math.max(...vs) : 1;
+        if (max - min < 0.01) { min -= 1; max += 1; }
+        const pad = (max - min) * 0.12; min -= pad; max += pad;
+        const Y = v => y1 - (v - min) / (max - min) * (y1 - y0);
+        const f = n => Math.round(n * 10) / 10;
+        const eixo = [max - pad, (max + min) / 2, min + pad].map(v => `<text x="${x0 - 5}" y="${f(Y(v)) + 3}" text-anchor="end">${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</text><line x1="${x0}" x2="${x1}" y1="${f(Y(v))}" y2="${f(Y(v))}" stroke="#E2E8F0"/>`).join('');
+        let d = '', pen = false;   // degraus: o trecho antes do 1º dado fica sem linha
+        seq.forEach((dia, i) => { const v = vals[i]; if (v === null) return; d += pen ? ' H' + f(X(i)) + ' V' + f(Y(v)) : 'M' + f(X(i)) + ' ' + f(Y(v)); pen = true; });
+        const iSub = subida && subida.desde ? seq.indexOf(subida.desde) : -1;   // o dia da subida dentro da janela
+        const marcaSub = iSub >= 0 ? `<line x1="${f(X(iSub))}" x2="${f(X(iSub))}" y1="${y0}" y2="${y1}" stroke="#B91C1C" stroke-dasharray="3 3"/><text x="${f(Math.min(X(iSub) + 4, x1 - 34))}" y="${y0 + 8}" fill="#B91C1C" font-weight="700">subiu aqui</text>` : '';
+        const ptsV = iVenda.map(p => `<circle cx="${f(X(p.i))}" cy="${f(Y(vals[p.i] !== null ? vals[p.i] : min + pad))}" r="${p.n > 1 ? 3.6 : 2.8}" fill="${p.acima ? '#DC2626' : '#2563EB'}"${p.n > 1 ? ' stroke="#fff" stroke-width="1"' : ''}/>`).join('');
+        const rotIs = [...new Set([0, Math.floor((seq.length - 1) / 2), seq.length - 1])];
+        const rot = rotIs.map(i => `<text x="${f(X(i))}" y="${H - 14}" text-anchor="middle"${i === seq.length - 1 ? ' font-weight="700" fill="#0F172A"' : ''}>${seq[i].slice(8, 10)}/${seq[i].slice(5, 7)}</text>`).join('');
+        const nDias = comDado.filter(x => x >= d0).length;
+        const aria = `Frete dia a dia: ${nDias} dias com venda nos últimos ${seq.length} dias` + (iSub >= 0 ? `; subiu em ${subida.desde.slice(8, 10)}/${subida.desde.slice(5, 7)}` : '');
+        return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${aria}" font-family="Segoe UI,Arial,sans-serif" font-size="9" fill="#64748B">`
+            + eixo + `<text x="4" y="12">R$</text>` + marcaSub
+            + (d ? `<path d="${d}" fill="none" stroke="#DC2626" stroke-width="2"/>` : '') + ptsV
+            + (vs.length ? `<text x="${x1}" y="12" text-anchor="end" font-size="10" font-weight="700" fill="#991B1B">${SHC.moeda(vs[vs.length - 1])}</text>` : '') + rot + '</svg>';
+    };
+
     // Catálogo: SKUs do retrato de anúncios (sem SKU → um grupo por MLB).
     P.agrupaSkus = function (itens) {
         const g = {};
@@ -1708,8 +1748,10 @@
         const doFundo = anom && String(anom.conta) === String(conta || '') ? (anom.itens || []).filter(i => i && i.aba === aba && ehDoCanal(i) && ((ROT_ANOM[i.tipo] && P.ABA_DO_ALERTA[i.tipo] !== aba) || (i.tipo === 'full' && i.remessaId)))
             .map(i => ({ tipo: i.tipo, rot: i.remessaId ? 'Remessa' : i.tipo === 'prejuizo' && i.titulo ? i.titulo : ROT_ANOM[i.tipo], titulo: '',
                 // v3.2: prejuízo = título + motivo (sem "Venda no prejuízo" 2 vezes)
-                texto: i.tipo === 'prejuizo' && i.titulo ? i.motivo || '' : i.texto, link: i.link || '', remessaId: i.remessaId || '', qtd: i.qtd, vermelho: !!i.vermelho,
-                linkTxt: LINK_ANOM[i.remessaId ? 'remessa' : i.tipo] || (i.link ? 'Abrir no Mercado Livre' : '') })) : [];
+                // v3.3.1: itemId passa (o alerta de frete ganha o botão "Ver a linha do tempo"); linkTxt do fundo tem preferência
+                // ("Abrir a cobrança no ML" / "Abrir a fatura no ML", dos alertas analíticos de cobrança).
+                texto: i.tipo === 'prejuizo' && i.titulo ? i.motivo || '' : i.texto, link: i.link || '', remessaId: i.remessaId || '', qtd: i.qtd, vermelho: !!i.vermelho, itemId: i.itemId || '',
+                linkTxt: i.linkTxt || LINK_ANOM[i.remessaId ? 'remessa' : i.tipo] || (i.link ? 'Abrir no Mercado Livre' : '') })) : [];
         return daqui.concat(doFundo);
     };
     // ── v3.1 topo (ESPEC §3): contador de cada aba e sino, da MESMA conta do número do ícone (shc:anomalias, SHC.anomalias) ──
@@ -3396,7 +3438,8 @@
         if (lista.some(i => i.tipo === 'prejuizo') && !prejAutoAberto.has(k)) { prejAutoAberto.add(k); verAberto.add(k); }
         fim.innerHTML = lista.length ? `<div class="card alab"><div class="gb-l"><i class="dot ${urg ? 'ruim' : 'atencao'}"></i><b>Alertas desta aba</b><span class="gb-v">${esc(SHC.qtd(n, 'alerta', 'alertas'))}</span>${btVer(k, `Ver mais (${n})`)}</div>`
             + (aberto(k) ? '<div class="gb-c">' + lista.map(i => `<div class="linha-comp"><b>${esc(i.rot)}${i.titulo ? ' · ' + esc(i.titulo) : ''}</b><small>${esc(i.texto)}</small>`
-                + (i.link && /^https:\/\/([a-z]+\.)*mercadolivre\.com\.br\//.test(i.link) ? `<a class="lnk" href="${esc(i.link)}" target="_blank" rel="noopener" style="font-size:11.5px">${esc(i.linkTxt || 'Abrir Gestão de envios Full')}</a>` : '') + '</div>').join('') + '</div>' : '')
+                + (i.link && /^https:\/\/([a-z]+\.)*mercadolivre\.com\.br\//.test(i.link) ? `<a class="lnk" href="${esc(i.link)}" target="_blank" rel="noopener" style="font-size:11.5px">${esc(i.linkTxt || 'Abrir Gestão de envios Full')}</a>` : '')
+                + (i.tipo === 'frete' && i.itemId ? ` <button class="lnk" data-frete-det="${esc(i.itemId)}" style="font-size:11.5px">Ver a linha do tempo</button>` : '') + '</div>').join('') + '</div>' : '')
             + '</div>' : '';
     }
     const curtoTxt = (t, n) => { const s = String(t || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
@@ -4199,6 +4242,11 @@
           </div>`;
         html += cardLogistica(it);   // v3.2: forma de entrega, status e se o modelo combina com a medida
         html += cardAtacado(it);     // v3.2: lucro por degrau do preço de atacado (só quando o anúncio tem atacado)
+        // v3.3.1: linha do tempo do frete (dia a dia) — o anúncio, as vendas e o dia da subida no mesmo gráfico (pedido do Diego:
+        // "mostrar o anúncio e a venda e o período como uma linha do tempo"). lTl = a mesma linha de P.linhasFrete (subiu = lista ou cobrado).
+        const lTl = { it, h, fa, comprador: false, subiu: !!(h && h.anterior !== null && h.atual > h.anterior) || !!(fa && fa.subiu && !P.freteMultiplo(fa.ult30 && fa.ult30.medio, it.frete)) };
+        const subTl = P.subidaFrete(lTl, vd, SHC.hoje()), svgDia = P.svgFreteDia(fa, P.pedidosFrete(vd).lista, subTl, SHC.hoje());
+        if (svgDia) html += dobra(`<div class="card"><b style="font-size:13px">Linha do tempo do frete (dia a dia)</b>${svgDia}<p class="det">Frete médio cobrado por dia nos pedidos deste anúncio (Faturamento do ML), últimos 60 dias. Cada bolinha é um dia com venda — em vermelho, frete acima do normal do anúncio.${subTl && subTl.desde ? ` A linha tracejada é o dia em que o frete subiu (${esc(P.dataBr(subTl.desde))}, de ${SHC.moeda(subTl.de)} para ${SHC.moeda(subTl.para)}).` : ''} Dia sem venda repete o valor do dia anterior.</p></div>`, 'frete:detdia', esc(subTl && subTl.desde ? 'subiu em ' + P.dataBr(subTl.desde).slice(0, 5) : 'dia a dia'));
         // Frete por mês: TODOS os meses com venda (e os do histórico diário), do primeiro ao último, com a tabela.
         const meses = P.mesesFrete(h, porMes), pt = P.pagoAMaisPorMes(vd), espera = temVd ? '' : P.esperaVendas(status, Date.now());
         const resMes = temVd && pt.linhas.length ? (pt.total > 0 ? `${SHC.moeda(pt.total)} a mais em ${SHC.qtd(pt.linhas.length, 'mês', 'meses')}` : `${SHC.qtd(pt.linhas.length, 'mês', 'meses')} · sem frete a mais`) : '';
